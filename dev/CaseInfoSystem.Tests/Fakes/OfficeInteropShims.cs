@@ -123,8 +123,19 @@ namespace Microsoft.Office.Interop.Excel
 
         public object CustomDocumentProperties { get; set; }
 
+        public int SaveCallCount { get; private set; }
+
+        public Action SaveBehavior { get; set; }
+
         public void Save()
         {
+            SaveCallCount++;
+            if (SaveBehavior != null)
+            {
+                SaveBehavior();
+                return;
+            }
+
             Saved = true;
         }
 
@@ -205,6 +216,14 @@ namespace CaseInfoSystem.ExcelAddIn
 {
     internal sealed class ThisAddIn
     {
+        internal Action<Action> RunWithScreenUpdatingSuspendedHandler { get; set; }
+
+        internal Func<string, IDisposable> SuppressTaskPaneRefreshHandler { get; set; }
+
+        internal Action<string> RefreshActiveTaskPaneHandler { get; set; }
+
+        internal Func<string, string, bool> ShowKernelSheetAndRefreshPaneHandler { get; set; }
+
         internal Microsoft.Office.Tools.CustomTaskPane CreateTaskPane(Microsoft.Office.Interop.Excel.Window window, UserControl control)
         {
             return new Microsoft.Office.Tools.CustomTaskPane();
@@ -212,6 +231,45 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal void RemoveTaskPane(Microsoft.Office.Tools.CustomTaskPane pane)
         {
+        }
+
+        internal void RunWithScreenUpdatingSuspended(Action action)
+        {
+            if (RunWithScreenUpdatingSuspendedHandler != null)
+            {
+                RunWithScreenUpdatingSuspendedHandler(action);
+                return;
+            }
+
+            action?.Invoke();
+        }
+
+        internal IDisposable SuppressTaskPaneRefresh(string reason)
+        {
+            if (SuppressTaskPaneRefreshHandler != null)
+            {
+                return SuppressTaskPaneRefreshHandler(reason);
+            }
+
+            return new NoOpDisposable();
+        }
+
+        internal void RefreshActiveTaskPane(string reason)
+        {
+            RefreshActiveTaskPaneHandler?.Invoke(reason);
+        }
+
+        internal bool ShowKernelSheetAndRefreshPane(string kernelTransitionSheetCodeName, string kernelTransitionReason)
+        {
+            return ShowKernelSheetAndRefreshPaneHandler == null
+                || ShowKernelSheetAndRefreshPaneHandler(kernelTransitionSheetCodeName, kernelTransitionReason);
+        }
+
+        private sealed class NoOpDisposable : IDisposable
+        {
+            public void Dispose()
+            {
+            }
         }
     }
 }

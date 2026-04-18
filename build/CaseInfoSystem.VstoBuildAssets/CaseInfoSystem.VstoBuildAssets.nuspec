@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>CaseInfoSystem.VstoBuildAssets</id>
+    <version>1.0.2</version>
+    <authors>CaseInfoSystem</authors>
+    <owners>CaseInfoSystem</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Internal build assets package for VSTO reference assemblies and Office core interop.</description>
+    <tags>vsto office interop build</tags>
+  </metadata>
+  <files>
+    <file src="build\CaseInfoSystem.VstoBuildAssets\build\CaseInfoSystem.VstoBuildAssets.props" target="build\CaseInfoSystem.VstoBuildAssets.props" />
+    <file src="build\CaseInfoSystem.VstoBuildAssets\build\CaseInfoSystem.VstoBuildAssets.targets" target="build\CaseInfoSystem.VstoBuildAssets.targets" />
+    <file src="content\lib\net48\Office.dll" target="lib\net48\Office.dll" />
+    <file src="content\lib\net48\Microsoft.Office.Tools.v4.0.Framework.dll" target="lib\net48\Microsoft.Office.Tools.v4.0.Framework.dll" />
+    <file src="content\lib\net48\Microsoft.VisualStudio.Tools.Applications.Runtime.dll" target="lib\net48\Microsoft.VisualStudio.Tools.Applications.Runtime.dll" />
+    <file src="content\lib\net48\Microsoft.Office.Tools.dll" target="lib\net48\Microsoft.Office.Tools.dll" />
+    <file src="content\lib\net48\Microsoft.Office.Tools.Common.dll" target="lib\net48\Microsoft.Office.Tools.Common.dll" />
+    <file src="content\lib\net48\Microsoft.Office.Tools.Excel.dll" target="lib\net48\Microsoft.Office.Tools.Excel.dll" />
+    <file src="content\lib\net48\Microsoft.Office.Tools.Word.dll" target="lib\net48\Microsoft.Office.Tools.Word.dll" />
+    <file src="content\lib\net48\Microsoft.Office.Tools.Common.v4.0.Utilities.dll" target="lib\net48\Microsoft.Office.Tools.Common.v4.0.Utilities.dll" />
+  </files>
+</package>

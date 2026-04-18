@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -8,6 +8,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
 	internal sealed class WordInteropService
 	{
+		internal sealed class WordInteropServiceTestHooks
+		{
+			internal Func<object, bool> IsWordApplicationAlive { get; set; }
+
+			internal Func<string, object> GetActiveObject { get; set; }
+
+			internal Func<string, Type> GetTypeFromProgID { get; set; }
+
+			internal Func<Type, object> CreateInstance { get; set; }
+
+			internal Func<string, string> ResolveToExistingLocalPath { get; set; }
+
+			internal Func<string, string> NormalizePath { get; set; }
+
+			internal Func<string, bool> FileExists { get; set; }
+		}
+
 		internal sealed class WordPerformanceState
 		{
 			internal bool HasScreenUpdating { get; set; }
@@ -47,6 +64,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private readonly Logger _logger;
 
+		private readonly WordInteropServiceTestHooks _testHooks;
+
 		private object _cachedWordApplication;
 
 		[DllImport ("user32.dll")]
@@ -77,28 +96,46 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		private static extern bool SetWindowPos (IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
 		internal WordInteropService (PathCompatibilityService pathCompatibilityService, Logger logger)
+			: this (pathCompatibilityService, logger, testHooks: null)
+		{
+		}
+
+		internal WordInteropService (PathCompatibilityService pathCompatibilityService, Logger logger, WordInteropServiceTestHooks testHooks)
 		{
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
+			_testHooks = testHooks;
 		}
 
 		internal object AcquireWordApplication (out bool createdNew)
 		{
 			createdNew = false;
-			if (IsWordApplicationAlive (_cachedWordApplication)) {
+			if (IsWordApplicationAliveSafe (_cachedWordApplication)) {
 				return _cachedWordApplication;
 			}
 			_cachedWordApplication = null;
 			object obj = null;
 			try {
-				obj = Marshal.GetActiveObject ("Word.Application");
+				obj = GetActiveObject ("Word.Application");
 			} catch {
 			}
+			if (!IsWordApplicationAliveSafe (obj)) {
+				obj = null;
+			}
 			if (obj == null) {
-				Type typeFromProgID = Type.GetTypeFromProgID ("Word.Application");
-				if (typeFromProgID != null) {
-					obj = Activator.CreateInstance (typeFromProgID);
-					createdNew = obj != null;
+				try {
+					Type typeFromProgID = GetTypeFromProgID ("Word.Application");
+					if (typeFromProgID != null) {
+						obj = CreateInstance (typeFromProgID);
+						if (IsWordApplicationAliveSafe (obj)) {
+							createdNew = true;
+						} else {
+							obj = null;
+						}
+					}
+				} catch (Exception exception) {
+					_logger.Error ("WordInteropService.AcquireWordApplication failed.", exception);
+					obj = null;
 				}
 			}
 			_cachedWordApplication = obj;
@@ -107,7 +144,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal object EnsureWordApplication (ref object wordApplication)
 		{
-			if (IsWordApplicationAlive (wordApplication)) {
+			if (IsWordApplicationAliveSafe (wordApplication)) {
 				return wordApplication;
 			}
 			wordApplication = AcquireWordApplication (out var _);
@@ -134,14 +171,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		internal object CreateDocumentFromTemplate (object wordApplication, string templatePath)
 		{
 			if (wordApplication == null) {
-				throw new ArgumentNullException ("wordApplication");
+				_logger.Warn ("WordInteropService.CreateDocumentFromTemplate skipped because wordApplication was null.");
+				return null;
 			}
-			string path = _pathCompatibilityService.ResolveToExistingLocalPath (templatePath);
-			path = _pathCompatibilityService.NormalizePath (path);
-			if (path.Length == 0 || !File.Exists (path)) {
-				throw new FileNotFoundException ("テンプレートが見つかりませんでした。", path);
+			string text;
+			try {
+				text = NormalizePath (ResolveToExistingLocalPath (templatePath));
+			} catch (Exception exception) {
+				_logger.Error ("WordInteropService.CreateDocumentFromTemplate template path resolution failed.", exception);
+				return null;
 			}
-			return ((dynamic)wordApplication).Documents.Add (path, false);
+			if (text.Length == 0 || !FileExistsSafe (text)) {
+				_logger.Warn ("WordInteropService.CreateDocumentFromTemplate template not found. template=" + (templatePath ?? string.Empty) + " resolved=" + text);
+				return null;
+			}
+			try {
+				return ((dynamic)wordApplication).Documents.Add (text, false);
+			} catch (Exception exception2) {
+				_logger.Error ("WordInteropService.CreateDocumentFromTemplate Documents.Add failed.", exception2);
+				return null;
+			}
 		}
 
 		internal string SaveDocumentAsDocx (object wordDocument, string fullPath)
@@ -155,7 +204,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			string directoryName = Path.GetDirectoryName (text);
 			if (!string.IsNullOrWhiteSpace (directoryName) && !_pathCompatibilityService.EnsureFolderSafe (directoryName)) {
-				throw new InvalidOperationException ("保存先フォルダを用意できませんでした。");
+				throw new InvalidOperationException ("保存先フォルダを作成できませんでした。");
 			}
 			((dynamic)wordDocument).SaveAs2 (text, 16);
 			return text;
@@ -292,6 +341,47 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		private bool IsWordApplicationAliveSafe (object wordApplication)
+		{
+			if (_testHooks != null && _testHooks.IsWordApplicationAlive != null) {
+				return _testHooks.IsWordApplicationAlive (wordApplication);
+			}
+			return IsWordApplicationAlive (wordApplication);
+		}
+
+		private object GetActiveObject (string progId)
+		{
+			if (_testHooks != null && _testHooks.GetActiveObject != null) {
+				return _testHooks.GetActiveObject (progId);
+			}
+			return Marshal.GetActiveObject (progId);
+		}
+
+		private Type GetTypeFromProgID (string progId)
+		{
+			return (_testHooks != null && _testHooks.GetTypeFromProgID != null) ? _testHooks.GetTypeFromProgID (progId) : Type.GetTypeFromProgID (progId);
+		}
+
+		private object CreateInstance (Type type)
+		{
+			return (_testHooks != null && _testHooks.CreateInstance != null) ? _testHooks.CreateInstance (type) : Activator.CreateInstance (type);
+		}
+
+		private string ResolveToExistingLocalPath (string path)
+		{
+			return (_testHooks != null && _testHooks.ResolveToExistingLocalPath != null) ? _testHooks.ResolveToExistingLocalPath (path) : _pathCompatibilityService.ResolveToExistingLocalPath (path);
+		}
+
+		private string NormalizePath (string path)
+		{
+			return (_testHooks != null && _testHooks.NormalizePath != null) ? _testHooks.NormalizePath (path) : _pathCompatibilityService.NormalizePath (path);
+		}
+
+		private bool FileExistsSafe (string path)
+		{
+			return (_testHooks != null && _testHooks.FileExists != null) ? _testHooks.FileExists (path) : _pathCompatibilityService.FileExistsSafe (path);
+		}
+
 		private static string FormatElapsedSeconds (TimeSpan elapsed)
 		{
 			return elapsed.TotalSeconds.ToString ("0.000");
@@ -386,3 +476,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		}
 	}
 }
+
+
+

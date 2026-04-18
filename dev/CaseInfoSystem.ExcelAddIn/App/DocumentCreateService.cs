@@ -187,6 +187,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 SetStatusBar("文書作成：テンプレから作成中...");
                 wordDocument = _wordInteropService.CreateDocumentFromTemplate(wordApplication, templateSpec.TemplatePath);
+                if (wordDocument == null)
+                {
+                    throw new InvalidOperationException("テンプレートから Word 文書を作成できませんでした。");
+                }
                 _logger.Debug("ExecuteCreateDocument", "DocumentCreated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
                 phaseStopwatch.Restart();
 

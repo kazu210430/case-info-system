@@ -30,6 +30,7 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <ProjectToolsDir>$(MSBuildProjectDirectory)\Tools</ProjectToolsDir>
     <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">$(MSBuildProjectDirectory)\CaseInfoSystem.WordAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
+    <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.WordAddIn</UnifiedDeployPackageDir>
     <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\Addins\CaseInfoSystem.WordAddIn</RuntimeAddInDir>
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.WordAddIn.vsto</RuntimeManifestPath>
@@ -120,6 +121,22 @@
   </PropertyGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(VSToolsPath)\$(VSToolsTargetsRelativePath)" Condition="'$(VSToolsPath)' != '' and Exists('$(VSToolsPath)\$(VSToolsTargetsRelativePath)') and '$(EnableVstoPackaging)' == 'true'" />
+  <Target Name="HotReloadBackup" BeforeTargets="Build" Condition="'$(BuildingInsideVisualStudio)' == 'true' and '$(Configuration)' != 'Release' and '$(SolutionDir)' != '' and Exists('$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1')">
+    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1&quot; -Mode Backup -Project WordAddIn -Configuration $(Configuration)" />
+  </Target>
+  <Target Name="UpdateUnifiedDeployPackage" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'">
+    <ItemGroup>
+      <DeployPackageExistingFiles Include="$(UnifiedDeployPackageDir)\*.*" />
+      <DeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.dll" />
+      <DeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.dll.manifest" />
+      <DeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.vsto" />
+      <DeployPackageFiles Include="$(TargetDir)Microsoft.Office.Tools.Common.v4.0.Utilities.dll" />
+      <DeployPackageFiles Remove="$(TargetDir)\*.pdb" />
+    </ItemGroup>
+    <MakeDir Directories="$(UnifiedDeployPackageDir)" />
+    <Delete Files="@(DeployPackageExistingFiles)" TreatErrorsAsWarnings="true" />
+    <Copy SourceFiles="@(DeployPackageFiles)" DestinationFolder="$(UnifiedDeployPackageDir)" SkipUnchangedFiles="false" />
+  </Target>
   <Target Name="UpdateDebugDeployPackage" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <ItemGroup>
       <DebugDeployPackageExistingFiles Include="$(DebugDeployPackageDir)\*.*" />
@@ -132,9 +149,13 @@
     <Delete Files="@(DebugDeployPackageExistingFiles)" TreatErrorsAsWarnings="true" />
     <Copy SourceFiles="@(DebugDeployPackageFiles)" DestinationFolder="$(DebugDeployPackageDir)" SkipUnchangedFiles="false" />
   </Target>
-  <Target Name="SyncRuntimeAddInDebug" DependsOnTargets="UpdateDebugDeployPackage" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'">
+  <Target Name="SyncRuntimeAddInDebug" AfterTargets="Build" DependsOnTargets="UpdateDebugDeployPackage" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <Exec Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File &quot;$(ProjectToolsDir)\Sync-RuntimeAddIn.ps1&quot; -PackageDir &quot;$(DebugDeployPackageDir)&quot; -RuntimeAddInDir &quot;$(RuntimeAddInDirFull)&quot; -RuntimeManifestPath &quot;$(RuntimeManifestPath)&quot;" />
   </Target>
+  <Target Name="HotReloadVerifyAfterDebugSync" AfterTargets="SyncRuntimeAddInDebug" Condition="'$(BuildingInsideVisualStudio)' == 'true' and '$(Configuration)' != 'Release' and '$(SolutionDir)' != '' and Exists('$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1')">
+    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1&quot; -Mode Verify -Project WordAddIn -Configuration $(Configuration)" />
+  </Target>
+  <Target Name="DeployReleaseAddIn" DependsOnTargets="Build;UpdateUnifiedDeployPackage" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'" />
   <Target Name="DeployDebugAddIn" DependsOnTargets="Build;SyncRuntimeAddInDebug" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'" />
   <ProjectExtensions>
     <VisualStudio>

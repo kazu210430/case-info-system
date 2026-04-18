@@ -142,7 +142,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 try
                 {
-                    workbook.Saved = true;
+                    WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
                     _logger.Info("Kernel workbook before-close prompt suppressed for transient read-only workbook. workbook=" + GetWorkbookKey(workbook));
                 }
                 catch (Exception ex)
@@ -311,7 +311,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         }
                         else
                         {
-                            workbook.Saved = true;
+                            WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
                         }
 
                         workbook.Close(SaveChanges: false);

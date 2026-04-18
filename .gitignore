@@ -1,0 +1,27 @@
+# Visual Studio user-local state
+dev/.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+Desktop.ini
+Thumbs.db
+~$*
+
+# .NET build outputs
+[Bb]in/
+[Oo]bj/
+
+# Test output
+[Tt]estResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Local hot-reload safety snapshots
+build/hot-reload-backups/
+
+# Intentionally not ignored here:
+# - dev/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx
+# - dev/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn_TemporaryKey.pfx
+# - dev/Deploy/**

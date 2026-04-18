@@ -9,9 +9,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
     internal sealed class ExcelInteropService
     {
+        internal Func<Excel.Workbook, Excel.Window> OnGetActiveWindow { get; set; }
+
+        internal Func<CaseInfoSystem.ExcelAddIn.Domain.CaseContext, bool> OnTryNormalizeCaseListRowHeight { get; set; }
+
+        internal Func<IEnumerable<Excel.Workbook>> OnGetOpenWorkbooks { get; set; }
+
         internal Excel.Workbook GetActiveWorkbook() => null;
 
-        internal Excel.Window GetActiveWindow() => null;
+        internal Excel.Window GetActiveWindow() => OnGetActiveWindow != null ? OnGetActiveWindow(null) : null;
 
         internal string GetWorkbookFullName(Excel.Workbook workbook) => workbook == null ? string.Empty : workbook.FullName ?? string.Empty;
 
@@ -55,24 +61,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return workbook?.Worksheets.FirstOrDefault(worksheet => string.Equals(worksheet?.CodeName, sheetCodeName, StringComparison.OrdinalIgnoreCase));
         }
 
+        internal bool TryNormalizeCaseListRowHeight(CaseInfoSystem.ExcelAddIn.Domain.CaseContext context)
+        {
+            return OnTryNormalizeCaseListRowHeight == null || OnTryNormalizeCaseListRowHeight(context);
+        }
+
         internal Excel.Workbook FindOpenWorkbook(string workbookPath) => null;
+
+        internal IEnumerable<Excel.Workbook> GetOpenWorkbooks()
+        {
+            return OnGetOpenWorkbooks != null
+                ? OnGetOpenWorkbooks()
+                : Enumerable.Empty<Excel.Workbook>();
+        }
 
         internal bool ActivateWorkbook(Excel.Workbook workbook) => true;
 
         internal bool ActivateWorksheetByCodeName(Excel.Workbook workbook, string sheetCodeName) => true;
-    }
-
-    internal sealed class PathCompatibilityService
-    {
-        internal string NormalizePath(string path) => (path ?? string.Empty).Trim();
-
-        internal bool FileExistsSafe(string path) => !string.IsNullOrWhiteSpace(path);
-
-        internal bool DirectoryExistsSafe(string path) => !string.IsNullOrWhiteSpace(path);
-
-        internal string GetFileNameFromPath(string path) => Path.GetFileName(path ?? string.Empty) ?? string.Empty;
-
-        internal string CombinePath(string left, string right) => Path.Combine(left ?? string.Empty, right ?? string.Empty);
     }
 
     internal sealed class WorkbookRoleResolver
@@ -138,10 +143,81 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-    internal sealed class DocumentCommandService
+    internal sealed class DocumentExecutionEligibilityService
     {
-        internal void Execute(Excel.Workbook workbook, string actionKind, string key)
+        internal Func<Excel.Workbook, string, string, CaseInfoSystem.ExcelAddIn.Domain.DocumentExecutionEligibility> OnEvaluate { get; set; }
+
+        internal CaseInfoSystem.ExcelAddIn.Domain.DocumentExecutionEligibility Evaluate(Excel.Workbook workbook, string actionKind, string key)
         {
+            return OnEvaluate != null
+                ? OnEvaluate(workbook, actionKind, key)
+                : new CaseInfoSystem.ExcelAddIn.Domain.DocumentExecutionEligibility(false, string.Empty, null, null);
+        }
+    }
+
+    internal sealed class DocumentExecutionPolicyService
+    {
+        internal Func<CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec, bool> OnIsVstoExecutionAllowed { get; set; }
+
+        internal Func<CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec, bool> OnIsRolloutReady { get; set; }
+
+        internal string AllowlistPath { get; set; } = string.Empty;
+
+        internal bool IsVstoExecutionAllowed(CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec templateSpec)
+        {
+            return OnIsVstoExecutionAllowed != null && OnIsVstoExecutionAllowed(templateSpec);
+        }
+
+        internal string GetAllowlistPath()
+        {
+            return AllowlistPath;
+        }
+
+        internal bool IsRolloutReady(CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec templateSpec)
+        {
+            return OnIsRolloutReady != null && OnIsRolloutReady(templateSpec);
+        }
+    }
+
+    internal sealed class DocumentCreateService
+    {
+        internal Action<Excel.Workbook, CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec, CaseInfoSystem.ExcelAddIn.Domain.CaseContext> OnExecute { get; set; }
+
+        internal void Execute(Excel.Workbook workbook, CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec templateSpec, CaseInfoSystem.ExcelAddIn.Domain.CaseContext caseContext)
+        {
+            OnExecute?.Invoke(workbook, templateSpec, caseContext);
+        }
+    }
+
+    internal sealed class AccountingSetCommandService
+    {
+        internal Action<Excel.Workbook> OnExecute { get; set; }
+
+        internal void Execute(Excel.Workbook workbook)
+        {
+            OnExecute?.Invoke(workbook);
+        }
+    }
+
+    internal sealed class CaseListRegistrationService
+    {
+        internal Func<Excel.Workbook, CaseInfoSystem.ExcelAddIn.Domain.CaseListRegistrationResult> OnExecute { get; set; }
+
+        internal CaseInfoSystem.ExcelAddIn.Domain.CaseListRegistrationResult Execute(Excel.Workbook workbook)
+        {
+            return OnExecute != null
+                ? OnExecute(workbook)
+                : new CaseInfoSystem.ExcelAddIn.Domain.CaseListRegistrationResult();
+        }
+    }
+
+    internal sealed class CaseContextFactory
+    {
+        internal Func<Excel.Workbook, CaseInfoSystem.ExcelAddIn.Domain.CaseContext> OnCreateForCaseListRegistration { get; set; }
+
+        internal CaseInfoSystem.ExcelAddIn.Domain.CaseContext CreateForCaseListRegistration(Excel.Workbook caseWorkbook)
+        {
+            return OnCreateForCaseListRegistration == null ? null : OnCreateForCaseListRegistration(caseWorkbook);
         }
     }
 
@@ -207,5 +283,92 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class KernelWorkbookLifecycleService
     {
         internal bool RequestManagedCloseFromHomeExit(Excel.Workbook workbook) => true;
+    }
+
+    internal sealed class DocumentOutputService
+    {
+        internal DocumentOutputService(CaseInfoSystem.ExcelAddIn.Infrastructure.ExcelInteropService excelInteropService, CaseInfoSystem.ExcelAddIn.Infrastructure.PathCompatibilityService pathCompatibilityService, CaseInfoSystem.ExcelAddIn.Infrastructure.Logger logger)
+        {
+        }
+
+        internal string PrepareSavePath(string rawFullPath) => rawFullPath ?? string.Empty;
+    }
+}
+
+namespace CaseInfoSystem.ExcelAddIn.Domain
+{
+    internal sealed class CaseListRegistrationResult
+    {
+        internal bool Success { get; set; }
+
+        internal int RegisteredRow { get; set; }
+
+        internal string Message { get; set; } = string.Empty;
+    }
+
+    internal enum DocumentExecutionMode
+    {
+        Disabled = 0,
+        PilotOnly = 1,
+        AllowlistedOnly = 2
+    }
+
+    internal sealed class DocumentExecutionEligibility
+    {
+        internal DocumentExecutionEligibility(bool canExecuteInVsto, string reason, DocumentTemplateSpec templateSpec, CaseContext caseContext)
+        {
+            CanExecuteInVsto = canExecuteInVsto;
+            Reason = reason ?? string.Empty;
+            TemplateSpec = templateSpec;
+            CaseContext = caseContext;
+        }
+
+        internal bool CanExecuteInVsto { get; }
+
+        internal string Reason { get; }
+
+        internal DocumentTemplateSpec TemplateSpec { get; }
+
+        internal CaseContext CaseContext { get; }
+    }
+
+    internal sealed class DocumentTemplateSpec
+    {
+        internal string TemplateFileName { get; set; } = string.Empty;
+    }
+
+    internal sealed class CaseContext
+    {
+        internal Excel.Workbook KernelWorkbook { get; set; }
+    }
+}
+
+namespace CaseInfoSystem.ExcelAddIn.UI
+{
+    internal sealed class ExcelWindowOwner : IDisposable
+    {
+        internal static Func<Microsoft.Office.Interop.Excel.Window, ExcelWindowOwner> OnFrom { get; set; }
+
+        internal bool Disposed { get; private set; }
+
+        internal static ExcelWindowOwner From(Microsoft.Office.Interop.Excel.Window window)
+        {
+            return OnFrom == null ? new ExcelWindowOwner() : OnFrom(window);
+        }
+
+        public void Dispose()
+        {
+            Disposed = true;
+        }
+    }
+
+    internal static class CompletionNoticeForm
+    {
+        internal static Action<ExcelWindowOwner, string, string> OnShowNotice { get; set; }
+
+        internal static void ShowNotice(ExcelWindowOwner owner, string title, string message)
+        {
+            OnShowNotice?.Invoke(owner, title, message);
+        }
     }
 }

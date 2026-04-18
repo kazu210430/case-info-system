@@ -158,7 +158,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 if (context == null)
                 {
                     _logger.Info("Case list row normalization skipped because context could not be resolved.");
-                    TrySaveKernelWorkbook(workbook, registrationResult);
+                    string saveFailureMessageForWorkbook;
+                    if (!TrySaveKernelWorkbook(workbook, registrationResult, out saveFailureMessageForWorkbook))
+                    {
+                        throw new InvalidOperationException(saveFailureMessageForWorkbook);
+                    }
+
                     return;
                 }
 
@@ -168,7 +173,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     _logger.Info("Case list row normalization was skipped or failed.");
                 }
 
-                TrySaveKernelWorkbook(context.KernelWorkbook, registrationResult);
+                string saveFailureMessageForKernel;
+                if (!TrySaveKernelWorkbook(context.KernelWorkbook, registrationResult, out saveFailureMessageForKernel))
+                {
+                    throw new InvalidOperationException(saveFailureMessageForKernel);
+                }
+
                 completedRegistrationResult = registrationResult;
                 shouldShowKernelCaseList = true;
             });
@@ -221,21 +231,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private void TrySaveKernelWorkbook(Excel.Workbook kernelWorkbook, CaseListRegistrationResult registrationResult)
+        private bool TrySaveKernelWorkbook(Excel.Workbook kernelWorkbook, CaseListRegistrationResult registrationResult, out string failureMessage)
         {
+            failureMessage = string.Empty;
             if (kernelWorkbook == null)
             {
-                return;
+                return true;
             }
 
             try
             {
                 kernelWorkbook.Save();
                 _logger.Info("Kernel workbook saved after case-list registration. row=" + registrationResult.RegisteredRow.ToString());
+                return true;
             }
             catch (Exception ex)
             {
                 _logger.Error("Kernel workbook save after case-list registration failed.", ex);
+                failureMessage = "案件一覧登録後の保存に失敗しました。Excel 上で保存状態を確認してください。詳細: " + ex.Message;
+                return false;
             }
         }
 

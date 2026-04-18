@@ -53,27 +53,7 @@
   </dependency>
   <dependency>
     <dependentAssembly dependencyType="preRequisite" allowDelayedBinding="true">
-      <assemblyIdentity name="Microsoft.Office.Tools" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
-    </dependentAssembly>
-  </dependency>
-  <dependency>
-    <dependentAssembly dependencyType="preRequisite" allowDelayedBinding="true">
-      <assemblyIdentity name="Microsoft.Office.Tools.Common" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
-    </dependentAssembly>
-  </dependency>
-  <dependency>
-    <dependentAssembly dependencyType="preRequisite" allowDelayedBinding="true">
-      <assemblyIdentity name="Microsoft.Office.Tools.v4.0.Framework" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
-    </dependentAssembly>
-  </dependency>
-  <dependency>
-    <dependentAssembly dependencyType="preRequisite" allowDelayedBinding="true">
-      <assemblyIdentity name="Microsoft.Office.Tools.Word" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
-    </dependentAssembly>
-  </dependency>
-  <dependency>
-    <dependentAssembly dependencyType="preRequisite" allowDelayedBinding="true">
-      <assemblyIdentity name="Microsoft.VisualStudio.Tools.Applications.Runtime" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <assemblyIdentity name="Microsoft.Vbe.Interop" version="15.0.0.0" publicKeyToken="71E9BCE111E9429C" language="neutral" processorArchitecture="msil" />
     </dependentAssembly>
   </dependency>
   <dependency>
@@ -83,7 +63,7 @@
   </dependency>
   <dependency>
     <dependentAssembly dependencyType="preRequisite" allowDelayedBinding="true">
-      <assemblyIdentity name="stdole" version="7.0.3300.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" />
+      <assemblyIdentity name="netstandard" version="2.0.0.0" publicKeyToken="CC7B13FFCD2DDD51" language="neutral" />
     </dependentAssembly>
   </dependency>
   <dependency>
@@ -112,14 +92,50 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="CaseInfoSystem.WordAddIn.dll" size="31744">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="CaseInfoSystem.WordAddIn.dll" size="23552">
       <assemblyIdentity name="CaseInfoSystem.WordAddIn" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>t5uWi2K5W31ImW/sUzWR0xHAy3XL/3DbM60SwfeJJxw=</dsig:DigestValue>
+        <dsig:DigestValue>5OqGC76Px7JTfIxHQuxnANQxLTgvMOCfjwH36cOD0sI=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.Office.Interop.Word.dll" size="940672">
+      <assemblyIdentity name="Microsoft.Office.Interop.Word" version="15.0.0.0" publicKeyToken="71E9BCE111E9429C" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>I7GljXdFUk79h9N0DoNj/jTXZuFZwovfn/KqvHntctA=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.Office.Tools.dll" size="19392">
+      <assemblyIdentity name="Microsoft.Office.Tools" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>L3UyNVA02mZ8DffKXVSyRgEHQ0a56i0jBbJnbZ5XfHo=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.Office.Tools.Common.dll" size="95680">
+      <assemblyIdentity name="Microsoft.Office.Tools.Common" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>Y3DmCtx0rByK55h8jwWfEGn02KJHJYhqh+p1/TofiVE=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>
@@ -135,6 +151,111 @@
       </hash>
     </dependentAssembly>
   </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.Office.Tools.Excel.dll" size="175552">
+      <assemblyIdentity name="Microsoft.Office.Tools.Excel" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>IfPKW2hCPFE0v8IwDu3InpTyGc6blBT6bIyPu9PAA9k=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.Office.Tools.v4.0.Framework.dll" size="31680">
+      <assemblyIdentity name="Microsoft.Office.Tools.v4.0.Framework" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>N4bOLABmWN0w9ckZ5WHUvr9dArzfynyC5RCMVRiE2/M=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.Office.Tools.Word.dll" size="145856">
+      <assemblyIdentity name="Microsoft.Office.Tools.Word" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>N8vO4as2hJ6PJuuv57cSv8/QHQf9hoi/heU/SrbpGsg=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.VisualStudio.Imaging.Interop.14.0.DesignTime.dll" size="22264">
+      <assemblyIdentity name="Microsoft.VisualStudio.Imaging.Interop.14.0.DesignTime" version="14.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>Iek4iWAUPqsDI7m1ZEO2xHQ5lzsWgmU8N+DlAhfjuwg=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.VisualStudio.Interop.dll" size="2140744">
+      <assemblyIdentity name="Microsoft.VisualStudio.Interop" version="17.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>Im3f8FHgZpt1ESNvELYEqPBYSVm6x5vMWc7x+CRpAf4=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Microsoft.VisualStudio.Tools.Applications.Runtime.dll" size="86464">
+      <assemblyIdentity name="Microsoft.VisualStudio.Tools.Applications.Runtime" version="10.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>d9mXRzBqhUbn5au7DNJRVSmV9rl6z1CLCQzVziV30Kc=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Office.dll" size="457328">
+      <assemblyIdentity name="office" version="15.0.0.0" publicKeyToken="71E9BCE111E9429C" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>3ByTN0Nfo3IB27jAEuA5fgobrnJzMFyjl/7tVmug+ek=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="stdole.dll" size="16424">
+      <assemblyIdentity name="stdole" version="17.0.0.0" publicKeyToken="B03F5F7F11D50A3A" language="neutral" processorArchitecture="msil" />
+      <hash>
+        <dsig:Transforms>
+          <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+        </dsig:Transforms>
+        <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+        <dsig:DigestValue>J+H0NL5zzRsL431/j8dgdXL59QgLRZXfswP3YgyxJyk=</dsig:DigestValue>
+      </hash>
+    </dependentAssembly>
+  </dependency>
+  <file name="CaseInfoSystem.WordAddIn.dll.config" size="420">
+    <hash>
+      <dsig:Transforms>
+        <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+      </dsig:Transforms>
+      <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+      <dsig:DigestValue>s7vxTs/+xehjZ96/+x/nIw4P9tUrzU/KkJVdTA7UzpY=</dsig:DigestValue>
+    </hash>
+  </file>
   <vstav3:addIn xmlns:vstav3="urn:schemas-microsoft-com:vsta.v3">
     <vstav3:entryPointsCollection>
       <vstav3:entryPoints>
@@ -160,4 +281,4 @@
       </vstov4:customizations>
     </vstav3:application>
   </vstav3:addIn>
-<publisherIdentity name="CN=CaseInfoSystem Temporary" issuerKeyHash="64b4f75435171f5e87a0b2c5b407e8602cf464b8" /><Signature Id="StrongNameSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>5Hz6KosJjt4OTmeqwicHEOIGO3SF49+1Irv3IR0JZRQ=</DigestValue></Reference></SignedInfo><SignatureValue>0g+O3gCwHw/DXaQAfurlJUjIpLoSlzvMIKhkYiVWNd36sE4KDw7XjO7rujDuuR/EpsR6YnLm/O1dV4CpcrJfNV8ekFEM+++gWCBcuIHD9FssjqXUPT8sU+Hp5u/X0ZnwUlm8KFtOhPFiOnKCvQ5+ZXsimSnLXOXoVpDb5lA/FJ4RT9yHc3KotFhUx7qpK5/fjU3rl2ZJQc7YvQHCXd3+Fzkx6LrMU2FK3b7aNHwhE2mvcehFLocGiYnsas4SL4LY5zazBuaUT14diy6Cv/NPkTeJuPSzHEQmA2VqaqK8J1JESFno2BDapE5Gfsjkz9ANmtZicYM25wz+/JBxjmUSog==</SignatureValue><KeyInfo Id="StrongNameKeyInfo"><KeyValue><RSAKeyValue><Modulus>19jVmO0j4xZDyUNqxvxOY1eZJ0uAhQGmZ4VEVCWilBOJVXjQDzXYMk4jAajCW8UfSMfUgffcfzEhQwUvwbg8N9wIZMs+fmZ3ahgUXNCWuqJuxfj03jwiij+wXcrvE8C6gNfWRs5iqrxSBrEC2o/SAVnYvOX488+i3svHxEk/3663Nhn9RfrrMx7dRgQlFwBtOXFAzjFPotrI00jUdrPdpewp9lON838J1shDezF8uBwWKMF2EQf99o+M93yAUpebsk/69Dl5Yrh9sZSeWDwoHFo6AmZhZStNloZ+Qc2UKOiV0ddDXU0ZY2IBVzwGRczApjuLJRdFoxmskbVo8doKxQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><msrel:RelData xmlns:msrel="http://schemas.microsoft.com/windows/rel/2005/reldata"><r:license xmlns:r="urn:mpeg:mpeg21:2003:01-REL-R-NS" xmlns:as="http://schemas.microsoft.com/windows/pki/2005/Authenticode"><r:grant><as:ManifestInformation Hash="1465091d21f7bb22b5dfe385743b06e2100727c2aa674e0ede8e098b2afa7ce4" Description="" Url=""><as:assemblyIdentity name="CaseInfoSystem.WordAddIn.dll" version="1.0.0.0" publicKeyToken="4d83897ae653ae4d" language="neutral" processorArchitecture="msil" type="win32" /></as:ManifestInformation><as:SignedBy /><as:AuthenticodePublisher><as:X509SubjectName>CN=CaseInfoSystem Temporary</as:X509SubjectName></as:AuthenticodePublisher></r:grant><r:issuer><Signature Id="AuthenticodeSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>60RTBOkQYMH651wfyv9kOTBYVPJgUzA9abPmO40qddg=</DigestValue></Reference></SignedInfo><SignatureValue>B5j1n0uc1FQjbylcNDfU3dOTQ9ok5O0qmkZ4WkVfnWSoVoGLFKxgP0Zi8J1BYZuHxVQo3mlt9QD21u5RtNvFOwZ3qvDdclgB5VqxEpcfU8uH6A6KewerbjkTD1+ic1+jn8P+E20omV5HHk/zpWttuMYC9Nmx4v205m8ez6BBfWpmOlZLtx7bMEiUwp+4T2fbm1CqIjx9IPwPITV+gtEuooOWAQFE3cH5jAPjdUMI6r9rw1Qe9t4Wf/lCZSmgYsbQGqfbojdnsJRmjt3JPc/3hMh/n9tfAIXglsbeakaH+ZxvNX+vnu6/Qmg99LUGuIBANQaD2EGSJyokXULqs/Az3w==</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>19jVmO0j4xZDyUNqxvxOY1eZJ0uAhQGmZ4VEVCWilBOJVXjQDzXYMk4jAajCW8UfSMfUgffcfzEhQwUvwbg8N9wIZMs+fmZ3ahgUXNCWuqJuxfj03jwiij+wXcrvE8C6gNfWRs5iqrxSBrEC2o/SAVnYvOX488+i3svHxEk/3663Nhn9RfrrMx7dRgQlFwBtOXFAzjFPotrI00jUdrPdpewp9lON838J1shDezF8uBwWKMF2EQf99o+M93yAUpebsk/69Dl5Yrh9sZSeWDwoHFo6AmZhZStNloZ+Qc2UKOiV0ddDXU0ZY2IBVzwGRczApjuLJRdFoxmskbVo8doKxQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIDFjCCAf6gAwIBAgIQQI71AvXx461EmCsUQoff7DANBgkqhkiG9w0BAQsFADAjMSEwHwYDVQQDDBhDYXNlSW5mb1N5c3RlbSBUZW1wb3JhcnkwHhcNMjYwNDE1MTEyMjMwWhcNMjcwNDE1MTE0MjMwWjAjMSEwHwYDVQQDDBhDYXNlSW5mb1N5c3RlbSBUZW1wb3JhcnkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDX2NWY7SPjFkPJQ2rG/E5jV5knS4CFAaZnhURUJaKUE4lVeNAPNdgyTiMBqMJbxR9Ix9SB99x/MSFDBS/BuDw33Ahkyz5+ZndqGBRc0Ja6om7F+PTePCKKP7Bdyu8TwLqA19ZGzmKqvFIGsQLaj9IBWdi85fjzz6Ley8fEST/frrc2Gf1F+uszHt1GBCUXAG05cUDOMU+i2sjTSNR2s92l7Cn2U43zfwnWyEN7MXy4HBYowXYRB/32j4z3fIBSl5uyT/r0OXliuH2xlJ5YPCgcWjoCZmFlK02Whn5BzZQo6JXR10NdTRljYgFXPAZFzMCmO4slF0WjGayRtWjx2grFAgMBAAGjRjBEMA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNVHQ4EFgQUZLT3VDUXH16HoLLFtAfoYCz0ZLgwDQYJKoZIhvcNAQELBQADggEBALSSQ6F2/NTVgqNyXtKUSSaELwRN/D8lY6rRCcV1RcIUjl9h7p+8XIdoeFS9bTkodJe0yAMYCy5Jqp1XtRoOGFS6QDmz/nM7YbUP5RCb4c5LVNffxTxBm1lhLf8Fpjtr6+QWLPDJ6uo4dvZqdF4CNrjWRXXkaUEF9KcRsHz67XOChgBwP4LLZhYrZODvu0PGWNPIcrvX1Kf/07DH5Z/QLAEXPcyAx5J+fePAUkY2pJLYZVMsHBPwN5Uku7MYFTMzrxcB9tGWB45PJEEsIkXuMl8VWcifYXFdQSZ3AC6hmmRxhbScCFFgHqoY1sSQi65xLvkuW2cYHcDFySj+uRLYAfc=</X509Certificate></X509Data></KeyInfo></Signature></r:issuer></r:license></msrel:RelData></KeyInfo></Signature></asmv1:assembly>
+<publisherIdentity name="CN=CaseInfoSystem Temporary" issuerKeyHash="64b4f75435171f5e87a0b2c5b407e8602cf464b8" /><Signature Id="StrongNameSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>7DC3+NRcxp7oiJ5iUMwttNPFhMONNJZWHZf4WfwwCwk=</DigestValue></Reference></SignedInfo><SignatureValue>FqyAF4+q+kA2RGQzgTtg8Q4I0TQs4QiEAVncZsffvxzCe4lv2/5LYIPBesZniIbd/+q837tycoeN5+X6NS5A4P16hBHDIJ0FxGIw57j1ZBq4QxkH/TrdrPUuN3S4JmW2jA39b1RRwWGWpnr3nm/P7ESi3kCCVt0z8zwNd8CN/K5ReuqmBSyj9X2ad2x5D/25J07Z6xbTlSxrkEbfSDOBXX3Y/WwFJCrT0g0i47xN5GlfnYqptSci4VgnupV6LrO1t4qSpii2neIaNYIWMSXBQacPLHYruavzAiTluxpukBND2O2N32uzGWVgQPA+7/M7XLCIbdATrp3ac+NL4PkUqw==</SignatureValue><KeyInfo Id="StrongNameKeyInfo"><KeyValue><RSAKeyValue><Modulus>19jVmO0j4xZDyUNqxvxOY1eZJ0uAhQGmZ4VEVCWilBOJVXjQDzXYMk4jAajCW8UfSMfUgffcfzEhQwUvwbg8N9wIZMs+fmZ3ahgUXNCWuqJuxfj03jwiij+wXcrvE8C6gNfWRs5iqrxSBrEC2o/SAVnYvOX488+i3svHxEk/3663Nhn9RfrrMx7dRgQlFwBtOXFAzjFPotrI00jUdrPdpewp9lON838J1shDezF8uBwWKMF2EQf99o+M93yAUpebsk/69Dl5Yrh9sZSeWDwoHFo6AmZhZStNloZ+Qc2UKOiV0ddDXU0ZY2IBVzwGRczApjuLJRdFoxmskbVo8doKxQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><msrel:RelData xmlns:msrel="http://schemas.microsoft.com/windows/rel/2005/reldata"><r:license xmlns:r="urn:mpeg:mpeg21:2003:01-REL-R-NS" xmlns:as="http://schemas.microsoft.com/windows/pki/2005/Authenticode"><r:grant><as:ManifestInformation Hash="090b30fc59f8971d5696348dc384c5d3b42dcc50629e88e89ec65cd4f8b730ec" Description="" Url=""><as:assemblyIdentity name="CaseInfoSystem.WordAddIn.dll" version="1.0.0.0" publicKeyToken="4d83897ae653ae4d" language="neutral" processorArchitecture="msil" type="win32" /></as:ManifestInformation><as:SignedBy /><as:AuthenticodePublisher><as:X509SubjectName>CN=CaseInfoSystem Temporary</as:X509SubjectName></as:AuthenticodePublisher></r:grant><r:issuer><Signature Id="AuthenticodeSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>D32Olm+9q36SuVK/sn6yK+9umFW+C3Ds5n+fac0BnaU=</DigestValue></Reference></SignedInfo><SignatureValue>eGaCLYW3YwlqHWtMkH5emIYryJD63y0LNg45Zw6Njgf1MtRFhswaj2/d0wvklATI5uFCzosWPLHoaKN9HQInDbUoU2ADQNDzQb8sYGO9BRkmz9pDvEBTG4lochY4Gy7iHd417drEjC3sizO+ZSUR3LICWscJvCWyvvyfAX1zfKyk0qX0XnT2EgYHsSgCs+MqmoohlPsJA8hArg9lxpykyhJdrYfwdZXNa417hY+0aiVQUBGImoaUgLUlcaHyhXGuCqp6zYGk8QKrVE87lGihDjpCjuGfoIE90yJ0Vbs6t4m0bPuuq3f9KHg8sowaE2/T0azTnuNiZpA062CI5nNkdQ==</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>19jVmO0j4xZDyUNqxvxOY1eZJ0uAhQGmZ4VEVCWilBOJVXjQDzXYMk4jAajCW8UfSMfUgffcfzEhQwUvwbg8N9wIZMs+fmZ3ahgUXNCWuqJuxfj03jwiij+wXcrvE8C6gNfWRs5iqrxSBrEC2o/SAVnYvOX488+i3svHxEk/3663Nhn9RfrrMx7dRgQlFwBtOXFAzjFPotrI00jUdrPdpewp9lON838J1shDezF8uBwWKMF2EQf99o+M93yAUpebsk/69Dl5Yrh9sZSeWDwoHFo6AmZhZStNloZ+Qc2UKOiV0ddDXU0ZY2IBVzwGRczApjuLJRdFoxmskbVo8doKxQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIDFjCCAf6gAwIBAgIQQI71AvXx461EmCsUQoff7DANBgkqhkiG9w0BAQsFADAjMSEwHwYDVQQDDBhDYXNlSW5mb1N5c3RlbSBUZW1wb3JhcnkwHhcNMjYwNDE1MTEyMjMwWhcNMjcwNDE1MTE0MjMwWjAjMSEwHwYDVQQDDBhDYXNlSW5mb1N5c3RlbSBUZW1wb3JhcnkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDX2NWY7SPjFkPJQ2rG/E5jV5knS4CFAaZnhURUJaKUE4lVeNAPNdgyTiMBqMJbxR9Ix9SB99x/MSFDBS/BuDw33Ahkyz5+ZndqGBRc0Ja6om7F+PTePCKKP7Bdyu8TwLqA19ZGzmKqvFIGsQLaj9IBWdi85fjzz6Ley8fEST/frrc2Gf1F+uszHt1GBCUXAG05cUDOMU+i2sjTSNR2s92l7Cn2U43zfwnWyEN7MXy4HBYowXYRB/32j4z3fIBSl5uyT/r0OXliuH2xlJ5YPCgcWjoCZmFlK02Whn5BzZQo6JXR10NdTRljYgFXPAZFzMCmO4slF0WjGayRtWjx2grFAgMBAAGjRjBEMA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNVHQ4EFgQUZLT3VDUXH16HoLLFtAfoYCz0ZLgwDQYJKoZIhvcNAQELBQADggEBALSSQ6F2/NTVgqNyXtKUSSaELwRN/D8lY6rRCcV1RcIUjl9h7p+8XIdoeFS9bTkodJe0yAMYCy5Jqp1XtRoOGFS6QDmz/nM7YbUP5RCb4c5LVNffxTxBm1lhLf8Fpjtr6+QWLPDJ6uo4dvZqdF4CNrjWRXXkaUEF9KcRsHz67XOChgBwP4LLZhYrZODvu0PGWNPIcrvX1Kf/07DH5Z/QLAEXPcyAx5J+fePAUkY2pJLYZVMsHBPwN5Uku7MYFTMzrxcB9tGWB45PJEEsIkXuMl8VWcifYXFdQSZ3AC6hmmRxhbScCFFgHqoY1sSQi65xLvkuW2cYHcDFySj+uRLYAfc=</X509Certificate></X509Data></KeyInfo></Signature></r:issuer></r:license></msrel:RelData></KeyInfo></Signature></asmv1:assembly>

@@ -65,6 +65,102 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void NotifyCasePaneUpdatedIfNeeded_WhenWorkbookWasDirty_RestoresDirtyState()
+        {
+            var notifications = new List<string>();
+            var manager = new TaskPaneManager(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnCasePaneUpdatedNotification = reason => notifications.Add(reason)
+                });
+
+            var workbook = new Excel.Workbook
+            {
+                Saved = true
+            };
+            var buildResult = new TaskPaneSnapshotBuilderService.TaskPaneBuildResult("snapshot", updatedCaseSnapshotCache: true);
+
+            manager.NotifyCasePaneUpdatedIfNeeded(workbook, "WorkbookOpen", buildResult, originalSavedState: false);
+
+            Assert.False(workbook.Saved);
+            Assert.Single(notifications);
+        }
+
+        [Fact]
+        public void NotifyCasePaneUpdatedIfNeeded_WhenWorkbookWasClean_RestoresCleanState()
+        {
+            var notifications = new List<string>();
+            var manager = new TaskPaneManager(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnCasePaneUpdatedNotification = reason => notifications.Add(reason)
+                });
+
+            var workbook = new Excel.Workbook
+            {
+                Saved = false
+            };
+            var buildResult = new TaskPaneSnapshotBuilderService.TaskPaneBuildResult("snapshot", updatedCaseSnapshotCache: true);
+
+            manager.NotifyCasePaneUpdatedIfNeeded(workbook, "WorkbookOpen", buildResult, originalSavedState: true);
+
+            Assert.True(workbook.Saved);
+            Assert.Single(notifications);
+        }
+
+        [Fact]
+        public void NotifyCasePaneUpdatedIfNeeded_WhenCacheUpdatedButNotificationIsSkipped_RestoresOriginalDirtyState()
+        {
+            var notifications = new List<string>();
+            var manager = new TaskPaneManager(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnCasePaneUpdatedNotification = reason => notifications.Add(reason)
+                });
+
+            var workbook = new Excel.Workbook
+            {
+                Saved = true
+            };
+            var buildResult = new TaskPaneSnapshotBuilderService.TaskPaneBuildResult("snapshot", updatedCaseSnapshotCache: true);
+
+            manager.NotifyCasePaneUpdatedIfNeeded(workbook, "SheetActivate", buildResult, originalSavedState: false);
+
+            Assert.False(workbook.Saved);
+            Assert.Empty(notifications);
+        }
+
+        [Fact]
+        public void NotifyCasePaneUpdatedIfNeeded_WhenCacheWasNotUpdated_DoesNotRestoreSavedState()
+        {
+            var notifications = new List<string>();
+            var manager = new TaskPaneManager(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnCasePaneUpdatedNotification = reason => notifications.Add(reason)
+                });
+
+            var workbook = new Excel.Workbook
+            {
+                Saved = true
+            };
+            var buildResult = new TaskPaneSnapshotBuilderService.TaskPaneBuildResult("snapshot", updatedCaseSnapshotCache: false);
+
+            manager.NotifyCasePaneUpdatedIfNeeded(workbook, "WorkbookOpen", buildResult, originalSavedState: false);
+
+            Assert.True(workbook.Saved);
+            Assert.Empty(notifications);
+        }
+
+        [Fact]
         public void NotifyCasePaneUpdatedIfNeeded_WhenReasonIsNotEligible_DoesNotFireNotification()
         {
             var notifications = new List<string>();
@@ -417,7 +513,7 @@ namespace CaseInfoSystem.Tests
                 new CaseInfoSystem.ExcelAddIn.ThisAddIn(),
                 new ExcelInteropService(),
                 snapshotBuilderService ?? new TaskPaneSnapshotBuilderService(),
-                new DocumentCommandService(),
+                CreateDocumentCommandService(),
                 new DocumentEligibilityDiagnosticsService(),
                 new DocumentMasterCatalogDiagnosticsService(),
                 new DocumentNamePromptService(),
@@ -429,6 +525,54 @@ namespace CaseInfoSystem.Tests
                 new UserErrorService(),
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 hooks);
+        }
+
+        private static DocumentCommandService CreateDocumentCommandService()
+        {
+            return new DocumentCommandService(
+                new CaseInfoSystem.ExcelAddIn.ThisAddIn(),
+                new InlineScreenUpdatingExecutionBridge(),
+                new NoOpTaskPaneRefreshSuppressionBridge(),
+                new CollectingActiveTaskPaneRefreshBridge(),
+                new DocumentExecutionModeService(OrchestrationTestSupport.CreateLogger(new List<string>()), new ExcelInteropService()),
+                new DocumentExecutionEligibilityService(),
+                new DocumentExecutionPolicyService(),
+                new DocumentCreateService(),
+                new AccountingSetCommandService(),
+                new CaseListRegistrationService(),
+                new CaseContextFactory(),
+                new ExcelInteropService(),
+                OrchestrationTestSupport.CreateLogger(new List<string>()));
+        }
+
+        private sealed class InlineScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge
+        {
+            public void Execute(Action action)
+            {
+                action?.Invoke();
+            }
+        }
+
+        private sealed class NoOpTaskPaneRefreshSuppressionBridge : ITaskPaneRefreshSuppressionBridge
+        {
+            public IDisposable Enter(string reason)
+            {
+                return new NoOpDisposable();
+            }
+        }
+
+        private sealed class CollectingActiveTaskPaneRefreshBridge : IActiveTaskPaneRefreshBridge
+        {
+            public void RequestRefresh(string reason)
+            {
+            }
+        }
+
+        private sealed class NoOpDisposable : IDisposable
+        {
+            public void Dispose()
+            {
+            }
         }
     }
 }

@@ -78,8 +78,14 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		internal KernelHomeForm (KernelWorkbookService kernelWorkbookService, KernelCaseCreationCommandService kernelCaseCreationCommandService)
 			: this ()
 		{
-			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
-			_kernelCaseCreationCommandService = kernelCaseCreationCommandService ?? throw new ArgumentNullException ("kernelCaseCreationCommandService");
+			if (kernelWorkbookService == null) {
+				throw new ArgumentNullException ("kernelWorkbookService");
+			}
+			if (kernelCaseCreationCommandService == null) {
+				throw new ArgumentNullException ("kernelCaseCreationCommandService");
+			}
+			_kernelWorkbookService = kernelWorkbookService;
+			_kernelCaseCreationCommandService = kernelCaseCreationCommandService;
 			InitializeRuntime ();
 		}
 
@@ -251,7 +257,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPaneFromHome (codeName, "KernelHomeForm.OpenSheet")) {
 				MessageBox.Show ("シートを開けませんでした。logs\\KernelHomeAddin_trace.log を確認してください。", "案件情報System");
 			} else {
-				Globals.ThisAddIn?.ScheduleWorkbookTaskPaneRefresh (_kernelWorkbookService.GetOpenKernelWorkbook (), "KernelHomeForm.OpenSheet.PostClose");
+				if (Globals.ThisAddIn != null) {
+					Globals.ThisAddIn.ScheduleWorkbookTaskPaneRefresh (_kernelWorkbookService.GetOpenKernelWorkbook (), "KernelHomeForm.OpenSheet.PostClose");
+				}
 			}
 			Close ();
 		}

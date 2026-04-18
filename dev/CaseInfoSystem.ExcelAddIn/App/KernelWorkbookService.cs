@@ -728,7 +728,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 if (requiresSave)
                 {
                     workbook.Save();
-                    workbook.Saved = true;
                     _logger.Info("SaveAndCloseKernelWorkbook saved workbook=" + workbookFullName);
                 }
                 else

@@ -350,11 +350,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblCustomer
             // 
             this.lblCustomer.AutoSize = true;
-            this.lblCustomer.Font = new System.Drawing.Font("BIZ UDゴシック", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblCustomer.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblCustomer.Location = new System.Drawing.Point(43, 201);
             this.lblCustomer.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblCustomer.Name = "lblCustomer";
-            this.lblCustomer.Size = new System.Drawing.Size(104, 19);
+            this.lblCustomer.Size = new System.Drawing.Size(89, 25);
             this.lblCustomer.TabIndex = 5;
             this.lblCustomer.Text = "【顧客名】";
             this.lblCustomer.Click += new System.EventHandler(this.lblCustomer_Click);
@@ -383,7 +383,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblNewCaseTitlePrefix
             // 
             this.lblNewCaseTitlePrefix.AutoSize = true;
-            this.lblNewCaseTitlePrefix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewCaseTitlePrefix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblNewCaseTitlePrefix.Location = new System.Drawing.Point(50, 275);
             this.lblNewCaseTitlePrefix.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblNewCaseTitlePrefix.Name = "lblNewCaseTitlePrefix";
@@ -394,24 +394,24 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblNewCaseTitleFolder
             // 
             this.lblNewCaseTitleFolder.AutoSize = true;
-            this.lblNewCaseTitleFolder.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewCaseTitleFolder.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblNewCaseTitleFolder.ForeColor = System.Drawing.Color.Green;
             this.lblNewCaseTitleFolder.Location = new System.Drawing.Point(181, 275);
             this.lblNewCaseTitleFolder.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblNewCaseTitleFolder.Name = "lblNewCaseTitleFolder";
-            this.lblNewCaseTitleFolder.Size = new System.Drawing.Size(108, 25);
+            this.lblNewCaseTitleFolder.Size = new System.Drawing.Size(107, 25);
             this.lblNewCaseTitleFolder.TabIndex = 9;
             this.lblNewCaseTitleFolder.Text = "新規フォルダ";
             // 
             // lblNewCaseTitleCase
             // 
             this.lblNewCaseTitleCase.AutoSize = true;
-            this.lblNewCaseTitleCase.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewCaseTitleCase.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblNewCaseTitleCase.ForeColor = System.Drawing.Color.Blue;
             this.lblNewCaseTitleCase.Location = new System.Drawing.Point(308, 275);
             this.lblNewCaseTitleCase.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblNewCaseTitleCase.Name = "lblNewCaseTitleCase";
-            this.lblNewCaseTitleCase.Size = new System.Drawing.Size(126, 25);
+            this.lblNewCaseTitleCase.Size = new System.Drawing.Size(123, 25);
             this.lblNewCaseTitleCase.TabIndex = 11;
             this.lblNewCaseTitleCase.Text = "案件情報.xlsx";
             this.lblNewCaseTitleCase.Click += new System.EventHandler(this.lblNewCaseTitleCase_Click);
@@ -419,7 +419,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblNewCaseTitleSuffix
             // 
             this.lblNewCaseTitleSuffix.AutoSize = true;
-            this.lblNewCaseTitleSuffix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewCaseTitleSuffix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblNewCaseTitleSuffix.Location = new System.Drawing.Point(430, 275);
             this.lblNewCaseTitleSuffix.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblNewCaseTitleSuffix.Name = "lblNewCaseTitleSuffix";
@@ -495,7 +495,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblNewTreeCaseName
             // 
             this.lblNewTreeCaseName.AutoSize = true;
-            this.lblNewTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblNewTreeCaseName.ForeColor = System.Drawing.Color.RoyalBlue;
             this.lblNewTreeCaseName.Location = new System.Drawing.Point(192, 105);
             this.lblNewTreeCaseName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
@@ -509,7 +509,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             this.lblNewTreeFolderName.AutoSize = true;
             this.lblNewTreeFolderName.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.lblNewTreeFolderName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeFolderName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblNewTreeFolderName.ForeColor = System.Drawing.Color.ForestGreen;
             this.lblNewTreeFolderName.Location = new System.Drawing.Point(110, 57);
             this.lblNewTreeFolderName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
@@ -537,7 +537,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblExistingCaseTitlePrefix
             // 
             this.lblExistingCaseTitlePrefix.AutoSize = true;
-            this.lblExistingCaseTitlePrefix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingCaseTitlePrefix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblExistingCaseTitlePrefix.Location = new System.Drawing.Point(50, 529);
             this.lblExistingCaseTitlePrefix.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblExistingCaseTitlePrefix.Name = "lblExistingCaseTitlePrefix";
@@ -549,19 +549,19 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblExistingCaseTitleCase
             // 
             this.lblExistingCaseTitleCase.AutoSize = true;
-            this.lblExistingCaseTitleCase.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingCaseTitleCase.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblExistingCaseTitleCase.ForeColor = System.Drawing.Color.Blue;
             this.lblExistingCaseTitleCase.Location = new System.Drawing.Point(181, 529);
             this.lblExistingCaseTitleCase.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblExistingCaseTitleCase.Name = "lblExistingCaseTitleCase";
-            this.lblExistingCaseTitleCase.Size = new System.Drawing.Size(126, 25);
+            this.lblExistingCaseTitleCase.Size = new System.Drawing.Size(123, 25);
             this.lblExistingCaseTitleCase.TabIndex = 14;
             this.lblExistingCaseTitleCase.Text = "案件情報.xlsx";
             // 
             // lblExistingCaseTitleSuffix
             // 
             this.lblExistingCaseTitleSuffix.AutoSize = true;
-            this.lblExistingCaseTitleSuffix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingCaseTitleSuffix.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblExistingCaseTitleSuffix.Location = new System.Drawing.Point(302, 529);
             this.lblExistingCaseTitleSuffix.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblExistingCaseTitleSuffix.Name = "lblExistingCaseTitleSuffix";
@@ -634,7 +634,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblExistingTreeCaseName
             // 
             this.lblExistingTreeCaseName.AutoSize = true;
-            this.lblExistingTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblExistingTreeCaseName.ForeColor = System.Drawing.Color.RoyalBlue;
             this.lblExistingTreeCaseName.Location = new System.Drawing.Point(107, 70);
             this.lblExistingTreeCaseName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
@@ -659,11 +659,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Font = new System.Drawing.Font("BIZ UDゴシック", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.label6.Location = new System.Drawing.Point(284, 278);
+            this.label6.Font = new System.Drawing.Font("Yu Gothic UI", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label6.Location = new System.Drawing.Point(282, 275);
             this.label6.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(28, 19);
+            this.label6.Size = new System.Drawing.Size(31, 25);
             this.label6.TabIndex = 18;
             this.label6.Text = "＆";
             // 

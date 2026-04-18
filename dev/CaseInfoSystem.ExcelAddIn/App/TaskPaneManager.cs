@@ -495,6 +495,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (host.Control is DocumentButtonsControl caseControl)
             {
                 _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
+                bool? originalWorkbookSavedState = TryGetWorkbookSavedState(context.Workbook);
                 TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _taskPaneSnapshotBuilderService.BuildSnapshotText(context.Workbook);
                 string snapshotText = buildResult.SnapshotText;
                 _logger.Info("RenderHost snapshot acquired. role=Case, length=" + snapshotText.Length.ToString());
@@ -503,7 +504,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 // 処理ブロック: CASE pane の表示判断は App 層で固定化し、UI には描画済み状態だけを渡す。
                 CaseTaskPaneViewState viewState = _caseTaskPaneViewStateBuilder.Build(snapshot, caseControl.SelectedTabName);
                 caseControl.Render(viewState);
-                NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult);
+                NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
                 _logger.Info("RenderHost completed. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
             }
         }
@@ -514,26 +515,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// 戻り値: なし。
         /// 副作用: 内部キャッシュ更新による保存確認を抑止し、業務メッセージを表示する。
         /// </summary>
-        internal void NotifyCasePaneUpdatedIfNeeded(Excel.Workbook workbook, string reason, TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult)
+        internal void NotifyCasePaneUpdatedIfNeeded(Excel.Workbook workbook, string reason, TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult, bool? originalSavedState = null)
         {
-            if (workbook == null
-                || !CasePaneCacheRefreshNotificationPolicy.ShouldNotify(
-                    buildResult != null && buildResult.UpdatedCaseSnapshotCache,
-                    reason))
+            if (workbook == null)
             {
                 return;
             }
 
             try
             {
+                bool updatedCaseSnapshotCache = buildResult != null && buildResult.UpdatedCaseSnapshotCache;
+                if (updatedCaseSnapshotCache)
+                {
+                    RestoreWorkbookSavedState(workbook, originalSavedState);
+                }
+
+                if (!CasePaneCacheRefreshNotificationPolicy.ShouldNotify(updatedCaseSnapshotCache, reason))
+                {
+                    return;
+                }
+
                 if (_testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null)
                 {
                     _testHooks.OnCasePaneUpdatedNotification(reason ?? string.Empty);
                     return;
                 }
 
-                // 処理ブロック: 文書ボタンパネルの内部更新だけで CASE が未保存扱いにならないように戻す。
-                workbook.Saved = true;
                 MessageBox.Show("文書ボタンパネルを更新しました", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _logger.Info("CASE pane cache refresh notification was shown. workbook=" + SafeGetWorkbookName(workbook) + ", reason=" + (reason ?? string.Empty));
             }
@@ -553,6 +560,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private string SafeGetWorkbookName(Excel.Workbook workbook)
         {
             return workbook == null ? string.Empty : (_excelInteropService.GetWorkbookFullName(workbook) ?? string.Empty);
+        }
+
+        private bool? TryGetWorkbookSavedState(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return workbook.Saved;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("TryGetWorkbookSavedState failed.", ex);
+                return null;
+            }
+        }
+
+        private void RestoreWorkbookSavedState(Excel.Workbook workbook, bool? originalSavedState)
+        {
+            if (workbook == null || !originalSavedState.HasValue)
+            {
+                return;
+            }
+
+            try
+            {
+                workbook.Saved = originalSavedState.Value;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("RestoreWorkbookSavedState failed.", ex);
+            }
         }
 
         private void CaseControl_ActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)

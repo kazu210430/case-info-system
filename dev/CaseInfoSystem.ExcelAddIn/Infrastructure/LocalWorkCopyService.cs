@@ -6,6 +6,17 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
 	internal sealed class LocalWorkCopyService : IDisposable
 	{
+		internal sealed class LocalWorkCopyServiceTestHooks
+		{
+			internal Func<object, string, bool> IsDocumentOpen { get; set; }
+
+			internal Func<string, bool> FileExistsSafe { get; set; }
+
+			internal Func<string, string, bool> MoveFileSafe { get; set; }
+
+			internal Action<string, string> ShowFinalizeFailureMessage { get; set; }
+		}
+
 		private sealed class LocalWorkCopyJob
 		{
 			internal string LocalPath { get; }
@@ -33,6 +44,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private readonly Logger _logger;
 
+		private readonly LocalWorkCopyServiceTestHooks _testHooks;
+
 		private readonly Dictionary<string, LocalWorkCopyJob> _jobs;
 
 		private readonly Timer _pollTimer;
@@ -40,13 +53,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		private bool _disposed;
 
 		internal LocalWorkCopyService (PathCompatibilityService pathCompatibilityService, WordInteropService wordInteropService, Logger logger)
+			: this (pathCompatibilityService, wordInteropService, logger, testHooks: null)
+		{
+		}
+
+		internal LocalWorkCopyService (PathCompatibilityService pathCompatibilityService, WordInteropService wordInteropService, Logger logger, LocalWorkCopyServiceTestHooks testHooks)
 		{
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_wordInteropService = wordInteropService ?? throw new ArgumentNullException ("wordInteropService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
+			_testHooks = testHooks;
 			_jobs = new Dictionary<string, LocalWorkCopyJob> (StringComparer.OrdinalIgnoreCase);
 			_pollTimer = new Timer ();
-			_pollTimer.Interval = 5000;
+			_pollTimer.Interval = LocalWorkPollIntervalMs;
 			_pollTimer.Tick += PollTimer_Tick;
 		}
 
@@ -76,7 +95,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			string text2 = _pathCompatibilityService.NormalizePath (finalPath);
 			if (text.Length != 0 && text2.Length != 0) {
 				string key = text.ToLowerInvariant ();
-				_jobs [key] = new LocalWorkCopyJob (text, text2, _pathCompatibilityService.GetFileNameFromPath (text2), wordApplication);
+				_jobs[key] = new LocalWorkCopyJob (text, text2, _pathCompatibilityService.GetFileNameFromPath (text2), wordApplication);
 				if (!_pollTimer.Enabled) {
 					_pollTimer.Start ();
 				}
@@ -106,6 +125,21 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			_pollTimer.Stop ();
 		}
 
+		internal void ExecutePollLocalWorkCopiesForTesting ()
+		{
+			PollLocalWorkCopies ();
+		}
+
+		internal void RaisePollTimerTickForTesting ()
+		{
+			PollTimer_Tick (this, EventArgs.Empty);
+		}
+
+		internal bool IsPollingActiveForTesting ()
+		{
+			return _pollTimer.Enabled;
+		}
+
 		private void PollLocalWorkCopies ()
 		{
 			if (_jobs.Count == 0) {
@@ -115,7 +149,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			List<string> list = new List<string> ();
 			foreach (KeyValuePair<string, LocalWorkCopyJob> job in _jobs) {
 				LocalWorkCopyJob value = job.Value;
-				if (!_wordInteropService.IsDocumentOpen (value.WordApplication, value.LocalPath) && FinalizeTrackedWordDoc (value)) {
+				if (!IsDocumentOpen (value.WordApplication, value.LocalPath) && FinalizeTrackedWordDoc (value)) {
 					list.Add (job.Key);
 				}
 			}
@@ -132,14 +166,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (job == null) {
 				return false;
 			}
-			if (!_pathCompatibilityService.FileExistsSafe (job.LocalPath)) {
+			if (!FileExistsSafe (job.LocalPath)) {
 				return true;
 			}
-			if (_pathCompatibilityService.MoveFileSafe (job.LocalPath, job.FinalPath)) {
+			if (MoveFileSafe (job.LocalPath, job.FinalPath)) {
 				_logger.Info ("LocalWorkCopyService finalized local copy. final=" + job.FinalPath);
 				return true;
 			}
-			MessageBox.Show ("ローカル作業コピーを最終保存先へ移動できませんでした。" + Environment.NewLine + "Word を閉じた後、再度お試しください。" + Environment.NewLine + Environment.NewLine + "Local: " + job.LocalPath + Environment.NewLine + "Final: " + job.FinalPath, "Case System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			ShowFinalizeFailureMessage (job);
 			return false;
 		}
 
@@ -150,6 +184,44 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception exception) {
 				_logger.Error ("LocalWorkCopyService.PollLocalWorkCopies failed.", exception);
 			}
+		}
+
+		private bool IsDocumentOpen (object wordApplication, string localPath)
+		{
+			if (_testHooks != null && _testHooks.IsDocumentOpen != null) {
+				return _testHooks.IsDocumentOpen (wordApplication, localPath);
+			}
+			return _wordInteropService.IsDocumentOpen (wordApplication, localPath);
+		}
+
+		private bool FileExistsSafe (string path)
+		{
+			return (_testHooks != null && _testHooks.FileExistsSafe != null) ? _testHooks.FileExistsSafe (path) : _pathCompatibilityService.FileExistsSafe (path);
+		}
+
+		private bool MoveFileSafe (string sourcePath, string destinationPath)
+		{
+			return (_testHooks != null && _testHooks.MoveFileSafe != null) ? _testHooks.MoveFileSafe (sourcePath, destinationPath) : _pathCompatibilityService.MoveFileSafe (sourcePath, destinationPath);
+		}
+
+		private void ShowFinalizeFailureMessage (LocalWorkCopyJob job)
+		{
+			if (job == null) {
+				return;
+			}
+			if (_testHooks != null && _testHooks.ShowFinalizeFailureMessage != null) {
+				_testHooks.ShowFinalizeFailureMessage (job.LocalPath, job.FinalPath);
+				return;
+			}
+			string message = "Could not move the local work copy to the final location."
+				+ Environment.NewLine
+				+ "Close Word and confirm the destination is available, then try again."
+				+ Environment.NewLine
+				+ Environment.NewLine
+				+ "Local: " + job.LocalPath
+				+ Environment.NewLine
+				+ "Final: " + job.FinalPath;
+			MessageBox.Show (message, "Case System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 		}
 
 		public void Dispose ()

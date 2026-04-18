@@ -1,0 +1,5 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <CaseInfoSystemVstoBuildAssetsDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\lib\net48\'))</CaseInfoSystemVstoBuildAssetsDir>
+  </PropertyGroup>
+</Project>

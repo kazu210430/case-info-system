@@ -1,0 +1,37 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Reference Include="Microsoft.Office.Core">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Office.dll</HintPath>
+      <Private>False</Private>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.v4.0.Framework">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.Office.Tools.v4.0.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Tools.Applications.Runtime">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.VisualStudio.Tools.Applications.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.Office.Tools.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Common">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.Office.Tools.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Excel" Condition="'$(MSBuildProjectName)' == 'CaseInfoSystem.ExcelAddIn'">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.Office.Tools.Excel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Word" Condition="'$(MSBuildProjectName)' == 'CaseInfoSystem.WordAddIn'">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.Office.Tools.Word.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Common.v4.0.Utilities" Condition="'$(MSBuildProjectName)' == 'CaseInfoSystem.ExcelAddIn' or '$(MSBuildProjectName)' == 'CaseInfoSystem.WordAddIn'">
+      <HintPath>$(CaseInfoSystemVstoBuildAssetsDir)\Microsoft.Office.Tools.Common.v4.0.Utilities.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

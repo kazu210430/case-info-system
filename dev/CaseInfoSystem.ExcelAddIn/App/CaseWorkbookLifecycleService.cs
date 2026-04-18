@@ -604,7 +604,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         }
                         else
                         {
-                            workbook.Saved = true;
+                            WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
                         }
 
                         _sessionDirtyWorkbookKeys.Remove(workbookKey);

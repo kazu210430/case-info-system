@@ -229,6 +229,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 // 例外処理: 終了イベントで例外を再送出すると Excel のクローズ動作が不安定になるため、ログ化して返す。
                 _logger.Error("Case workbook before-close handling failed.", ex);
+                cancel = false;
                 return false;
             }
         }

@@ -117,6 +117,86 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void PrepareForHomeDisplay_WhenHomeSessionCompletes_CanPrepareAgain()
+        {
+            var callLog = new List<string>();
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    ApplyHomeDisplayVisibility = () => callLog.Add("apply"),
+                    GetOpenKernelWorkbook = () => null,
+                    HasOtherVisibleWorkbook = _ => false,
+                    HasOtherWorkbook = _ => false,
+                    ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
+                    QuitApplication = () => callLog.Add("quit")
+                });
+
+            service.PrepareForHomeDisplay();
+            service.CloseHomeSession();
+            service.PrepareForHomeDisplay();
+
+            Assert.Equal(
+                new[]
+                {
+                    "apply",
+                    "release:False",
+                    "quit",
+                    "apply"
+                },
+                callLog);
+        }
+
+        [Fact]
+        public void ResolveKernelWorkbook_WhenAvailabilityChanges_TransitionsFromPrimaryToFallbackToUnavailable()
+        {
+            var callLog = new List<string>();
+            int phase = 0;
+            Excel.Workbook primary = new Excel.Workbook();
+            Excel.Workbook fallback = new Excel.Workbook();
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        callLog.Add("get:" + phase.ToString());
+                        return phase == 0 ? primary : null;
+                    },
+                    ResolveKernelWorkbookPath = root =>
+                    {
+                        callLog.Add("resolve:" + phase.ToString());
+                        return phase == 2 ? string.Empty : root + "\\kernel.xlsm";
+                    },
+                    FindOpenWorkbook = path =>
+                    {
+                        callLog.Add("find:" + phase.ToString());
+                        return phase == 1 ? fallback : null;
+                    }
+                });
+            var context = new WorkbookContext(null, null, WorkbookRole.Case, @"C:\root", "case.xlsx", "shHOME");
+
+            Excel.Workbook first = service.ResolveKernelWorkbook(context);
+            phase = 1;
+            Excel.Workbook second = service.ResolveKernelWorkbook(context);
+            phase = 2;
+            Excel.Workbook third = service.ResolveKernelWorkbook(context);
+
+            Assert.Same(primary, first);
+            Assert.Same(fallback, second);
+            Assert.Null(third);
+            Assert.Equal(
+                new[]
+                {
+                    "get:0",
+                    "get:1",
+                    "resolve:1",
+                    "find:1",
+                    "get:2",
+                    "resolve:2"
+                },
+                callLog);
+        }
+
+        [Fact]
         public void CloseHomeSessionSavingKernel_WhenCaseCreationFlowIsActive_ConcealsBeforeSaveAndDismissesWithoutRestoreOrQuit()
         {
             int quitCalls = 0;
@@ -208,6 +288,46 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(0, quitCalls);
             Assert.Equal(new[] { "request-close" }, callLog);
+        }
+
+        [Fact]
+        public void CloseHomeSession_WhenManagedCloseIsRetriedAfterRejection_ReusesPreparedState()
+        {
+            var callLog = new List<string>();
+            int requestCalls = 0;
+            Excel.Workbook kernelWorkbook = new Excel.Workbook { FullName = @"C:\root\kernel.xlsm", Name = "kernel.xlsm" };
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    ApplyHomeDisplayVisibility = () => callLog.Add("apply"),
+                    GetOpenKernelWorkbook = () => kernelWorkbook,
+                    HasOtherVisibleWorkbook = _ => true,
+                    HasOtherWorkbook = _ => true,
+                    RequestManagedCloseFromHomeExit = workbook =>
+                    {
+                        requestCalls++;
+                        callLog.Add("request:" + requestCalls.ToString());
+                        return requestCalls > 1;
+                    },
+                    ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
+                    QuitApplication = () => callLog.Add("quit")
+                });
+
+            service.SetLifecycleService(new KernelWorkbookLifecycleService());
+
+            service.PrepareForHomeDisplay();
+            service.CloseHomeSession();
+            service.CloseHomeSession();
+
+            Assert.Equal(
+                new[]
+                {
+                    "apply",
+                    "request:1",
+                    "request:2",
+                    "release:True"
+                },
+                callLog);
         }
 
         private static KernelWorkbookService CreateService(KernelWorkbookService.KernelWorkbookServiceTestHooks hooks)

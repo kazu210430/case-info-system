@@ -198,5 +198,166 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(2, registerCalls);
             Assert.Equal(2, syncCalls);
         }
+
+        [Fact]
+        public void HandleWorkbookOpenedOrActivated_WhenInitializationFailsThenSucceeds_RetriesUntilSuccessThenNoOps()
+        {
+            var callLog = new List<string>();
+            int syncAttempts = 0;
+            Excel.Workbook workbook = new Excel.Workbook();
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsCaseWorkbook = _ => true,
+                    RegisterKnownCaseWorkbook = _ => callLog.Add("register"),
+                    SyncNameRulesFromKernelToCase = _ =>
+                    {
+                        syncAttempts++;
+                        callLog.Add("sync:" + syncAttempts.ToString());
+                        if (syncAttempts == 1)
+                        {
+                            throw new InvalidOperationException("sync failed");
+                        }
+                    }
+                });
+
+            service.HandleWorkbookOpenedOrActivated(workbook);
+            service.HandleWorkbookOpenedOrActivated(workbook);
+            service.HandleWorkbookOpenedOrActivated(workbook);
+
+            Assert.Equal(
+                new[]
+                {
+                    "register",
+                    "sync:1",
+                    "register",
+                    "sync:2"
+                },
+                callLog);
+        }
+
+        [Fact]
+        public void HandleWorkbookBeforeClose_WhenPromptIsCanceled_DoesNotScheduleManagedCloseOrPostClose()
+        {
+            int managedCloseCalls = 0;
+            int postCloseCalls = 0;
+            bool cancel = false;
+            Excel.Workbook workbook = new Excel.Workbook();
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsManagedClose = _ => false,
+                    IsSuppressed = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    ShowClosePrompt = _ => DialogResult.Cancel,
+                    ScheduleManagedSessionClose = (key, folder, saveChanges) => managedCloseCalls++,
+                    SchedulePostCloseFollowUp = (key, folder) => postCloseCalls++
+                });
+
+            service.HandleSheetChanged(workbook);
+            bool handled = service.HandleWorkbookBeforeClose(workbook, ref cancel);
+
+            Assert.True(handled);
+            Assert.True(cancel);
+            Assert.Equal(0, managedCloseCalls);
+            Assert.Equal(0, postCloseCalls);
+        }
+
+        [Fact]
+        public void HandleWorkbookBeforeClose_WhenPromptThrows_DoesNotScheduleCloseAndRestoresCancel()
+        {
+            int managedCloseCalls = 0;
+            int postCloseCalls = 0;
+            bool cancel = false;
+            Excel.Workbook workbook = new Excel.Workbook();
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsManagedClose = _ => false,
+                    IsSuppressed = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    ShowClosePrompt = _ => throw new InvalidOperationException("prompt failed"),
+                    ScheduleManagedSessionClose = (key, folder, saveChanges) => managedCloseCalls++,
+                    SchedulePostCloseFollowUp = (key, folder) => postCloseCalls++
+                });
+
+            service.HandleSheetChanged(workbook);
+            bool handled = service.HandleWorkbookBeforeClose(workbook, ref cancel);
+
+            Assert.False(handled);
+            Assert.False(cancel);
+            Assert.Equal(0, managedCloseCalls);
+            Assert.Equal(0, postCloseCalls);
+        }
+
+        [Fact]
+        public void HandleWorkbookBeforeClose_WhenPromptThrows_ThenNextNormalCloseWorksCorrectly()
+        {
+            var callLog = new List<string>();
+            int promptAttempts = 0;
+            Excel.Workbook workbook = new Excel.Workbook();
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsSuppressed = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    ShowClosePrompt = _ =>
+                    {
+                        promptAttempts++;
+                        callLog.Add("prompt:" + promptAttempts.ToString());
+                        if (promptAttempts == 1)
+                        {
+                            throw new InvalidOperationException("prompt failed");
+                        }
+
+                        return DialogResult.Yes;
+                    },
+                    ScheduleManagedSessionClose = (key, folder, saveChanges) =>
+                    {
+                        callLog.Add("schedule:" + saveChanges.ToString());
+                    },
+                    SchedulePostCloseFollowUp = (key, folder) => callLog.Add("post-close")
+                });
+
+            service.HandleSheetChanged(workbook);
+
+            bool firstCancel = false;
+            bool firstHandled = service.HandleWorkbookBeforeClose(workbook, ref firstCancel);
+
+            Assert.False(firstHandled);
+            Assert.False(firstCancel);
+            Assert.Equal(
+                new[]
+                {
+                    "prompt:1"
+                },
+                callLog);
+
+            bool secondCancel = false;
+            bool secondHandled = service.HandleWorkbookBeforeClose(workbook, ref secondCancel);
+
+            Assert.True(secondHandled);
+            Assert.True(secondCancel);
+            Assert.Equal(
+                new[]
+                {
+                    "prompt:1",
+                    "prompt:2",
+                    "schedule:True"
+                },
+                callLog);
+        }
     }
 }

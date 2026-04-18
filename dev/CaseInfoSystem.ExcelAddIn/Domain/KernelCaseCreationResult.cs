@@ -1,0 +1,22 @@
+﻿using Excel = Microsoft.Office.Interop.Excel;
+
+namespace CaseInfoSystem.ExcelAddIn.Domain
+{
+    /// <summary>
+    internal sealed class KernelCaseCreationResult
+    {
+        internal bool Success { get; set; }
+
+        internal KernelCaseCreationMode Mode { get; set; }
+
+        internal string CaseFolderPath { get; set; }
+
+        internal string CaseWorkbookPath { get; set; }
+
+        internal Excel.Workbook CreatedWorkbook { get; set; }
+
+        internal string UserMessage { get; set; }
+
+        internal bool ShouldCloseKernelHome { get; set; }
+    }
+}

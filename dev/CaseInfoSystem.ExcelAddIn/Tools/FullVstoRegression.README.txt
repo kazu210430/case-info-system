@@ -1,0 +1,28 @@
+完全VSTO回帰チェック
+
+1. 総合チェック
+   powershell -ExecutionPolicy Bypass -File ".\Invoke-FullVstoRegression.ps1"
+
+2. readiness チェック
+   powershell -ExecutionPolicy Bypass -File ".\Invoke-VstoRegressionReadiness.ps1"
+
+確認項目
+- Debug / Release ビルド
+- package / runtime manifest version 一致
+- policy / mode / pilot ファイル検証
+- add-in ソースに `Application.Run` が残っていないこと
+- add-in ソースに `VbaBridgeService` が残っていないこと
+- add-in ソースに旧 fallback 表現が残っていないこと
+- `.xlsx` 切替準備監査 (`Invoke-XlsxSwitchAudit.ps1`)
+- VSTO 信頼登録監査 (`Invoke-VstoTrustAudit.ps1`)
+
+期待値
+- ApplicationRunHits = 0
+- VbaBridgeHits = 0
+- DeprecatedFallbackHits = 0
+- PolicyValidation に allowlistEntries=32, passReviewEntries=32
+- ModeValidation に AllowlistedOnly
+- PilotValidation に entries=0
+- XlsxAuditUnexpectedXlsmLiteralHitCount = 0
+- TrustAuditComManifestMatches = True
+- TrustAuditSecurityInclusionExists = True

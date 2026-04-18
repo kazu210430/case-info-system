@@ -1,0 +1,7 @@
+# VSTO document execution pilot list
+# Format:
+#   key|templateFileName
+#
+# Notes:
+# - PilotOnly mode uses this file for parity comparison before PASS review exists.
+# - Keep this file empty until a specific pilot document is approved for testing.

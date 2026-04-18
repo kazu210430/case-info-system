@@ -1,0 +1,182 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|c:\\users\\kazu2\\documents\\\u6848\u4EF6\u60C5\u5831system\\dev\\caseinfosystem.exceladdin\\ui\\kernelhomeform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\ui\\kernelhomeform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C1509513-BC44-B2EB-CCC3-6D0942D87999}|CaseInfoSystem.Tests\\CaseInfoSystem.Tests.csproj|c:\\users\\kazu2\\documents\\\u6848\u4EF6\u60C5\u5831system\\dev\\caseinfosystem.tests\\caseinfosystem.tests.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{C1509513-BC44-B2EB-CCC3-6D0942D87999}|CaseInfoSystem.Tests\\CaseInfoSystem.Tests.csproj|solutionrelative:caseinfosystem.tests\\caseinfosystem.tests.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\ui\\kernelhomeform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\ui\\kernelhomeform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\app\\documentexecutionpolicyservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\app\\documentexecutionpolicyservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\app\\documenteligibilitydiagnosticsservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\app\\documenteligibilitydiagnosticsservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\app\\documentexecutionmodeservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\app\\documentexecutionmodeservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\app\\accountingsheetcontrolservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\app\\accountingsheetcontrolservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\app\\accountingsetnamingservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\app\\accountingsetnamingservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\app\\accountingformhelperservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\app\\accountingformhelperservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\caseinfosystem.exceladdin\\thisaddin.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{9A89A9AA-0A0D-49D4-8EFA-D450D4C624D5}|CaseInfoSystem.ExcelAddIn\\CaseInfoSystem.ExcelAddIn.csproj|solutionrelative:caseinfosystem.exceladdin\\thisaddin.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CaseInfoSystem.Tests.csproj",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.Tests\\CaseInfoSystem.Tests.csproj",
+              "RelativeDocumentMoniker": "CaseInfoSystem.Tests\\CaseInfoSystem.Tests.csproj",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.Tests\\CaseInfoSystem.Tests.csproj",
+              "RelativeToolTip": "CaseInfoSystem.Tests\\CaseInfoSystem.Tests.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAANAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-04-17T09:31:12.928Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "KernelHomeForm.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs",
+              "ViewState": "AgIAACEFAAAAAAAAAAAiwD4FAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:28.626Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "KernelHomeForm.cs [\u30C7\u30B6\u30A4\u30F3]",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs [\u30C7\u30B6\u30A4\u30F3]",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\UI\\KernelHomeForm.cs [\u30C7\u30B6\u30A4\u30F3]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.658Z",
+              "EditorCaption": " [\u30C7\u30B6\u30A4\u30F3]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "DocumentExecutionPolicyService.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionPolicyService.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionPolicyService.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionPolicyService.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionPolicyService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.665Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "DocumentEligibilityDiagnosticsService.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\DocumentEligibilityDiagnosticsService.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\App\\DocumentEligibilityDiagnosticsService.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\DocumentEligibilityDiagnosticsService.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\App\\DocumentEligibilityDiagnosticsService.cs",
+              "ViewState": "AgIAAPQBAAAAAAAAAAAcwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.665Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "DocumentExecutionModeService.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionModeService.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionModeService.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionModeService.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\App\\DocumentExecutionModeService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.667Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "AccountingSheetControlService.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\AccountingSheetControlService.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\App\\AccountingSheetControlService.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\AccountingSheetControlService.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\App\\AccountingSheetControlService.cs",
+              "ViewState": "AgIAAIoAAAAAAAAAAAAIwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.668Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "AccountingSetNamingService.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\AccountingSetNamingService.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\App\\AccountingSetNamingService.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\AccountingSetNamingService.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\App\\AccountingSetNamingService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.668Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "AccountingFormHelperService.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\AccountingFormHelperService.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\App\\AccountingFormHelperService.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\App\\AccountingFormHelperService.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\App\\AccountingFormHelperService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.669Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "ThisAddIn.cs",
+              "DocumentMoniker": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\ThisAddIn.cs",
+              "RelativeDocumentMoniker": "CaseInfoSystem.ExcelAddIn\\ThisAddIn.cs",
+              "ToolTip": "C:\\Users\\kazu2\\Documents\\\u6848\u4EF6\u60C5\u5831System\\dev\\CaseInfoSystem.ExcelAddIn\\ThisAddIn.cs",
+              "RelativeToolTip": "CaseInfoSystem.ExcelAddIn\\ThisAddIn.cs",
+              "ViewState": "AgIAADsBAAAAAAAAAAAiwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-17T10:43:29.67Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

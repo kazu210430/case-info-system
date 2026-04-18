@@ -1,0 +1,21 @@
+案件情報System 最終切替監査
+============================
+
+実行:
+  powershell -ExecutionPolicy Bypass -File ".\Invoke-FinalCutoverAudit.ps1"
+
+目的:
+- フェーズ6の切替可否を機械的に判定する
+- 残課題を blocker / warning に分けて固定化する
+- ロールバック観点を毎回同じ基準で出す
+
+主な判定項目:
+- VSTO trust / manifest 整合
+- add-in 本体の Application.Run / VBA bridge 残存有無
+- Workbook event / COM bridge の VBA 残存有無
+- Kernel / Base の運用上 VSTO-ready 判定
+- Accounting workbook asset による .xlsm 継続要因
+
+現時点の想定:
+- Kernel / Base は最終切替判定に向けて準備済み
+- Accounting workbook は workbook asset 依存が残るため最終切替 blocker

@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="CaseWorkbookLifecycleServicePolicyTests.cs" />
+    <Compile Include="DocumentCommandActionRoutePolicyTests.cs" />
+    <Compile Include="DocumentCommandExecutionDecisionPolicyTests.cs" />
+    <Compile Include="DocumentCommandPreconditionPolicyTests.cs" />
+    <Compile Include="KernelWorkbookHomeReleaseFallbackPolicyTests.cs" />
+    <Compile Include="KernelWorkbookPromotionPolicyTests.cs" />
+    <Compile Include="KernelWorkbookServicePolicyTests.cs" />
+    <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
+    <Compile Include="KernelWorkbookWindowRestorePolicyTests.cs" />
+    <Compile Include="TaskPaneHostReusePolicyTests.cs" />
+    <Compile Include="TaskPaneManagerOrchestrationPolicyTests.cs" />
+    <Compile Include="TaskPanePostActionRefreshPolicyTests.cs" />
+    <!-- TaskPaneManager policies -->
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationPolicy.cs" Link="Source\App\CasePaneCacheRefreshNotificationPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostPreparationPolicy.cs" Link="Source\App\TaskPaneHostPreparationPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostReusePolicy.cs" Link="Source\App\TaskPaneHostReusePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPanePostActionRefreshPolicy.cs" Link="Source\App\TaskPanePostActionRefreshPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshPreconditionPolicy.cs" Link="Source\App\TaskPaneRefreshPreconditionPolicy.cs" />
+    <!-- CaseWorkbookLifecycleService policies -->
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookBeforeClosePolicy.cs" Link="Source\App\CaseWorkbookBeforeClosePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleInitializationPolicy.cs" Link="Source\App\CaseWorkbookLifecycleInitializationPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookSheetChangePolicy.cs" Link="Source\App\CaseWorkbookSheetChangePolicy.cs" />
+    <!-- DocumentCommandService policies -->
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandPreconditionPolicy.cs" Link="Source\App\DocumentCommandPreconditionPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandActionRoutePolicy.cs" Link="Source\App\DocumentCommandActionRoutePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandExecutionDecisionPolicy.cs" Link="Source\App\DocumentCommandExecutionDecisionPolicy.cs" />
+    <!-- KernelWorkbookService policies -->
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelHomeSessionDisplayPolicy.cs" Link="Source\App\KernelHomeSessionDisplayPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" Link="Source\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStartupDisplayPolicy.cs" Link="Source\App\KernelWorkbookStartupDisplayPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookPromotionPolicy.cs" Link="Source\App\KernelWorkbookPromotionPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolutionPolicy.cs" Link="Source\App\KernelWorkbookResolutionPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
+  </ItemGroup>
+</Project>

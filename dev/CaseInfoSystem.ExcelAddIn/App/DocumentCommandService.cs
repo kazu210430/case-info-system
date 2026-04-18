@@ -1,0 +1,334 @@
+﻿using System;
+using System.Diagnostics;
+using CaseInfoSystem.ExcelAddIn.Domain;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
+using CaseInfoSystem.ExcelAddIn.UI;
+using Excel = Microsoft.Office.Interop.Excel;
+
+namespace CaseInfoSystem.ExcelAddIn.App
+{
+    internal interface IScreenUpdatingExecutionBridge
+    {
+        void Execute(Action action);
+    }
+
+    internal interface ITaskPaneRefreshSuppressionBridge
+    {
+        IDisposable Enter(string reason);
+    }
+
+    internal interface IActiveTaskPaneRefreshBridge
+    {
+        void RequestRefresh(string reason);
+    }
+
+    internal sealed class ThisAddInScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge
+    {
+        private readonly ThisAddIn _addIn;
+
+        internal ThisAddInScreenUpdatingExecutionBridge(ThisAddIn addIn)
+        {
+            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+        }
+
+        public void Execute(Action action)
+        {
+            _addIn.RunWithScreenUpdatingSuspended(action);
+        }
+    }
+
+    internal sealed class ThisAddInTaskPaneRefreshSuppressionBridge : ITaskPaneRefreshSuppressionBridge
+    {
+        private readonly ThisAddIn _addIn;
+
+        internal ThisAddInTaskPaneRefreshSuppressionBridge(ThisAddIn addIn)
+        {
+            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+        }
+
+        public IDisposable Enter(string reason)
+        {
+            return _addIn.SuppressTaskPaneRefresh(reason);
+        }
+    }
+
+    internal sealed class ThisAddInActiveTaskPaneRefreshBridge : IActiveTaskPaneRefreshBridge
+    {
+        private readonly ThisAddIn _addIn;
+
+        internal ThisAddInActiveTaskPaneRefreshBridge(ThisAddIn addIn)
+        {
+            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+        }
+
+        public void RequestRefresh(string reason)
+        {
+            _addIn.RefreshActiveTaskPane(reason);
+        }
+    }
+
+    internal sealed class DocumentCommandService
+    {
+        private const string DocumentActionKind = "doc";
+        private const string CaseListActionKind = "caselist";
+
+        private readonly DocumentExecutionModeService _documentExecutionModeService;
+        private readonly DocumentExecutionEligibilityService _documentExecutionEligibilityService;
+        private readonly DocumentExecutionPolicyService _documentExecutionPolicyService;
+        private readonly DocumentCreateService _documentCreateService;
+        private readonly AccountingSetCommandService _accountingSetCommandService;
+        private readonly CaseListRegistrationService _caseListRegistrationService;
+        private readonly CaseContextFactory _caseContextFactory;
+        private readonly ExcelInteropService _excelInteropService;
+        private readonly IScreenUpdatingExecutionBridge _screenUpdatingExecutionBridge;
+        private readonly ITaskPaneRefreshSuppressionBridge _taskPaneRefreshSuppressionBridge;
+        private readonly IActiveTaskPaneRefreshBridge _activeTaskPaneRefreshBridge;
+        private readonly ThisAddIn _addIn;
+        private readonly Logger _logger;
+
+        internal DocumentCommandService(
+            ThisAddIn addIn,
+            IScreenUpdatingExecutionBridge screenUpdatingExecutionBridge,
+            ITaskPaneRefreshSuppressionBridge taskPaneRefreshSuppressionBridge,
+            IActiveTaskPaneRefreshBridge activeTaskPaneRefreshBridge,
+            DocumentExecutionModeService documentExecutionModeService,
+            DocumentExecutionEligibilityService documentExecutionEligibilityService,
+            DocumentExecutionPolicyService documentExecutionPolicyService,
+            DocumentCreateService documentCreateService,
+            AccountingSetCommandService accountingSetCommandService,
+            CaseListRegistrationService caseListRegistrationService,
+            CaseContextFactory caseContextFactory,
+            ExcelInteropService excelInteropService,
+            Logger logger)
+        {
+            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+            _screenUpdatingExecutionBridge = screenUpdatingExecutionBridge ?? throw new ArgumentNullException(nameof(screenUpdatingExecutionBridge));
+            _taskPaneRefreshSuppressionBridge = taskPaneRefreshSuppressionBridge ?? throw new ArgumentNullException(nameof(taskPaneRefreshSuppressionBridge));
+            _activeTaskPaneRefreshBridge = activeTaskPaneRefreshBridge ?? throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
+            _documentExecutionModeService = documentExecutionModeService ?? throw new ArgumentNullException(nameof(documentExecutionModeService));
+            _documentExecutionEligibilityService = documentExecutionEligibilityService ?? throw new ArgumentNullException(nameof(documentExecutionEligibilityService));
+            _documentExecutionPolicyService = documentExecutionPolicyService ?? throw new ArgumentNullException(nameof(documentExecutionPolicyService));
+            _documentCreateService = documentCreateService ?? throw new ArgumentNullException(nameof(documentCreateService));
+            _accountingSetCommandService = accountingSetCommandService ?? throw new ArgumentNullException(nameof(accountingSetCommandService));
+            _caseListRegistrationService = caseListRegistrationService ?? throw new ArgumentNullException(nameof(caseListRegistrationService));
+            _caseContextFactory = caseContextFactory ?? throw new ArgumentNullException(nameof(caseContextFactory));
+            _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        internal void Execute(Excel.Workbook workbook, string actionKind, string key)
+        {
+            if (workbook == null)
+            {
+                throw new InvalidOperationException("CASE workbook was not found.");
+            }
+
+            DocumentCommandActionRoute route = DocumentCommandActionRoutePolicy.Decide(actionKind);
+
+            if (route == DocumentCommandActionRoute.Document)
+            {
+                ExecuteDocumentAction(workbook, key);
+                return;
+            }
+
+            if (route == DocumentCommandActionRoute.Accounting)
+            {
+                _accountingSetCommandService.Execute(workbook);
+                _logger.Info("Accounting action was handled by VSTO flow.");
+                return;
+            }
+
+            if (route == DocumentCommandActionRoute.Unsupported)
+            {
+                _logger.Warn("Unsupported task pane action was blocked. actionKind=" + (actionKind ?? string.Empty) + ", key=" + (key ?? string.Empty));
+                throw new InvalidOperationException("未対応の操作です。actionKind=" + (actionKind ?? string.Empty));
+            }
+
+            CaseListRegistrationResult completedRegistrationResult = null;
+            bool shouldShowKernelCaseList = false;
+            _screenUpdatingExecutionBridge.Execute(() =>
+            {
+                CaseListRegistrationResult registrationResult = _caseListRegistrationService.Execute(workbook);
+                if (!registrationResult.Success)
+                {
+                    throw new InvalidOperationException(registrationResult.Message);
+                }
+
+                var context = _caseContextFactory.CreateForCaseListRegistration(workbook);
+                if (context == null)
+                {
+                    _logger.Info("Case list row normalization skipped because context could not be resolved.");
+                    TrySaveKernelWorkbook(workbook, registrationResult);
+                    return;
+                }
+
+                bool normalized = _excelInteropService.TryNormalizeCaseListRowHeight(context);
+                if (!normalized)
+                {
+                    _logger.Info("Case list row normalization was skipped or failed.");
+                }
+
+                TrySaveKernelWorkbook(context.KernelWorkbook, registrationResult);
+                completedRegistrationResult = registrationResult;
+                shouldShowKernelCaseList = true;
+            });
+
+            _activeTaskPaneRefreshBridge.RequestRefresh("DocumentCommandService.CaseListStateUpdated");
+            if (shouldShowKernelCaseList)
+            {
+                string kernelTransitionSheetCodeName = "shCaseList";
+                string kernelTransitionReason = "DocumentCommandService.Execute";
+                bool paneRefreshed = _addIn.ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
+                if (!paneRefreshed)
+                {
+                    _logger.Info("Kernel case list pane refresh by unified add-in was not available.");
+                }
+            }
+
+            if (completedRegistrationResult != null && completedRegistrationResult.Success)
+            {
+                ShowCaseListRegistrationMessage(completedRegistrationResult);
+            }
+            return;
+        }
+
+        /// <summary>
+        /// メソッド: 案件一覧登録完了メッセージを表示する。
+        /// 引数: registrationResult - 案件一覧登録結果。
+        /// 戻り値: なし。
+        /// 副作用: メッセージダイアログを表示する。
+        /// </summary>
+        private void ShowCaseListRegistrationMessage(CaseListRegistrationResult registrationResult)
+        {
+            if (registrationResult == null)
+            {
+                throw new ArgumentNullException(nameof(registrationResult));
+            }
+
+            string message = registrationResult.Message ?? "案件一覧登録が完了しました。";
+            Excel.Window activeWindowBeforeMessage = _excelInteropService.GetActiveWindow();
+            ExcelWindowOwner owner = ExcelWindowOwner.From(activeWindowBeforeMessage);
+            try
+            {
+                CompletionNoticeForm.ShowNotice(owner, "案件情報System", message);
+            }
+            finally
+            {
+                if (owner != null)
+                {
+                    owner.Dispose();
+                }
+            }
+        }
+
+        private void TrySaveKernelWorkbook(Excel.Workbook kernelWorkbook, CaseListRegistrationResult registrationResult)
+        {
+            if (kernelWorkbook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                kernelWorkbook.Save();
+                _logger.Info("Kernel workbook saved after case-list registration. row=" + registrationResult.RegisteredRow.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Kernel workbook save after case-list registration failed.", ex);
+            }
+        }
+
+        /// <summary>
+        /// メソッド: 文書作成ボタン押下を VSTO 本体で実行する。
+        /// 引数: workbook - 対象 CASE ブック, key - 文書キー。
+        /// 戻り値: なし。
+        /// 副作用: Word 文書を生成し、未許可条件では例外を送出する。
+        /// </summary>
+        private void ExecuteDocumentAction(Excel.Workbook workbook, string key)
+        {
+            Stopwatch totalStopwatch = Stopwatch.StartNew();
+            Stopwatch phaseStopwatch = Stopwatch.StartNew();
+            using (_taskPaneRefreshSuppressionBridge.Enter("DocumentCommandService.ExecuteDocumentAction"))
+            {
+                _screenUpdatingExecutionBridge.Execute(() =>
+                {
+                    DocumentExecutionMode executionMode = _documentExecutionModeService.GetMode();
+                    DocumentExecutionEligibility eligibility = _documentExecutionEligibilityService.Evaluate(workbook, DocumentActionKind, key);
+                    _logger.Debug(
+                        "ExecuteDocumentAction",
+                        "EligibilityEvaluated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed)
+                        + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed)
+                        + " key=" + (key ?? string.Empty)
+                        + " canExecute=" + eligibility.CanExecuteInVsto.ToString());
+                    phaseStopwatch.Restart();
+                    bool isVstoExecutionAllowed = _documentExecutionPolicyService.IsVstoExecutionAllowed(eligibility.TemplateSpec);
+                    DocumentCommandPreconditionDecision preconditionDecision = DocumentCommandPreconditionPolicy.Decide(
+                        eligibility.CanExecuteInVsto,
+                        isVstoExecutionAllowed);
+                    DocumentCommandExecutionDecision executionDecision = DocumentCommandExecutionDecisionPolicy.Decide(preconditionDecision);
+                    if (executionDecision == DocumentCommandExecutionDecision.ThrowBecauseIneligible)
+                    {
+                        _logger.Warn(
+                            "Document action was blocked because the template was not eligible for VSTO execution."
+                            + " mode=" + executionMode.ToString()
+                            + ", key=" + (key ?? string.Empty)
+                            + ", reason=" + (eligibility.Reason ?? string.Empty));
+                        throw new InvalidOperationException("文書作成を実行できませんでした。理由: " + (eligibility.Reason ?? "eligible 判定に失敗しました。"));
+                    }
+
+                    if (executionDecision == DocumentCommandExecutionDecision.ThrowBecauseNotAllowlisted)
+                    {
+                        string templateFileName = eligibility.TemplateSpec == null ? string.Empty : (eligibility.TemplateSpec.TemplateFileName ?? string.Empty);
+                        string allowlistPath = _documentExecutionPolicyService.GetAllowlistPath();
+                        _logger.Debug(
+                            "ExecuteDocumentAction",
+                            "AllowlistEvaluated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed)
+                            + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed)
+                            + " key=" + (key ?? string.Empty)
+                            + " allowed=false");
+                        _logger.Warn(
+                            "Document action was blocked because the template is not allowlisted for VSTO execution."
+                            + " mode=" + executionMode.ToString()
+                            + ", key=" + (key ?? string.Empty)
+                            + ", templateFile=" + templateFileName
+                            + ", allowlistPath=" + allowlistPath);
+                        throw new InvalidOperationException(
+                            "文書作成を実行できませんでした。VSTO 対象外の帳票です。"
+                            + Environment.NewLine
+                            + "key=" + (key ?? string.Empty)
+                            + Environment.NewLine
+                            + "templateFile=" + templateFileName
+                            + Environment.NewLine
+                            + "allowlist=" + allowlistPath);
+                    }
+
+                    _logger.Debug(
+                        "ExecuteDocumentAction",
+                        "AllowlistEvaluated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed)
+                        + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed)
+                        + " key=" + (key ?? string.Empty)
+                        + " allowed=true");
+                    phaseStopwatch.Restart();
+                    _documentCreateService.Execute(workbook, eligibility.TemplateSpec, eligibility.CaseContext);
+                    _logger.Debug(
+                        "ExecuteDocumentAction",
+                        "DocumentCreateCompleted elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed)
+                        + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed)
+                        + " key=" + (key ?? string.Empty));
+                    _logger.Info(
+                        "Document action was handled by VSTO document flow."
+                        + " mode=" + executionMode.ToString()
+                        + ", key=" + (key ?? string.Empty)
+                        + ", templateFile=" + (eligibility.TemplateSpec == null ? string.Empty : (eligibility.TemplateSpec.TemplateFileName ?? string.Empty))
+                        + ", rolloutReady=" + _documentExecutionPolicyService.IsRolloutReady(eligibility.TemplateSpec).ToString());
+                });
+            }
+        }
+
+        private static string FormatElapsedSeconds(TimeSpan elapsed)
+        {
+            return elapsed.TotalSeconds.ToString("0.000");
+        }
+    }
+}

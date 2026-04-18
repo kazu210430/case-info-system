@@ -1,0 +1,8 @@
+# VSTO document execution mode
+# Allowed values:
+#   Disabled
+#   PilotOnly
+#   AllowlistedOnly
+#
+# Keep Disabled until VBA parity review is complete.
+AllowlistedOnly

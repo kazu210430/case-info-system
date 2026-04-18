@@ -1,0 +1,82 @@
+案件情報System .xlsx 切替準備メモ
+=================================
+
+目的
+----
+Kernel / Base / CASE を .xlsm から .xlsx へ切り替える前に、
+VSTO add-in 側で吸収済みの workbook event 依存を明示する。
+
+今回 VSTO 側へ移したもの
+------------------------
+1. Base / CASE Workbook_Open
+   - 実装: App\CaseWorkbookLifecycleService.cs
+   - 内容: CASE 起動時の NAME_RULE_A / NAME_RULE_B 同期
+
+2. Base / CASE Workbook_BeforeClose
+   - 実装: App\CaseWorkbookLifecycleService.cs
+   - 内容:
+     - 保存確認ダイアログ
+     - Yes / No / Cancel
+     - No 時の Saved = true
+     - 終了前の保存先フォルダ表示
+
+3. Kernel Workbook_AfterSave 相当
+   - 実装: App\KernelWorkbookLifecycleService.cs
+   - 内容:
+     - SYSTEM_ROOT 同期
+     - WORD_TEMPLATE_DIR 同期
+   - 実際のイベントは ThisAddIn.cs の WorkbookBeforeSave で実施
+
+4. VSTO 側のイベント配線
+   - 実装: ThisAddIn.cs
+   - 内容:
+     - WorkbookOpen
+     - WorkbookActivate
+     - WorkbookBeforeSave
+     - WorkbookBeforeClose
+
+5. 内部 close の確認ダイアログ抑止
+   - 実装: App\CaseWorkbookLifecycleService.cs
+   - 内容:
+     - BeginManagedCloseScope
+     - KernelTemplateSyncService から利用
+
+.xlsx 切替の時点で非ブロッカーと判断したもの
+------------------------------------------
+1. Kernel Workbook_Open
+   - 旧 VBA の役割は legacy form 導線
+   - 現行本線は VSTO HOME
+
+2. Kernel Workbook_Deactivate
+   - 旧 VBA の役割は Kernel 退避
+   - 画面制御は VSTO で再設計対象
+   - VBA 完全一致は要求しない前提
+
+3. Base Workbook_AfterSave
+   - 旧 VBA でも実質 no-op
+
+4. Base Workbook_Deactivate
+   - 旧 VBA でも実質 no-op
+
+切替前に確認すること
+--------------------
+1. 実運用テストで以下が支障なし
+   - CASE 作成
+   - 文書作成
+   - 利用者情報登録
+   - 雛形登録・更新
+   - 案件一覧登録
+   - OneDrive 配下保存
+
+2. Build / runtime / regression が成功
+   - Invoke-FullVstoRegression.ps1
+
+3. 実ファイル変換は add-in 準備とは別判断
+   - Kernel / Base の実ファイルを .xlsx に保存し直す作業は
+     業務切替として扱う
+
+補足
+----
+- VBA コード自体は未修正
+- add-in 側は .xlsm / .xlsx の両方を解決可能
+- Accounting 系 .xlsm は別帳票仕様として据え置き

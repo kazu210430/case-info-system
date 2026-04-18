@@ -1,0 +1,49 @@
+文書作成 VSTO 比較検証ワークフロー
+=================================
+
+目的
+----
+- CASE の診断ログから allowlist / review 候補を抽出する
+- review 結果を policy ファイルへ安全に反映する
+- rollout-ready / pending 状態を確認する
+
+前提
+----
+- CASE を開いて Task Pane を表示し、診断ログが出力されていること
+- temp ログ:
+  C:\Users\kazu2\AppData\Local\Temp\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn_trace.log
+- policy ファイル:
+  DocumentExecutionAllowlist.txt
+  DocumentExecutionAllowlist.review.txt
+
+主なスクリプト
+--------------
+1. Convert-DocumentEligibilityLogToPolicyCandidates.ps1
+   - temp ログから候補ファイルを生成する
+
+2. Merge-DocumentExecutionPolicyCandidates.ps1
+   - 候補ファイルを allowlist / review ファイルへ追記する
+
+3. Get-DocumentExecutionPolicyStatus.ps1
+   - candidate / allowlist / PASS review / rollout-ready の件数差分を出す
+
+4. Invoke-DocumentExecutionPolicyWorkflow.ps1
+   - 上記 1, 3, Validate をまとめて実行する
+   - ApplyMerge を付けた場合は 2 も実行する
+
+基本運用
+--------
+1. CASE を開く
+2. temp ログに Document eligibility ... が出る
+3. Convert または Invoke で候補ファイルを生成する
+4. review 結果を確認する
+5. 合格した帳票だけ Merge で policy ファイルへ反映する
+6. Validate が通ることを確認する
+7. rollout-ready の件数を確認する
+
+注意
+----
+- PASS を付けるのは VBA 互換比較が完了した帳票だけ
+- reviewer / notes / reviewedOn は placeholder のまま残さない
+- allowlist に入れる帳票は review メモでも PASS になっている必要がある
+- conflicting / duplicate review status が出た場合は review メモを先に修正する

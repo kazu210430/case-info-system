@@ -1,8 +1,0 @@
-is_global = true
-build_property.RootNamespace = CaseInfoSystem.Tests
-build_property.ProjectDir = C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.Tests\
-build_property.EnableComHosting = 
-build_property.EnableGeneratedComInterfaceComImportInterop = 
-build_property.CsWinRTUseWindowsUIXamlProjections = false
-build_property.EffectiveAnalysisLevelStyle = 
-build_property.EnableCodeStyleSeverity = 

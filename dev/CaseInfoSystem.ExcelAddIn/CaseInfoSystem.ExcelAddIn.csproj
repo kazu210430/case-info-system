@@ -32,7 +32,7 @@
   <PropertyGroup>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <ProjectToolsDir>$(MSBuildProjectDirectory)\Tools</ProjectToolsDir>
-    <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == ''">$(MSBuildProjectDirectory)\..\..\Addins\CaseInfoSystem.ExcelAddIn</WindowsApiCodePackDir>
+    <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == ''">$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack</WindowsApiCodePackDir>
     <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">$(MSBuildProjectDirectory)\CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
     <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.ExcelAddIn</UnifiedDeployPackageDir>
     <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\Addins\CaseInfoSystem.ExcelAddIn</RuntimeAddInDir>
@@ -40,6 +40,7 @@
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.ExcelAddIn.vsto</RuntimeManifestPath>
     <VstoInstallerPath Condition="'$(VstoInstallerPath)' == ''">C:\Program Files\Common Files\microsoft shared\VSTO\10.0\VSTOInstaller.exe</VstoInstallerPath>
     <DebugDeployPackageDir Condition="'$(DebugDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\DebugPackage\CaseInfoSystem.ExcelAddIn</DebugDeployPackageDir>
+    <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(SignManifests)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == ''">true</EnableVstoPackaging>
   </PropertyGroup>

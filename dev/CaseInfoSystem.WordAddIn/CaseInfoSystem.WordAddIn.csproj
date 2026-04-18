@@ -35,6 +35,7 @@
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.WordAddIn.vsto</RuntimeManifestPath>
     <DebugDeployPackageDir Condition="'$(DebugDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\DebugPackage\CaseInfoSystem.WordAddIn</DebugDeployPackageDir>
+    <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(SignManifests)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == ''">true</EnableVstoPackaging>
   </PropertyGroup>

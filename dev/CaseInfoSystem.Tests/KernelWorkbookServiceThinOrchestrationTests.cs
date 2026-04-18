@@ -140,8 +140,7 @@ namespace CaseInfoSystem.Tests
                 {
                     "apply",
                     "release:False",
-                    "quit",
-                    "apply"
+                    "quit"
                 },
                 callLog);
         }

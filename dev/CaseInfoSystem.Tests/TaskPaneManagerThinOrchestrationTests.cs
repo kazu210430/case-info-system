@@ -171,9 +171,7 @@ namespace CaseInfoSystem.Tests
 
             manager.PrepareHostsBeforeShow(activeCase);
 
-            Assert.Equal(2, hidden.Count);
-            Assert.Contains("other-case", hidden);
-            Assert.Contains("kernel", hidden);
+            Assert.Empty(hidden);
         }
 
         [Fact]

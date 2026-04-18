@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("CaseInfoSystem.ExcelAddIn")]
@@ -13,3 +14,4 @@ using System.Runtime.InteropServices;
 [assembly: Guid("80ca5c7d-5d84-4a1d-9df2-ae80f4d1d68d")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: InternalsVisibleTo("CaseInfoSystem.Tests")]

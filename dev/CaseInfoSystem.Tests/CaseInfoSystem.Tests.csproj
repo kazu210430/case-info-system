@@ -16,6 +16,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="TaskPaneManagerThinOrchestrationTests.cs" />
+    <Compile Include="CaseWorkbookLifecycleServiceThinOrchestrationTests.cs" />
+    <Compile Include="KernelWorkbookServiceThinOrchestrationTests.cs" />
+    <Compile Include="Fakes\OfficeInteropShims.cs" />
+    <Compile Include="Fakes\OrchestrationDependencyPlaceholders.cs" />
+    <Compile Include="Fakes\OrchestrationTestSupport.cs" />
     <Compile Include="CaseWorkbookLifecycleServicePolicyTests.cs" />
     <Compile Include="DocumentCommandActionRoutePolicyTests.cs" />
     <Compile Include="DocumentCommandExecutionDecisionPolicyTests.cs" />
@@ -44,11 +56,32 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandExecutionDecisionPolicy.cs" Link="Source\App\DocumentCommandExecutionDecisionPolicy.cs" />
     <!-- KernelWorkbookService policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelHomeSessionDisplayPolicy.cs" Link="Source\App\KernelHomeSessionDisplayPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseInteractionState.cs" Link="Source\App\KernelCaseInteractionState.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNamingService.cs" Link="Source\App\KernelNamingService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManager.cs" Link="Source\App\TaskPaneManager.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseTaskPaneViewStateBuilder.cs" Link="Source\App\CaseTaskPaneViewStateBuilder.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookService.cs" Link="Source\App\KernelWorkbookService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" Link="Source\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStartupDisplayPolicy.cs" Link="Source\App\KernelWorkbookStartupDisplayPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookPromotionPolicy.cs" Link="Source\App\KernelWorkbookPromotionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolutionPolicy.cs" Link="Source\App\KernelWorkbookResolutionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingSetSpec.cs" Link="Source\Domain\AccountingSetSpec.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookContext.cs" Link="Source\Domain\WorkbookContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ITaskPaneView.cs" Link="Source\UI\ITaskPaneView.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneHost.cs" Link="Source\UI\TaskPaneHost.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneModels.cs" Link="Source\UI\TaskPaneModels.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\KernelNavigationModels.cs" Link="Source\UI\KernelNavigationModels.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationModels.cs" Link="Source\UI\AccountingNavigationModels.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\KernelNavigationControl.cs" Link="Source\UI\KernelNavigationControl.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationControl.cs" Link="Source\UI\AccountingNavigationControl.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocTaskPaneControl.cs" Link="Source\UI\DocTaskPaneControl.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocumentButtonsControl.cs" Link="Source\UI\DocumentButtonsControl.cs" />
   </ItemGroup>
 </Project>

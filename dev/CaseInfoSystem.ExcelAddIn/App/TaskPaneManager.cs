@@ -25,6 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
+        private readonly TaskPaneManagerTestHooks _testHooks;
         private const string ProductTitle = "案件情報System";
 
         internal TaskPaneManager(
@@ -42,6 +43,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
             KernelCaseInteractionState kernelCaseInteractionState,
             UserErrorService userErrorService,
             Logger logger)
+            : this(
+                addIn,
+                excelInteropService,
+                taskPaneSnapshotBuilderService,
+                documentCommandService,
+                documentEligibilityDiagnosticsService,
+                documentMasterCatalogDiagnosticsService,
+                documentNamePromptService,
+                kernelCommandService,
+                accountingSheetCommandService,
+                caseTaskPaneViewStateBuilder,
+                accountingInternalCommandService,
+                kernelCaseInteractionState,
+                userErrorService,
+                logger,
+                testHooks: null)
+        {
+        }
+
+        internal TaskPaneManager(
+            ThisAddIn addIn,
+            ExcelInteropService excelInteropService,
+            TaskPaneSnapshotBuilderService taskPaneSnapshotBuilderService,
+            DocumentCommandService documentCommandService,
+            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
+            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
+            DocumentNamePromptService documentNamePromptService,
+            KernelCommandService kernelCommandService,
+            AccountingSheetCommandService accountingSheetCommandService,
+            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
+            AccountingInternalCommandService accountingInternalCommandService,
+            KernelCaseInteractionState kernelCaseInteractionState,
+            UserErrorService userErrorService,
+            Logger logger,
+            TaskPaneManagerTestHooks testHooks)
         {
             _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
@@ -58,6 +94,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
+            _testHooks = testHooks;
+        }
+
+        internal TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
+        {
+            _addIn = null;
+            _excelInteropService = null;
+            _taskPaneSnapshotBuilderService = null;
+            _documentCommandService = null;
+            _documentEligibilityDiagnosticsService = null;
+            _documentMasterCatalogDiagnosticsService = null;
+            _documentNamePromptService = null;
+            _kernelCommandService = null;
+            _accountingSheetCommandService = null;
+            _caseTaskPaneViewStateBuilder = null;
+            _accountingInternalCommandService = null;
+            _userErrorService = null;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
+            _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
+            _testHooks = testHooks;
         }
 
         internal bool RefreshPane(WorkbookContext context, string reason)
@@ -181,7 +238,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// 戻り値: なし。
         /// 副作用: CASE pane は複数窓で維持し、それ以外は従来どおり単一表示に寄せる。
         /// </summary>
-        private void PrepareHostsBeforeShow(TaskPaneHost host)
+        internal void PrepareHostsBeforeShow(TaskPaneHost host)
         {
             if (host == null)
             {
@@ -292,6 +349,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _hostsByWindowKey.Clear();
+        }
+
+        internal void RegisterHost(TaskPaneHost host)
+        {
+            if (host == null)
+            {
+                throw new ArgumentNullException(nameof(host));
+            }
+
+            if (_hostsByWindowKey.TryGetValue(host.WindowKey, out TaskPaneHost existingHost)
+                && !ReferenceEquals(existingHost, host))
+            {
+                existingHost.Dispose();
+            }
+
+            _hostsByWindowKey[host.WindowKey] = host;
         }
 
         private TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
@@ -441,7 +514,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// 戻り値: なし。
         /// 副作用: 内部キャッシュ更新による保存確認を抑止し、業務メッセージを表示する。
         /// </summary>
-        private void NotifyCasePaneUpdatedIfNeeded(Excel.Workbook workbook, string reason, TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult)
+        internal void NotifyCasePaneUpdatedIfNeeded(Excel.Workbook workbook, string reason, TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult)
         {
             if (workbook == null
                 || !CasePaneCacheRefreshNotificationPolicy.ShouldNotify(
@@ -453,6 +526,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
+                if (_testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null)
+                {
+                    _testHooks.OnCasePaneUpdatedNotification(reason ?? string.Empty);
+                    return;
+                }
+
                 // 処理ブロック: 文書ボタンパネルの内部更新だけで CASE が未保存扱いにならないように戻す。
                 workbook.Saved = true;
                 MessageBox.Show("文書ボタンパネルを更新しました", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -624,6 +703,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
+                _testHooks?.OnHideHost?.Invoke(host.WindowKey, reason ?? string.Empty);
                 host.Hide();
             }
             catch (Exception ex)
@@ -638,6 +718,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (host == null)
             {
                 return false;
+            }
+
+            if (_testHooks != null && _testHooks.TryShowHost != null)
+            {
+                return _testHooks.TryShowHost(host.WindowKey, reason ?? string.Empty);
             }
 
             try
@@ -809,6 +894,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 context.ActiveSheetCodeName ?? string.Empty,
                 caseListRegistered,
                 snapshotCacheCount);
+        }
+
+        internal sealed class TaskPaneManagerTestHooks
+        {
+            internal Action<string, string> OnHideHost { get; set; }
+
+            internal Func<string, string, bool> TryShowHost { get; set; }
+
+            internal Action<string> OnCasePaneUpdatedNotification { get; set; }
         }
     }
 }

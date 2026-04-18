@@ -40,6 +40,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly HashSet<string> _sessionDirtyWorkbookKeys;
         private readonly Dictionary<string, int> _managedCloseCounts;
         private readonly Queue<PostCloseFollowUpRequest> _pendingPostCloseQueue;
+        private readonly CaseWorkbookLifecycleServiceTestHooks _testHooks;
         private Control _managedCloseDispatcher;
         private bool _postClosePosted;
 
@@ -94,6 +95,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _sessionDirtyWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
+            _testHooks = null;
+        }
+
+        internal CaseWorkbookLifecycleService(Logger logger, CaseWorkbookLifecycleServiceTestHooks testHooks)
+        {
+            _workbookRoleResolver = null;
+            _application = null;
+            _excelInteropService = null;
+            _pathCompatibilityService = null;
+            _transientPaneSuppressionService = null;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _initializedWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _sessionDirtyWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
+            _testHooks = testHooks;
         }
 
         // メソッド: CASE/Base ブックの初回アクティブ化時に初期化処理を行う。
@@ -104,10 +121,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             string workbookKey = GetWorkbookKey(workbook);
             CaseWorkbookInitializationAction action = CaseWorkbookLifecycleInitializationPolicy.Decide(
-                isBaseOrCaseWorkbook: IsBaseOrCaseWorkbook(workbook),
+                isBaseOrCaseWorkbook: IsBaseOrCaseWorkbookCore(workbook),
                 workbookKey: workbookKey,
                 isAlreadyInitialized: !string.IsNullOrWhiteSpace(workbookKey) && _initializedWorkbookKeys.Contains(workbookKey),
-                isCaseWorkbook: _workbookRoleResolver.IsCaseWorkbook(workbook));
+                isCaseWorkbook: IsCaseWorkbookCore(workbook));
 
             if (action == CaseWorkbookInitializationAction.None)
             {
@@ -118,8 +135,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 if (action == CaseWorkbookInitializationAction.InitializeCaseWorkbook)
                 {
-                    _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
-                    SyncNameRulesFromKernelToCase(workbook);
+                    RegisterKnownCaseWorkbookCore(workbook);
+                    SyncNameRulesFromKernelToCaseCore(workbook);
                 }
 
                 _initializedWorkbookKeys.Add(workbookKey);
@@ -163,8 +180,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal bool HandleWorkbookBeforeClose(Excel.Workbook workbook, ref bool cancel)
         {
             CaseWorkbookBeforeCloseAction action = CaseWorkbookBeforeClosePolicy.Decide(
-                isBaseOrCaseWorkbook: IsBaseOrCaseWorkbook(workbook),
-                isManagedClose: IsManagedClose(workbook),
+                isBaseOrCaseWorkbook: IsBaseOrCaseWorkbookCore(workbook),
+                isManagedClose: IsManagedCloseCore(workbook),
                 isSessionDirty: _sessionDirtyWorkbookKeys.Contains(GetWorkbookKey(workbook)));
 
             if (action == CaseWorkbookBeforeCloseAction.Ignore)
@@ -187,19 +204,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 {
                     cancel = true;
 
-                    DialogResult answer = MessageBox.Show(
-                        "保存しますか？",
-                        BuildCloseDialogTitle(workbook),
-                        MessageBoxButtons.YesNoCancel,
-                        MessageBoxIcon.Question,
-                        MessageBoxDefaultButton.Button1);
+                    DialogResult answer = ShowClosePromptCore(workbook);
 
                     if (answer == DialogResult.Cancel)
                     {
                         return true;
                     }
 
-                    ScheduleManagedSessionClose(workbookKey, folderPath, answer == DialogResult.Yes);
+                    ScheduleManagedSessionCloseCore(workbookKey, folderPath, answer == DialogResult.Yes);
                     return true;
                 }
 
@@ -209,7 +221,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", macroEnabled="
                     + IsMacroEnabledWorkbook(workbook).ToString());
 
-                SchedulePostCloseFollowUp(workbookKey, folderPath);
+                SchedulePostCloseFollowUpCore(workbookKey, folderPath);
                 _logger.Info("Case workbook post-close follow-up posted. workbook=" + workbookKey);
                 return false;
             }
@@ -265,9 +277,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         // 副作用: セッション汚染状態を更新する。
         internal void HandleSheetChanged(Excel.Workbook workbook)
         {
-            bool isBaseOrCaseWorkbook = IsBaseOrCaseWorkbook(workbook);
-            bool isManagedClose = IsManagedClose(workbook);
-            bool isSuppressed = _transientPaneSuppressionService.IsSuppressed(workbook);
+            bool isBaseOrCaseWorkbook = IsBaseOrCaseWorkbookCore(workbook);
+            bool isManagedClose = IsManagedCloseCore(workbook);
+            bool isSuppressed = IsSuppressedCore(workbook);
 
             CaseWorkbookSheetChangeAction action = CaseWorkbookSheetChangePolicy.Decide(
                 isBaseOrCaseWorkbook,
@@ -297,6 +309,93 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private bool IsBaseOrCaseWorkbook(Excel.Workbook workbook)
         {
             return _workbookRoleResolver.IsBaseWorkbook(workbook) || _workbookRoleResolver.IsCaseWorkbook(workbook);
+        }
+
+        private bool IsBaseOrCaseWorkbookCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.IsBaseOrCaseWorkbook != null
+                ? _testHooks.IsBaseOrCaseWorkbook(workbook)
+                : IsBaseOrCaseWorkbook(workbook);
+        }
+
+        private bool IsCaseWorkbookCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.IsCaseWorkbook != null
+                ? _testHooks.IsCaseWorkbook(workbook)
+                : _workbookRoleResolver.IsCaseWorkbook(workbook);
+        }
+
+        private void RegisterKnownCaseWorkbookCore(Excel.Workbook workbook)
+        {
+            if (_testHooks != null && _testHooks.RegisterKnownCaseWorkbook != null)
+            {
+                _testHooks.RegisterKnownCaseWorkbook(workbook);
+                return;
+            }
+
+            _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
+        }
+
+        private void SyncNameRulesFromKernelToCaseCore(Excel.Workbook workbook)
+        {
+            if (_testHooks != null && _testHooks.SyncNameRulesFromKernelToCase != null)
+            {
+                _testHooks.SyncNameRulesFromKernelToCase(workbook);
+                return;
+            }
+
+            SyncNameRulesFromKernelToCase(workbook);
+        }
+
+        private bool IsManagedCloseCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.IsManagedClose != null
+                ? _testHooks.IsManagedClose(workbook)
+                : IsManagedClose(workbook);
+        }
+
+        private bool IsSuppressedCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.IsSuppressed != null
+                ? _testHooks.IsSuppressed(workbook)
+                : _transientPaneSuppressionService.IsSuppressed(workbook);
+        }
+
+        private DialogResult ShowClosePromptCore(Excel.Workbook workbook)
+        {
+            if (_testHooks != null && _testHooks.ShowClosePrompt != null)
+            {
+                return _testHooks.ShowClosePrompt(workbook);
+            }
+
+            return MessageBox.Show(
+                "保存しますか？",
+                BuildCloseDialogTitle(workbook),
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+        }
+
+        private void ScheduleManagedSessionCloseCore(string workbookKey, string folderPath, bool saveChanges)
+        {
+            if (_testHooks != null && _testHooks.ScheduleManagedSessionClose != null)
+            {
+                _testHooks.ScheduleManagedSessionClose(workbookKey, folderPath, saveChanges);
+                return;
+            }
+
+            ScheduleManagedSessionClose(workbookKey, folderPath, saveChanges);
+        }
+
+        private void SchedulePostCloseFollowUpCore(string workbookKey, string folderPath)
+        {
+            if (_testHooks != null && _testHooks.SchedulePostCloseFollowUp != null)
+            {
+                _testHooks.SchedulePostCloseFollowUp(workbookKey, folderPath);
+                return;
+            }
+
+            SchedulePostCloseFollowUp(workbookKey, folderPath);
         }
 
         // メソッド: CASE HOME シート表示時に A 列が常に見えるようウィンドウ固定を再適用する。
@@ -696,6 +795,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private string ResolveContainingFolder(Excel.Workbook workbook)
         {
+            if (_testHooks != null && _testHooks.ResolveContainingFolder != null)
+            {
+                return _testHooks.ResolveContainingFolder(workbook) ?? string.Empty;
+            }
+
             string folderPath = _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookPath(workbook));
             if (folderPath.Length == 0 || !_pathCompatibilityService.DirectoryExistsSafe(folderPath))
             {
@@ -741,6 +845,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private string GetWorkbookKey(Excel.Workbook workbook)
         {
+            if (_testHooks != null && _testHooks.GetWorkbookKey != null)
+            {
+                return _testHooks.GetWorkbookKey(workbook) ?? string.Empty;
+            }
+
             if (workbook == null)
             {
                 return string.Empty;
@@ -844,6 +953,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
             public void Dispose()
             {
             }
+        }
+
+        internal sealed class CaseWorkbookLifecycleServiceTestHooks
+        {
+            internal Func<Excel.Workbook, string> GetWorkbookKey { get; set; }
+
+            internal Func<Excel.Workbook, bool> IsBaseOrCaseWorkbook { get; set; }
+
+            internal Func<Excel.Workbook, bool> IsCaseWorkbook { get; set; }
+
+            internal Action<Excel.Workbook> RegisterKnownCaseWorkbook { get; set; }
+
+            internal Action<Excel.Workbook> SyncNameRulesFromKernelToCase { get; set; }
+
+            internal Func<Excel.Workbook, bool> IsManagedClose { get; set; }
+
+            internal Func<Excel.Workbook, bool> IsSuppressed { get; set; }
+
+            internal Func<Excel.Workbook, string> ResolveContainingFolder { get; set; }
+
+            internal Func<Excel.Workbook, DialogResult> ShowClosePrompt { get; set; }
+
+            internal Action<string, string, bool> ScheduleManagedSessionClose { get; set; }
+
+            internal Action<string, string> SchedulePostCloseFollowUp { get; set; }
         }
 
     }

@@ -21,6 +21,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly PathCompatibilityService _pathCompatibilityService;
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
+        private readonly KernelWorkbookServiceTestHooks _testHooks;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
         private bool _isHomeDisplayPrepared;
 
@@ -54,6 +55,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _pathCompatibilityService = new PathCompatibilityService();
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _testHooks = null;
+        }
+
+        internal KernelWorkbookService(KernelCaseInteractionState kernelCaseInteractionState, Logger logger, KernelWorkbookServiceTestHooks testHooks)
+        {
+            _application = null;
+            _excelInteropService = null;
+            _excelWindowRecoveryService = null;
+            _pathCompatibilityService = new PathCompatibilityService();
+            _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _testHooks = testHooks;
         }
 
         internal Excel.Workbook GetOpenKernelWorkbook()
@@ -83,11 +96,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Excel.Workbook ResolveKernelWorkbook(Domain.WorkbookContext context)
         {
-            Excel.Workbook openKernelWorkbook = GetOpenKernelWorkbook();
+            Excel.Workbook openKernelWorkbook = GetOpenKernelWorkbookCore();
             string kernelPath = KernelWorkbookResolutionPolicy.ResolveKernelWorkbookPath(
                 hasOpenKernelWorkbook: openKernelWorkbook != null,
                 systemRoot: context == null ? string.Empty : context.SystemRoot,
-                resolvePath: root => WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(root, _pathCompatibilityService));
+                resolvePath: root => ResolveKernelWorkbookPathCore(root));
 
             if (openKernelWorkbook != null)
             {
@@ -99,7 +112,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return null;
             }
 
-            return _excelInteropService.FindOpenWorkbook(kernelPath);
+            return FindOpenWorkbookCore(kernelPath);
         }
 
         internal bool TryShowSheetByCodeName(Domain.WorkbookContext context, string sheetCodeName, string reason)
@@ -221,13 +234,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            ApplyHomeDisplayVisibility();
+            ApplyHomeDisplayVisibilityCore();
             _isHomeDisplayPrepared = true;
         }
 
         internal void PrepareForHomeDisplayFromSheet()
         {
-            ApplyHomeDisplayVisibility();
+            ApplyHomeDisplayVisibilityCore();
             _isHomeDisplayPrepared = true;
         }
 
@@ -243,7 +256,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            ApplyHomeDisplayVisibility();
+            ApplyHomeDisplayVisibilityCore();
         }
 
         internal void SaveNameRuleA(string ruleA)
@@ -301,9 +314,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void CloseHomeSession(bool saveKernelWorkbook)
         {
-            Excel.Workbook workbook = GetOpenKernelWorkbook();
-            bool otherVisibleWorkbookExists = HasOtherVisibleWorkbook(workbook);
-            bool otherWorkbookExists = HasOtherWorkbook(workbook);
+            Excel.Workbook workbook = GetOpenKernelWorkbookCore();
+            bool otherVisibleWorkbookExists = HasOtherVisibleWorkbookCore(workbook);
+            bool otherWorkbookExists = HasOtherWorkbookCore(workbook);
             bool skipDisplayRestoreForCaseCreation = KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(
                 saveKernelWorkbook,
                 _kernelCaseInteractionState.IsKernelCaseCreationFlowActive,
@@ -317,7 +330,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "CloseHomeSession started. saveKernelWorkbook="
                 + saveKernelWorkbook.ToString()
                 + ", workbook="
-                + (workbook == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
+                + GetWorkbookFullNameCore(workbook)
                 + ", otherVisibleWorkbookExists="
                 + otherVisibleWorkbookExists.ToString()
                 + ", otherWorkbookExists="
@@ -332,14 +345,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     // 処理ブロック: CASE 作成完了直後は Kernel シートが前景に出ないよう、閉じる直前に window を不可視化する。
                     if (skipDisplayRestoreForCaseCreation)
                     {
-                        ConcealKernelWorkbookWindowsForCaseCreationClose(workbook);
+                        ConcealKernelWorkbookWindowsForCaseCreationCloseCore(workbook);
                     }
 
-                    SaveAndCloseKernelWorkbook(workbook);
+                    SaveAndCloseKernelWorkbookCore(workbook);
                 }
                 else if (_kernelWorkbookLifecycleService != null)
                 {
-                    bool closeScheduled = _kernelWorkbookLifecycleService.RequestManagedCloseFromHomeExit(workbook);
+                    bool closeScheduled = RequestManagedCloseFromHomeExitCore(workbook);
                     if (!closeScheduled)
                     {
                         _logger.Info("CloseHomeSession canceled before managed close was scheduled.");
@@ -348,47 +361,176 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
                 else
                 {
-                    bool previousDisplayAlerts = _application.DisplayAlerts;
-                    try
-                    {
-                        _application.DisplayAlerts = false;
-                        workbook.Close(SaveChanges: false);
-                    }
-                    finally
-                    {
-                        _application.DisplayAlerts = previousDisplayAlerts;
-                    }
+                    CloseKernelWorkbookWithoutLifecycleCore(workbook);
                 }
             }
 
             if (completionAction == KernelHomeSessionCompletionAction.ReleaseHomeDisplayWithoutShowingExcelAndQuit)
             {
-                ReleaseHomeDisplay(false);
+                ReleaseHomeDisplayCore(false);
                 if (saveKernelWorkbook || _kernelWorkbookLifecycleService == null)
                 {
-                    bool previousDisplayAlerts = _application.DisplayAlerts;
-                    try
-                    {
-                        _application.DisplayAlerts = false;
-                        _application.Quit();
-                    }
-                    finally
-                    {
-                        _application.DisplayAlerts = previousDisplayAlerts;
-                    }
+                    QuitApplicationCore();
                 }
             }
             else if (completionAction == KernelHomeSessionCompletionAction.DismissPreparedHomeDisplayState)
             {
                 // 処理ブロック: CASE 作成完了後は、既に表示中の CASE などの前景を維持し、Kernel 復帰を行わない。
-                DismissPreparedHomeDisplayState("CloseHomeSession.CaseCreationSkipRestore");
+                DismissPreparedHomeDisplayStateCore("CloseHomeSession.CaseCreationSkipRestore");
             }
             else
             {
-                ReleaseHomeDisplay(true);
+                ReleaseHomeDisplayCore(true);
             }
 
             _logger.Info("CloseHomeSession completed. saveKernelWorkbook=" + saveKernelWorkbook.ToString());
+        }
+
+        private Excel.Workbook GetOpenKernelWorkbookCore()
+        {
+            return _testHooks != null && _testHooks.GetOpenKernelWorkbook != null
+                ? _testHooks.GetOpenKernelWorkbook()
+                : GetOpenKernelWorkbook();
+        }
+
+        private string ResolveKernelWorkbookPathCore(string systemRoot)
+        {
+            return _testHooks != null && _testHooks.ResolveKernelWorkbookPath != null
+                ? _testHooks.ResolveKernelWorkbookPath(systemRoot)
+                : WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
+        }
+
+        private Excel.Workbook FindOpenWorkbookCore(string workbookPath)
+        {
+            return _testHooks != null && _testHooks.FindOpenWorkbook != null
+                ? _testHooks.FindOpenWorkbook(workbookPath)
+                : _excelInteropService.FindOpenWorkbook(workbookPath);
+        }
+
+        private bool HasOtherVisibleWorkbookCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.HasOtherVisibleWorkbook != null
+                ? _testHooks.HasOtherVisibleWorkbook(workbook)
+                : HasOtherVisibleWorkbook(workbook);
+        }
+
+        private string GetWorkbookFullNameCore(Excel.Workbook workbook)
+        {
+            if (_excelInteropService != null)
+            {
+                return _excelInteropService.GetWorkbookFullName(workbook);
+            }
+
+            return workbook == null ? string.Empty : workbook.FullName ?? string.Empty;
+        }
+
+        private bool HasOtherWorkbookCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.HasOtherWorkbook != null
+                ? _testHooks.HasOtherWorkbook(workbook)
+                : HasOtherWorkbook(workbook);
+        }
+
+        private void ReleaseHomeDisplayCore(bool showExcel)
+        {
+            if (_testHooks != null && _testHooks.ReleaseHomeDisplay != null)
+            {
+                _testHooks.ReleaseHomeDisplay(showExcel);
+                return;
+            }
+
+            ReleaseHomeDisplay(showExcel);
+        }
+
+        private void DismissPreparedHomeDisplayStateCore(string reason)
+        {
+            if (_testHooks != null && _testHooks.DismissPreparedHomeDisplayState != null)
+            {
+                _testHooks.DismissPreparedHomeDisplayState(reason);
+                return;
+            }
+
+            DismissPreparedHomeDisplayState(reason);
+        }
+
+        private void QuitApplicationCore()
+        {
+            if (_testHooks != null && _testHooks.QuitApplication != null)
+            {
+                _testHooks.QuitApplication();
+                return;
+            }
+
+            bool previousDisplayAlerts = _application.DisplayAlerts;
+            try
+            {
+                _application.DisplayAlerts = false;
+                _application.Quit();
+            }
+            finally
+            {
+                _application.DisplayAlerts = previousDisplayAlerts;
+            }
+        }
+
+        private bool RequestManagedCloseFromHomeExitCore(Excel.Workbook workbook)
+        {
+            return _testHooks != null && _testHooks.RequestManagedCloseFromHomeExit != null
+                ? _testHooks.RequestManagedCloseFromHomeExit(workbook)
+                : _kernelWorkbookLifecycleService.RequestManagedCloseFromHomeExit(workbook);
+        }
+
+        private void SaveAndCloseKernelWorkbookCore(Excel.Workbook workbook)
+        {
+            if (_testHooks != null && _testHooks.SaveAndCloseKernelWorkbook != null)
+            {
+                _testHooks.SaveAndCloseKernelWorkbook(workbook);
+                return;
+            }
+
+            SaveAndCloseKernelWorkbook(workbook);
+        }
+
+        private void CloseKernelWorkbookWithoutLifecycleCore(Excel.Workbook workbook)
+        {
+            if (_testHooks != null && _testHooks.CloseKernelWorkbookWithoutLifecycle != null)
+            {
+                _testHooks.CloseKernelWorkbookWithoutLifecycle(workbook);
+                return;
+            }
+
+            bool previousDisplayAlerts = _application.DisplayAlerts;
+            try
+            {
+                _application.DisplayAlerts = false;
+                workbook.Close(SaveChanges: false);
+            }
+            finally
+            {
+                _application.DisplayAlerts = previousDisplayAlerts;
+            }
+        }
+
+        private void ConcealKernelWorkbookWindowsForCaseCreationCloseCore(Excel.Workbook workbook)
+        {
+            if (_testHooks != null && _testHooks.ConcealKernelWorkbookWindowsForCaseCreationClose != null)
+            {
+                _testHooks.ConcealKernelWorkbookWindowsForCaseCreationClose(workbook);
+                return;
+            }
+
+            ConcealKernelWorkbookWindowsForCaseCreationClose(workbook);
+        }
+
+        private void ApplyHomeDisplayVisibilityCore()
+        {
+            if (_testHooks != null && _testHooks.ApplyHomeDisplayVisibility != null)
+            {
+                _testHooks.ApplyHomeDisplayVisibility();
+                return;
+            }
+
+            ApplyHomeDisplayVisibility();
         }
 
         internal bool ShowSheetByCodeName(string codeName)
@@ -1066,6 +1208,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch
             {
             }
+        }
+
+        internal sealed class KernelWorkbookServiceTestHooks
+        {
+            internal Action ApplyHomeDisplayVisibility { get; set; }
+
+            internal Func<Excel.Workbook> GetOpenKernelWorkbook { get; set; }
+
+            internal Func<string, string> ResolveKernelWorkbookPath { get; set; }
+
+            internal Func<string, Excel.Workbook> FindOpenWorkbook { get; set; }
+
+            internal Func<Excel.Workbook, bool> HasOtherVisibleWorkbook { get; set; }
+
+            internal Func<Excel.Workbook, bool> HasOtherWorkbook { get; set; }
+
+            internal Action<bool> ReleaseHomeDisplay { get; set; }
+
+            internal Action<string> DismissPreparedHomeDisplayState { get; set; }
+
+            internal Action QuitApplication { get; set; }
+
+            internal Func<Excel.Workbook, bool> RequestManagedCloseFromHomeExit { get; set; }
+
+            internal Action<Excel.Workbook> SaveAndCloseKernelWorkbook { get; set; }
+
+            internal Action<Excel.Workbook> CloseKernelWorkbookWithoutLifecycle { get; set; }
+
+            internal Action<Excel.Workbook> ConcealKernelWorkbookWindowsForCaseCreationClose { get; set; }
         }
     }
 

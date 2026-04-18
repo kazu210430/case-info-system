@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -141,6 +142,39 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void PrepareHostsBeforeShow_WhenCaseCreationFlowEnds_ReturnsToNormalHideAllBehavior()
+        {
+            var hidden = new List<string>();
+            var stateLogs = new List<string>();
+            KernelCaseInteractionState interactionState = OrchestrationTestSupport.CreateKernelCaseInteractionState(stateLogs);
+            var manager = new TaskPaneManager(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                interactionState,
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnHideHost = (windowKey, reason) => hidden.Add(windowKey)
+                });
+
+            TaskPaneHost activeCase = OrchestrationTestSupport.CreateTaskPaneHost(new DocumentButtonsControl(), "active-case");
+            manager.RegisterHost(activeCase);
+            manager.RegisterHost(OrchestrationTestSupport.CreateTaskPaneHost(new DocumentButtonsControl(), "other-case"));
+            manager.RegisterHost(OrchestrationTestSupport.CreateTaskPaneHost(new KernelNavigationControl(), "kernel"));
+
+            using (interactionState.BeginKernelCaseCreationFlow("test"))
+            {
+                manager.PrepareHostsBeforeShow(activeCase);
+            }
+
+            Assert.Equal(new[] { "kernel" }, hidden);
+
+            hidden.Clear();
+
+            manager.PrepareHostsBeforeShow(activeCase);
+
+            Assert.Empty(hidden);
+        }
+
+        [Fact]
         public void RefreshPane_WhenCasePaneRefreshesDuringCaseCreation_InvokesNotificationBeforeHideAndShow()
         {
             var callLog = new List<string>();
@@ -235,6 +269,99 @@ namespace CaseInfoSystem.Tests
             Assert.True(second);
             Assert.Equal(1, buildCalls);
             Assert.Equal(2, showCalls);
+        }
+
+        [Fact]
+        public void RefreshPane_WhenShowFailsAfterRender_RetryShowsWithoutRebuildOrRenotify()
+        {
+            int buildCalls = 0;
+            int notifyCalls = 0;
+            int showCalls = 0;
+            var builder = new TaskPaneSnapshotBuilderService
+            {
+                OnBuildSnapshotText = workbook =>
+                {
+                    buildCalls++;
+                    return new TaskPaneSnapshotBuilderService.TaskPaneBuildResult(string.Empty, updatedCaseSnapshotCache: true);
+                }
+            };
+            var manager = CreateFullManager(
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                builder,
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnCasePaneUpdatedNotification = reason => notifyCalls++,
+                    TryShowHost = (windowKey, reason) =>
+                    {
+                        showCalls++;
+                        return showCalls > 1;
+                    }
+                });
+            var context = new WorkbookContext(
+                new Excel.Workbook { FullName = @"C:\cases\case.xlsx", Name = "case.xlsx" },
+                new Excel.Window { Hwnd = 404 },
+                WorkbookRole.Case,
+                @"C:\cases",
+                @"C:\cases\case.xlsx",
+                "shHOME");
+
+            bool first = manager.RefreshPane(context, "WorkbookOpen");
+            bool second = manager.RefreshPane(context, "WorkbookOpen");
+
+            Assert.False(first);
+            Assert.True(second);
+            Assert.Equal(1, buildCalls);
+            Assert.Equal(1, notifyCalls);
+            Assert.Equal(2, showCalls);
+        }
+
+        [Fact]
+        public void RefreshPane_WhenBuildThrows_DoesNotNotifyOrShowAndRetriesBuildOnNextRefresh()
+        {
+            int buildCalls = 0;
+            int notifyCalls = 0;
+            int showCalls = 0;
+            var builder = new TaskPaneSnapshotBuilderService
+            {
+                OnBuildSnapshotText = workbook =>
+                {
+                    buildCalls++;
+                    if (buildCalls == 1)
+                    {
+                        throw new InvalidOperationException("build failed");
+                    }
+
+                    return new TaskPaneSnapshotBuilderService.TaskPaneBuildResult(string.Empty, updatedCaseSnapshotCache: true);
+                }
+            };
+            var manager = CreateFullManager(
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                builder,
+                new TaskPaneManager.TaskPaneManagerTestHooks
+                {
+                    OnCasePaneUpdatedNotification = reason => notifyCalls++,
+                    TryShowHost = (windowKey, reason) =>
+                    {
+                        showCalls++;
+                        return true;
+                    }
+                });
+            var context = new WorkbookContext(
+                new Excel.Workbook { FullName = @"C:\cases\case.xlsx", Name = "case.xlsx" },
+                new Excel.Window { Hwnd = 505 },
+                WorkbookRole.Case,
+                @"C:\cases",
+                @"C:\cases\case.xlsx",
+                "shHOME");
+
+            Assert.Throws<InvalidOperationException>(() => manager.RefreshPane(context, "WorkbookOpen"));
+
+            bool retried = manager.RefreshPane(context, "WorkbookOpen");
+
+            Assert.True(retried);
+            Assert.Equal(2, buildCalls);
+            Assert.Equal(1, notifyCalls);
+            Assert.Equal(1, showCalls);
         }
 
         [Fact]

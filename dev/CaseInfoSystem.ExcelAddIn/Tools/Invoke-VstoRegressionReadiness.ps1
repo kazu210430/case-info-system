@@ -1,7 +1,7 @@
 param(
     [string]$ProjectDirectory = (Split-Path -Path $PSScriptRoot -Parent),
     [string]$WorkspaceRoot = (Split-Path -Path (Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent) -Parent),
-    [string]$RuntimeAddInDir = (Join-Path (Split-Path -Path (Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent) -Parent) 'Addins\CaseInfoSystem.ExcelAddIn'),
+    [string]$RuntimeAddInDir = (Join-Path (Split-Path -Path (Split-Path -Path (Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent) -Parent) -Parent) 'Addins\CaseInfoSystem.ExcelAddIn'),
     [string]$PackageDir = (Join-Path (Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent) 'Deploy\Package\CaseInfoSystem.ExcelAddIn')
 )
 

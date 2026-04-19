@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="CaseInfoSystem.VstoBuildAssets" Version="1.0.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageVersion Include="Microsoft.Office.Interop.Excel" Version="15.0.4797.1004" />
+    <PackageVersion Include="Microsoft.Office.Interop.Word" Version="15.0.4797.1004" />
+    <PackageVersion Include="stdole" Version="17.14.40260" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+</Project>

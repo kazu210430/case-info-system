@@ -1,11 +1,11 @@
-name: CI Tests
+name: CI Build and Test
 
 on:
   push:
   pull_request:
 
 jobs:
-  pure-tests:
+  solution-build-and-test:
     runs-on: windows-2022
 
     steps:
@@ -17,14 +17,16 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore pure test project
-        working-directory: dev/CaseInfoSystem.Tests
-        run: dotnet restore
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-      - name: Build pure test project
-        working-directory: dev/CaseInfoSystem.Tests
-        run: dotnet build -c Release --no-restore
+      - name: Build solution
+        # CI is limited to restore/compile/test. It does not validate deployable VSTO output.
+        # Run restore as part of the same MSBuild invocation so the solution is evaluated on the
+        # same build path that actually compiles the Excel/Word Add-in projects.
+        # Skip manifest signing here because certificate-store-dependent release signing is outside
+        # this CI's scope; the goal is to catch product compile/build breakage, not packaging setup.
+        run: msbuild .\dev\CaseInfoSystem.slnx /restore /t:Build /p:Configuration=Release /p:SignManifests=false /p:ManifestCertificateThumbprint= /m
 
-      - name: Run pure tests
-        working-directory: dev/CaseInfoSystem.Tests
-        run: dotnet test -c Release --no-build
+      - name: Run tests
+        run: dotnet test .\dev\CaseInfoSystem.Tests\CaseInfoSystem.Tests.csproj -c Release --no-build --no-restore

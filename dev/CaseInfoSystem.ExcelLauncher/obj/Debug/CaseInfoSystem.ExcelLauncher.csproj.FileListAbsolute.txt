@@ -1,6 +1,0 @@
-C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.ExcelLauncher\bin\Debug\CaseInfoSystem.ExcelLauncher.exe
-C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.ExcelLauncher\bin\Debug\CaseInfoSystem.ExcelLauncher.pdb
-C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.ExcelLauncher\obj\Debug\CaseInfoSystem.ExcelLauncher.csproj.AssemblyReference.cache
-C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.ExcelLauncher\obj\Debug\CaseInfoSystem.ExcelLauncher.csproj.CoreCompileInputs.cache
-C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.ExcelLauncher\obj\Debug\CaseInfoSystem.ExcelLauncher.exe
-C:\Users\kazu2\Documents\案件情報System\dev\CaseInfoSystem.ExcelLauncher\obj\Debug\CaseInfoSystem.ExcelLauncher.pdb

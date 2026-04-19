@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -22,7 +22,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CaseInfoSystem.ExcelLauncher\CaseInfoSystem.ExcelLauncher.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="ExcelLauncherProgramTests.cs" />
     <Compile Include="TaskPaneManagerThinOrchestrationTests.cs" />
+    <Compile Include="DocumentCommandServiceTests.cs" />
+    <Compile Include="DocumentExecutionModeServiceTests.cs" />
+    <Compile Include="LocalWorkCopyServiceTests.cs" />
+    <Compile Include="WordInteropServiceTests.cs" />
+    <Compile Include="DocumentSaveServiceTests.cs" />
+    <Compile Include="PathCompatibilityServiceTests.cs" />
+    <Compile Include="EventBoundaryGuardTests.cs" />
+    <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
     <Compile Include="CaseWorkbookLifecycleServiceThinOrchestrationTests.cs" />
     <Compile Include="KernelWorkbookServiceThinOrchestrationTests.cs" />
     <Compile Include="Fakes\OfficeInteropShims.cs" />
@@ -59,6 +72,12 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseInteractionState.cs" Link="Source\App\KernelCaseInteractionState.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNamingService.cs" Link="Source\App\KernelNamingService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManager.cs" Link="Source\App\TaskPaneManager.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandService.cs" Link="Source\App\DocumentCommandService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionModeService.cs" Link="Source\App\DocumentExecutionModeService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveResult.cs" Link="Source\App\DocumentSaveResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveService.cs" Link="Source\App\DocumentSaveService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\EventBoundaryGuard.cs" Link="Source\App\EventBoundaryGuard.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseTaskPaneViewStateBuilder.cs" Link="Source\App\CaseTaskPaneViewStateBuilder.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
@@ -73,7 +92,11 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IPathCompatibilityService.cs" Link="Source\Infrastructure\IPathCompatibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordInteropService.cs" Link="Source\Infrastructure\WordInteropService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\LocalWorkCopyService.cs" Link="Source\Infrastructure\LocalWorkCopyService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ITaskPaneView.cs" Link="Source\UI\ITaskPaneView.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneHost.cs" Link="Source\UI\TaskPaneHost.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneModels.cs" Link="Source\UI\TaskPaneModels.cs" />

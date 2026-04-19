@@ -90,6 +90,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal WordInteropService WordInteropService { get; private set; }
 
+        internal LocalWorkCopyService LocalWorkCopyService { get; private set; }
+
         internal KernelWorkbookService KernelWorkbookService { get; private set; }
 
         internal KernelWorkbookLifecycleService KernelWorkbookLifecycleService { get; private set; }
@@ -139,7 +141,6 @@ namespace CaseInfoSystem.ExcelAddIn
             var pathCompatibilityService = new PathCompatibilityService();
             KernelCaseInteractionState = new KernelCaseInteractionState(_logger);
             ExcelInteropService = new ExcelInteropService(_application, _logger, pathCompatibilityService);
-            var caseTaskPaneViewStateBuilder = new CaseTaskPaneViewStateBuilder();
             ExcelWindowRecoveryService = new ExcelWindowRecoveryService(_application, ExcelInteropService, _logger);
             var caseListFieldDefinitionRepository = new CaseListFieldDefinitionRepository(ExcelInteropService);
             var caseListHeaderRepository = new CaseListHeaderRepository(ExcelInteropService);
@@ -152,17 +153,27 @@ namespace CaseInfoSystem.ExcelAddIn
             NavigationService = new NavigationService(ExcelInteropService, WorkbookRoleResolver, _logger);
             WorkbookSessionService = new WorkbookSessionService(NavigationService, TransientPaneSuppressionService, _logger);
             CaseContextFactory = new CaseContextFactory(ExcelInteropService, caseDataSnapshotFactory, _logger);
-            KernelWorkbookService = new KernelWorkbookService(_application, ExcelInteropService, ExcelWindowRecoveryService, KernelCaseInteractionState, _logger);
+            // Dependency memo:
+            // - Stable intra-area wiring is extracted into small compositions.
+            // - Cross-area coordination and creation order stay in this root intentionally.
+            // Kernel workbook boundary: workbook access and lifecycle only.
+            var kernelWorkbookCoreComposition = new AddInKernelWorkbookCoreCompositionFactory(_application, _logger)
+                .Compose(
+                    pathCompatibilityService,
+                    ExcelInteropService,
+                    caseListFieldDefinitionRepository,
+                    caseListHeaderRepository,
+                    caseListMappingRepository,
+                    ExcelWindowRecoveryService,
+                    KernelCaseInteractionState);
+            KernelWorkbookService = kernelWorkbookCoreComposition.KernelWorkbookService;
+            KernelWorkbookLifecycleService = kernelWorkbookCoreComposition.KernelWorkbookLifecycleService;
             var userErrorService = new UserErrorService(_logger);
-            KernelWorkbookLifecycleService = new KernelWorkbookLifecycleService(KernelWorkbookService, _application, ExcelInteropService, pathCompatibilityService, _logger);
-            KernelWorkbookService.SetLifecycleService(KernelWorkbookLifecycleService);
             CaseWorkbookLifecycleService = new CaseWorkbookLifecycleService(WorkbookRoleResolver, _application, ExcelInteropService, pathCompatibilityService, TransientPaneSuppressionService, _logger);
             var folderWindowService = new FolderWindowService(pathCompatibilityService, _logger);
-            var taskPaneSnapshotBuilderService = new TaskPaneSnapshotBuilderService(_application, ExcelInteropService, pathCompatibilityService, _logger);
             var kernelCasePathService = new KernelCasePathService(pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(ExcelInteropService, _logger);
             var masterTemplateCatalogService = new MasterTemplateCatalogService(_application, ExcelInteropService, pathCompatibilityService, _logger);
-            var documentTemplateResolver = new DocumentTemplateResolver(ExcelInteropService, pathCompatibilityService, taskPaneSnapshotCacheService, masterTemplateCatalogService, _logger);
             var documentOutputService = new DocumentOutputService(ExcelInteropService, pathCompatibilityService, _logger);
             var excelValidationService = new ExcelValidationService(_logger);
             var accountingTemplateResolver = new AccountingTemplateResolver(ExcelInteropService, pathCompatibilityService, _logger);
@@ -177,25 +188,6 @@ namespace CaseInfoSystem.ExcelAddIn
             var accountingFormHelperService = new AccountingFormHelperService(accountingWorkbookService, accountingInstallmentScheduleCommandService, accountingPaymentHistoryCommandService, accountingSaveAsService, userErrorService, _logger);
             AccountingWorkbookLifecycleService = new AccountingWorkbookLifecycleService(WorkbookRoleResolver, accountingWorkbookService, accountingFormHelperService, accountingPaymentHistoryImportService, _logger);
             var accountingInternalCommandService = new AccountingInternalCommandService(NavigationService, accountingPaymentHistoryImportService, accountingFormHelperService, accountingSaveAsService, _logger);
-            DocumentExecutionModeService = new DocumentExecutionModeService(_logger, ExcelInteropService);
-            var documentExecutionEligibilityService = new DocumentExecutionEligibilityService(ExcelInteropService, documentTemplateResolver, CaseContextFactory, documentOutputService, _logger);
-            var documentExecutionPolicyService = new DocumentExecutionPolicyService(_logger, ExcelInteropService);
-            var documentEligibilityDiagnosticsService = new DocumentEligibilityDiagnosticsService(DocumentExecutionModeService, documentExecutionEligibilityService, documentExecutionPolicyService, _logger);
-            var documentMasterCatalogDiagnosticsService = new DocumentMasterCatalogDiagnosticsService(masterTemplateCatalogService, documentExecutionEligibilityService, documentExecutionPolicyService, DocumentExecutionModeService, _logger);
-            var mergeDataBuilder = new MergeDataBuilder();
-            var documentMergeService = new DocumentMergeService(_logger);
-            WordInteropService = new WordInteropService(pathCompatibilityService, _logger);
-            var localWorkCopyService = new LocalWorkCopyService(pathCompatibilityService, WordInteropService, _logger);
-            var documentSaveService = new DocumentSaveService(documentOutputService, pathCompatibilityService, localWorkCopyService, WordInteropService, _logger);
-            var documentCreateService = new DocumentCreateService(
-                ExcelInteropService,
-                CaseContextFactory,
-                documentOutputService,
-                mergeDataBuilder,
-                documentMergeService,
-                documentSaveService,
-                WordInteropService,
-                _logger);
             var accountingSetCreateService = new AccountingSetCreateService(
                 ExcelInteropService,
                 CaseContextFactory,
@@ -227,17 +219,23 @@ namespace CaseInfoSystem.ExcelAddIn
                 caseListMappingRepository,
                 accountingWorkbookService,
                 _logger);
-            var screenUpdatingExecutionBridge = new ThisAddInScreenUpdatingExecutionBridge(_addIn);
-            var taskPaneRefreshSuppressionBridge = new ThisAddInTaskPaneRefreshSuppressionBridge(_addIn);
-            var activeTaskPaneRefreshBridge = new ThisAddInActiveTaskPaneRefreshBridge(_addIn);
-            DocumentCommandService = new DocumentCommandService(_addIn, screenUpdatingExecutionBridge, taskPaneRefreshSuppressionBridge, activeTaskPaneRefreshBridge, DocumentExecutionModeService, documentExecutionEligibilityService, documentExecutionPolicyService, documentCreateService, accountingSetCommandService, caseListRegistrationService, CaseContextFactory, ExcelInteropService, _logger);
-            DocumentNamePromptService = new DocumentNamePromptService(ExcelInteropService, taskPaneSnapshotCacheService, _logger);
+            // Document boundary: bundle Word/document execution services and diagnostics.
+            var documentComposition = new AddInDocumentCompositionFactory(_addIn, _logger)
+                .Compose(
+                    pathCompatibilityService,
+                    ExcelInteropService,
+                    CaseContextFactory,
+                    taskPaneSnapshotCacheService,
+                    masterTemplateCatalogService,
+                    documentOutputService,
+                    accountingSetCommandService,
+                    caseListRegistrationService);
+            DocumentCommandService = documentComposition.DocumentCommandService;
+            DocumentNamePromptService = documentComposition.DocumentNamePromptService;
+            DocumentExecutionModeService = documentComposition.DocumentExecutionModeService;
+            WordInteropService = documentComposition.WordInteropService;
+            LocalWorkCopyService = documentComposition.LocalWorkCopyService;
             WorkbookRibbonCommandService = new WorkbookRibbonCommandService(ExcelInteropService, pathCompatibilityService, _logger);
-            WorkbookCaseTaskPaneRefreshCommandService = new WorkbookCaseTaskPaneRefreshCommandService(
-                WorkbookRoleResolver,
-                ExcelInteropService,
-                _resolveWorkbookPaneWindow,
-                _isTaskPaneRefreshSucceeded);
             var workbookResetDefinitionRepository = new WorkbookResetDefinitionRepository();
             WorkbookResetCommandService = new WorkbookResetCommandService(
                 ExcelInteropService,
@@ -246,6 +244,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 KernelWorkbookLifecycleService,
                 _logger);
             var caseTemplateSnapshotService = new CaseTemplateSnapshotService(ExcelInteropService);
+            // Case creation stays here because it still spans kernel, case workbook, and UI-facing coordination.
             var caseWorkbookInitializer = new CaseWorkbookInitializer(ExcelInteropService, caseTemplateSnapshotService, caseListFieldDefinitionRepository);
             var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy(_application, WorkbookRoleResolver, _logger);
             var createdCaseOpenPromptService = new CreatedCaseOpenPromptService(_logger);
@@ -280,6 +279,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _clearKernelSheetCommandCell,
                 _releaseComObject,
                 _logger);
+            // Kernel home remains here because it bridges workbook state and UI coordination.
             ExternalWorkbookDetectionService = new ExternalWorkbookDetectionService(
                 WorkbookRoleResolver,
                 KernelCaseInteractionState,
@@ -299,32 +299,375 @@ namespace CaseInfoSystem.ExcelAddIn
                 KernelHomeCoordinator,
                 _showKernelHomePlaceholderWithExternalWorkbookSuppression,
                 _logger);
-            var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts);
-            var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
-            TaskPaneManager = new TaskPaneManager(_addIn, ExcelInteropService, taskPaneSnapshotBuilderService, DocumentCommandService, documentEligibilityDiagnosticsService, documentMasterCatalogDiagnosticsService, DocumentNamePromptService, KernelCommandService, accountingSheetCommandService, caseTaskPaneViewStateBuilder, accountingInternalCommandService, KernelCaseInteractionState, userErrorService, _logger);
-            WindowActivatePaneHandlingService = new WindowActivatePaneHandlingService(
+            // Task pane boundary: bundle pane construction and refresh orchestration.
+            var taskPaneComposition = new AddInTaskPaneCompositionFactory(
+                _addIn,
+                _application,
+                _logger,
+                _resolveWorkbookPaneWindow,
+                _isTaskPaneRefreshSucceeded,
                 _handleExternalWorkbookDetected,
                 _shouldSuppressCasePaneRefresh,
-                TaskPaneManager,
                 _refreshTaskPane,
-                ExcelInteropService,
+                _scheduleWordWarmup,
+                _getKernelHomeForm,
+                _getTaskPaneRefreshSuppressionCount,
+                _pendingPaneRefreshMaxAttempts)
+                .Compose(
+                    pathCompatibilityService,
+                    ExcelInteropService,
+                    WorkbookRoleResolver,
+                    DocumentCommandService,
+                    documentComposition.DocumentEligibilityDiagnosticsService,
+                    documentComposition.DocumentMasterCatalogDiagnosticsService,
+                    DocumentNamePromptService,
+                    KernelCommandService,
+                    accountingSheetCommandService,
+                    accountingInternalCommandService,
+                    KernelCaseInteractionState,
+                    userErrorService,
+                    WorkbookSessionService,
+                    ExcelWindowRecoveryService);
+            WorkbookCaseTaskPaneRefreshCommandService = taskPaneComposition.WorkbookCaseTaskPaneRefreshCommandService;
+            TaskPaneManager = taskPaneComposition.TaskPaneManager;
+            WindowActivatePaneHandlingService = taskPaneComposition.WindowActivatePaneHandlingService;
+            TaskPaneRefreshOrchestrationService = taskPaneComposition.TaskPaneRefreshOrchestrationService;
+        }
+    }
+
+    // Bundles document creation, execution diagnostics, and Word interop services.
+    internal sealed class AddInDocumentCompositionFactory
+    {
+        private readonly ThisAddIn _addIn;
+        private readonly Logger _logger;
+
+        internal AddInDocumentCompositionFactory(ThisAddIn addIn, Logger logger)
+        {
+            _addIn = addIn;
+            _logger = logger;
+        }
+
+        internal AddInDocumentComposition Compose(
+            PathCompatibilityService pathCompatibilityService,
+            ExcelInteropService excelInteropService,
+            CaseContextFactory caseContextFactory,
+            TaskPaneSnapshotCacheService taskPaneSnapshotCacheService,
+            MasterTemplateCatalogService masterTemplateCatalogService,
+            DocumentOutputService documentOutputService,
+            AccountingSetCommandService accountingSetCommandService,
+            CaseListRegistrationService caseListRegistrationService)
+        {
+            var documentTemplateResolver = new DocumentTemplateResolver(
+                excelInteropService,
+                pathCompatibilityService,
+                taskPaneSnapshotCacheService,
+                masterTemplateCatalogService,
+                _logger);
+            var documentExecutionModeService = new DocumentExecutionModeService(_logger, excelInteropService);
+            var documentExecutionEligibilityService = new DocumentExecutionEligibilityService(
+                excelInteropService,
+                documentTemplateResolver,
+                caseContextFactory,
+                documentOutputService,
+                _logger);
+            var documentExecutionPolicyService = new DocumentExecutionPolicyService(_logger, excelInteropService);
+            var documentEligibilityDiagnosticsService = new DocumentEligibilityDiagnosticsService(
+                documentExecutionModeService,
+                documentExecutionEligibilityService,
+                documentExecutionPolicyService,
+                _logger);
+            var documentMasterCatalogDiagnosticsService = new DocumentMasterCatalogDiagnosticsService(
+                masterTemplateCatalogService,
+                documentExecutionEligibilityService,
+                documentExecutionPolicyService,
+                documentExecutionModeService,
+                _logger);
+            var mergeDataBuilder = new MergeDataBuilder();
+            var documentMergeService = new DocumentMergeService(_logger);
+            var wordInteropService = new WordInteropService(pathCompatibilityService, _logger);
+            var localWorkCopyService = new LocalWorkCopyService(pathCompatibilityService, wordInteropService, _logger);
+            var documentSaveService = new DocumentSaveService(
+                documentOutputService,
+                pathCompatibilityService,
+                localWorkCopyService,
+                wordInteropService,
+                _logger);
+            var documentCreateService = new DocumentCreateService(
+                excelInteropService,
+                caseContextFactory,
+                documentOutputService,
+                mergeDataBuilder,
+                documentMergeService,
+                documentSaveService,
+                wordInteropService,
+                _logger);
+            var screenUpdatingExecutionBridge = new ThisAddInScreenUpdatingExecutionBridge(_addIn);
+            var taskPaneRefreshSuppressionBridge = new ThisAddInTaskPaneRefreshSuppressionBridge(_addIn);
+            var activeTaskPaneRefreshBridge = new ThisAddInActiveTaskPaneRefreshBridge(_addIn);
+            var documentCommandService = new DocumentCommandService(
+                _addIn,
+                screenUpdatingExecutionBridge,
+                taskPaneRefreshSuppressionBridge,
+                activeTaskPaneRefreshBridge,
+                documentExecutionModeService,
+                documentExecutionEligibilityService,
+                documentExecutionPolicyService,
+                documentCreateService,
+                accountingSetCommandService,
+                caseListRegistrationService,
+                caseContextFactory,
+                excelInteropService,
+                _logger);
+            var documentNamePromptService = new DocumentNamePromptService(
+                excelInteropService,
+                taskPaneSnapshotCacheService,
+                _logger);
+            return new AddInDocumentComposition(
+                documentCommandService,
+                documentNamePromptService,
+                documentExecutionModeService,
+                documentEligibilityDiagnosticsService,
+                documentMasterCatalogDiagnosticsService,
+                wordInteropService,
+                localWorkCopyService);
+        }
+    }
+
+    // Carries the document-related services composed for the root.
+    internal sealed class AddInDocumentComposition
+    {
+        internal AddInDocumentComposition(
+            DocumentCommandService documentCommandService,
+            DocumentNamePromptService documentNamePromptService,
+            DocumentExecutionModeService documentExecutionModeService,
+            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
+            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
+            WordInteropService wordInteropService,
+            LocalWorkCopyService localWorkCopyService)
+        {
+            DocumentCommandService = documentCommandService;
+            DocumentNamePromptService = documentNamePromptService;
+            DocumentExecutionModeService = documentExecutionModeService;
+            DocumentEligibilityDiagnosticsService = documentEligibilityDiagnosticsService;
+            DocumentMasterCatalogDiagnosticsService = documentMasterCatalogDiagnosticsService;
+            WordInteropService = wordInteropService;
+            LocalWorkCopyService = localWorkCopyService;
+        }
+
+        internal DocumentCommandService DocumentCommandService { get; private set; }
+
+        internal DocumentNamePromptService DocumentNamePromptService { get; private set; }
+
+        internal DocumentExecutionModeService DocumentExecutionModeService { get; private set; }
+
+        internal DocumentEligibilityDiagnosticsService DocumentEligibilityDiagnosticsService { get; private set; }
+
+        internal DocumentMasterCatalogDiagnosticsService DocumentMasterCatalogDiagnosticsService { get; private set; }
+
+        internal WordInteropService WordInteropService { get; private set; }
+
+        internal LocalWorkCopyService LocalWorkCopyService { get; private set; }
+    }
+
+    // Bundles kernel workbook access and lifecycle services that must be initialized together.
+    internal sealed class AddInKernelWorkbookCoreCompositionFactory
+    {
+        private readonly Excel.Application _application;
+        private readonly Logger _logger;
+
+        internal AddInKernelWorkbookCoreCompositionFactory(Excel.Application application, Logger logger)
+        {
+            _application = application;
+            _logger = logger;
+        }
+
+        internal AddInKernelWorkbookCoreComposition Compose(
+            PathCompatibilityService pathCompatibilityService,
+            ExcelInteropService excelInteropService,
+            CaseListFieldDefinitionRepository caseListFieldDefinitionRepository,
+            CaseListHeaderRepository caseListHeaderRepository,
+            CaseListMappingRepository caseListMappingRepository,
+            ExcelWindowRecoveryService excelWindowRecoveryService,
+            KernelCaseInteractionState kernelCaseInteractionState)
+        {
+            var kernelWorkbookService = new KernelWorkbookService(
+                _application,
+                excelInteropService,
+                excelWindowRecoveryService,
+                kernelCaseInteractionState,
+                _logger);
+            var kernelWorkbookLifecycleService = new KernelWorkbookLifecycleService(
+                kernelWorkbookService,
+                _application,
+                excelInteropService,
+                pathCompatibilityService,
+                caseListFieldDefinitionRepository,
+                caseListHeaderRepository,
+                caseListMappingRepository,
+                _logger);
+            kernelWorkbookService.SetLifecycleService(kernelWorkbookLifecycleService);
+            return new AddInKernelWorkbookCoreComposition(
+                kernelWorkbookService,
+                kernelWorkbookLifecycleService);
+        }
+    }
+
+    // Carries kernel workbook core services back to the root.
+    internal sealed class AddInKernelWorkbookCoreComposition
+    {
+        internal AddInKernelWorkbookCoreComposition(
+            KernelWorkbookService kernelWorkbookService,
+            KernelWorkbookLifecycleService kernelWorkbookLifecycleService)
+        {
+            KernelWorkbookService = kernelWorkbookService;
+            KernelWorkbookLifecycleService = kernelWorkbookLifecycleService;
+        }
+
+        internal KernelWorkbookService KernelWorkbookService { get; private set; }
+
+        internal KernelWorkbookLifecycleService KernelWorkbookLifecycleService { get; private set; }
+    }
+
+    // Bundles task pane construction and refresh orchestration services.
+    internal sealed class AddInTaskPaneCompositionFactory
+    {
+        private readonly ThisAddIn _addIn;
+        private readonly Excel.Application _application;
+        private readonly Logger _logger;
+        private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
+        private readonly Func<string, Excel.Workbook, Excel.Window, bool> _isTaskPaneRefreshSucceeded;
+        private readonly Action<Excel.Workbook, string> _handleExternalWorkbookDetected;
+        private readonly Func<string, Excel.Workbook, bool> _shouldSuppressCasePaneRefresh;
+        private readonly Action<string, Excel.Workbook, Excel.Window> _refreshTaskPane;
+        private readonly Action _scheduleWordWarmup;
+        private readonly Func<KernelHomeForm> _getKernelHomeForm;
+        private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
+        private readonly int _pendingPaneRefreshMaxAttempts;
+
+        internal AddInTaskPaneCompositionFactory(
+            ThisAddIn addIn,
+            Excel.Application application,
+            Logger logger,
+            Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
+            Func<string, Excel.Workbook, Excel.Window, bool> isTaskPaneRefreshSucceeded,
+            Action<Excel.Workbook, string> handleExternalWorkbookDetected,
+            Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh,
+            Action<string, Excel.Workbook, Excel.Window> refreshTaskPane,
+            Action scheduleWordWarmup,
+            Func<KernelHomeForm> getKernelHomeForm,
+            Func<int> getTaskPaneRefreshSuppressionCount,
+            int pendingPaneRefreshMaxAttempts)
+        {
+            _addIn = addIn;
+            _application = application;
+            _logger = logger;
+            _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow;
+            _isTaskPaneRefreshSucceeded = isTaskPaneRefreshSucceeded;
+            _handleExternalWorkbookDetected = handleExternalWorkbookDetected;
+            _shouldSuppressCasePaneRefresh = shouldSuppressCasePaneRefresh;
+            _refreshTaskPane = refreshTaskPane;
+            _scheduleWordWarmup = scheduleWordWarmup;
+            _getKernelHomeForm = getKernelHomeForm;
+            _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
+            _pendingPaneRefreshMaxAttempts = pendingPaneRefreshMaxAttempts;
+        }
+
+        internal AddInTaskPaneComposition Compose(
+            PathCompatibilityService pathCompatibilityService,
+            ExcelInteropService excelInteropService,
+            WorkbookRoleResolver workbookRoleResolver,
+            DocumentCommandService documentCommandService,
+            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
+            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
+            DocumentNamePromptService documentNamePromptService,
+            KernelCommandService kernelCommandService,
+            AccountingSheetCommandService accountingSheetCommandService,
+            AccountingInternalCommandService accountingInternalCommandService,
+            KernelCaseInteractionState kernelCaseInteractionState,
+            UserErrorService userErrorService,
+            WorkbookSessionService workbookSessionService,
+            ExcelWindowRecoveryService excelWindowRecoveryService)
+        {
+            var caseTaskPaneViewStateBuilder = new CaseTaskPaneViewStateBuilder();
+            var taskPaneSnapshotBuilderService = new TaskPaneSnapshotBuilderService(
+                _application,
+                excelInteropService,
+                pathCompatibilityService,
+                _logger);
+            var workbookCaseTaskPaneRefreshCommandService = new WorkbookCaseTaskPaneRefreshCommandService(
+                workbookRoleResolver,
+                excelInteropService,
+                _resolveWorkbookPaneWindow,
+                _isTaskPaneRefreshSucceeded);
+            var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts);
+            var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
+            var taskPaneManager = new TaskPaneManager(
+                _addIn,
+                excelInteropService,
+                taskPaneSnapshotBuilderService,
+                documentCommandService,
+                documentEligibilityDiagnosticsService,
+                documentMasterCatalogDiagnosticsService,
+                documentNamePromptService,
+                kernelCommandService,
+                accountingSheetCommandService,
+                caseTaskPaneViewStateBuilder,
+                accountingInternalCommandService,
+                kernelCaseInteractionState,
+                userErrorService,
+                _logger);
+            var windowActivatePaneHandlingService = new WindowActivatePaneHandlingService(
+                _handleExternalWorkbookDetected,
+                _shouldSuppressCasePaneRefresh,
+                taskPaneManager,
+                _refreshTaskPane,
+                excelInteropService,
                 _logger);
             var taskPaneRefreshCoordinator = new TaskPaneRefreshCoordinator(
-                WorkbookSessionService,
-                TaskPaneManager,
-                ExcelWindowRecoveryService,
+                workbookSessionService,
+                taskPaneManager,
+                excelWindowRecoveryService,
                 _logger,
                 _resolveWorkbookPaneWindow,
                 _scheduleWordWarmup);
-            TaskPaneRefreshOrchestrationService = new TaskPaneRefreshOrchestrationService(
-                ExcelInteropService,
-                WorkbookSessionService,
+            var taskPaneRefreshOrchestrationService = new TaskPaneRefreshOrchestrationService(
+                excelInteropService,
+                workbookSessionService,
                 _logger,
                 taskPaneDisplayRetryCoordinator,
                 workbookTaskPaneDisplayAttemptCoordinator,
                 taskPaneRefreshCoordinator,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount);
+            return new AddInTaskPaneComposition(
+                workbookCaseTaskPaneRefreshCommandService,
+                taskPaneManager,
+                windowActivatePaneHandlingService,
+                taskPaneRefreshOrchestrationService);
         }
+    }
+
+    // Carries task pane services back to the root.
+    internal sealed class AddInTaskPaneComposition
+    {
+        internal AddInTaskPaneComposition(
+            WorkbookCaseTaskPaneRefreshCommandService workbookCaseTaskPaneRefreshCommandService,
+            TaskPaneManager taskPaneManager,
+            WindowActivatePaneHandlingService windowActivatePaneHandlingService,
+            TaskPaneRefreshOrchestrationService taskPaneRefreshOrchestrationService)
+        {
+            WorkbookCaseTaskPaneRefreshCommandService = workbookCaseTaskPaneRefreshCommandService;
+            TaskPaneManager = taskPaneManager;
+            WindowActivatePaneHandlingService = windowActivatePaneHandlingService;
+            TaskPaneRefreshOrchestrationService = taskPaneRefreshOrchestrationService;
+        }
+
+        internal WorkbookCaseTaskPaneRefreshCommandService WorkbookCaseTaskPaneRefreshCommandService { get; private set; }
+
+        internal TaskPaneManager TaskPaneManager { get; private set; }
+
+        internal WindowActivatePaneHandlingService WindowActivatePaneHandlingService { get; private set; }
+
+        internal TaskPaneRefreshOrchestrationService TaskPaneRefreshOrchestrationService { get; private set; }
     }
 }

@@ -194,7 +194,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 throw new InvalidOperationException("雛形一覧シートが見つかりません。 book=" + _excelInteropService.GetWorkbookFullName(masterWorkbook));
             }
 
-            int lastRow = worksheet.Cells[worksheet.Rows.Count, "A"].End[Excel.XlDirection.xlUp].Row;
+            Excel.Range lastCell = worksheet.Cells[worksheet.Rows.Count, "A"] as Excel.Range;
+            if (lastCell == null)
+            {
+                throw new InvalidOperationException("雛形一覧シートの最終行セルを取得できませんでした。");
+            }
+
+            Excel.Range lastUsedCell = lastCell.End[Excel.XlDirection.xlUp] as Excel.Range;
+            if (lastUsedCell == null)
+            {
+                throw new InvalidOperationException("雛形一覧シートの使用済み最終行を取得できませんでした。");
+            }
+
+            int lastRow = lastUsedCell.Row;
             var result = new List<MasterTemplateRecord>();
             if (lastRow < MasterListFirstDataRow)
             {

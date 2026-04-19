@@ -1,5 +1,15 @@
 # CI tests
 
-This GitHub Actions workflow runs only the pure tests in `dev/CaseInfoSystem.Tests/CaseInfoSystem.Tests.csproj`.
+This GitHub Actions workflow restores, builds, and tests the solution on `windows-2022`.
 
-It does not build VSTO application projects and does not verify Office or VSTO behavior on a real machine.
+Current scope:
+
+- Build `dev/CaseInfoSystem.slnx` via MSBuild
+- Skip manifest signing in CI so certificate-store-dependent packaging does not block compile verification
+- Run `dev/CaseInfoSystem.Tests/CaseInfoSystem.Tests.csproj`
+
+Out of scope:
+
+- Deploy package validation
+- Runtime synchronization to `Addins/`
+- Office / VSTO behavior on a real machine

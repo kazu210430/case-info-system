@@ -351,8 +351,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (wasProtected)
             {
-                homeWorksheet.Cells.Locked = true;
-                homeWorksheet.Columns["B"].Locked = false;
+                Excel.Range allCells = homeWorksheet.Cells as Excel.Range;
+                if (allCells != null)
+                {
+                    allCells.Locked = true;
+                }
+
+                Excel.Range unlockedColumn = homeWorksheet.Columns["B"] as Excel.Range;
+                if (unlockedColumn != null)
+                {
+                    unlockedColumn.Locked = false;
+                }
+
                 homeWorksheet.Protect(
                     Password: UnprotectPassword,
                     UserInterfaceOnly: true,
@@ -549,7 +559,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Range targetCell = null;
             try
             {
-                int lastRow = homeWorksheet.Cells[homeWorksheet.Rows.Count, "A"].End[Excel.XlDirection.xlUp].Row;
+                Excel.Range lastCell = homeWorksheet.Cells[homeWorksheet.Rows.Count, "A"] as Excel.Range;
+                if (lastCell == null)
+                {
+                    throw new InvalidOperationException("Base HOME の最終行セルを取得できませんでした。");
+                }
+
+                Excel.Range lastUsedCell = lastCell.End[Excel.XlDirection.xlUp] as Excel.Range;
+                if (lastUsedCell == null)
+                {
+                    throw new InvalidOperationException("Base HOME の使用済み最終行を取得できませんでした。");
+                }
+
+                int lastRow = lastUsedCell.Row;
                 if (lastRow < 1)
                 {
                     throw new InvalidOperationException("Base HOME のキー列を読み取れませんでした。");

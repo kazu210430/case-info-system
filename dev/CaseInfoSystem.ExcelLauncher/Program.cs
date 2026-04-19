@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CaseInfoSystem.Tests")]
+
 namespace CaseInfoSystem.ExcelLauncher
 {
     /// <summary>
@@ -62,7 +64,11 @@ namespace CaseInfoSystem.ExcelLauncher
         /// </summary>
         private static string ResolveKernelWorkbookPath()
         {
-            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            return ResolveKernelWorkbookPath(AppDomain.CurrentDomain.BaseDirectory);
+        }
+
+        internal static string ResolveKernelWorkbookPath(string baseDirectory)
+        {
             return Path.Combine(baseDirectory, KernelWorkbookFileName);
         }
 

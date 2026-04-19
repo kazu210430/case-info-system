@@ -45,6 +45,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private DocumentNamePromptService _documentNamePromptService;
         private DocumentExecutionModeService _documentExecutionModeService;
         private WordInteropService _wordInteropService;
+        private LocalWorkCopyService _localWorkCopyService;
 
         // workbook ライフサイクル
         private KernelWorkbookService _kernelWorkbookService;
@@ -162,6 +163,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _documentNamePromptService = compositionRoot.DocumentNamePromptService;
             _documentExecutionModeService = compositionRoot.DocumentExecutionModeService;
             _wordInteropService = compositionRoot.WordInteropService;
+            _localWorkCopyService = compositionRoot.LocalWorkCopyService;
 
             // workbook ライフサイクル
             _kernelWorkbookService = compositionRoot.KernelWorkbookService;
@@ -210,6 +212,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 StopWordWarmupTimer();
+                _localWorkCopyService?.Dispose();
 
                 _logger.Info("ThisAddIn_Shutdown fired.");
                 return;
@@ -263,38 +266,33 @@ namespace CaseInfoSystem.ExcelAddIn
         // Excel application event handler
         private void Application_WorkbookOpen(Excel.Workbook workbook)
         {
-            try
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookOpen), () =>
             {
                 _logger?.Info("Excel WorkbookOpen fired. workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
                 _workbookEventCoordinator.OnWorkbookOpen(workbook);
-            }
-            catch (Exception ex)
-            {
-                _logger?.Error("Application_WorkbookOpen failed.", ex);
-            }
+            });
         }
 
         private void Application_WorkbookActivate(Excel.Workbook workbook)
         {
-            try
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () =>
             {
                 _logger?.Info("Excel WorkbookActivate fired. workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
                 _workbookEventCoordinator.OnWorkbookActivate(workbook);
-            }
-            catch (Exception ex)
-            {
-                _logger?.Error("Application_WorkbookActivate failed.", ex);
-            }
+            });
         }
 
         private void Application_WindowActivate(Excel.Workbook workbook, Excel.Window window)
         {
-            _logger?.Info(
-                "Excel WindowActivate fired. workbook="
-                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
-                + ", windowHwnd="
-                + SafeWindowHwnd(window));
-            _workbookEventCoordinator.OnWindowActivate(workbook, window);
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WindowActivate), () =>
+            {
+                _logger?.Info(
+                    "Excel WindowActivate fired. workbook="
+                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
+                    + ", windowHwnd="
+                    + SafeWindowHwnd(window));
+                _workbookEventCoordinator.OnWindowActivate(workbook, window);
+            });
         }
 
         // event handler から調停 service へ渡す delegate 入口
@@ -304,6 +302,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
             HandleExternalWorkbookDetected(workbook, "WorkbookOpen");
+            _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
@@ -317,6 +316,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
             HandleExternalWorkbookDetected(workbook, "WorkbookActivate");
+            _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
@@ -337,34 +337,46 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private void Application_SheetActivate(object sh)
         {
-            _accountingWorkbookLifecycleService?.HandleSheetActivated(sh);
-            _accountingSheetControlService?.HandleSheetActivated(sh);
-            _caseWorkbookLifecycleService?.HandleSheetActivated(sh);
-            RefreshTaskPane("SheetActivate", null, null);
+            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetActivate), () =>
+            {
+                _accountingWorkbookLifecycleService?.HandleSheetActivated(sh);
+                _accountingSheetControlService?.HandleSheetActivated(sh);
+                _caseWorkbookLifecycleService?.HandleSheetActivated(sh);
+                RefreshTaskPane("SheetActivate", null, null);
+            });
         }
 
         private void Application_SheetSelectionChange(object sh, Excel.Range target)
         {
-            string sheetName = SafeSheetName(sh);
-            string targetAddress = SafeRangeAddress(target);
-            _logger?.Debug("Application_SheetSelectionChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
-            _accountingSheetControlService?.HandleSheetSelectionChange(sh, target);
+            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetSelectionChange), () =>
+            {
+                string sheetName = SafeSheetName(sh);
+                string targetAddress = SafeRangeAddress(target);
+                _logger?.Debug("Application_SheetSelectionChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
+                _accountingSheetControlService?.HandleSheetSelectionChange(sh, target);
+            });
         }
 
         private void Application_SheetChange(object sh, Excel.Range target)
         {
-            string sheetName = SafeSheetName(sh);
-            string targetAddress = SafeRangeAddress(target);
-            _logger?.Debug("Application_SheetChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
-            HandleKernelSheetCommand(sh as Excel.Worksheet, target);
-            _caseWorkbookLifecycleService?.HandleSheetChanged((sh as Excel.Worksheet)?.Parent as Excel.Workbook);
-            _accountingSheetControlService?.HandleSheetChange(sh, target);
+            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetChange), () =>
+            {
+                string sheetName = SafeSheetName(sh);
+                string targetAddress = SafeRangeAddress(target);
+                _logger?.Debug("Application_SheetChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
+                HandleKernelSheetCommand(sh as Excel.Worksheet, target);
+                _caseWorkbookLifecycleService?.HandleSheetChanged((sh as Excel.Worksheet)?.Parent as Excel.Workbook);
+                _accountingSheetControlService?.HandleSheetChange(sh, target);
+            });
         }
 
         private void Application_AfterCalculate()
         {
-            _logger?.Debug("Application_AfterCalculate", "fired.");
-            _accountingSheetControlService?.HandleAfterCalculate(Application);
+            EventBoundaryGuard.Execute(_logger, nameof(Application_AfterCalculate), () =>
+            {
+                _logger?.Debug("Application_AfterCalculate", "fired.");
+                _accountingSheetControlService?.HandleAfterCalculate(Application);
+            });
         }
 
         private void HandleKernelSheetCommand(Excel.Worksheet worksheet, Excel.Range target)
@@ -630,62 +642,72 @@ namespace CaseInfoSystem.ExcelAddIn
         // Excel workbook lifecycle event handler
         private void Application_WorkbookBeforeSave(Excel.Workbook workbook, bool saveAsUi, ref bool cancel)
         {
-            _logger?.Info(
-                "Excel WorkbookBeforeSave fired. workbook="
-                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
-                + ", saveAsUi="
-                + saveAsUi.ToString()
-                + ", cancel="
-                + cancel.ToString());
-            _kernelWorkbookLifecycleService?.HandleWorkbookBeforeSave(workbook, saveAsUi, ref cancel);
+            EventBoundaryGuard.ExecuteCancelable(_logger, nameof(Application_WorkbookBeforeSave), ref cancel, HandleBeforeSave);
+
+            void HandleBeforeSave(ref bool innerCancel)
+            {
+                _logger?.Info(
+                    "Excel WorkbookBeforeSave fired. workbook="
+                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
+                    + ", saveAsUi="
+                    + saveAsUi.ToString()
+                    + ", cancel="
+                    + innerCancel.ToString());
+                _kernelWorkbookLifecycleService?.HandleWorkbookBeforeSave(workbook, saveAsUi, ref innerCancel);
+            }
         }
 
         private void Application_WorkbookBeforeClose(Excel.Workbook workbook, ref bool cancel)
         {
-            _logger?.Info(
-                "Excel WorkbookBeforeClose fired. workbook="
-                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
-                + ", cancel="
-                + cancel.ToString());
+            EventBoundaryGuard.ExecuteCancelable(_logger, nameof(Application_WorkbookBeforeClose), ref cancel, HandleBeforeClose);
 
-            if (cancel)
+            void HandleBeforeClose(ref bool innerCancel)
             {
-                return;
-            }
+                _logger?.Info(
+                    "Excel WorkbookBeforeClose fired. workbook="
+                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
+                    + ", cancel="
+                    + innerCancel.ToString());
 
-            _caseWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook, ref cancel);
-            if (cancel)
-            {
-                return;
-            }
+                if (innerCancel)
+                {
+                    return;
+                }
 
-            _kernelWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook, ref cancel);
-            if (cancel)
-            {
-                return;
-            }
+                _caseWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook, ref innerCancel);
+                if (innerCancel)
+                {
+                    return;
+                }
 
-            _workbookClipboardPreservationService?.PreserveCopiedValuesForClosingWorkbook(workbook);
-            _accountingWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook);
+                _kernelWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook, ref innerCancel);
+                if (innerCancel)
+                {
+                    return;
+                }
 
-            if (_accountingSheetControlService != null)
-            {
-                _accountingSheetControlService.RemoveWorkbookState(workbook);
-            }
+                _workbookClipboardPreservationService?.PreserveCopiedValuesForClosingWorkbook(workbook);
+                _accountingWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook);
 
-            if (_accountingWorkbookLifecycleService != null)
-            {
-                _accountingWorkbookLifecycleService.RemoveWorkbookState(workbook);
-            }
+                if (_accountingSheetControlService != null)
+                {
+                    _accountingSheetControlService.RemoveWorkbookState(workbook);
+                }
 
-            if (_caseWorkbookLifecycleService != null)
-            {
-                _caseWorkbookLifecycleService.RemoveWorkbookState(workbook);
-            }
+                if (_accountingWorkbookLifecycleService != null)
+                {
+                    _accountingWorkbookLifecycleService.RemoveWorkbookState(workbook);
+                }
 
-            if (_taskPaneManager != null)
-            {
-                _taskPaneManager.RemoveWorkbookPanes(workbook);
+                if (_caseWorkbookLifecycleService != null)
+                {
+                    _caseWorkbookLifecycleService.RemoveWorkbookState(workbook);
+                }
+
+                if (_taskPaneManager != null)
+                {
+                    _taskPaneManager.RemoveWorkbookPanes(workbook);
+                }
             }
         }
 

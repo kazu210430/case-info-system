@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using System.Threading;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
@@ -10,6 +10,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         private const int MoveRetryCountPrimary = 20;
         private const int MoveRetryCountFallback = 20;
+        private readonly Logger _logger;
+
+        internal PathCompatibilityService(Logger logger = null)
+        {
+            _logger = logger;
+        }
 
         public string NormalizePath(string path)
         {
@@ -28,7 +34,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             if (IsHttpUrl(normalized))
             {
-                normalized = ConvertOneDriveUrlToLocalBestEffort(normalized);
+                if (!IsSupportedCloudUrl(normalized))
+                {
+                    return normalized;
+                }
+
+                string resolvedCloudPath = ConvertOneDriveUrlToLocalBestEffort(normalized);
+                if (!string.Equals(resolvedCloudPath, normalized, StringComparison.Ordinal))
+                {
+                    normalized = resolvedCloudPath;
+                }
+                else
+                {
+                    return normalized;
+                }
             }
 
             normalized = normalized.Replace("/", "\\");
@@ -106,9 +125,17 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return PathExistsLocal(localPath) ? localPath : string.Empty;
             }
 
+            LogHttpObservation("ResolveToExistingLocalPath", "Inspecting HTTP path. input=" + trimmed);
+            if (!IsSupportedCloudUrl(trimmed))
+            {
+                _logger?.Warn("PathCompatibilityService.ResolveToExistingLocalPath ignored unsupported HTTP input. input=" + trimmed);
+                return string.Empty;
+            }
+
             string relativePath = ExtractRelativePathFromCloudUrl(trimmed);
             if (relativePath.Length == 0)
             {
+                _logger?.Warn("PathCompatibilityService.ResolveToExistingLocalPath could not extract relative path from HTTP input. input=" + trimmed);
                 return string.Empty;
             }
 
@@ -117,10 +144,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 string candidate = NormalizePath(CombinePath(root, relativePath));
                 if (PathExistsLocal(candidate))
                 {
+                    _logger?.Info("PathCompatibilityService.ResolveToExistingLocalPath resolved HTTP path. input=" + trimmed + " relative=" + relativePath + " resolved=" + candidate);
                     return candidate;
                 }
             }
 
+            _logger?.Warn("PathCompatibilityService.ResolveToExistingLocalPath did not find a local candidate for HTTP path. input=" + trimmed + " relative=" + relativePath);
             return string.Empty;
         }
 
@@ -142,10 +171,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             folderPath = ResolveToExistingLocalPath(folderPath);
             if (folderPath.Length == 0)
             {
+                if (IsHttpUrl(rawFullPath))
+                {
+                    _logger?.Warn("PathCompatibilityService.BuildSafeSavePath could not resolve HTTP folder to an existing local path. input=" + (rawFullPath ?? string.Empty));
+                }
                 return string.Empty;
             }
 
-            return NormalizePath(CombinePath(folderPath, fileName));
+            string safePath = NormalizePath(CombinePath(folderPath, fileName));
+            if (IsHttpUrl(rawFullPath))
+            {
+                _logger?.Info("PathCompatibilityService.BuildSafeSavePath resolved HTTP save path. input=" + (rawFullPath ?? string.Empty) + " resolved=" + safePath);
+            }
+
+            return safePath;
         }
 
         internal bool EnsureFolderSafe(string folderPath)
@@ -309,12 +348,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 try
                 {
-                    if (File.Exists(normalizedDestination))
-                    {
-                        File.Delete(normalizedDestination);
-                    }
-
-                    File.Move(normalizedSource, normalizedDestination);
+                    PromoteFileToDestinationSafely(normalizedSource, normalizedDestination);
                     return true;
                 }
                 catch
@@ -327,8 +361,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 try
                 {
-                    File.Copy(normalizedSource, normalizedDestination, true);
-                    File.Delete(normalizedSource);
+                    PromoteFileToDestinationSafely(normalizedSource, normalizedDestination);
                     return true;
                 }
                 catch
@@ -338,6 +371,89 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return false;
+        }
+
+        private void PromoteFileToDestinationSafely(string normalizedSource, string normalizedDestination)
+        {
+            string replacementTempPath = BuildAdjacentTempFilePath(normalizedDestination);
+            string backupTempPath = BuildAdjacentBackupFilePath(normalizedDestination);
+
+            try
+            {
+                File.Copy(normalizedSource, replacementTempPath, overwrite: false);
+
+                if (File.Exists(normalizedDestination))
+                {
+                    if (!TryReplaceFile(replacementTempPath, normalizedDestination, backupTempPath))
+                    {
+                        ReplaceFileViaBackupSwap(replacementTempPath, normalizedDestination, backupTempPath);
+                    }
+                }
+                else
+                {
+                    File.Move(replacementTempPath, normalizedDestination);
+                }
+
+                TryDeleteFileQuietly(normalizedSource);
+            }
+            catch
+            {
+                TryDeleteFileQuietly(replacementTempPath);
+                RestoreDestinationFromBackupIfNeeded(normalizedDestination, backupTempPath);
+                TryDeleteFileQuietly(backupTempPath);
+                throw;
+            }
+        }
+
+        private static bool TryReplaceFile(string replacementTempPath, string normalizedDestination, string backupTempPath)
+        {
+            try
+            {
+                File.Replace(replacementTempPath, normalizedDestination, backupTempPath);
+                TryDeleteFileQuietly(backupTempPath);
+                return true;
+            }
+            catch (IOException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (PlatformNotSupportedException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (NotSupportedException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+        }
+
+        private static void ReplaceFileViaBackupSwap(string replacementTempPath, string normalizedDestination, string backupTempPath)
+        {
+            File.Move(normalizedDestination, backupTempPath);
+
+            try
+            {
+                File.Move(replacementTempPath, normalizedDestination);
+                TryDeleteFileQuietly(backupTempPath);
+            }
+            catch
+            {
+                RestoreDestinationFromBackupIfNeeded(normalizedDestination, backupTempPath);
+                throw;
+            }
         }
 
         internal bool IsUnderSyncRoot(string path)
@@ -422,7 +538,27 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 || normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string ExtractRelativePathFromCloudUrl(string url)
+        private static bool IsSupportedCloudUrl(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            if (normalized.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            string[] markers = { "/Documents/", "/Shared%20Documents/", "/Shared Documents/" };
+            foreach (string marker in markers)
+            {
+                if (normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase) > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string ExtractRelativePathFromCloudUrl(string url)
         {
             string trimmed = (url ?? string.Empty).Trim();
             if (trimmed.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
@@ -430,7 +566,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 int fourthSlashIndex = FindSlashOccurrence(trimmed, 4);
                 if (fourthSlashIndex > 0 && fourthSlashIndex + 1 < trimmed.Length)
                 {
-                    return UrlDecode(trimmed.Substring(fourthSlashIndex + 1)).Replace("/", "\\");
+                    string encodedRelativePath = trimmed.Substring(fourthSlashIndex + 1);
+                    LogHttpDecodeObservation("ExtractRelativePathFromCloudUrl", trimmed, encodedRelativePath);
+                    return DecodeRelativeCloudPath(encodedRelativePath);
                 }
             }
 
@@ -440,7 +578,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 int markerIndex = trimmed.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
                 if (markerIndex > 0)
                 {
-                    return UrlDecode(trimmed.Substring(markerIndex + 1)).Replace("/", "\\");
+                    string encodedRelativePath = trimmed.Substring(markerIndex + 1);
+                    LogHttpDecodeObservation("ExtractRelativePathFromCloudUrl", trimmed, encodedRelativePath);
+                    return DecodeRelativeCloudPath(encodedRelativePath);
                 }
             }
 
@@ -468,6 +608,29 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             candidates.Add(trimmed);
         }
 
+        private string BuildAdjacentTempFilePath(string destinationPath)
+        {
+            return BuildAdjacentWorkingFilePath(destinationPath, "tmp");
+        }
+
+        private string BuildAdjacentBackupFilePath(string destinationPath)
+        {
+            return BuildAdjacentWorkingFilePath(destinationPath, "bak");
+        }
+
+        private string BuildAdjacentWorkingFilePath(string destinationPath, string suffix)
+        {
+            string normalizedDestination = NormalizePath(destinationPath);
+            string destinationFolder = GetParentFolderPath(normalizedDestination);
+            string fileName = GetFileNameFromPath(normalizedDestination);
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string extension = Path.GetExtension(fileName);
+            string tempFileName = (baseName.Length == 0 ? "temp" : baseName)
+                + "." + (suffix ?? "tmp") + "_" + Guid.NewGuid().ToString("N")
+                + extension;
+            return CombinePath(destinationFolder, tempFileName);
+        }
+
         private static string SanitizeFileName(string value)
         {
             string sanitized = value ?? string.Empty;
@@ -487,37 +650,103 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private static void WaitRetryTickMs(int milliseconds)
         {
-            DateTime endAt = DateTime.UtcNow.AddMilliseconds(milliseconds);
-            while (DateTime.UtcNow < endAt)
+            if (milliseconds <= 0)
             {
-                System.Windows.Forms.Application.DoEvents();
+                return;
+            }
+
+            Thread.Sleep(milliseconds);
+        }
+
+        private static void TryDeleteFileQuietly(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
             }
         }
 
-        private static string ConvertOneDriveUrlToLocalBestEffort(string url)
+        private static void RestoreDestinationFromBackupIfNeeded(string destinationPath, string backupPath)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath) || string.IsNullOrWhiteSpace(backupPath))
+            {
+                return;
+            }
+
+            try
+            {
+                if (!File.Exists(destinationPath) && File.Exists(backupPath))
+                {
+                    File.Move(backupPath, destinationPath);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private string ConvertOneDriveUrlToLocalBestEffort(string url)
         {
             string trimmed = (url ?? string.Empty).Trim();
-            if (!trimmed.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
+            if (!IsSupportedCloudUrl(trimmed))
             {
                 return trimmed;
             }
 
-            int fourthSlashIndex = FindSlashOccurrence(trimmed, 4);
-            if (fourthSlashIndex <= 0 || fourthSlashIndex + 1 >= trimmed.Length)
+            string relativePath = ExtractRelativePathFromCloudUrl(trimmed);
+            if (relativePath.Length == 0)
             {
                 return trimmed;
             }
 
-            string relativePath = UrlDecode(trimmed.Substring(fourthSlashIndex + 1));
-            string oneDriveRoot = Environment.GetEnvironmentVariable("OneDrive");
-            if (string.IsNullOrWhiteSpace(oneDriveRoot))
+            string firstCombinedCandidate = string.Empty;
+            string firstParentExistingCandidate = string.Empty;
+            foreach (string syncRoot in GetSyncRootCandidates())
             {
-                oneDriveRoot = Environment.GetEnvironmentVariable("OneDriveCommercial");
+                string combinedPath = NormalizePath(CombinePath(syncRoot, relativePath));
+                if (firstCombinedCandidate.Length == 0)
+                {
+                    firstCombinedCandidate = combinedPath;
+                }
+
+                if (PathExistsLocal(combinedPath))
+                {
+                    _logger?.Info("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort resolved cloud URL to existing local path. input=" + trimmed + " relative=" + relativePath + " combined=" + combinedPath);
+                    return combinedPath;
+                }
+
+                string parentFolderPath = GetParentFolderPath(combinedPath);
+                if (firstParentExistingCandidate.Length == 0 && PathExistsLocal(parentFolderPath))
+                {
+                    firstParentExistingCandidate = combinedPath;
+                }
             }
 
-            return string.IsNullOrWhiteSpace(oneDriveRoot)
-                ? trimmed
-                : Path.Combine(oneDriveRoot, relativePath);
+            if (firstParentExistingCandidate.Length > 0)
+            {
+                _logger?.Info("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort selected cloud URL candidate whose parent folder exists. input=" + trimmed + " relative=" + relativePath + " combined=" + firstParentExistingCandidate);
+                return firstParentExistingCandidate;
+            }
+
+            if (firstCombinedCandidate.Length > 0)
+            {
+                _logger?.Warn("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort found only non-existing local candidates. input=" + trimmed + " relative=" + relativePath + " firstCandidate=" + firstCombinedCandidate);
+                return trimmed;
+            }
+
+            _logger?.Warn("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort could not find a sync root. input=" + trimmed + " relative=" + relativePath);
+            return trimmed;
         }
 
         private static int FindSlashOccurrence(string value, int occurrence)
@@ -562,32 +791,37 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return collapsed;
         }
 
-        private static string UrlDecode(string value)
+        private static string DecodeRelativeCloudPath(string encodedRelativePath)
+        {
+            if (string.IsNullOrEmpty(encodedRelativePath))
+            {
+                return string.Empty;
+            }
+
+            string[] segments = encodedRelativePath.Split(new[] { '/' }, StringSplitOptions.None);
+            for (int index = 0; index < segments.Length; index++)
+            {
+                segments[index] = DecodeUrlPathSegment(segments[index]);
+            }
+
+            return string.Join("\\", segments);
+        }
+
+        private static string DecodeUrlPathSegment(string value)
         {
             if (string.IsNullOrEmpty(value))
             {
                 return string.Empty;
             }
 
-            var builder = new StringBuilder(value.Length);
-            for (int index = 0; index < value.Length; index++)
+            try
             {
-                char current = value[index];
-                if (current == '%' && index + 2 < value.Length)
-                {
-                    string hex = value.Substring(index + 1, 2);
-                    if (IsHex2(hex))
-                    {
-                        builder.Append((char)Convert.ToInt32(hex, 16));
-                        index += 2;
-                        continue;
-                    }
-                }
-
-                builder.Append(current == '+' ? ' ' : current);
+                return Uri.UnescapeDataString(value);
             }
-
-            return builder.ToString();
+            catch (UriFormatException)
+            {
+                return value;
+            }
         }
 
         private static bool IsHex2(string value)
@@ -610,6 +844,59 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return true;
+        }
+
+        private void LogHttpDecodeObservation(string operationName, string originalUrl, string encodedRelativePath)
+        {
+            if (_logger == null)
+            {
+                return;
+            }
+
+            if (ContainsPercentEncodedHighByte(encodedRelativePath))
+            {
+                _logger.Warn("PathCompatibilityService." + operationName + " observed percent-encoded high-byte path data. input=" + originalUrl + " encodedRelative=" + encodedRelativePath);
+                return;
+            }
+
+            if (encodedRelativePath.IndexOf('%') >= 0 || encodedRelativePath.IndexOf('+') >= 0)
+            {
+                _logger.Info("PathCompatibilityService." + operationName + " observed encoded path data. input=" + originalUrl + " encodedRelative=" + encodedRelativePath);
+            }
+        }
+
+        private void LogHttpObservation(string operationName, string message)
+        {
+            _logger?.Info("PathCompatibilityService." + operationName + " " + (message ?? string.Empty));
+        }
+
+        private static bool ContainsPercentEncodedHighByte(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            for (int index = 0; index + 2 < value.Length; index++)
+            {
+                if (value[index] != '%')
+                {
+                    continue;
+                }
+
+                string hex = value.Substring(index + 1, 2);
+                if (!IsHex2(hex))
+                {
+                    continue;
+                }
+
+                if (Convert.ToInt32(hex, 16) >= 0x80)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -35,6 +35,7 @@
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.WordAddIn.vsto</RuntimeManifestPath>
     <DebugDeployPackageDir Condition="'$(DebugDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\DebugPackage\CaseInfoSystem.WordAddIn</DebugDeployPackageDir>
+    <SignManifests>true</SignManifests>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(SignManifests)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == ''">true</EnableVstoPackaging>
@@ -116,7 +117,6 @@
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(VSToolsTargetsRelativePath)')">C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>true</SignManifests>
     <ManifestKeyFile>$(AddInManifestKeyFile)</ManifestKeyFile>
     <ManifestCertificateThumbprint>6B9D20C90791706E34767379DA43A92579582E8B</ManifestCertificateThumbprint>
   </PropertyGroup>
@@ -128,10 +128,9 @@
   <Target Name="UpdateUnifiedDeployPackage" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <ItemGroup>
       <DeployPackageExistingFiles Include="$(UnifiedDeployPackageDir)\*.*" />
-      <DeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.dll" />
-      <DeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.dll.manifest" />
-      <DeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.vsto" />
-      <DeployPackageFiles Include="$(TargetDir)Microsoft.Office.Tools.Common.v4.0.Utilities.dll" />
+      <DeployPackageFiles Include="$(TargetDir)\*.dll" />
+      <DeployPackageFiles Include="$(TargetDir)\*.manifest" />
+      <DeployPackageFiles Include="$(TargetDir)\*.vsto" />
       <DeployPackageFiles Remove="$(TargetDir)\*.pdb" />
     </ItemGroup>
     <MakeDir Directories="$(UnifiedDeployPackageDir)" />
@@ -141,10 +140,9 @@
   <Target Name="UpdateDebugDeployPackage" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <ItemGroup>
       <DebugDeployPackageExistingFiles Include="$(DebugDeployPackageDir)\*.*" />
-      <DebugDeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.dll" />
-      <DebugDeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.dll.manifest" />
-      <DebugDeployPackageFiles Include="$(TargetDir)CaseInfoSystem.WordAddIn.vsto" />
-      <DebugDeployPackageFiles Include="$(TargetDir)Microsoft.Office.Tools.Common.v4.0.Utilities.dll" />
+      <DebugDeployPackageFiles Include="$(TargetDir)\*.dll" />
+      <DebugDeployPackageFiles Include="$(TargetDir)\*.manifest" />
+      <DebugDeployPackageFiles Include="$(TargetDir)\*.vsto" />
     </ItemGroup>
     <MakeDir Directories="$(DebugDeployPackageDir)" />
     <Delete Files="@(DebugDeployPackageExistingFiles)" TreatErrorsAsWarnings="true" />

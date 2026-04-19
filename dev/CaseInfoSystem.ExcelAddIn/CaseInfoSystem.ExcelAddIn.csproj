@@ -40,6 +40,7 @@
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.ExcelAddIn.vsto</RuntimeManifestPath>
     <VstoInstallerPath Condition="'$(VstoInstallerPath)' == ''">C:\Program Files\Common Files\microsoft shared\VSTO\10.0\VSTOInstaller.exe</VstoInstallerPath>
     <DebugDeployPackageDir Condition="'$(DebugDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\DebugPackage\CaseInfoSystem.ExcelAddIn</DebugDeployPackageDir>
+    <SignManifests>true</SignManifests>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(SignManifests)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == ''">true</EnableVstoPackaging>
@@ -376,9 +377,6 @@
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(VSToolsTargetsRelativePath)')">C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(VSToolsTargetsRelativePath)')">C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(VSToolsTargetsRelativePath)')">C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignManifests>true</SignManifests>
   </PropertyGroup>
   <PropertyGroup>
     <ManifestKeyFile>$(AddInManifestKeyFile)</ManifestKeyFile>

@@ -1,9 +1,0 @@
-<Project>
-  <ItemGroup>
-    <Reference Include="Microsoft.Office.Interop.Word">
-      <HintPath>$(MSBuildThisFileDirectory)..\lib\net20\Microsoft.Office.Interop.Word.dll</HintPath>
-      <EmbedInteropTypes>true</EmbedInteropTypes>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
-</Project>

@@ -25,3 +25,6 @@ build/hot-reload-backups/
 # - dev/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx
 # - dev/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn_TemporaryKey.pfx
 # - dev/Deploy/**
+
+/build/
+/.github/build/

@@ -309,12 +309,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 try
                 {
-                    if (File.Exists(normalizedDestination))
-                    {
-                        File.Delete(normalizedDestination);
-                    }
-
-                    File.Move(normalizedSource, normalizedDestination);
+                    PromoteFileToDestinationSafely(normalizedSource, normalizedDestination);
                     return true;
                 }
                 catch
@@ -327,8 +322,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 try
                 {
-                    File.Copy(normalizedSource, normalizedDestination, true);
-                    File.Delete(normalizedSource);
+                    PromoteFileToDestinationSafely(normalizedSource, normalizedDestination);
                     return true;
                 }
                 catch
@@ -338,6 +332,89 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return false;
+        }
+
+        private void PromoteFileToDestinationSafely(string normalizedSource, string normalizedDestination)
+        {
+            string replacementTempPath = BuildAdjacentTempFilePath(normalizedDestination);
+            string backupTempPath = BuildAdjacentBackupFilePath(normalizedDestination);
+
+            try
+            {
+                File.Copy(normalizedSource, replacementTempPath, overwrite: false);
+
+                if (File.Exists(normalizedDestination))
+                {
+                    if (!TryReplaceFile(replacementTempPath, normalizedDestination, backupTempPath))
+                    {
+                        ReplaceFileViaBackupSwap(replacementTempPath, normalizedDestination, backupTempPath);
+                    }
+                }
+                else
+                {
+                    File.Move(replacementTempPath, normalizedDestination);
+                }
+
+                TryDeleteFileQuietly(normalizedSource);
+            }
+            catch
+            {
+                TryDeleteFileQuietly(replacementTempPath);
+                RestoreDestinationFromBackupIfNeeded(normalizedDestination, backupTempPath);
+                TryDeleteFileQuietly(backupTempPath);
+                throw;
+            }
+        }
+
+        private static bool TryReplaceFile(string replacementTempPath, string normalizedDestination, string backupTempPath)
+        {
+            try
+            {
+                File.Replace(replacementTempPath, normalizedDestination, backupTempPath);
+                TryDeleteFileQuietly(backupTempPath);
+                return true;
+            }
+            catch (IOException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (PlatformNotSupportedException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (NotSupportedException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                TryDeleteFileQuietly(backupTempPath);
+                return false;
+            }
+        }
+
+        private static void ReplaceFileViaBackupSwap(string replacementTempPath, string normalizedDestination, string backupTempPath)
+        {
+            File.Move(normalizedDestination, backupTempPath);
+
+            try
+            {
+                File.Move(replacementTempPath, normalizedDestination);
+                TryDeleteFileQuietly(backupTempPath);
+            }
+            catch
+            {
+                RestoreDestinationFromBackupIfNeeded(normalizedDestination, backupTempPath);
+                throw;
+            }
         }
 
         internal bool IsUnderSyncRoot(string path)
@@ -468,6 +545,29 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             candidates.Add(trimmed);
         }
 
+        private string BuildAdjacentTempFilePath(string destinationPath)
+        {
+            return BuildAdjacentWorkingFilePath(destinationPath, "tmp");
+        }
+
+        private string BuildAdjacentBackupFilePath(string destinationPath)
+        {
+            return BuildAdjacentWorkingFilePath(destinationPath, "bak");
+        }
+
+        private string BuildAdjacentWorkingFilePath(string destinationPath, string suffix)
+        {
+            string normalizedDestination = NormalizePath(destinationPath);
+            string destinationFolder = GetParentFolderPath(normalizedDestination);
+            string fileName = GetFileNameFromPath(normalizedDestination);
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string extension = Path.GetExtension(fileName);
+            string tempFileName = (baseName.Length == 0 ? "temp" : baseName)
+                + "." + (suffix ?? "tmp") + "_" + Guid.NewGuid().ToString("N")
+                + extension;
+            return CombinePath(destinationFolder, tempFileName);
+        }
+
         private static string SanitizeFileName(string value)
         {
             string sanitized = value ?? string.Empty;
@@ -491,6 +591,44 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             while (DateTime.UtcNow < endAt)
             {
                 System.Windows.Forms.Application.DoEvents();
+            }
+        }
+
+        private static void TryDeleteFileQuietly(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void RestoreDestinationFromBackupIfNeeded(string destinationPath, string backupPath)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath) || string.IsNullOrWhiteSpace(backupPath))
+            {
+                return;
+            }
+
+            try
+            {
+                if (!File.Exists(destinationPath) && File.Exists(backupPath))
+                {
+                    File.Move(backupPath, destinationPath);
+                }
+            }
+            catch
+            {
             }
         }
 

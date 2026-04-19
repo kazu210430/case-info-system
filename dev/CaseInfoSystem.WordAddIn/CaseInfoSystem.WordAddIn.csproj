@@ -153,6 +153,9 @@
   <Target Name="SyncRuntimeAddInDebug" AfterTargets="Build" DependsOnTargets="UpdateDebugDeployPackage" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <Exec Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File &quot;$(ProjectToolsDir)\Sync-RuntimeAddIn.ps1&quot; -PackageDir &quot;$(DebugDeployPackageDir)&quot; -RuntimeAddInDir &quot;$(RuntimeAddInDirFull)&quot; -RuntimeManifestPath &quot;$(RuntimeManifestPath)&quot;" />
   </Target>
+  <Target Name="RepairRuntimeAddInRegistrationDebug" AfterTargets="Build" Condition="'$(BuildingInsideVisualStudio)' == 'true' and '$(Configuration)' != 'Release' and Exists('$(RuntimeManifestPath)') and Exists('$(ProjectToolsDir)\Repair-VstoRegistration.ps1')">
+    <Exec Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File &quot;$(ProjectToolsDir)\Repair-VstoRegistration.ps1&quot; -RuntimeManifestPath &quot;$(RuntimeManifestPath)&quot;" />
+  </Target>
   <Target Name="HotReloadVerifyAfterDebugSync" AfterTargets="SyncRuntimeAddInDebug" Condition="'$(BuildingInsideVisualStudio)' == 'true' and '$(Configuration)' != 'Release' and '$(SolutionDir)' != '' and Exists('$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1')">
     <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1&quot; -Mode Verify -Project WordAddIn -Configuration $(Configuration)" />
   </Target>

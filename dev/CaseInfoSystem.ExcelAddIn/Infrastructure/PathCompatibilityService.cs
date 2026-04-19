@@ -10,6 +10,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         private const int MoveRetryCountPrimary = 20;
         private const int MoveRetryCountFallback = 20;
+        private readonly Logger _logger;
+
+        internal PathCompatibilityService(Logger logger = null)
+        {
+            _logger = logger;
+        }
 
         public string NormalizePath(string path)
         {
@@ -106,9 +112,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return PathExistsLocal(localPath) ? localPath : string.Empty;
             }
 
+            LogHttpObservation("ResolveToExistingLocalPath", "Inspecting HTTP path. input=" + trimmed);
             string relativePath = ExtractRelativePathFromCloudUrl(trimmed);
             if (relativePath.Length == 0)
             {
+                _logger?.Warn("PathCompatibilityService.ResolveToExistingLocalPath could not extract relative path from HTTP input. input=" + trimmed);
                 return string.Empty;
             }
 
@@ -117,10 +125,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 string candidate = NormalizePath(CombinePath(root, relativePath));
                 if (PathExistsLocal(candidate))
                 {
+                    _logger?.Info("PathCompatibilityService.ResolveToExistingLocalPath resolved HTTP path. input=" + trimmed + " relative=" + relativePath + " resolved=" + candidate);
                     return candidate;
                 }
             }
 
+            _logger?.Warn("PathCompatibilityService.ResolveToExistingLocalPath did not find a local candidate for HTTP path. input=" + trimmed + " relative=" + relativePath);
             return string.Empty;
         }
 
@@ -142,10 +152,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             folderPath = ResolveToExistingLocalPath(folderPath);
             if (folderPath.Length == 0)
             {
+                if (IsHttpUrl(rawFullPath))
+                {
+                    _logger?.Warn("PathCompatibilityService.BuildSafeSavePath could not resolve HTTP folder to an existing local path. input=" + (rawFullPath ?? string.Empty));
+                }
                 return string.Empty;
             }
 
-            return NormalizePath(CombinePath(folderPath, fileName));
+            string safePath = NormalizePath(CombinePath(folderPath, fileName));
+            if (IsHttpUrl(rawFullPath))
+            {
+                _logger?.Info("PathCompatibilityService.BuildSafeSavePath resolved HTTP save path. input=" + (rawFullPath ?? string.Empty) + " resolved=" + safePath);
+            }
+
+            return safePath;
         }
 
         internal bool EnsureFolderSafe(string folderPath)
@@ -499,7 +519,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 || normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string ExtractRelativePathFromCloudUrl(string url)
+        private string ExtractRelativePathFromCloudUrl(string url)
         {
             string trimmed = (url ?? string.Empty).Trim();
             if (trimmed.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
@@ -507,7 +527,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 int fourthSlashIndex = FindSlashOccurrence(trimmed, 4);
                 if (fourthSlashIndex > 0 && fourthSlashIndex + 1 < trimmed.Length)
                 {
-                    return UrlDecode(trimmed.Substring(fourthSlashIndex + 1)).Replace("/", "\\");
+                    string encodedRelativePath = trimmed.Substring(fourthSlashIndex + 1);
+                    LogHttpDecodeObservation("ExtractRelativePathFromCloudUrl", trimmed, encodedRelativePath);
+                    return UrlDecode(encodedRelativePath).Replace("/", "\\");
                 }
             }
 
@@ -517,7 +539,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 int markerIndex = trimmed.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
                 if (markerIndex > 0)
                 {
-                    return UrlDecode(trimmed.Substring(markerIndex + 1)).Replace("/", "\\");
+                    string encodedRelativePath = trimmed.Substring(markerIndex + 1);
+                    LogHttpDecodeObservation("ExtractRelativePathFromCloudUrl", trimmed, encodedRelativePath);
+                    return UrlDecode(encodedRelativePath).Replace("/", "\\");
                 }
             }
 
@@ -632,7 +656,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private static string ConvertOneDriveUrlToLocalBestEffort(string url)
+        private string ConvertOneDriveUrlToLocalBestEffort(string url)
         {
             string trimmed = (url ?? string.Empty).Trim();
             if (!trimmed.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
@@ -646,16 +670,24 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return trimmed;
             }
 
-            string relativePath = UrlDecode(trimmed.Substring(fourthSlashIndex + 1));
+            string encodedRelativePath = trimmed.Substring(fourthSlashIndex + 1);
+            LogHttpDecodeObservation("ConvertOneDriveUrlToLocalBestEffort", trimmed, encodedRelativePath);
+            string relativePath = UrlDecode(encodedRelativePath);
             string oneDriveRoot = Environment.GetEnvironmentVariable("OneDrive");
             if (string.IsNullOrWhiteSpace(oneDriveRoot))
             {
                 oneDriveRoot = Environment.GetEnvironmentVariable("OneDriveCommercial");
             }
 
-            return string.IsNullOrWhiteSpace(oneDriveRoot)
-                ? trimmed
-                : Path.Combine(oneDriveRoot, relativePath);
+            if (string.IsNullOrWhiteSpace(oneDriveRoot))
+            {
+                _logger?.Warn("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort could not find a OneDrive root. input=" + trimmed + " relative=" + relativePath);
+                return trimmed;
+            }
+
+            string combinedPath = Path.Combine(oneDriveRoot, relativePath);
+            _logger?.Info("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort combined docs.live URL with OneDrive root. input=" + trimmed + " relative=" + relativePath + " combined=" + combinedPath);
+            return combinedPath;
         }
 
         private static int FindSlashOccurrence(string value, int occurrence)
@@ -748,6 +780,59 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return true;
+        }
+
+        private void LogHttpDecodeObservation(string operationName, string originalUrl, string encodedRelativePath)
+        {
+            if (_logger == null)
+            {
+                return;
+            }
+
+            if (ContainsPercentEncodedHighByte(encodedRelativePath))
+            {
+                _logger.Warn("PathCompatibilityService." + operationName + " observed percent-encoded high-byte path data. input=" + originalUrl + " encodedRelative=" + encodedRelativePath);
+                return;
+            }
+
+            if (encodedRelativePath.IndexOf('%') >= 0 || encodedRelativePath.IndexOf('+') >= 0)
+            {
+                _logger.Info("PathCompatibilityService." + operationName + " observed encoded path data. input=" + originalUrl + " encodedRelative=" + encodedRelativePath);
+            }
+        }
+
+        private void LogHttpObservation(string operationName, string message)
+        {
+            _logger?.Info("PathCompatibilityService." + operationName + " " + (message ?? string.Empty));
+        }
+
+        private static bool ContainsPercentEncodedHighByte(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            for (int index = 0; index + 2 < value.Length; index++)
+            {
+                if (value[index] != '%')
+                {
+                    continue;
+                }
+
+                string hex = value.Substring(index + 1, 2);
+                if (!IsHex2(hex))
+                {
+                    continue;
+                }
+
+                if (Convert.ToInt32(hex, 16) >= 0x80)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

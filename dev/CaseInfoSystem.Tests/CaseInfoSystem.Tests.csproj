@@ -28,6 +28,7 @@
     <Compile Include="LocalWorkCopyServiceTests.cs" />
     <Compile Include="WordInteropServiceTests.cs" />
     <Compile Include="DocumentSaveServiceTests.cs" />
+    <Compile Include="PathCompatibilityServiceTests.cs" />
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
     <Compile Include="CaseWorkbookLifecycleServiceThinOrchestrationTests.cs" />

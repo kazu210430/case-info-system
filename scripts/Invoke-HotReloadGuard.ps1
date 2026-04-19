@@ -33,7 +33,13 @@ function New-ProjectDefinition {
         [string[]]$RequiredFiles,
 
         [Parameter(Mandatory = $true)]
-        [object[]]$BackupItems
+        [object[]]$BackupItems,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RuntimeManifestPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$AddInRegistryPath
     )
 
     [pscustomobject]@{
@@ -42,7 +48,19 @@ function New-ProjectDefinition {
         PackageDir = $PackageDir
         RequiredFiles = $RequiredFiles
         BackupItems = $BackupItems
+        RuntimeManifestPath = $RuntimeManifestPath
+        AddInRegistryPath = $AddInRegistryPath
     }
+}
+
+function Convert-ToFileUri {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    return ([System.Uri]$fullPath).AbsoluteUri
 }
 
 function Resolve-FirstChildFile {
@@ -155,7 +173,9 @@ function Get-ProjectDefinitions {
             'DocumentExecutionAllowlist.txt',
             'DocumentExecutionAllowlist.review.txt'
         ) `
-        -BackupItems $excelBackupItems
+        -BackupItems $excelBackupItems `
+        -RuntimeManifestPath (Join-Path $RepoRoot 'Addins\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.vsto') `
+        -AddInRegistryPath 'HKCU:\Software\Microsoft\Office\Excel\Addins\CaseInfoSystem.ExcelAddIn'
 
     $wordDefinition = New-ProjectDefinition `
         -Name 'WordAddIn' `
@@ -172,7 +192,9 @@ function Get-ProjectDefinitions {
                 SourcePath = Join-Path $RepoRoot 'Addins\CaseInfoSystem.WordAddIn'
                 SnapshotRelativePath = 'WordAddIn\Addins\CaseInfoSystem.WordAddIn'
             }
-        )
+        ) `
+        -RuntimeManifestPath (Join-Path $RepoRoot 'Addins\CaseInfoSystem.WordAddIn\CaseInfoSystem.WordAddIn.vsto') `
+        -AddInRegistryPath 'HKCU:\Software\Microsoft\Office\Word\Addins\CaseInfoSystem.WordAddIn'
 
     if ($SelectedProject -eq 'ExcelAddIn') {
         return @($excelDefinition)
@@ -334,6 +356,33 @@ function Assert-DirectoriesInSync {
     Write-Output ("Verify completed: {0}" -f $Definition.Name)
 }
 
+function Assert-AddInRegistrationMatches {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Definition
+    )
+
+    if (-not (Test-Path -LiteralPath $Definition.RuntimeManifestPath)) {
+        throw ("Runtime manifest was not found. project={0}, path={1}" -f $Definition.Name, $Definition.RuntimeManifestPath)
+    }
+
+    if (-not (Test-Path -LiteralPath $Definition.AddInRegistryPath)) {
+        throw ("Add-in registry key was not found. project={0}, key={1}" -f $Definition.Name, $Definition.AddInRegistryPath)
+    }
+
+    $registration = Get-ItemProperty -LiteralPath $Definition.AddInRegistryPath
+    $expectedManifest = (Convert-ToFileUri -Path $Definition.RuntimeManifestPath) + '|vstolocal'
+    $actualManifest = [string]$registration.Manifest
+    if ($actualManifest -ne $expectedManifest) {
+        throw ("Add-in registry manifest mismatch. project={0}, expected={1}, actual={2}" -f $Definition.Name, $expectedManifest, $actualManifest)
+    }
+
+    $actualLoadBehavior = [int]$registration.LoadBehavior
+    if ($actualLoadBehavior -ne 3) {
+        throw ("Add-in LoadBehavior mismatch. project={0}, expected=3, actual={1}" -f $Definition.Name, $actualLoadBehavior)
+    }
+}
+
 function Invoke-VerifyMode {
     param(
         [Parameter(Mandatory = $true)]
@@ -342,6 +391,7 @@ function Invoke-VerifyMode {
 
     foreach ($definition in $ProjectDefinitions) {
         Assert-DirectoriesInSync -Definition $definition
+        Assert-AddInRegistrationMatches -Definition $definition
     }
 }
 

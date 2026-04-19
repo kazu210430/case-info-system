@@ -151,8 +151,10 @@ namespace CaseInfoSystem.ExcelAddIn
             NavigationService = new NavigationService(ExcelInteropService, WorkbookRoleResolver, _logger);
             WorkbookSessionService = new WorkbookSessionService(NavigationService, TransientPaneSuppressionService, _logger);
             CaseContextFactory = new CaseContextFactory(ExcelInteropService, caseDataSnapshotFactory, _logger);
-            // Kernel 系は workbook core までを閉じた生成責務として外出しし、
-            // Home / command / detection は既存順序維持のためこの root に残す。
+            // Dependency memo:
+            // - Stable intra-area wiring is extracted into small compositions.
+            // - Cross-area coordination and creation order stay in this root intentionally.
+            // Kernel workbook boundary: workbook access and lifecycle only.
             var kernelWorkbookCoreComposition = new AddInKernelWorkbookCoreCompositionFactory(_application, _logger)
                 .Compose(
                     pathCompatibilityService,
@@ -212,6 +214,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 caseListMappingRepository,
                 accountingWorkbookService,
                 _logger);
+            // Document boundary: bundle Word/document execution services and diagnostics.
             var documentComposition = new AddInDocumentCompositionFactory(_addIn, _logger)
                 .Compose(
                     pathCompatibilityService,
@@ -234,9 +237,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 workbookResetDefinitionRepository,
                 KernelWorkbookLifecycleService,
                 _logger);
-            // この先の Kernel 連鎖は CaseWorkbookLifecycleService や UI 調停にまたがるため、
-            // 現時点では生成場所を動かさず AddInCompositionRoot に留めている。
             var caseTemplateSnapshotService = new CaseTemplateSnapshotService(ExcelInteropService);
+            // Case creation stays here because it still spans kernel, case workbook, and UI-facing coordination.
             var caseWorkbookInitializer = new CaseWorkbookInitializer(ExcelInteropService, caseTemplateSnapshotService, caseListFieldDefinitionRepository);
             var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy(_application, WorkbookRoleResolver, _logger);
             var createdCaseOpenPromptService = new CreatedCaseOpenPromptService(_logger);
@@ -271,6 +273,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _clearKernelSheetCommandCell,
                 _releaseComObject,
                 _logger);
+            // Kernel home remains here because it bridges workbook state and UI coordination.
             ExternalWorkbookDetectionService = new ExternalWorkbookDetectionService(
                 WorkbookRoleResolver,
                 KernelCaseInteractionState,
@@ -290,6 +293,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 KernelHomeCoordinator,
                 _showKernelHomePlaceholderWithExternalWorkbookSuppression,
                 _logger);
+            // Task pane boundary: bundle pane construction and refresh orchestration.
             var taskPaneComposition = new AddInTaskPaneCompositionFactory(
                 _addIn,
                 _application,
@@ -325,6 +329,7 @@ namespace CaseInfoSystem.ExcelAddIn
         }
     }
 
+    // Bundles document creation, execution diagnostics, and Word interop services.
     internal sealed class AddInDocumentCompositionFactory
     {
         private readonly ThisAddIn _addIn;
@@ -421,6 +426,7 @@ namespace CaseInfoSystem.ExcelAddIn
         }
     }
 
+    // Carries the document-related services composed for the root.
     internal sealed class AddInDocumentComposition
     {
         internal AddInDocumentComposition(
@@ -452,8 +458,7 @@ namespace CaseInfoSystem.ExcelAddIn
         internal WordInteropService WordInteropService { get; private set; }
     }
 
-    // AddInCompositionRoot から切り出した Kernel 生成責務のうち、
-    // 依存順序と配線が比較的閉じている workbook core だけを扱う。
+    // Bundles kernel workbook access and lifecycle services that must be initialized together.
     internal sealed class AddInKernelWorkbookCoreCompositionFactory
     {
         private readonly Excel.Application _application;
@@ -490,6 +495,7 @@ namespace CaseInfoSystem.ExcelAddIn
         }
     }
 
+    // Carries kernel workbook core services back to the root.
     internal sealed class AddInKernelWorkbookCoreComposition
     {
         internal AddInKernelWorkbookCoreComposition(
@@ -505,6 +511,7 @@ namespace CaseInfoSystem.ExcelAddIn
         internal KernelWorkbookLifecycleService KernelWorkbookLifecycleService { get; private set; }
     }
 
+    // Bundles task pane construction and refresh orchestration services.
     internal sealed class AddInTaskPaneCompositionFactory
     {
         private readonly ThisAddIn _addIn;
@@ -623,6 +630,7 @@ namespace CaseInfoSystem.ExcelAddIn
         }
     }
 
+    // Carries task pane services back to the root.
     internal sealed class AddInTaskPaneComposition
     {
         internal AddInTaskPaneComposition(

@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CaseInfoSystem.ExcelLauncher\CaseInfoSystem.ExcelLauncher.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="ExcelLauncherProgramTests.cs" />
     <Compile Include="TaskPaneManagerThinOrchestrationTests.cs" />
     <Compile Include="DocumentCommandServiceTests.cs" />
     <Compile Include="DocumentExecutionModeServiceTests.cs" />

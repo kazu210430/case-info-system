@@ -90,6 +90,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal WordInteropService WordInteropService { get; private set; }
 
+        internal LocalWorkCopyService LocalWorkCopyService { get; private set; }
+
         internal KernelWorkbookService KernelWorkbookService { get; private set; }
 
         internal KernelWorkbookLifecycleService KernelWorkbookLifecycleService { get; private set; }
@@ -159,6 +161,9 @@ namespace CaseInfoSystem.ExcelAddIn
                 .Compose(
                     pathCompatibilityService,
                     ExcelInteropService,
+                    caseListFieldDefinitionRepository,
+                    caseListHeaderRepository,
+                    caseListMappingRepository,
                     ExcelWindowRecoveryService,
                     KernelCaseInteractionState);
             KernelWorkbookService = kernelWorkbookCoreComposition.KernelWorkbookService;
@@ -229,6 +234,7 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentNamePromptService = documentComposition.DocumentNamePromptService;
             DocumentExecutionModeService = documentComposition.DocumentExecutionModeService;
             WordInteropService = documentComposition.WordInteropService;
+            LocalWorkCopyService = documentComposition.LocalWorkCopyService;
             WorkbookRibbonCommandService = new WorkbookRibbonCommandService(ExcelInteropService, pathCompatibilityService, _logger);
             var workbookResetDefinitionRepository = new WorkbookResetDefinitionRepository();
             WorkbookResetCommandService = new WorkbookResetCommandService(
@@ -422,7 +428,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentExecutionModeService,
                 documentEligibilityDiagnosticsService,
                 documentMasterCatalogDiagnosticsService,
-                wordInteropService);
+                wordInteropService,
+                localWorkCopyService);
         }
     }
 
@@ -435,7 +442,8 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentExecutionModeService documentExecutionModeService,
             DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
             DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
-            WordInteropService wordInteropService)
+            WordInteropService wordInteropService,
+            LocalWorkCopyService localWorkCopyService)
         {
             DocumentCommandService = documentCommandService;
             DocumentNamePromptService = documentNamePromptService;
@@ -443,6 +451,7 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentEligibilityDiagnosticsService = documentEligibilityDiagnosticsService;
             DocumentMasterCatalogDiagnosticsService = documentMasterCatalogDiagnosticsService;
             WordInteropService = wordInteropService;
+            LocalWorkCopyService = localWorkCopyService;
         }
 
         internal DocumentCommandService DocumentCommandService { get; private set; }
@@ -456,6 +465,8 @@ namespace CaseInfoSystem.ExcelAddIn
         internal DocumentMasterCatalogDiagnosticsService DocumentMasterCatalogDiagnosticsService { get; private set; }
 
         internal WordInteropService WordInteropService { get; private set; }
+
+        internal LocalWorkCopyService LocalWorkCopyService { get; private set; }
     }
 
     // Bundles kernel workbook access and lifecycle services that must be initialized together.
@@ -473,6 +484,9 @@ namespace CaseInfoSystem.ExcelAddIn
         internal AddInKernelWorkbookCoreComposition Compose(
             PathCompatibilityService pathCompatibilityService,
             ExcelInteropService excelInteropService,
+            CaseListFieldDefinitionRepository caseListFieldDefinitionRepository,
+            CaseListHeaderRepository caseListHeaderRepository,
+            CaseListMappingRepository caseListMappingRepository,
             ExcelWindowRecoveryService excelWindowRecoveryService,
             KernelCaseInteractionState kernelCaseInteractionState)
         {
@@ -487,6 +501,9 @@ namespace CaseInfoSystem.ExcelAddIn
                 _application,
                 excelInteropService,
                 pathCompatibilityService,
+                caseListFieldDefinitionRepository,
+                caseListHeaderRepository,
+                caseListMappingRepository,
                 _logger);
             kernelWorkbookService.SetLifecycleService(kernelWorkbookLifecycleService);
             return new AddInKernelWorkbookCoreComposition(

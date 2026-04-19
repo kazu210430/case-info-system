@@ -53,6 +53,19 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
+		public void Dispose_WhenPollingActive_StopsPollingAndAllowsRepeatedCalls ()
+		{
+			using TestServiceContext context = CreateContext (new List<string> ());
+
+			context.Service.RegisterLocalWorkCopy (new object (), @"C:\temp\draft.docx", @"C:\final\result.docx");
+
+			context.Service.Dispose ();
+			context.Service.Dispose ();
+
+			Assert.False (context.Service.IsPollingActiveForTesting ());
+		}
+
+		[Fact]
 		public void ExecutePollLocalWorkCopiesForTesting_WhenDocumentIsStillOpen_KeepsPendingState ()
 		{
 			bool moveCalled = false;

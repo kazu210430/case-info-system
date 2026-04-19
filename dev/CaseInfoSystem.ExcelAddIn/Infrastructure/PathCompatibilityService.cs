@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
@@ -611,11 +612,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private static void WaitRetryTickMs(int milliseconds)
         {
-            DateTime endAt = DateTime.UtcNow.AddMilliseconds(milliseconds);
-            while (DateTime.UtcNow < endAt)
+            if (milliseconds <= 0)
             {
-                System.Windows.Forms.Application.DoEvents();
+                return;
             }
+
+            Thread.Sleep(milliseconds);
         }
 
         private static void TryDeleteFileQuietly(string path)

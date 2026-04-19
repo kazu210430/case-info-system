@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -15,11 +17,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string SystemRootPropertyName = "SYSTEM_ROOT";
         private const string WordTemplateDirectoryPropertyName = "WORD_TEMPLATE_DIR";
         private const string TemplateFolderName = "雛形";
+        private static readonly string[] ProtectedManagementSheetNames = new string[]
+        {
+            "CaseList_FieldInventory",
+            "CaseList_Headers",
+            "CaseList_Mapping",
+            "UserData_BaseMapping"
+        };
 
         private readonly KernelWorkbookService _kernelWorkbookService;
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
+        private readonly CaseListFieldDefinitionRepository _caseListFieldDefinitionRepository;
+        private readonly CaseListHeaderRepository _caseListHeaderRepository;
+        private readonly CaseListMappingRepository _caseListMappingRepository;
         private readonly Logger _logger;
         private readonly Dictionary<string, int> _managedCloseCounts;
         private Control _managedCloseDispatcher;
@@ -34,14 +46,49 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Application application,
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
+            CaseListFieldDefinitionRepository caseListFieldDefinitionRepository,
+            CaseListHeaderRepository caseListHeaderRepository,
+            CaseListMappingRepository caseListMappingRepository,
             Logger logger)
         {
             _kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException(nameof(kernelWorkbookService));
             _application = application ?? throw new ArgumentNullException(nameof(application));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
+            _caseListFieldDefinitionRepository = caseListFieldDefinitionRepository ?? throw new ArgumentNullException(nameof(caseListFieldDefinitionRepository));
+            _caseListHeaderRepository = caseListHeaderRepository ?? throw new ArgumentNullException(nameof(caseListHeaderRepository));
+            _caseListMappingRepository = caseListMappingRepository ?? throw new ArgumentNullException(nameof(caseListMappingRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// メソッド: Kernel ブック利用開始時に管理シート保護と軽量な定義整合確認を行う。
+        /// 引数: workbook - 対象の Kernel ブック。
+        /// 戻り値: なし。
+        /// 副作用: hidden 管理シート保護を再適用し、整合不良はログへ警告する。
+        /// </summary>
+        internal void HandleWorkbookOpenedOrActivated(Excel.Workbook workbook)
+        {
+            if (!_kernelWorkbookService.IsKernelWorkbook(workbook))
+            {
+                return;
+            }
+
+            try
+            {
+                EnsureProtectedManagementSheets(workbook);
+
+                string validationMessage = ValidateCaseListManagedDefinitions(workbook);
+                if (!string.IsNullOrWhiteSpace(validationMessage))
+                {
+                    _logger.Warn("Kernel workbook case-list managed-definition validation failed. " + validationMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Kernel workbook initialization guards failed.", ex);
+            }
         }
 
         /// <summary>
@@ -511,6 +558,197 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 // 例外処理: Saved 判定に失敗した場合は安全側で保存確認ありとして扱う。
                 return true;
+            }
+        }
+
+        private void EnsureProtectedManagementSheets(Excel.Workbook workbook)
+        {
+            foreach (string sheetName in ProtectedManagementSheetNames)
+            {
+                Excel.Worksheet worksheet = _excelInteropService.FindWorksheetByName(workbook, sheetName);
+                if (worksheet == null)
+                {
+                    _logger.Warn("Kernel workbook management sheet was not found. sheet=" + sheetName);
+                    continue;
+                }
+
+                if (worksheet.ProtectContents || worksheet.ProtectDrawingObjects || worksheet.ProtectScenarios)
+                {
+                    continue;
+                }
+
+                worksheet.Protect(
+                    Password: string.Empty,
+                    UserInterfaceOnly: true,
+                    DrawingObjects: Type.Missing,
+                    Contents: Type.Missing,
+                    Scenarios: Type.Missing);
+                worksheet.EnableSelection = Excel.XlEnableSelection.xlNoSelection;
+                _logger.Info("Kernel workbook management sheet protected for runtime safety. sheet=" + sheetName);
+            }
+        }
+
+        private string ValidateCaseListManagedDefinitions(Excel.Workbook workbook)
+        {
+            Excel.Worksheet caseListWorksheet = _excelInteropService.FindCaseListWorksheet(workbook);
+            if (caseListWorksheet == null)
+            {
+                return "Kernelブックにシート「案件一覧」が見つかりません。";
+            }
+
+            IReadOnlyDictionary<string, CaseListFieldDefinition> fieldDefinitions = _caseListFieldDefinitionRepository.LoadDefinitions(workbook);
+            IReadOnlyList<CaseListHeaderDefinition> headerDefinitions = _caseListHeaderRepository.LoadDefinitions(workbook);
+            IReadOnlyList<CaseListMappingDefinition> enabledMappings = _caseListMappingRepository.LoadEnabledDefinitions(workbook);
+
+            if (fieldDefinitions == null || fieldDefinitions.Count == 0)
+            {
+                return "Kernelブックの管理シート CaseList_FieldInventory を読み取れません。";
+            }
+
+            if (headerDefinitions == null || headerDefinitions.Count == 0)
+            {
+                return "Kernelブックの管理シート CaseList_Headers を読み取れません。";
+            }
+
+            if (enabledMappings == null || enabledMappings.Count == 0)
+            {
+                return "Kernelブックの管理シート CaseList_Mapping を読み取れません。";
+            }
+
+            IReadOnlyDictionary<string, int> managedHeaderMap = BuildManagedHeaderMap(headerDefinitions);
+            IReadOnlyDictionary<string, int> actualHeaderMap = ReadActualCaseListHeaderMap(caseListWorksheet);
+            foreach (KeyValuePair<string, int> pair in managedHeaderMap)
+            {
+                int actualColumn;
+                if (!actualHeaderMap.TryGetValue(pair.Key, out actualColumn))
+                {
+                    return "案件一覧シートに管理定義ヘッダが存在しません。 header=" + pair.Key;
+                }
+
+                if (actualColumn != pair.Value)
+                {
+                    return "案件一覧シートの列配置が管理定義と一致しません。 header=" + pair.Key + ", managedColumn=" + pair.Value + ", actualColumn=" + actualColumn;
+                }
+            }
+
+            foreach (CaseListMappingDefinition mapping in enabledMappings)
+            {
+                if (mapping == null)
+                {
+                    continue;
+                }
+
+                string sourceFieldKey = (mapping.SourceFieldKey ?? string.Empty).Trim();
+                string targetHeaderName = (mapping.TargetHeaderName ?? string.Empty).Trim();
+                if (!fieldDefinitions.ContainsKey(sourceFieldKey))
+                {
+                    return "CaseList_Mapping に FieldInventory 未定義の項目があります。 sourceFieldKey=" + sourceFieldKey;
+                }
+
+                if (!managedHeaderMap.ContainsKey(targetHeaderName))
+                {
+                    return "CaseList_Mapping に Headers 未定義のヘッダがあります。 targetHeaderName=" + targetHeaderName;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static IReadOnlyDictionary<string, int> BuildManagedHeaderMap(IReadOnlyList<CaseListHeaderDefinition> headerDefinitions)
+        {
+            Dictionary<string, int> result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (headerDefinitions == null)
+            {
+                return result;
+            }
+
+            foreach (CaseListHeaderDefinition definition in headerDefinitions)
+            {
+                string headerName = ((definition == null ? string.Empty : definition.HeaderName) ?? string.Empty).Trim();
+                int columnIndex = ConvertColumnAddressToIndex(definition == null ? string.Empty : definition.CellAddress);
+                if (headerName.Length == 0 || columnIndex <= 0 || result.ContainsKey(headerName))
+                {
+                    continue;
+                }
+
+                result.Add(headerName, columnIndex);
+            }
+
+            return result;
+        }
+
+        private static IReadOnlyDictionary<string, int> ReadActualCaseListHeaderMap(Excel.Worksheet caseListWorksheet)
+        {
+            Dictionary<string, int> result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            Excel.Range range = null;
+            try
+            {
+                int lastColumn = ((dynamic)caseListWorksheet.Cells[2, caseListWorksheet.Columns.Count]).End[Excel.XlDirection.xlToLeft].Column;
+                if (lastColumn < 1)
+                {
+                    return result;
+                }
+
+                range = caseListWorksheet.Range[(dynamic)caseListWorksheet.Cells[2, 1], (dynamic)caseListWorksheet.Cells[2, lastColumn]];
+                object[,] values = range.Value2 as object[,];
+                if (values == null)
+                {
+                    return result;
+                }
+
+                int upperBound = values.GetUpperBound(1);
+                for (int i = 1; i <= upperBound; i++)
+                {
+                    string headerName = (Convert.ToString(values[1, i]) ?? string.Empty).Trim();
+                    if (headerName.Length != 0 && !result.ContainsKey(headerName))
+                    {
+                        result.Add(headerName, i);
+                    }
+                }
+
+                return result;
+            }
+            finally
+            {
+                ReleaseComObject(range);
+            }
+        }
+
+        private static int ConvertColumnAddressToIndex(string cellAddress)
+        {
+            if (string.IsNullOrWhiteSpace(cellAddress))
+            {
+                return 0;
+            }
+
+            int result = 0;
+            string normalized = cellAddress.Trim().ToUpperInvariant();
+            foreach (char c in normalized)
+            {
+                if (c < 'A' || c > 'Z')
+                {
+                    break;
+                }
+
+                result = result * 26 + (c - 'A' + 1);
+            }
+
+            return result;
+        }
+
+        private static void ReleaseComObject(object comObject)
+        {
+            if (comObject == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Marshal.FinalReleaseComObject(comObject);
+            }
+            catch
+            {
             }
         }
 

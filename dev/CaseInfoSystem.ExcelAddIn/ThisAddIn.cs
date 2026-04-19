@@ -45,6 +45,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private DocumentNamePromptService _documentNamePromptService;
         private DocumentExecutionModeService _documentExecutionModeService;
         private WordInteropService _wordInteropService;
+        private LocalWorkCopyService _localWorkCopyService;
 
         // workbook ライフサイクル
         private KernelWorkbookService _kernelWorkbookService;
@@ -162,6 +163,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _documentNamePromptService = compositionRoot.DocumentNamePromptService;
             _documentExecutionModeService = compositionRoot.DocumentExecutionModeService;
             _wordInteropService = compositionRoot.WordInteropService;
+            _localWorkCopyService = compositionRoot.LocalWorkCopyService;
 
             // workbook ライフサイクル
             _kernelWorkbookService = compositionRoot.KernelWorkbookService;
@@ -210,6 +212,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 StopWordWarmupTimer();
+                _localWorkCopyService?.Dispose();
 
                 _logger.Info("ThisAddIn_Shutdown fired.");
                 return;
@@ -299,6 +302,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
             HandleExternalWorkbookDetected(workbook, "WorkbookOpen");
+            _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
@@ -312,6 +316,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
             HandleExternalWorkbookDetected(workbook, "WorkbookActivate");
+            _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);

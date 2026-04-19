@@ -141,13 +141,14 @@ function New-BackupFile {
     return $backupPath
 }
 
-$rootPath = Split-Path -Parent $PSScriptRoot
-$kernelPath = (Get-ChildItem -LiteralPath $rootPath -Filter '*_Kernel.xlsx' | Select-Object -First 1 -ExpandProperty FullName)
-$extractPath = Join-Path $rootPath 'tmp\\kernel_xml'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$runtimeRoot = Split-Path -Parent $repoRoot
+$kernelPath = (Get-ChildItem -LiteralPath $runtimeRoot -Filter '*_Kernel.xlsx' | Select-Object -First 1 -ExpandProperty FullName)
+$extractPath = Join-Path $runtimeRoot 'tmp\\kernel_xml'
 $sheetPath = Join-Path $extractPath 'xl\\worksheets\\sheet4.xml'
 $sharedStringsPath = Join-Path $extractPath 'xl\\sharedStrings.xml'
 $workbookPath = Join-Path $extractPath 'xl\\workbook.xml'
-$outputZipPath = Join-Path $rootPath 'tmp\\kernel_fieldinventory_patched.zip'
+$outputZipPath = Join-Path $runtimeRoot 'tmp\\kernel_fieldinventory_patched.zip'
 
 if (-not (Test-Path -LiteralPath $kernelPath)) {
     throw 'Kernel workbook was not found.'

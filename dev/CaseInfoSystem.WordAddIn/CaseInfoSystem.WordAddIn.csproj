@@ -31,7 +31,7 @@
     <ProjectToolsDir>$(MSBuildProjectDirectory)\Tools</ProjectToolsDir>
     <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">$(MSBuildProjectDirectory)\CaseInfoSystem.WordAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
     <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.WordAddIn</UnifiedDeployPackageDir>
-    <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\Addins\CaseInfoSystem.WordAddIn</RuntimeAddInDir>
+    <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\Addins\CaseInfoSystem.WordAddIn</RuntimeAddInDir>
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.WordAddIn.vsto</RuntimeManifestPath>
     <DebugDeployPackageDir Condition="'$(DebugDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\DebugPackage\CaseInfoSystem.WordAddIn</DebugDeployPackageDir>

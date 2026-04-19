@@ -43,9 +43,10 @@ function Get-KernelSheetNames {
     return @($user, $template, $caseList)
 }
 
-$rootPath = Split-Path -Parent $PSScriptRoot
-$basePath = (Get-ChildItem -LiteralPath $rootPath -Filter '*_Base.xlsx' | Select-Object -First 1 -ExpandProperty FullName)
-$kernelPath = (Get-ChildItem -LiteralPath $rootPath -Filter '*_Kernel.xlsx' | Select-Object -First 1 -ExpandProperty FullName)
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$runtimeRoot = Split-Path -Parent $repoRoot
+$basePath = (Get-ChildItem -LiteralPath $runtimeRoot -Filter '*_Base.xlsx' | Select-Object -First 1 -ExpandProperty FullName)
+$kernelPath = (Get-ChildItem -LiteralPath $runtimeRoot -Filter '*_Kernel.xlsx' | Select-Object -First 1 -ExpandProperty FullName)
 
 if ([string]::IsNullOrWhiteSpace($basePath) -or [string]::IsNullOrWhiteSpace($kernelPath)) {
     throw 'Base or Kernel workbook was not found.'

@@ -28,30 +28,107 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
-		public void BuildSafeSavePath_WhenDocsLiveUrlUsesJapanesePercentEncoding_ReturnsEmptyStringEvenWhenFolderExists ()
+		public void BuildSafeSavePath_WhenDocsLiveUrlUsesJapanesePercentEncoding_ReturnsResolvedLocalPath ()
 		{
 			using TestEnvironmentScope scope = new TestEnvironmentScope ();
 			PathCompatibilityService service = new PathCompatibilityService ();
-			string existingFolder = Path.Combine (scope.OneDriveRoot, "文書");
+			string existingFolder = Path.Combine (scope.OneDriveRoot, "\u6587\u66F8");
 			Directory.CreateDirectory (existingFolder);
 
 			string safeSavePath = service.BuildSafeSavePath ("https://d.docs.live.net/cid123/%E6%96%87%E6%9B%B8/%E5%A5%91%E7%B4%84%E6%9B%B8.docx");
 
-			Assert.Equal (string.Empty, safeSavePath);
+			Assert.Equal (service.NormalizePath (Path.Combine (existingFolder, "\u5951\u7D04\u66F8.docx")), safeSavePath);
 		}
 
 		[Fact]
-		public void ResolveToExistingLocalPath_WhenSharePointUrlUsesJapanesePercentEncoding_ReturnsEmptyStringEvenWhenLocalPathExists ()
+		public void ResolveToExistingLocalPath_WhenSharePointUrlUsesJapanesePercentEncoding_ReturnsExistingLocalPath ()
 		{
 			using TestEnvironmentScope scope = new TestEnvironmentScope ();
 			PathCompatibilityService service = new PathCompatibilityService ();
-			string expectedPath = Path.Combine (scope.OneDriveRoot, "Shared Documents", "文書", "契約書.docx");
+			string expectedPath = Path.Combine (scope.OneDriveRoot, "Shared Documents", "\u6587\u66F8", "\u5951\u7D04\u66F8.docx");
 			Directory.CreateDirectory (Path.GetDirectoryName (expectedPath));
 			File.WriteAllText (expectedPath, "test");
 
 			string resolvedPath = service.ResolveToExistingLocalPath ("https://contoso.sharepoint.com/sites/test/Shared%20Documents/%E6%96%87%E6%9B%B8/%E5%A5%91%E7%B4%84%E6%9B%B8.docx");
 
+			Assert.Equal (service.NormalizePath (expectedPath), resolvedPath);
+		}
+
+		[Fact]
+		public void ResolveToExistingLocalPath_WhenCloudUrlContainsPlusSign_PreservesPlusSign ()
+		{
+			using TestEnvironmentScope scope = new TestEnvironmentScope ();
+			PathCompatibilityService service = new PathCompatibilityService ();
+			string expectedPath = Path.Combine (scope.OneDriveRoot, "Shared Documents", "Team+Folder", "Budget+Plan.docx");
+			Directory.CreateDirectory (Path.GetDirectoryName (expectedPath));
+			File.WriteAllText (expectedPath, "test");
+
+			string resolvedPath = service.ResolveToExistingLocalPath ("https://contoso.sharepoint.com/sites/test/Shared%20Documents/Team+Folder/Budget+Plan.docx");
+
+			Assert.Equal (service.NormalizePath (expectedPath), resolvedPath);
+		}
+
+		[Fact]
+		public void ResolveToExistingLocalPath_WhenInputIsLocalPath_ReturnsExistingLocalPath ()
+		{
+			using TestEnvironmentScope scope = new TestEnvironmentScope ();
+			PathCompatibilityService service = new PathCompatibilityService ();
+			string expectedPath = Path.Combine (scope.TempRoot, "local", "inside.docx");
+			Directory.CreateDirectory (Path.GetDirectoryName (expectedPath));
+			File.WriteAllText (expectedPath, "test");
+
+			string resolvedPath = service.ResolveToExistingLocalPath (expectedPath);
+
+			Assert.Equal (service.NormalizePath (expectedPath), resolvedPath);
+		}
+
+		[Fact]
+		public void ResolveToExistingLocalPath_WhenInputIsFileUrl_ReturnsExistingLocalPath ()
+		{
+			using TestEnvironmentScope scope = new TestEnvironmentScope ();
+			PathCompatibilityService service = new PathCompatibilityService ();
+			string expectedPath = Path.Combine (scope.TempRoot, "local", "inside.docx");
+			Directory.CreateDirectory (Path.GetDirectoryName (expectedPath));
+			File.WriteAllText (expectedPath, "test");
+			string fileUrl = "file:///" + expectedPath.Replace ("\\", "/");
+
+			string resolvedPath = service.ResolveToExistingLocalPath (fileUrl);
+
+			Assert.Equal (service.NormalizePath (expectedPath), resolvedPath);
+		}
+
+		[Fact]
+		public void ResolveToExistingLocalPath_WhenCloudCandidateDoesNotExist_ReturnsEmptyString ()
+		{
+			using TestEnvironmentScope scope = new TestEnvironmentScope ();
+			PathCompatibilityService service = new PathCompatibilityService ();
+
+			string resolvedPath = service.ResolveToExistingLocalPath ("https://contoso.sharepoint.com/sites/test/Shared%20Documents/Missing/inside.docx");
+
 			Assert.Equal (string.Empty, resolvedPath);
+		}
+
+		[Fact]
+		public void NormalizePath_WhenDocsLiveUrlHasNoExistingLocalCandidate_ReturnsOriginalUrl ()
+		{
+			using TestEnvironmentScope scope = new TestEnvironmentScope ();
+			PathCompatibilityService service = new PathCompatibilityService ();
+			string url = "https://d.docs.live.net/cid123/Missing/inside.docx";
+
+			string normalized = service.NormalizePath (url);
+
+			Assert.Equal (url, normalized);
+		}
+
+		[Fact]
+		public void NormalizePath_WhenHttpUrlIsUnsupported_ReturnsOriginalUrl ()
+		{
+			PathCompatibilityService service = new PathCompatibilityService ();
+			string url = "https://example.com/path/to/file.docx";
+
+			string normalized = service.NormalizePath (url);
+
+			Assert.Equal (url, normalized);
 		}
 
 		[Fact]

@@ -35,7 +35,7 @@
     <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == ''">$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack</WindowsApiCodePackDir>
     <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">$(MSBuildProjectDirectory)\CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
     <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.ExcelAddIn</UnifiedDeployPackageDir>
-    <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\Addins\CaseInfoSystem.ExcelAddIn</RuntimeAddInDir>
+    <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\Addins\CaseInfoSystem.ExcelAddIn</RuntimeAddInDir>
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.ExcelAddIn.vsto</RuntimeManifestPath>
     <VstoInstallerPath Condition="'$(VstoInstallerPath)' == ''">C:\Program Files\Common Files\microsoft shared\VSTO\10.0\VSTOInstaller.exe</VstoInstallerPath>

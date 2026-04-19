@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
@@ -35,7 +34,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             if (IsHttpUrl(normalized))
             {
-                normalized = ConvertOneDriveUrlToLocalBestEffort(normalized);
+                if (!IsSupportedCloudUrl(normalized))
+                {
+                    return normalized;
+                }
+
+                string resolvedCloudPath = ConvertOneDriveUrlToLocalBestEffort(normalized);
+                if (!string.Equals(resolvedCloudPath, normalized, StringComparison.Ordinal))
+                {
+                    normalized = resolvedCloudPath;
+                }
+                else
+                {
+                    return normalized;
+                }
             }
 
             normalized = normalized.Replace("/", "\\");
@@ -114,6 +126,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             LogHttpObservation("ResolveToExistingLocalPath", "Inspecting HTTP path. input=" + trimmed);
+            if (!IsSupportedCloudUrl(trimmed))
+            {
+                _logger?.Warn("PathCompatibilityService.ResolveToExistingLocalPath ignored unsupported HTTP input. input=" + trimmed);
+                return string.Empty;
+            }
+
             string relativePath = ExtractRelativePathFromCloudUrl(trimmed);
             if (relativePath.Length == 0)
             {
@@ -520,6 +538,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 || normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsSupportedCloudUrl(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            if (normalized.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            string[] markers = { "/Documents/", "/Shared%20Documents/", "/Shared Documents/" };
+            foreach (string marker in markers)
+            {
+                if (normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase) > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private string ExtractRelativePathFromCloudUrl(string url)
         {
             string trimmed = (url ?? string.Empty).Trim();
@@ -530,7 +568,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     string encodedRelativePath = trimmed.Substring(fourthSlashIndex + 1);
                     LogHttpDecodeObservation("ExtractRelativePathFromCloudUrl", trimmed, encodedRelativePath);
-                    return UrlDecode(encodedRelativePath).Replace("/", "\\");
+                    return DecodeRelativeCloudPath(encodedRelativePath);
                 }
             }
 
@@ -542,7 +580,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     string encodedRelativePath = trimmed.Substring(markerIndex + 1);
                     LogHttpDecodeObservation("ExtractRelativePathFromCloudUrl", trimmed, encodedRelativePath);
-                    return UrlDecode(encodedRelativePath).Replace("/", "\\");
+                    return DecodeRelativeCloudPath(encodedRelativePath);
                 }
             }
 
@@ -661,35 +699,54 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private string ConvertOneDriveUrlToLocalBestEffort(string url)
         {
             string trimmed = (url ?? string.Empty).Trim();
-            if (!trimmed.StartsWith("https://d.docs.live.net/", StringComparison.OrdinalIgnoreCase))
+            if (!IsSupportedCloudUrl(trimmed))
             {
                 return trimmed;
             }
 
-            int fourthSlashIndex = FindSlashOccurrence(trimmed, 4);
-            if (fourthSlashIndex <= 0 || fourthSlashIndex + 1 >= trimmed.Length)
+            string relativePath = ExtractRelativePathFromCloudUrl(trimmed);
+            if (relativePath.Length == 0)
             {
                 return trimmed;
             }
 
-            string encodedRelativePath = trimmed.Substring(fourthSlashIndex + 1);
-            LogHttpDecodeObservation("ConvertOneDriveUrlToLocalBestEffort", trimmed, encodedRelativePath);
-            string relativePath = UrlDecode(encodedRelativePath);
-            string oneDriveRoot = Environment.GetEnvironmentVariable("OneDrive");
-            if (string.IsNullOrWhiteSpace(oneDriveRoot))
+            string firstCombinedCandidate = string.Empty;
+            string firstParentExistingCandidate = string.Empty;
+            foreach (string syncRoot in GetSyncRootCandidates())
             {
-                oneDriveRoot = Environment.GetEnvironmentVariable("OneDriveCommercial");
+                string combinedPath = NormalizePath(CombinePath(syncRoot, relativePath));
+                if (firstCombinedCandidate.Length == 0)
+                {
+                    firstCombinedCandidate = combinedPath;
+                }
+
+                if (PathExistsLocal(combinedPath))
+                {
+                    _logger?.Info("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort resolved cloud URL to existing local path. input=" + trimmed + " relative=" + relativePath + " combined=" + combinedPath);
+                    return combinedPath;
+                }
+
+                string parentFolderPath = GetParentFolderPath(combinedPath);
+                if (firstParentExistingCandidate.Length == 0 && PathExistsLocal(parentFolderPath))
+                {
+                    firstParentExistingCandidate = combinedPath;
+                }
             }
 
-            if (string.IsNullOrWhiteSpace(oneDriveRoot))
+            if (firstParentExistingCandidate.Length > 0)
             {
-                _logger?.Warn("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort could not find a OneDrive root. input=" + trimmed + " relative=" + relativePath);
+                _logger?.Info("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort selected cloud URL candidate whose parent folder exists. input=" + trimmed + " relative=" + relativePath + " combined=" + firstParentExistingCandidate);
+                return firstParentExistingCandidate;
+            }
+
+            if (firstCombinedCandidate.Length > 0)
+            {
+                _logger?.Warn("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort found only non-existing local candidates. input=" + trimmed + " relative=" + relativePath + " firstCandidate=" + firstCombinedCandidate);
                 return trimmed;
             }
 
-            string combinedPath = Path.Combine(oneDriveRoot, relativePath);
-            _logger?.Info("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort combined docs.live URL with OneDrive root. input=" + trimmed + " relative=" + relativePath + " combined=" + combinedPath);
-            return combinedPath;
+            _logger?.Warn("PathCompatibilityService.ConvertOneDriveUrlToLocalBestEffort could not find a sync root. input=" + trimmed + " relative=" + relativePath);
+            return trimmed;
         }
 
         private static int FindSlashOccurrence(string value, int occurrence)
@@ -734,32 +791,37 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return collapsed;
         }
 
-        private static string UrlDecode(string value)
+        private static string DecodeRelativeCloudPath(string encodedRelativePath)
+        {
+            if (string.IsNullOrEmpty(encodedRelativePath))
+            {
+                return string.Empty;
+            }
+
+            string[] segments = encodedRelativePath.Split(new[] { '/' }, StringSplitOptions.None);
+            for (int index = 0; index < segments.Length; index++)
+            {
+                segments[index] = DecodeUrlPathSegment(segments[index]);
+            }
+
+            return string.Join("\\", segments);
+        }
+
+        private static string DecodeUrlPathSegment(string value)
         {
             if (string.IsNullOrEmpty(value))
             {
                 return string.Empty;
             }
 
-            var builder = new StringBuilder(value.Length);
-            for (int index = 0; index < value.Length; index++)
+            try
             {
-                char current = value[index];
-                if (current == '%' && index + 2 < value.Length)
-                {
-                    string hex = value.Substring(index + 1, 2);
-                    if (IsHex2(hex))
-                    {
-                        builder.Append((char)Convert.ToInt32(hex, 16));
-                        index += 2;
-                        continue;
-                    }
-                }
-
-                builder.Append(current == '+' ? ' ' : current);
+                return Uri.UnescapeDataString(value);
             }
-
-            return builder.ToString();
+            catch (UriFormatException)
+            {
+                return value;
+            }
         }
 
         private static bool IsHex2(string value)

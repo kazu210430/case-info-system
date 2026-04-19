@@ -18,6 +18,10 @@ function Get-RepositoryRoot {
     return Split-Path -Parent $PSScriptRoot
 }
 
+function Get-RuntimeRoot {
+    return Split-Path -Parent (Get-RepositoryRoot)
+}
+
 function New-ProjectDefinition {
     param(
         [Parameter(Mandatory = $true)]
@@ -86,7 +90,10 @@ function Resolve-FirstChildFile {
 function Get-ExtraRuntimeDirectoryBackupItems {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$RepoRoot
+        [string]$RuntimeRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepositoryRoot
     )
 
     $excludedDirectoryNames = @(
@@ -100,8 +107,13 @@ function Get-ExtraRuntimeDirectoryBackupItems {
         'tools'
     )
 
+    $repositoryRootFolderName = Split-Path -Leaf $RepositoryRoot
+    if (-not [string]::IsNullOrWhiteSpace($repositoryRootFolderName)) {
+        $excludedDirectoryNames += $repositoryRootFolderName
+    }
+
     $items = New-Object System.Collections.Generic.List[object]
-    Get-ChildItem -LiteralPath $RepoRoot -Directory | Where-Object {
+    Get-ChildItem -LiteralPath $RuntimeRoot -Directory | Where-Object {
         $excludedDirectoryNames -notcontains $_.Name
     } | ForEach-Object {
         $items.Add([pscustomobject]@{
@@ -118,6 +130,9 @@ function Get-ProjectDefinitions {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RuntimeRoot,
 
         [Parameter(Mandatory = $true)]
         [string]$SelectedProject,
@@ -139,13 +154,13 @@ function Get-ProjectDefinitions {
     else {
         Join-Path $RepoRoot 'dev\Deploy\DebugPackage\CaseInfoSystem.WordAddIn'
     }
-    $kernelWorkbookPath = Resolve-FirstChildFile -RootPath $RepoRoot -Filter '*Kernel.xlsx'
-    $baseWorkbookPath = Resolve-FirstChildFile -RootPath $RepoRoot -Filter '*Base.xlsx'
-    $excelExtraRuntimeItems = Get-ExtraRuntimeDirectoryBackupItems -RepoRoot $RepoRoot
+    $kernelWorkbookPath = Resolve-FirstChildFile -RootPath $RuntimeRoot -Filter '*Kernel.xlsx'
+    $baseWorkbookPath = Resolve-FirstChildFile -RootPath $RuntimeRoot -Filter '*Base.xlsx'
+    $excelExtraRuntimeItems = Get-ExtraRuntimeDirectoryBackupItems -RuntimeRoot $RuntimeRoot -RepositoryRoot $RepoRoot
     $excelBackupItems = @(
         [pscustomobject]@{
             Label = 'Excel runtime add-in'
-            SourcePath = Join-Path $RepoRoot 'Addins\CaseInfoSystem.ExcelAddIn'
+            SourcePath = Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.ExcelAddIn'
             SnapshotRelativePath = 'ExcelAddIn\Addins\CaseInfoSystem.ExcelAddIn'
         },
         [pscustomobject]@{
@@ -162,7 +177,7 @@ function Get-ProjectDefinitions {
 
     $excelDefinition = New-ProjectDefinition `
         -Name 'ExcelAddIn' `
-        -RuntimeDir (Join-Path $RepoRoot 'Addins\CaseInfoSystem.ExcelAddIn') `
+        -RuntimeDir (Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.ExcelAddIn') `
         -PackageDir $excelPackageDir `
         -RequiredFiles @(
             'CaseInfoSystem.ExcelAddIn.dll',
@@ -174,12 +189,12 @@ function Get-ProjectDefinitions {
             'DocumentExecutionAllowlist.review.txt'
         ) `
         -BackupItems $excelBackupItems `
-        -RuntimeManifestPath (Join-Path $RepoRoot 'Addins\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.vsto') `
+        -RuntimeManifestPath (Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.vsto') `
         -AddInRegistryPath 'HKCU:\Software\Microsoft\Office\Excel\Addins\CaseInfoSystem.ExcelAddIn'
 
     $wordDefinition = New-ProjectDefinition `
         -Name 'WordAddIn' `
-        -RuntimeDir (Join-Path $RepoRoot 'Addins\CaseInfoSystem.WordAddIn') `
+        -RuntimeDir (Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.WordAddIn') `
         -PackageDir $wordPackageDir `
         -RequiredFiles @(
             'CaseInfoSystem.WordAddIn.dll',
@@ -189,11 +204,11 @@ function Get-ProjectDefinitions {
         -BackupItems @(
             [pscustomobject]@{
                 Label = 'Word runtime add-in'
-                SourcePath = Join-Path $RepoRoot 'Addins\CaseInfoSystem.WordAddIn'
+                SourcePath = Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.WordAddIn'
                 SnapshotRelativePath = 'WordAddIn\Addins\CaseInfoSystem.WordAddIn'
             }
         ) `
-        -RuntimeManifestPath (Join-Path $RepoRoot 'Addins\CaseInfoSystem.WordAddIn\CaseInfoSystem.WordAddIn.vsto') `
+        -RuntimeManifestPath (Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.WordAddIn\CaseInfoSystem.WordAddIn.vsto') `
         -AddInRegistryPath 'HKCU:\Software\Microsoft\Office\Word\Addins\CaseInfoSystem.WordAddIn'
 
     if ($SelectedProject -eq 'ExcelAddIn') {
@@ -396,11 +411,12 @@ function Invoke-VerifyMode {
 }
 
 $repoRoot = Get-RepositoryRoot
+$runtimeRoot = Get-RuntimeRoot
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
     $BackupRoot = Join-Path $repoRoot 'build\hot-reload-backups'
 }
 
-$definitions = Get-ProjectDefinitions -RepoRoot $repoRoot -SelectedProject $Project -BuildConfiguration $Configuration
+$definitions = Get-ProjectDefinitions -RepoRoot $repoRoot -RuntimeRoot $runtimeRoot -SelectedProject $Project -BuildConfiguration $Configuration
 
 if ($Mode -eq 'Backup') {
     Invoke-BackupMode -ProjectDefinitions $definitions -ResolvedBackupRoot $BackupRoot -BuildConfiguration $Configuration

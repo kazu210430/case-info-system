@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$RuntimeAddInDir = (Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'Addins\CaseInfoSystem.ExcelAddIn')
+    [string]$RuntimeAddInDir = (Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)))) 'Addins\CaseInfoSystem.ExcelAddIn')
 )
 
 $ErrorActionPreference = 'Stop'

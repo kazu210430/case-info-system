@@ -6,17 +6,18 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$runtimeRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot '..'))
 if ([string]::IsNullOrWhiteSpace($WorkbookPath)) {
-    $baseWorkbook = Get-ChildItem -Path $repoRoot -Filter '*Base.xlsm' | Select-Object -First 1
+    $baseWorkbook = Get-ChildItem -Path $runtimeRoot -Filter '*Base.xlsm' | Select-Object -First 1
     if ($null -eq $baseWorkbook) {
-        throw "Could not locate *Base.xlsm under $repoRoot"
+        throw "Could not locate *Base.xlsm under $runtimeRoot"
     }
 
     $WorkbookPath = $baseWorkbook.FullName
 }
 
 if ([string]::IsNullOrWhiteSpace($SourceFolderPath)) {
-    $SourceFolderPath = Join-Path $repoRoot 'Base'
+    $SourceFolderPath = Join-Path $runtimeRoot 'Base'
 }
 
 function Get-VbaCodeBody {

@@ -1,10 +1,13 @@
-﻿using System;
+using System;
+using System.Globalization;
+using System.Threading;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
     /// <summary>
     internal sealed class Logger
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private readonly Action<string> _writeTrace;
 
         /// <summary>
@@ -16,7 +19,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         /// <summary>
         internal void Info(string message)
         {
-            _writeTrace(message ?? string.Empty);
+            _writeTrace(WithKernelFlickerTraceId(message));
         }
 
         /// <summary>
@@ -24,13 +27,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             string safeProcedureName = procedureName ?? string.Empty;
             string safeMessage = message ?? string.Empty;
-            _writeTrace("DEBUG: " + safeProcedureName + " " + safeMessage);
+            _writeTrace(WithKernelFlickerTraceId("DEBUG: " + safeProcedureName + " " + safeMessage));
         }
 
         /// <summary>
         internal void Warn(string message)
         {
-            _writeTrace("WARN: " + (message ?? string.Empty));
+            _writeTrace(WithKernelFlickerTraceId("WARN: " + (message ?? string.Empty)));
         }
 
         /// <summary>
@@ -39,11 +42,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             string safeContext = context ?? string.Empty;
             if (exception == null)
             {
-                _writeTrace("ERROR: " + safeContext);
+                _writeTrace(WithKernelFlickerTraceId("ERROR: " + safeContext));
                 return;
             }
 
-            _writeTrace("ERROR: " + safeContext + " " + exception.GetType().Name + ": " + exception.Message);
+            _writeTrace(WithKernelFlickerTraceId("ERROR: " + safeContext + " " + exception.GetType().Name + ": " + exception.Message));
         }
 
         /// <summary>
@@ -51,7 +54,46 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             string safeProcedureName = procedureName ?? string.Empty;
             string safeDescription = errorDescription ?? string.Empty;
-            _writeTrace("ERROR: " + safeProcedureName + " Err=" + errorNumber.ToString() + " " + safeDescription);
+            _writeTrace(WithKernelFlickerTraceId("ERROR: " + safeProcedureName + " Err=" + errorNumber.ToString() + " " + safeDescription));
+        }
+
+        private static string WithKernelFlickerTraceId(string message)
+        {
+            string safeMessage = message ?? string.Empty;
+            string traceId = KernelFlickerTraceContext.CurrentTraceId;
+            if (string.IsNullOrWhiteSpace(traceId))
+            {
+                return safeMessage;
+            }
+
+            string targetPrefix = KernelFlickerTracePrefix + " ";
+            if (safeMessage.StartsWith(targetPrefix, StringComparison.Ordinal))
+            {
+                return KernelFlickerTracePrefix + " traceId=" + traceId + " " + safeMessage.Substring(targetPrefix.Length);
+            }
+
+            return safeMessage;
+        }
+    }
+
+    internal static class KernelFlickerTraceContext
+    {
+        private static readonly AsyncLocal<string> CurrentTraceIdSlot = new AsyncLocal<string>();
+        private static int _traceSequence;
+
+        internal static string CurrentTraceId => CurrentTraceIdSlot.Value ?? string.Empty;
+
+        internal static string BeginNewTrace()
+        {
+            string traceId = "KF-"
+                + Interlocked.Increment(ref _traceSequence).ToString("D6", CultureInfo.InvariantCulture);
+            CurrentTraceIdSlot.Value = traceId;
+            return traceId;
+        }
+
+        internal static void SetCurrentTrace(string traceId)
+        {
+            CurrentTraceIdSlot.Value = traceId ?? string.Empty;
         }
     }
 }

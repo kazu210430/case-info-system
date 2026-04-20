@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
@@ -10,6 +12,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class KernelWorkbookService
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private const string SystemRootPropName = "SYSTEM_ROOT";
         private const int SwHide = 0;
         private const int SwShow = 5;
@@ -234,13 +237,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            ApplyHomeDisplayVisibilityCore();
+            ApplyHomeDisplayVisibilityCore("PrepareForHomeDisplay");
             _isHomeDisplayPrepared = true;
         }
 
         internal void PrepareForHomeDisplayFromSheet()
         {
-            ApplyHomeDisplayVisibilityCore();
+            ApplyHomeDisplayVisibilityCore("PrepareForHomeDisplayFromSheet");
             _isHomeDisplayPrepared = true;
         }
 
@@ -249,14 +252,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ReleaseHomeDisplay(showExcel);
         }
 
-        internal void EnsureHomeDisplayHidden()
+        internal void EnsureHomeDisplayHidden(string triggerReason)
         {
+            string caller = ResolveExternalCaller();
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=ensure-home-display-hidden-enter trigger="
+                + (triggerReason ?? string.Empty)
+                + ", caller="
+                + caller
+                + ", activeState="
+                + FormatActiveExcelState()
+                + ", isHomeDisplayPrepared="
+                + _isHomeDisplayPrepared.ToString()
+                + ", tracePresent="
+                + (!string.IsNullOrWhiteSpace(KernelFlickerTraceContext.CurrentTraceId)).ToString());
             if (!_isHomeDisplayPrepared)
             {
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=ensure-home-display-hidden-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", result=skipped-not-prepared");
                 return;
             }
 
-            ApplyHomeDisplayVisibilityCore();
+            ApplyHomeDisplayVisibilityCore("EnsureHomeDisplayHidden|" + (triggerReason ?? string.Empty));
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=ensure-home-display-hidden-end trigger="
+                + (triggerReason ?? string.Empty)
+                + ", result=applied, activeState="
+                + FormatActiveExcelState());
         }
 
         internal void SaveNameRuleA(string ruleA)
@@ -304,15 +328,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void CloseHomeSession()
         {
-            CloseHomeSession(saveKernelWorkbook: false);
+            CloseHomeSession(saveKernelWorkbook: false, entryPoint: "CloseHomeSession");
         }
 
         internal void CloseHomeSessionSavingKernel()
         {
-            CloseHomeSession(saveKernelWorkbook: true);
+            CloseHomeSession(saveKernelWorkbook: true, entryPoint: "CloseHomeSessionSavingKernel");
         }
 
-        private void CloseHomeSession(bool saveKernelWorkbook)
+        private void CloseHomeSession(bool saveKernelWorkbook, string entryPoint)
         {
             Excel.Workbook workbook = GetOpenKernelWorkbookCore();
             bool otherVisibleWorkbookExists = HasOtherVisibleWorkbookCore(workbook);
@@ -326,6 +350,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 skipDisplayRestoreForCaseCreation,
                 otherVisibleWorkbookExists,
                 otherWorkbookExists);
+            string caller = ResolveExternalCaller();
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=close-home-session-enter entryPoint="
+                + (entryPoint ?? string.Empty)
+                + ", caller="
+                + caller
+                + ", saveKernelWorkbook="
+                + saveKernelWorkbook.ToString()
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState()
+                + ", otherVisibleWorkbookExists="
+                + otherVisibleWorkbookExists.ToString()
+                + ", otherWorkbookExists="
+                + otherWorkbookExists.ToString()
+                + ", skipDisplayRestoreForCaseCreation="
+                + skipDisplayRestoreForCaseCreation.ToString()
+                + ", completionAction="
+                + completionAction.ToString()
+                + ", otherVisibleTargets="
+                + DescribeVisibleOtherWorkbookWindows(workbook));
             _logger.Info(
                 "CloseHomeSession started. saveKernelWorkbook="
                 + saveKernelWorkbook.ToString()
@@ -342,6 +388,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 if (saveKernelWorkbook)
                 {
+                    LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=save-and-close, workbook="
+                        + FormatWorkbookDescriptor(workbook)
+                        + ", skipDisplayRestoreForCaseCreation="
+                        + skipDisplayRestoreForCaseCreation.ToString());
                     // 処理ブロック: CASE 作成完了直後は Kernel シートが前景に出ないよう、閉じる直前に window を不可視化する。
                     if (skipDisplayRestoreForCaseCreation)
                     {
@@ -352,19 +405,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
                 else if (_kernelWorkbookLifecycleService != null)
                 {
+                    LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=request-managed-close, workbook="
+                        + FormatWorkbookDescriptor(workbook)
+                        + ", lifecycleAvailable=True, activeState="
+                        + FormatActiveExcelState());
                     bool closeScheduled = RequestManagedCloseFromHomeExitCore(workbook);
+                    LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch-result entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=request-managed-close, workbook="
+                        + FormatWorkbookDescriptor(workbook)
+                        + ", closeScheduled="
+                        + closeScheduled.ToString());
                     if (!closeScheduled)
                     {
+                        LogKernelFlickerTrace(
+                            "source=KernelWorkbookService action=close-home-session-end entryPoint="
+                            + (entryPoint ?? string.Empty)
+                            + ", result=canceled-before-managed-close, workbook="
+                            + FormatWorkbookDescriptor(workbook));
                         _logger.Info("CloseHomeSession canceled before managed close was scheduled.");
                         return;
                     }
                 }
                 else
                 {
+                    LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=close-without-lifecycle, workbook="
+                        + FormatWorkbookDescriptor(workbook)
+                        + ", lifecycleAvailable=False");
                     CloseKernelWorkbookWithoutLifecycleCore(workbook);
                 }
             }
 
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=close-home-session-completion entryPoint="
+                + (entryPoint ?? string.Empty)
+                + ", completionAction="
+                + completionAction.ToString()
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState());
             if (completionAction == KernelHomeSessionCompletionAction.ReleaseHomeDisplayWithoutShowingExcelAndQuit)
             {
                 ReleaseHomeDisplayCore(false);
@@ -383,6 +470,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 ReleaseHomeDisplayCore(true);
             }
 
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=close-home-session-end entryPoint="
+                + (entryPoint ?? string.Empty)
+                + ", result=completed, workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState());
             _logger.Info("CloseHomeSession completed. saveKernelWorkbook=" + saveKernelWorkbook.ToString());
         }
 
@@ -522,7 +616,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ConcealKernelWorkbookWindowsForCaseCreationClose(workbook);
         }
 
-        private void ApplyHomeDisplayVisibilityCore()
+        private void ApplyHomeDisplayVisibilityCore(string triggerReason)
         {
             if (_testHooks != null && _testHooks.ApplyHomeDisplayVisibility != null)
             {
@@ -530,7 +624,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            ApplyHomeDisplayVisibility();
+            ApplyHomeDisplayVisibility(triggerReason);
         }
 
         internal bool ShowSheetByCodeName(string codeName)
@@ -589,7 +683,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook = _application.Workbooks.Open(workbookPath, ReadOnly: false);
                 if (workbook.Windows.Count > 0)
                 {
-                    workbook.Windows[1].Visible = false;
+                    SetKernelWindowVisibleFalse(
+                        workbook,
+                        workbook.Windows[1],
+                        1,
+                        "GetOrOpenKernelWorkbook.OpenedWorkbook");
                 }
 
                 if (_isHomeDisplayPrepared)
@@ -771,7 +869,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             continue;
                         }
 
-                        window.Visible = false;
+                        SetKernelWindowVisibleFalse(
+                            workbook,
+                            window,
+                            index,
+                            "ConcealKernelWorkbookWindowsForCaseCreationClose");
                     }
                     catch (Exception ex)
                     {
@@ -1002,23 +1104,67 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger.Info("DismissPreparedHomeDisplayState executed. reason=" + (reason ?? string.Empty));
         }
 
-        private void ApplyHomeDisplayVisibility()
+        private void ApplyHomeDisplayVisibility(string triggerReason)
         {
-            if (HasVisibleNonKernelWorkbook())
+            Excel.Workbook kernelWorkbook = GetOpenKernelWorkbookCore();
+            bool hasVisibleNonKernelWorkbook = HasVisibleNonKernelWorkbook();
+            bool preserveOtherWorkbookWindowLayout = ShouldPreserveOtherWorkbookWindowLayout();
+            string visibleNonKernelWindows = DescribeVisibleNonKernelWorkbookWindows();
+            string kernelWindowTargets = DescribeWorkbookWindows(kernelWorkbook);
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=apply-home-display-enter trigger="
+                + (triggerReason ?? string.Empty)
+                + ", activeState="
+                + FormatActiveExcelState()
+                + ", hasVisibleNonKernelWorkbook="
+                + hasVisibleNonKernelWorkbook.ToString()
+                + ", preserveOtherWorkbookWindowLayout="
+                + preserveOtherWorkbookWindowLayout.ToString()
+                + ", visibleNonKernelWindows="
+                + visibleNonKernelWindows
+                + ", kernelWindowTargets="
+                + kernelWindowTargets);
+            if (hasVisibleNonKernelWorkbook)
             {
-                if (!ShouldPreserveOtherWorkbookWindowLayout())
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=apply-home-display-decision trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", decision=minimize-kernel-windows, reason=visible-non-kernel-workbook-detected, preserveOtherWorkbookWindowLayout="
+                    + preserveOtherWorkbookWindowLayout.ToString()
+                    + ", visibleNonKernelWindows="
+                    + visibleNonKernelWindows
+                    + ", kernelWindowTargets="
+                    + kernelWindowTargets);
+                if (!preserveOtherWorkbookWindowLayout)
                 {
                     EnsureExcelApplicationVisible();
                 }
 
-                HideKernelWorkbookWindows();
+                HideKernelWorkbookWindows("ApplyHomeDisplayVisibility:" + (triggerReason ?? string.Empty), kernelWorkbook);
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=apply-home-display-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", result=minimized-kernel-windows, visibleNonKernelWindows="
+                    + visibleNonKernelWindows
+                    + ", kernelWindowTargets="
+                    + kernelWindowTargets);
                 _logger.Info(
                     "ApplyHomeDisplayVisibility minimized kernel windows because a non-kernel workbook is visible. preserveOtherWindowLayout="
-                    + ShouldPreserveOtherWorkbookWindowLayout().ToString());
+                    + preserveOtherWorkbookWindowLayout.ToString());
                 return;
             }
 
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=apply-home-display-decision trigger="
+                + (triggerReason ?? string.Empty)
+                + ", decision=hide-excel-main-window, reason=no-visible-non-kernel-workbook, kernelWindowTargets="
+                + kernelWindowTargets);
             HideExcelMainWindow();
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=apply-home-display-end trigger="
+                + (triggerReason ?? string.Empty)
+                + ", result=excel-main-window-hidden, activeState="
+                + FormatActiveExcelState());
         }
 
         private bool ShouldPreserveOtherWorkbookWindowLayout()
@@ -1049,38 +1195,138 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void HideKernelWorkbookWindows()
         {
-            HideKernelWorkbookWindows(GetOpenKernelWorkbook());
+            HideKernelWorkbookWindows("HideKernelWorkbookWindows.ResolveOpenKernelWorkbook", GetOpenKernelWorkbook());
         }
 
         private void HideKernelWorkbookWindows(Excel.Workbook workbook)
         {
+            HideKernelWorkbookWindows("HideKernelWorkbookWindows.DirectWorkbook", workbook);
+        }
+
+        private void HideKernelWorkbookWindows(string triggerReason, Excel.Workbook workbook)
+        {
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=hide-kernel-windows-enter trigger="
+                + (triggerReason ?? string.Empty)
+                + ", targetWorkbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState()
+                + ", targets="
+                + DescribeWorkbookWindows(workbook));
             if (workbook == null)
             {
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=hide-kernel-windows-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", result=skipped-null-workbook");
                 return;
             }
 
             try
             {
                 int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                int minimizedCount = 0;
+                int failedCount = 0;
                 for (int index = 1; index <= windowCount; index++)
                 {
                     Excel.Window window = null;
                     try
                     {
                         window = workbook.Windows[index];
+                        string beforeState = FormatWindowDescriptor(window);
+                        LogKernelFlickerTrace(
+                            "source=KernelWorkbookService action=minimize-window-start trigger="
+                            + (triggerReason ?? string.Empty)
+                            + ", index="
+                            + index.ToString()
+                            + ", workbook="
+                            + FormatWorkbookDescriptor(workbook)
+                            + ", window="
+                            + beforeState);
                         if (window != null)
                         {
+                            bool isVisible = false;
+                            try
+                            {
+                                isVisible = window.Visible;
+                            }
+                            catch
+                            {
+                            }
+
+                            if (!isVisible)
+                            {
+                                LogKernelFlickerTrace(
+                                    "source=KernelWorkbookService action=minimize-window-end trigger="
+                                    + (triggerReason ?? string.Empty)
+                                    + ", index="
+                                    + index.ToString()
+                                    + ", result=skipped-already-invisible, workbook="
+                                    + FormatWorkbookDescriptor(workbook)
+                                    + ", window="
+                                    + beforeState);
+                                continue;
+                            }
+
                             window.WindowState = Excel.XlWindowState.xlMinimized;
+                            minimizedCount++;
+                            LogKernelFlickerTrace(
+                                "source=KernelWorkbookService action=minimize-window-end trigger="
+                                + (triggerReason ?? string.Empty)
+                                + ", index="
+                                + index.ToString()
+                                + ", result=success, workbook="
+                                + FormatWorkbookDescriptor(workbook)
+                                + ", windowBefore="
+                                + beforeState
+                                + ", windowAfter="
+                                + FormatWindowDescriptor(window));
                         }
                     }
                     catch (Exception ex)
                     {
+                        failedCount++;
+                        LogKernelFlickerTrace(
+                            "source=KernelWorkbookService action=minimize-window-end trigger="
+                            + (triggerReason ?? string.Empty)
+                            + ", index="
+                            + index.ToString()
+                            + ", result=failed, workbook="
+                            + FormatWorkbookDescriptor(workbook)
+                            + ", window="
+                            + FormatWindowDescriptor(window)
+                            + ", exceptionType="
+                            + ex.GetType().Name
+                            + ", exceptionMessage="
+                            + (ex.Message ?? string.Empty));
                         _logger.Error("HideKernelWorkbookWindows window minimize failed. index=" + index.ToString(), ex);
                     }
                 }
+
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=hide-kernel-windows-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", result=completed, workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", totalTargets="
+                    + windowCount.ToString()
+                    + ", minimizedCount="
+                    + minimizedCount.ToString()
+                    + ", failedCount="
+                    + failedCount.ToString());
             }
             catch (Exception ex)
             {
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=hide-kernel-windows-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", result=failed, workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", exceptionType="
+                    + ex.GetType().Name
+                    + ", exceptionMessage="
+                    + (ex.Message ?? string.Empty));
                 _logger.Error("HideKernelWorkbookWindows failed.", ex);
             }
         }
@@ -1207,6 +1453,327 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch
             {
             }
+        }
+
+        private void SetKernelWindowVisibleFalse(Excel.Workbook workbook, Excel.Window window, int index, string triggerReason)
+        {
+            string caller = ResolveExternalCaller();
+            string beforeState = FormatWindowDescriptor(window);
+            LogKernelFlickerTrace(
+                "source=KernelWorkbookService action=set-window-visible-false-start trigger="
+                + (triggerReason ?? string.Empty)
+                + ", caller="
+                + caller
+                + ", index="
+                + index.ToString()
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", windowBefore="
+                + beforeState
+                + ", activeState="
+                + FormatActiveExcelState());
+
+            try
+            {
+                if (window == null)
+                {
+                    LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=set-window-visible-false-end trigger="
+                        + (triggerReason ?? string.Empty)
+                        + ", caller="
+                        + caller
+                        + ", index="
+                        + index.ToString()
+                        + ", result=skipped-null-window, workbook="
+                        + FormatWorkbookDescriptor(workbook));
+                    return;
+                }
+
+                window.Visible = false;
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=set-window-visible-false-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", caller="
+                    + caller
+                    + ", index="
+                    + index.ToString()
+                    + ", result=success, workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", windowBefore="
+                    + beforeState
+                    + ", windowAfter="
+                    + FormatWindowDescriptor(window));
+            }
+            catch (Exception ex)
+            {
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=set-window-visible-false-end trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", caller="
+                    + caller
+                    + ", index="
+                    + index.ToString()
+                    + ", result=failed, workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", window="
+                    + FormatWindowDescriptor(window)
+                    + ", exceptionType="
+                    + ex.GetType().Name
+                    + ", exceptionMessage="
+                    + (ex.Message ?? string.Empty));
+                throw;
+            }
+        }
+
+        private void LogKernelFlickerTrace(string detail)
+        {
+            _logger.Info(KernelFlickerTracePrefix + " " + (detail ?? string.Empty));
+        }
+
+        private string FormatActiveExcelState()
+        {
+            Excel.Workbook activeWorkbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
+            Excel.Window activeWindow = _excelInteropService == null ? null : _excelInteropService.GetActiveWindow();
+            return "activeWorkbook=" + FormatWorkbookDescriptor(activeWorkbook) + ",activeWindow=" + FormatWindowDescriptor(activeWindow);
+        }
+
+        private string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        {
+            return "full=\""
+                + SafeWorkbookFullName(workbook)
+                + "\",name=\""
+                + SafeWorkbookName(workbook)
+                + "\"";
+        }
+
+        private string FormatWindowDescriptor(Excel.Window window)
+        {
+            return "hwnd=\""
+                + SafeWindowHwnd(window)
+                + "\",caption=\""
+                + SafeWindowCaption(window)
+                + "\",visible=\""
+                + SafeWindowVisible(window)
+                + "\",state=\""
+                + SafeWindowState(window)
+                + "\"";
+        }
+
+        private string DescribeVisibleNonKernelWorkbookWindows()
+        {
+            if (_application == null)
+            {
+                return "app-null";
+            }
+
+            List<string> descriptors = new List<string>();
+            try
+            {
+                foreach (Excel.Workbook workbook in _application.Workbooks)
+                {
+                    if (workbook == null || IsKernelWorkbook(workbook))
+                    {
+                        continue;
+                    }
+
+                    List<string> visibleWindows = new List<string>();
+                    foreach (Excel.Window window in workbook.Windows)
+                    {
+                        if (SafeWindowVisibleValue(window))
+                        {
+                            visibleWindows.Add(FormatWindowDescriptor(window));
+                        }
+                    }
+
+                    if (visibleWindows.Count > 0)
+                    {
+                        descriptors.Add(FormatWorkbookDescriptor(workbook) + " windows=[" + string.Join(" | ", visibleWindows) + "]");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return "enumeration-failed:" + ex.GetType().Name;
+            }
+
+            return descriptors.Count == 0 ? "none" : string.Join(" || ", descriptors);
+        }
+
+        private string DescribeVisibleOtherWorkbookWindows(Excel.Workbook workbookToIgnore)
+        {
+            if (_application == null)
+            {
+                return "app-null";
+            }
+
+            List<string> descriptors = new List<string>();
+            try
+            {
+                foreach (Excel.Workbook workbook in _application.Workbooks)
+                {
+                    if (workbook == null || ReferenceEquals(workbook, workbookToIgnore))
+                    {
+                        continue;
+                    }
+
+                    List<string> visibleWindows = new List<string>();
+                    foreach (Excel.Window window in workbook.Windows)
+                    {
+                        if (SafeWindowVisibleValue(window))
+                        {
+                            visibleWindows.Add(FormatWindowDescriptor(window));
+                        }
+                    }
+
+                    if (visibleWindows.Count > 0)
+                    {
+                        descriptors.Add(FormatWorkbookDescriptor(workbook) + " windows=[" + string.Join(" | ", visibleWindows) + "]");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return "enumeration-failed:" + ex.GetType().Name;
+            }
+
+            return descriptors.Count == 0 ? "none" : string.Join(" || ", descriptors);
+        }
+
+        private string DescribeWorkbookWindows(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return "none";
+            }
+
+            List<string> descriptors = new List<string>();
+            try
+            {
+                int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                for (int index = 1; index <= windowCount; index++)
+                {
+                    Excel.Window window = workbook.Windows[index];
+                    descriptors.Add("index=" + index.ToString() + "," + FormatWindowDescriptor(window));
+                }
+            }
+            catch (Exception ex)
+            {
+                return "enumeration-failed:" + ex.GetType().Name;
+            }
+
+            return descriptors.Count == 0 ? "none" : string.Join(" | ", descriptors);
+        }
+
+        private string SafeWorkbookFullName(Excel.Workbook workbook)
+        {
+            return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+        }
+
+        private string SafeWorkbookName(Excel.Workbook workbook)
+        {
+            return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookName(workbook);
+        }
+
+        private static string SafeWindowHwnd(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : Convert.ToString(window.Hwnd) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWindowCaption(Excel.Window window)
+        {
+            try
+            {
+                if (window == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic lateBoundWindow = window;
+                return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWindowVisible(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : window.Visible.ToString();
+            }
+            catch
+            {
+                return "error";
+            }
+        }
+
+        private static bool SafeWindowVisibleValue(Excel.Window window)
+        {
+            try
+            {
+                return window != null && window.Visible;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string SafeWindowState(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : window.WindowState.ToString();
+            }
+            catch
+            {
+                return "error";
+            }
+        }
+
+        private static string ResolveExternalCaller()
+        {
+            try
+            {
+                StackTrace stackTrace = new StackTrace(skipFrames: 1, fNeedFileInfo: false);
+                StackFrame[] frames = stackTrace.GetFrames();
+                if (frames == null)
+                {
+                    return string.Empty;
+                }
+
+                foreach (StackFrame frame in frames)
+                {
+                    var method = frame.GetMethod();
+                    if (method == null)
+                    {
+                        continue;
+                    }
+
+                    Type declaringType = method.DeclaringType;
+                    if (declaringType == typeof(KernelWorkbookService))
+                    {
+                        continue;
+                    }
+
+                    string typeName = declaringType == null ? string.Empty : declaringType.FullName ?? string.Empty;
+                    return string.IsNullOrWhiteSpace(typeName) ? method.Name : typeName + "." + method.Name;
+                }
+            }
+            catch
+            {
+            }
+
+            return string.Empty;
         }
 
         internal sealed class KernelWorkbookServiceTestHooks

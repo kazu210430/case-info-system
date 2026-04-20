@@ -5,11 +5,13 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
 
 namespace CaseInfoSystem.ExcelAddIn.UI
 {
 	internal partial class KernelHomeForm : Form
 	{
+		private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
 		private const string CustomerPlaceholder = "(例)案件太郎";
 
 		private const string PreviewDocumentName = "訴状";
@@ -29,6 +31,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private readonly KernelWorkbookService _kernelWorkbookService;
 
 		private readonly KernelCaseCreationCommandService _kernelCaseCreationCommandService;
+
+		private readonly Logger _logger;
 
 		private bool _isInitializing;
 
@@ -54,6 +58,10 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private bool _isClosingBySession;
 
+		private int _ensureHomeDisplayHiddenRequestSequence;
+
+		private string _kernelFlickerTraceId = string.Empty;
+
 
 		[DllImport ("user32.dll")]
 		private static extern bool SetForegroundWindow (IntPtr hWnd);
@@ -75,7 +83,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			InitializeComponent ();
 		}
 
-		internal KernelHomeForm (KernelWorkbookService kernelWorkbookService, KernelCaseCreationCommandService kernelCaseCreationCommandService)
+		internal KernelHomeForm (KernelWorkbookService kernelWorkbookService, KernelCaseCreationCommandService kernelCaseCreationCommandService, Logger logger)
 			: this ()
 		{
 			if (kernelWorkbookService == null) {
@@ -84,8 +92,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			if (kernelCaseCreationCommandService == null) {
 				throw new ArgumentNullException ("kernelCaseCreationCommandService");
 			}
+			if (logger == null) {
+				throw new ArgumentNullException ("logger");
+			}
 			_kernelWorkbookService = kernelWorkbookService;
 			_kernelCaseCreationCommandService = kernelCaseCreationCommandService;
+			_logger = logger;
 			InitializeRuntime ();
 		}
 
@@ -308,7 +320,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				base.WindowState = FormWindowState.Normal;
 				Activate ();
 				BringToFront ();
-				ForceBringToFront ();
+				ForceBringToFront ("KernelHomeForm.RestoreHomeToForegroundAfterCaseCreation");
 				PrepareCustomerInputForNextBatchCreate ();
 			}
 		}
@@ -418,7 +430,15 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			BeginInvoke ((MethodInvoker)delegate {
 				if (!base.IsDisposed) {
-					ForceBringToFront ();
+					EnsureKernelFlickerTraceContext ("KernelHomeForm.Shown");
+					LogKernelFlickerTrace (
+						"source=KernelHomeForm action=shown-begin visible="
+						+ base.Visible.ToString ()
+						+ ", retryActive="
+						+ (_foregroundRetryTimer != null).ToString ()
+						+ ", formWindowState="
+						+ base.WindowState.ToString ());
+					ForceBringToFront ("KernelHomeForm.Shown");
 					BeginForegroundRetry ();
 				}
 			});
@@ -472,6 +492,16 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private void BeginForegroundRetry ()
 		{
+			EnsureKernelFlickerTraceContext ("KernelHomeForm.BeginForegroundRetry");
+			LogKernelFlickerTrace (
+				"source=KernelHomeForm action=foreground-retry-begin intervalMs="
+				+ ForegroundRetryIntervalMs.ToString ()
+				+ ", maxCount="
+				+ ForegroundRetryMaxCount.ToString ()
+				+ ", currentRetryCount="
+				+ _foregroundRetryCount.ToString ()
+				+ ", visible="
+				+ base.Visible.ToString ());
 			StopForegroundRetry ();
 			_foregroundRetryCount = 0;
 			_foregroundRetryTimer = new Timer ();
@@ -483,6 +513,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void StopForegroundRetry ()
 		{
 			if (_foregroundRetryTimer != null) {
+				EnsureKernelFlickerTraceContext ("KernelHomeForm.StopForegroundRetry");
+				LogKernelFlickerTrace (
+					"source=KernelHomeForm action=foreground-retry-stop currentRetryCount="
+					+ _foregroundRetryCount.ToString ()
+					+ ", visible="
+					+ base.Visible.ToString ());
 				_foregroundRetryTimer.Stop ();
 				_foregroundRetryTimer.Tick -= ForegroundRetryTimer_Tick;
 				_foregroundRetryTimer.Dispose ();
@@ -492,27 +528,104 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private void ForegroundRetryTimer_Tick (object sender, EventArgs e)
 		{
+			EnsureKernelFlickerTraceContext ("KernelHomeForm.ForegroundRetryTimer_Tick");
 			if (base.IsDisposed || !base.Visible) {
+				LogKernelFlickerTrace (
+					"source=KernelHomeForm action=foreground-retry-tick-skip reason=form-not-available visible="
+					+ base.Visible.ToString ()
+					+ ", isDisposed="
+					+ base.IsDisposed.ToString ()
+					+ ", retryCount="
+					+ _foregroundRetryCount.ToString ());
 				StopForegroundRetry ();
 				return;
 			}
 			_foregroundRetryCount++;
-			ForceBringToFront ();
-			_kernelWorkbookService.EnsureHomeDisplayHidden ();
+			LogKernelFlickerTrace (
+				"source=KernelHomeForm action=foreground-retry-tick retryCount="
+				+ _foregroundRetryCount.ToString ()
+				+ ", formWindowState="
+				+ base.WindowState.ToString ()
+				+ ", activeForm="
+				+ (Form.ActiveForm == null ? string.Empty : Form.ActiveForm.Name ?? string.Empty));
+			ForceBringToFront ("KernelHomeForm.ForegroundRetryTimer_Tick");
+			RequestEnsureHomeDisplayHidden ("KernelHomeForm.ForegroundRetryTimer_Tick.PostForceBringToFront");
 			if (_foregroundRetryCount >= 8) {
 				StopForegroundRetry ();
 			}
 		}
 
-		private void ForceBringToFront ()
+		private void ForceBringToFront (string triggerSource)
 		{
-			_kernelWorkbookService.EnsureHomeDisplayHidden ();
+			EnsureKernelFlickerTraceContext (triggerSource);
+			LogKernelFlickerTrace (
+				"source=KernelHomeForm action=force-bring-to-front-enter trigger="
+				+ (triggerSource ?? string.Empty)
+				+ ", retryCount="
+				+ _foregroundRetryCount.ToString ()
+				+ ", visible="
+				+ base.Visible.ToString ()
+				+ ", topMost="
+				+ base.TopMost.ToString ());
+			RequestEnsureHomeDisplayHidden ((triggerSource ?? string.Empty) + ".PreBringToFront");
 			base.TopMost = true;
 			ShowWindow (base.Handle, 1);
 			Activate ();
 			BringToFront ();
 			SetForegroundWindow (base.Handle);
 			base.TopMost = false;
+			LogKernelFlickerTrace (
+				"source=KernelHomeForm action=force-bring-to-front-end trigger="
+				+ (triggerSource ?? string.Empty)
+				+ ", retryCount="
+				+ _foregroundRetryCount.ToString ()
+				+ ", visible="
+				+ base.Visible.ToString ()
+				+ ", topMost="
+				+ base.TopMost.ToString ());
+		}
+
+		private void RequestEnsureHomeDisplayHidden (string triggerSource)
+		{
+			EnsureKernelFlickerTraceContext (triggerSource);
+			int requestSequence = ++_ensureHomeDisplayHiddenRequestSequence;
+			string requestReason = "source="
+				+ (triggerSource ?? string.Empty)
+				+ ",requestSequence="
+				+ requestSequence.ToString ()
+				+ ",foregroundRetryCount="
+				+ _foregroundRetryCount.ToString ()
+				+ ",formVisible="
+				+ base.Visible.ToString ()
+				+ ",formWindowState="
+				+ base.WindowState.ToString ();
+			LogKernelFlickerTrace (
+				"source=KernelHomeForm action=ensure-home-display-hidden-request "
+				+ requestReason);
+			_kernelWorkbookService.EnsureHomeDisplayHidden (requestReason);
+		}
+
+		private void EnsureKernelFlickerTraceContext (string triggerSource)
+		{
+			string currentTraceId = KernelFlickerTraceContext.CurrentTraceId;
+			if (!string.IsNullOrWhiteSpace (currentTraceId)) {
+				_kernelFlickerTraceId = currentTraceId;
+				return;
+			}
+			if (string.IsNullOrWhiteSpace (_kernelFlickerTraceId)) {
+				return;
+			}
+			KernelFlickerTraceContext.SetCurrentTrace (_kernelFlickerTraceId);
+			LogKernelFlickerTrace (
+				"source=KernelHomeForm action=trace-restore trigger="
+				+ (triggerSource ?? string.Empty)
+				+ ", restoredTraceId="
+				+ _kernelFlickerTraceId);
+		}
+
+		private void LogKernelFlickerTrace (string detail)
+		{
+			_logger.Info (KernelFlickerTracePrefix + " " + (detail ?? string.Empty));
 		}
 
 		private void HandleNameRuleAChanged (string ruleA, bool isChecked)

@@ -10,6 +10,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class TaskPaneManager
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
         private readonly TaskPaneSnapshotBuilderService _taskPaneSnapshotBuilderService;
@@ -27,6 +28,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
         private readonly TaskPaneManagerTestHooks _testHooks;
         private const string ProductTitle = "案件情報System";
+        private int _kernelFlickerTraceRefreshPaneSequence;
 
         internal TaskPaneManager(
             ThisAddIn addIn,
@@ -119,9 +121,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool RefreshPane(WorkbookContext context, string reason)
         {
+            int refreshPaneCallId = ++_kernelFlickerTraceRefreshPaneSequence;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=refresh-pane-start refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context));
             WorkbookRole role = context == null ? WorkbookRole.Unknown : context.Role;
             if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey: null))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
+                    + refreshPaneCallId.ToString()
+                    + ", reason=PreconditionPolicyRole"
+                    + ", role="
+                    + role.ToString());
                 HideAll();
                 return false;
             }
@@ -129,6 +147,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             string windowKey = SafeGetWindowKey(context.Window);
             if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
+                    + refreshPaneCallId.ToString()
+                    + ", reason=PreconditionPolicyWindowKey"
+                    + ", role="
+                    + role.ToString()
+                    + ", windowKey="
+                    + windowKey);
                 HideAll();
                 _logger.Warn("RefreshPane skipped because windowKey was empty. reason=" + (reason ?? string.Empty));
                 return false;
@@ -136,8 +163,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             RemoveStaleKernelHosts(context, windowKey);
             TaskPaneHost host = GetOrReplaceHost(windowKey, context.Window, context.Role);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=host-selected refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host));
             if (ShouldReuseCaseHostWithoutRender(host, context, reason))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=reuse-case-host refreshPaneCallId="
+                    + refreshPaneCallId.ToString()
+                    + ", host="
+                    + FormatHostDescriptor(host)
+                    + ", reason="
+                    + (reason ?? string.Empty));
                 PrepareHostsBeforeShow(host);
                 if (!TryShowHost(host, "RefreshPane.ReuseCaseHost"))
                 {
@@ -150,7 +191,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             string renderSignature = BuildRenderSignature(context);
-            if (!string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal))
+            bool renderRequired = !string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=render-evaluate refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", renderRequired="
+                + renderRequired.ToString());
+            if (renderRequired)
             {
                 RenderHost(host, context, reason);
                 host.LastRenderSignature = renderSignature;
@@ -167,6 +217,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=refresh-pane-end refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", result=Shown");
             _logger.Info("TaskPane refreshed. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
             return true;
         }
@@ -198,6 +255,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=show-existing-pane reason="
+                + (reason ?? string.Empty)
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook));
             _logger.Info("TaskPane existing host shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
             return true;
         }
@@ -251,15 +316,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (action == TaskPaneHostPreparationAction.None)
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=prepare-hosts decision=None"
+                    + ", host="
+                    + FormatHostDescriptor(host));
                 return;
             }
 
             if (action == TaskPaneHostPreparationAction.HideNonCaseHostsExceptActiveWindow)
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=prepare-hosts decision=HideNonCaseHostsExceptActiveWindow"
+                    + ", host="
+                    + FormatHostDescriptor(host));
                 HideNonCaseHostsExcept(host.WindowKey);
                 return;
             }
 
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=prepare-hosts decision=HideAllExcept"
+                + ", host="
+                + FormatHostDescriptor(host));
             HideAllExcept(host.WindowKey);
         }
 
@@ -390,6 +470,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 kernelControl.ActionInvoked += (sender, e) => KernelControl_ActionInvoked(windowKey, e);
                 var host = new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey);
                 _hostsByWindowKey.Add(windowKey, host);
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=create-host host="
+                    + FormatHostDescriptor(host)
+                    + ", paneRole=Kernel");
                 _logger.Info("TaskPane host created. role=Kernel, windowKey=" + windowKey);
                 return host;
             }
@@ -400,6 +485,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 accountingControl.ActionInvoked += (sender, e) => AccountingControl_ActionInvoked(windowKey, e);
                 var host = new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey);
                 _hostsByWindowKey.Add(windowKey, host);
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=create-host host="
+                    + FormatHostDescriptor(host)
+                    + ", paneRole=Accounting");
                 _logger.Info("TaskPane host created. role=Accounting, windowKey=" + windowKey);
                 return host;
             }
@@ -408,6 +498,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey);
             caseControl.ActionInvoked += (sender, e) => CaseControl_ActionInvoked(windowKey, caseControl, e);
             _hostsByWindowKey.Add(windowKey, caseHost);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=create-host host="
+                + FormatHostDescriptor(caseHost)
+                + ", paneRole=Case");
             _logger.Info("TaskPane host created. role=Case, windowKey=" + windowKey);
             return caseHost;
         }
@@ -745,6 +840,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=hide-pane reason="
+                    + (reason ?? string.Empty)
+                    + ", host="
+                    + FormatHostDescriptor(host));
                 _testHooks?.OnHideHost?.Invoke(host.WindowKey, reason ?? string.Empty);
                 host.Hide();
             }
@@ -764,11 +865,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (_testHooks != null && _testHooks.TryShowHost != null)
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=show-pane-test-hook reason="
+                    + (reason ?? string.Empty)
+                    + ", host="
+                    + FormatHostDescriptor(host));
                 return _testHooks.TryShowHost(host.WindowKey, reason ?? string.Empty);
             }
 
             try
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=show-pane reason="
+                    + (reason ?? string.Empty)
+                    + ", host="
+                    + FormatHostDescriptor(host));
                 host.Show();
                 return true;
             }
@@ -789,6 +902,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=remove-host host="
+                    + FormatHostDescriptor(host));
                 _hostsByWindowKey.Remove(windowKey);
                 try
                 {
@@ -936,6 +1053,122 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 context.ActiveSheetCodeName ?? string.Empty,
                 caseListRegistered,
                 snapshotCacheCount);
+        }
+
+        private string FormatContextDescriptor(WorkbookContext context)
+        {
+            if (context == null)
+            {
+                return "null";
+            }
+
+            return "role=\""
+                + context.Role.ToString()
+                + "\",workbook="
+                + FormatWorkbookDescriptor(context.Workbook, context.WorkbookFullName)
+                + ",window="
+                + FormatWindowDescriptor(context.Window)
+                + ",activeSheet=\""
+                + (context.ActiveSheetCodeName ?? string.Empty)
+                + "\"";
+        }
+
+        private string FormatHostDescriptor(TaskPaneHost host)
+        {
+            if (host == null)
+            {
+                return "null";
+            }
+
+            return "paneRole=\""
+                + GetPaneRoleName(host)
+                + "\",windowKey=\""
+                + (host.WindowKey ?? string.Empty)
+                + "\",workbookFullName=\""
+                + (host.WorkbookFullName ?? string.Empty)
+                + "\",window="
+                + FormatWindowDescriptor(host.Window);
+        }
+
+        private string GetPaneRoleName(TaskPaneHost host)
+        {
+            if (host == null || host.Control == null)
+            {
+                return "Unknown";
+            }
+
+            if (host.Control is DocumentButtonsControl)
+            {
+                return "Case";
+            }
+
+            if (host.Control is KernelNavigationControl)
+            {
+                return "Kernel";
+            }
+
+            if (host.Control is AccountingNavigationControl)
+            {
+                return "Accounting";
+            }
+
+            return host.Control.GetType().Name;
+        }
+
+        private string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        {
+            return FormatWorkbookDescriptor(workbook, null);
+        }
+
+        private string FormatWorkbookDescriptor(Excel.Workbook workbook, string fallbackFullName)
+        {
+            return "full=\""
+                + SafeWorkbookFullName(workbook, fallbackFullName)
+                + "\",name=\""
+                + SafeWorkbookShortName(workbook)
+                + "\"";
+        }
+
+        private string SafeWorkbookFullName(Excel.Workbook workbook, string fallbackFullName)
+        {
+            string workbookFullName = workbook == null || _excelInteropService == null
+                ? string.Empty
+                : (_excelInteropService.GetWorkbookFullName(workbook) ?? string.Empty);
+            return string.IsNullOrWhiteSpace(workbookFullName) ? (fallbackFullName ?? string.Empty) : workbookFullName;
+        }
+
+        private string SafeWorkbookShortName(Excel.Workbook workbook)
+        {
+            return workbook == null || _excelInteropService == null
+                ? string.Empty
+                : (_excelInteropService.GetWorkbookName(workbook) ?? string.Empty);
+        }
+
+        private static string FormatWindowDescriptor(Excel.Window window)
+        {
+            return "hwnd=\""
+                + SafeGetWindowKey(window)
+                + "\",caption=\""
+                + SafeWindowCaption(window)
+                + "\"";
+        }
+
+        private static string SafeWindowCaption(Excel.Window window)
+        {
+            try
+            {
+                if (window == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic lateBoundWindow = window;
+                return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         internal sealed class TaskPaneManagerTestHooks

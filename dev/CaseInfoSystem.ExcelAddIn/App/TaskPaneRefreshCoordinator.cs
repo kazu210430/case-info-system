@@ -9,12 +9,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class TaskPaneRefreshCoordinator
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private readonly WorkbookSessionService _workbookSessionService;
         private readonly TaskPaneManager _taskPaneManager;
         private readonly ExcelWindowRecoveryService _excelWindowRecoveryService;
         private readonly Logger _logger;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
         private readonly Action _scheduleWordWarmup;
+        private int _kernelFlickerTraceCoordinatorAttemptSequence;
 
         internal TaskPaneRefreshCoordinator(
             WorkbookSessionService workbookSessionService,
@@ -35,8 +37,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window, KernelHomeForm kernelHomeForm, int taskPaneRefreshSuppressionCount)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
+            int coordinatorAttemptId = ++_kernelFlickerTraceCoordinatorAttemptSequence;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=start coordinatorAttemptId="
+                + coordinatorAttemptId.ToString()
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", inputWindow="
+                + FormatWindowDescriptor(window)
+                + ", kernelHomeVisible="
+                + (kernelHomeForm != null && !kernelHomeForm.IsDisposed && kernelHomeForm.Visible).ToString()
+                + ", suppressionCount="
+                + taskPaneRefreshSuppressionCount.ToString());
             if (!CanExecuteTaskPaneRefresh(reason, stopwatch, taskPaneRefreshSuppressionCount))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=end coordinatorAttemptId="
+                    + coordinatorAttemptId.ToString()
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", result=Skipped");
                 return TaskPaneRefreshAttemptResult.Skipped();
             }
 
@@ -67,6 +91,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
             WorkbookContext context = workbook == null
                 ? _workbookSessionService.ResolveActiveContext(reason)
                 : _workbookSessionService.ResolveContext(workbook, window, reason);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=context-resolved coordinatorAttemptId="
+                + coordinatorAttemptId.ToString()
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", resolvedWindow="
+                + FormatWindowDescriptor(window)
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
             _logger?.Info("TryRefreshTaskPane context resolved. reason=" + (reason ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString() + ", role=" + (context == null ? string.Empty : context.Role.ToString()));
 
             // ここでは生成済み context を pane 対象として採用するかを調停する。
@@ -74,6 +110,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // 生成と受理は分離されており、context 生成 → 受理判定の順で直列に進む。
             if (!TryAcceptTaskPaneContext(context, window, kernelHomeForm))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=end coordinatorAttemptId="
+                    + coordinatorAttemptId.ToString()
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", result=ContextRejected"
+                    + ", context="
+                    + FormatContextDescriptor(context)
+                    + ", resolvedWindow="
+                    + FormatWindowDescriptor(window));
                 return TaskPaneRefreshAttemptResult.ContextRejected();
             }
 
@@ -92,6 +139,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
             }
 
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=end coordinatorAttemptId="
+                + coordinatorAttemptId.ToString()
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", result="
+                + (refreshed ? "Succeeded" : "Failed")
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", resolvedWindow="
+                + FormatWindowDescriptor(window)
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
             return refreshed
                 ? TaskPaneRefreshAttemptResult.Succeeded()
                 : TaskPaneRefreshAttemptResult.Failed();
@@ -101,11 +162,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (_workbookSessionService == null || _taskPaneManager == null)
             {
+                _logger?.Warn(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=skip reason="
+                    + (reason ?? string.Empty)
+                    + ", result=MissingDependency");
                 return false;
             }
 
             if (taskPaneRefreshSuppressionCount > 0)
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=skip reason="
+                    + (reason ?? string.Empty)
+                    + ", result=Suppressed"
+                    + ", suppressionCount="
+                    + taskPaneRefreshSuppressionCount.ToString());
                 _logger?.Info(
                     "TryRefreshTaskPane suppressed. reason="
                     + (reason ?? string.Empty)
@@ -127,6 +200,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (workbook != null && window == null)
             {
                 window = _resolveWorkbookPaneWindow(workbook, reason, false);
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=ensure-window reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", resolvedWindow="
+                    + FormatWindowDescriptor(window)
+                    + ", elapsedMs="
+                    + stopwatch.ElapsedMilliseconds.ToString());
                 _logger?.Info("TryRefreshTaskPane window resolved. reason=" + (reason ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString() + ", hasWindow=" + (window != null).ToString());
             }
 
@@ -139,6 +222,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 if (context != null && context.Role == WorkbookRole.Kernel)
                 {
+                    _logger?.Info(
+                        KernelFlickerTracePrefix
+                        + " source=TaskPaneRefreshCoordinator action=context-rejected reason=KernelHomeVisibleWithKernelContext"
+                        + ", context="
+                        + FormatContextDescriptor(context));
                     _taskPaneManager.HideKernelPanes();
                     return false;
                 }
@@ -146,6 +234,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (!_workbookSessionService.ShouldHandleContext(context))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=context-rejected reason=ShouldHandleContextFalse"
+                    + ", context="
+                    + FormatContextDescriptor(context)
+                    + ", fallbackWindow="
+                    + FormatWindowDescriptor(window));
                 if (context != null)
                 {
                     _taskPaneManager.HidePaneForWindow(context.Window);
@@ -164,6 +259,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private bool TryRefreshPaneAndScheduleWarmup(WorkbookContext context, string reason, Stopwatch stopwatch)
         {
             bool refreshed = _taskPaneManager.RefreshPane(context, reason);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=refresh-pane-complete reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", refreshed="
+                + refreshed.ToString()
+                + ", scheduleWarmup="
+                + (refreshed && context != null && context.Role == WorkbookRole.Case).ToString()
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
             _logger?.Info("TryRefreshTaskPane refresh completed. reason=" + (reason ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString() + ", refreshed=" + refreshed.ToString());
             if (refreshed && context != null && context.Role == WorkbookRole.Case)
             {
@@ -171,6 +278,107 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return refreshed;
+        }
+
+        private static string FormatContextDescriptor(WorkbookContext context)
+        {
+            if (context == null)
+            {
+                return "null";
+            }
+
+            return "role=\""
+                + context.Role.ToString()
+                + "\",workbook="
+                + FormatWorkbookDescriptor(context.Workbook, context.WorkbookFullName)
+                + ",window="
+                + FormatWindowDescriptor(context.Window)
+                + ",activeSheet=\""
+                + (context.ActiveSheetCodeName ?? string.Empty)
+                + "\"";
+        }
+
+        private static string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        {
+            return FormatWorkbookDescriptor(workbook, null);
+        }
+
+        private static string FormatWorkbookDescriptor(Excel.Workbook workbook, string fallbackFullName)
+        {
+            return "full=\""
+                + SafeWorkbookFullName(workbook, fallbackFullName)
+                + "\",name=\""
+                + SafeWorkbookName(workbook)
+                + "\"";
+        }
+
+        private static string SafeWorkbookFullName(Excel.Workbook workbook, string fallbackFullName)
+        {
+            try
+            {
+                if (workbook == null)
+                {
+                    return fallbackFullName ?? string.Empty;
+                }
+
+                string fullName = workbook.FullName ?? string.Empty;
+                return string.IsNullOrWhiteSpace(fullName) ? (fallbackFullName ?? string.Empty) : fullName;
+            }
+            catch
+            {
+                return fallbackFullName ?? string.Empty;
+            }
+        }
+
+        private static string SafeWorkbookName(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? string.Empty : workbook.Name ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string FormatWindowDescriptor(Excel.Window window)
+        {
+            return "hwnd=\""
+                + SafeWindowHwnd(window)
+                + "\",caption=\""
+                + SafeWindowCaption(window)
+                + "\"";
+        }
+
+        private static string SafeWindowHwnd(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : window.Hwnd.ToString() ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWindowCaption(Excel.Window window)
+        {
+            try
+            {
+                if (window == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic lateBoundWindow = window;
+                return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 }

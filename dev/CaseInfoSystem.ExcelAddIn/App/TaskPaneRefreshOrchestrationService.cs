@@ -11,6 +11,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class TaskPaneRefreshOrchestrationService
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         internal const int PendingPaneRefreshIntervalMs = 400;
         internal const int PendingPaneRefreshMaxAttempts = 3;
         internal const int WorkbookPaneWindowResolveAttempts = 2;
@@ -29,6 +30,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private int _pendingPaneRefreshAttemptsRemaining;
         private string _pendingPaneRefreshReason;
         private string _pendingPaneRefreshWorkbookFullName;
+        private int _kernelFlickerTraceRefreshAttemptSequence;
 
         internal TaskPaneRefreshOrchestrationService(
             ExcelInteropService excelInteropService,
@@ -52,12 +54,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
         {
-            return _taskPaneRefreshCoordinator.TryRefreshTaskPane(
+            int refreshAttemptId = ++_kernelFlickerTraceRefreshAttemptSequence;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=try-refresh-start refreshAttemptId="
+                + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", inputWindow="
+                + FormatWindowDescriptor(window)
+                + ", activeState="
+                + FormatActiveState());
+            TaskPaneRefreshAttemptResult result = _taskPaneRefreshCoordinator.TryRefreshTaskPane(
                 reason,
                 workbook,
                 window,
                 _getKernelHomeForm == null ? null : _getKernelHomeForm(),
                 _getTaskPaneRefreshSuppressionCount == null ? 0 : _getTaskPaneRefreshSuppressionCount());
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=try-refresh-end refreshAttemptId="
+                + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", inputWindow="
+                + FormatWindowDescriptor(window)
+                + ", result="
+                + (result == null ? "null" : result.IsRefreshSucceeded.ToString()));
+            return result;
         }
 
         internal bool IsTaskPaneRefreshSucceeded(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -75,6 +103,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _pendingPaneRefreshWorkbookFullName = string.Empty;
             if (IsTaskPaneRefreshSucceeded(reason, null, null))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=defer-immediate-success reason="
+                    + (reason ?? string.Empty)
+                    + ", target=active");
                 StopPendingPaneRefreshTimer();
                 return;
             }
@@ -84,6 +117,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             EnsurePendingPaneRefreshTimer();
             _pendingPaneRefreshTimer.Stop();
             _pendingPaneRefreshTimer.Start();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-scheduled reason="
+                + (reason ?? string.Empty)
+                + ", target=active"
+                + ", attempts="
+                + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
         }
 
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
@@ -92,10 +132,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 ? string.Empty
                 : _excelInteropService.GetWorkbookFullName(workbook);
             Excel.Window workbookWindow = ResolveWorkbookPaneWindow(workbook, reason, activateWorkbook: false);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-prepare reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", resolvedWindow="
+                + FormatWindowDescriptor(workbookWindow)
+                + ", activeState="
+                + FormatActiveState());
             _logger?.Info("TaskPane timer fallback prepare. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", resolvedWindowHwnd=" + SafeWindowHwnd(workbookWindow));
 
             if (TryRefreshTaskPane(reason, workbook, workbookWindow).IsRefreshSucceeded)
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=defer-immediate-success reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook));
                 _logger?.Info("TaskPane timer fallback immediate refresh succeeded. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook));
                 StopPendingPaneRefreshTimer();
                 return;
@@ -106,6 +162,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             EnsurePendingPaneRefreshTimer();
             _pendingPaneRefreshTimer.Stop();
             _pendingPaneRefreshTimer.Start();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-scheduled reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", attempts="
+                + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
             _logger?.Info("TaskPane timer fallback scheduled. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempts=" + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
         }
 
@@ -134,6 +198,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=resolve-window-start reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activateWorkbook="
+                + activateWorkbook.ToString()
+                + ", activeState="
+                + FormatActiveState());
             for (int attempt = 0; attempt < WorkbookPaneWindowResolveAttempts; attempt++)
             {
                 if (activateWorkbook)
@@ -145,21 +219,77 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 Excel.Workbook activeWorkbook = _excelInteropService.GetActiveWorkbook();
                 string activeWorkbookFullName = _excelInteropService.GetWorkbookFullName(activeWorkbook);
                 Excel.Window activeWindow = _excelInteropService.GetActiveWindow();
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=resolve-window-state reason="
+                    + (reason ?? string.Empty)
+                    + ", workbookFullName=\""
+                    + workbookFullName
+                    + "\", resolveAttempt="
+                    + (attempt + 1).ToString(CultureInfo.InvariantCulture)
+                    + ", activateWorkbook="
+                    + activateWorkbook.ToString()
+                    + ", visibleWindow="
+                    + FormatWindowDescriptor(workbookWindow)
+                    + ", activeWorkbook="
+                    + FormatWorkbookDescriptor(activeWorkbook)
+                    + ", activeWindow="
+                    + FormatWindowDescriptor(activeWindow)
+                    + ", activeWorkbookMatches="
+                    + string.Equals(activeWorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase).ToString());
                 _logger?.Info("ResolveWorkbookPaneWindow state. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", resolveAttempt=" + (attempt + 1).ToString(CultureInfo.InvariantCulture) + ", activateWorkbook=" + activateWorkbook.ToString() + ", visibleWindowHwnd=" + SafeWindowHwnd(workbookWindow) + ", activeWorkbook=" + activeWorkbookFullName + ", activeWorkbookMatches=" + string.Equals(activeWorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase).ToString() + ", activeWindowHwnd=" + SafeWindowHwnd(activeWindow));
                 if (workbookWindow != null)
                 {
+                    _logger?.Info(
+                        KernelFlickerTracePrefix
+                        + " source=TaskPaneRefreshOrchestrationService action=resolve-window-success reason="
+                        + (reason ?? string.Empty)
+                        + ", workbook="
+                        + FormatWorkbookDescriptor(workbook)
+                        + ", resolvedWindow="
+                        + FormatWindowDescriptor(workbookWindow)
+                        + ", resolveAttempt="
+                        + (attempt + 1).ToString(CultureInfo.InvariantCulture));
                     return workbookWindow;
                 }
 
                 if (string.Equals(activeWorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase) && activeWindow != null)
                 {
+                    _logger?.Info(
+                        KernelFlickerTracePrefix
+                        + " source=TaskPaneRefreshOrchestrationService action=resolve-window-success-active-window reason="
+                        + (reason ?? string.Empty)
+                        + ", workbook="
+                        + FormatWorkbookDescriptor(workbook)
+                        + ", resolvedWindow="
+                        + FormatWindowDescriptor(activeWindow)
+                        + ", resolveAttempt="
+                        + (attempt + 1).ToString(CultureInfo.InvariantCulture));
                     return activeWindow;
                 }
 
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=resolve-window-retry reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", resolveAttempt="
+                    + (attempt + 1).ToString(CultureInfo.InvariantCulture)
+                    + ", doEvents=true, sleepMs="
+                    + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
                 Application.DoEvents();
                 Thread.Sleep(WorkbookPaneWindowResolveDelayMs);
             }
 
+            _logger?.Warn(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=resolve-window-failed reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveState());
             _logger?.Warn(
                 "ResolveWorkbookPaneWindow failed. reason="
                 + (reason ?? string.Empty)
@@ -214,6 +344,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void WaitForTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber)
         {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", attempt="
+                + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ", doEvents=true, sleepMs=80");
             _logger?.Info("TaskPane wait-ready retry wait. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
             Application.DoEvents();
             Thread.Sleep(80);
@@ -231,9 +370,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (targetWorkbook != null)
             {
                 _pendingPaneRefreshAttemptsRemaining--;
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=defer-retry-start reason="
+                    + (_pendingPaneRefreshReason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(targetWorkbook)
+                    + ", attemptsRemaining="
+                    + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
                 _logger?.Info("TaskPane timer retry start. reason=" + (_pendingPaneRefreshReason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(targetWorkbook) + ", attemptsRemaining=" + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
                 Excel.Window workbookWindow = ResolveWorkbookPaneWindow(targetWorkbook, _pendingPaneRefreshReason, activateWorkbook: true);
                 bool refreshed = TryRefreshTaskPane(_pendingPaneRefreshReason, targetWorkbook, workbookWindow).IsRefreshSucceeded;
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=defer-retry-end reason="
+                    + (_pendingPaneRefreshReason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(targetWorkbook)
+                    + ", resolvedWindow="
+                    + FormatWindowDescriptor(workbookWindow)
+                    + ", refreshed="
+                    + refreshed.ToString());
                 _logger?.Info("TaskPane timer retry result. reason=" + (_pendingPaneRefreshReason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(targetWorkbook) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow) + ", refreshed=" + refreshed.ToString());
                 if (refreshed)
                 {
@@ -289,6 +446,54 @@ namespace CaseInfoSystem.ExcelAddIn.App
             try
             {
                 return window == null ? string.Empty : Convert.ToString(window.Hwnd, CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string FormatActiveState()
+        {
+            Excel.Workbook activeWorkbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
+            Excel.Window activeWindow = _excelInteropService == null ? null : _excelInteropService.GetActiveWindow();
+            return "activeWorkbook=" + FormatWorkbookDescriptor(activeWorkbook) + ",activeWindow=" + FormatWindowDescriptor(activeWindow);
+        }
+
+        private string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        {
+            return "full=\""
+                + SafeWorkbookFullName(workbook)
+                + "\",name=\""
+                + SafeWorkbookName(workbook)
+                + "\"";
+        }
+
+        private string SafeWorkbookName(Excel.Workbook workbook)
+        {
+            return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookName(workbook);
+        }
+
+        private static string FormatWindowDescriptor(Excel.Window window)
+        {
+            return "hwnd=\""
+                + SafeWindowHwnd(window)
+                + "\",caption=\""
+                + SafeWindowCaption(window)
+                + "\"";
+        }
+
+        private static string SafeWindowCaption(Excel.Window window)
+        {
+            try
+            {
+                if (window == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic lateBoundWindow = window;
+                return Convert.ToString(lateBoundWindow.Caption, CultureInfo.InvariantCulture) ?? string.Empty;
             }
             catch
             {

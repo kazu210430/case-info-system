@@ -24,6 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private const string TaskPaneTitle = "案件情報System";
         private const string SystemRootFolderName = "案件情報System";
         private const string TraceLogFileName = "CaseInfoSystem.ExcelAddIn_trace.log";
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private const string KernelSheetCommandSheetCodeName = "shCaseList";
         private const string KernelSheetCommandCellAddress = "AT1";
         private const string ProductTitle = "案件情報System";
@@ -76,6 +77,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private KernelHomeForm _kernelHomeForm;
         private KernelCaseInteractionState _kernelCaseInteractionState;
         private int _taskPaneRefreshSuppressionCount;
+        private int _kernelFlickerTraceRefreshCallSequence;
 
         // COM / warm-up
         private KernelAutomationService _kernelAutomationService;
@@ -266,8 +268,15 @@ namespace CaseInfoSystem.ExcelAddIn
         // Excel application event handler
         private void Application_WorkbookOpen(Excel.Workbook workbook)
         {
+            EnsureKernelFlickerTraceForWorkbookOpen(workbook);
             EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookOpen), () =>
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=ExcelEventBoundary action=fire event=WorkbookOpen workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + FormatActiveExcelState());
                 _logger?.Info("Excel WorkbookOpen fired. workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
                 _workbookEventCoordinator.OnWorkbookOpen(workbook);
             });
@@ -277,6 +286,12 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () =>
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=ExcelEventBoundary action=fire event=WorkbookActivate workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + FormatActiveExcelState());
                 _logger?.Info("Excel WorkbookActivate fired. workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
                 _workbookEventCoordinator.OnWorkbookActivate(workbook);
             });
@@ -286,6 +301,14 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             EventBoundaryGuard.Execute(_logger, nameof(Application_WindowActivate), () =>
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=ExcelEventBoundary action=fire event=WindowActivate workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", eventWindow="
+                    + FormatWindowDescriptor(window)
+                    + ", activeState="
+                    + FormatActiveExcelState());
                 _logger?.Info(
                     "Excel WindowActivate fired. workbook="
                     + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
@@ -298,6 +321,12 @@ namespace CaseInfoSystem.ExcelAddIn
         // event handler から調停 service へ渡す delegate 入口
         internal void HandleWorkbookOpenEvent(Excel.Workbook workbook)
         {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookEventCoordinator action=enter event=WorkbookOpen workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState());
             _logger?.Info("TaskPane event entry. event=WorkbookOpen, workbook=" + SafeWorkbookFullName(workbook) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
 
             // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
@@ -312,6 +341,12 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal void HandleWorkbookActivateEvent(Excel.Workbook workbook)
         {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookEventCoordinator action=enter event=WorkbookActivate workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState());
             _logger?.Info("TaskPane event entry. event=WorkbookActivate, workbook=" + SafeWorkbookFullName(workbook) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
 
             // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
@@ -323,6 +358,12 @@ namespace CaseInfoSystem.ExcelAddIn
             _kernelHomeCoordinator.HandleKernelWorkbookBecameAvailable("WorkbookActivate", workbook);
             if (ShouldSuppressCasePaneRefresh("WorkbookActivate", workbook))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=WorkbookEventCoordinator action=suppress-refresh event=WorkbookActivate workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + FormatActiveExcelState());
                 return;
             }
 
@@ -331,6 +372,14 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal void HandleWindowActivateEvent(Excel.Workbook workbook, Excel.Window window)
         {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookEventCoordinator action=enter event=WindowActivate workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", eventWindow="
+                + FormatWindowDescriptor(window)
+                + ", activeState="
+                + FormatActiveExcelState());
             _logger?.Info("TaskPane event entry. event=WindowActivate, workbook=" + SafeWorkbookFullName(workbook) + ", windowHwnd=" + SafeWindowHwnd(window) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
             _windowActivatePaneHandlingService?.Handle(workbook, window);
         }
@@ -714,7 +763,32 @@ namespace CaseInfoSystem.ExcelAddIn
         // Task pane / HOME 表示の VSTO 境界
         private void RefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
         {
-            TryRefreshTaskPane(reason, workbook, window);
+            int refreshCallId = ++_kernelFlickerTraceRefreshCallSequence;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=refresh-call-start refreshCallId="
+                + refreshCallId.ToString(CultureInfo.InvariantCulture)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", inputWindow="
+                + FormatWindowDescriptor(window)
+                + ", activeState="
+                + FormatActiveExcelState());
+            TaskPaneRefreshAttemptResult result = TryRefreshTaskPane(reason, workbook, window);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=refresh-call-end refreshCallId="
+                + refreshCallId.ToString(CultureInfo.InvariantCulture)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", inputWindow="
+                + FormatWindowDescriptor(window)
+                + ", result="
+                + (result == null ? "null" : result.IsRefreshSucceeded.ToString()));
         }
 
         private TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -821,7 +895,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             if (_kernelHomeForm == null || _kernelHomeForm.IsDisposed)
             {
-                _kernelHomeForm = new KernelHomeForm(_kernelWorkbookService, _kernelCaseCreationCommandService);
+                _kernelHomeForm = new KernelHomeForm(_kernelWorkbookService, _kernelCaseCreationCommandService, _logger);
             }
 
             _taskPaneManager?.HideKernelPanes();
@@ -841,6 +915,15 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal bool ShowKernelSheetAndRefreshPaneFromHome(string sheetCodeName, string reason)
         {
+            KernelFlickerTraceContext.BeginNewTrace();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=trace-begin trigger=ShowKernelSheetAndRefreshPaneFromHome traceOriginReason="
+                + (reason ?? string.Empty)
+                + ", sheetCodeName="
+                + (sheetCodeName ?? string.Empty)
+                + ", activeState="
+                + FormatActiveExcelState());
             // 処理ブロック: 次に来る activate 系イベントに備えて、Kernel HOME 抑止要求を発行する。
             SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
             bool shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName);
@@ -855,6 +938,15 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason)
         {
+            KernelFlickerTraceContext.BeginNewTrace();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=trace-begin trigger=ShowKernelSheetAndRefreshPane traceOriginReason="
+                + (reason ?? string.Empty)
+                + ", sheetCodeName="
+                + (sheetCodeName ?? string.Empty)
+                + ", activeState="
+                + FormatActiveExcelState());
             // 処理ブロック: 遷移開始前の時点観測として、開始ログへ出す workbook 状態を記録する。
             Excel.Workbook activeWorkbookBefore = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
             _logger?.Info(
@@ -1047,6 +1139,14 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             _taskPaneRefreshSuppressionCount++;
             _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=suppress-enter reason="
+                + (reason ?? string.Empty)
+                + ", suppressionCount="
+                + _taskPaneRefreshSuppressionCount.ToString(CultureInfo.InvariantCulture)
+                + ", activeState="
+                + FormatActiveExcelState());
+            _logger?.Info(
                 "Task pane refresh suppression entered. reason="
                 + (reason ?? string.Empty)
                 + ", suppressionCount="
@@ -1058,6 +1158,14 @@ namespace CaseInfoSystem.ExcelAddIn
                     _taskPaneRefreshSuppressionCount--;
                 }
 
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=ThisAddIn action=suppress-exit reason="
+                    + (reason ?? string.Empty)
+                    + ", suppressionCount="
+                    + _taskPaneRefreshSuppressionCount.ToString(CultureInfo.InvariantCulture)
+                    + ", activeState="
+                    + FormatActiveExcelState());
                 _logger?.Info(
                     "Task pane refresh suppression exited. reason="
                     + (reason ?? string.Empty)
@@ -1167,6 +1275,87 @@ namespace CaseInfoSystem.ExcelAddIn
         private string SafeWorkbookFullName(Excel.Workbook workbook)
         {
             return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+        }
+
+        private string FormatActiveExcelState()
+        {
+            Excel.Workbook activeWorkbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
+            Excel.Window activeWindow = _excelInteropService == null ? null : _excelInteropService.GetActiveWindow();
+            return "activeWorkbook=" + FormatWorkbookDescriptor(activeWorkbook) + ",activeWindow=" + FormatWindowDescriptor(activeWindow);
+        }
+
+        private string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        {
+            return "full=\""
+                + SafeWorkbookFullName(workbook)
+                + "\",name=\""
+                + SafeWorkbookName(workbook)
+                + "\"";
+        }
+
+        private string SafeWorkbookName(Excel.Workbook workbook)
+        {
+            return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookName(workbook);
+        }
+
+        private static string FormatWindowDescriptor(Excel.Window window)
+        {
+            return "hwnd=\""
+                + SafeWindowHwnd(window)
+                + "\",caption=\""
+                + SafeWindowCaption(window)
+                + "\"";
+        }
+
+        private void EnsureKernelFlickerTraceForWorkbookOpen(Excel.Workbook workbook)
+        {
+            if (!IsKernelWorkbookSafe(workbook))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(KernelFlickerTraceContext.CurrentTraceId))
+            {
+                return;
+            }
+
+            KernelFlickerTraceContext.BeginNewTrace();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=trace-begin trigger=WorkbookOpenKernelDetection workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveExcelState());
+        }
+
+        private bool IsKernelWorkbookSafe(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook != null && IsKernelWorkbook(workbook);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string SafeWindowCaption(Excel.Window window)
+        {
+            try
+            {
+                if (window == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic lateBoundWindow = window;
+                return Convert.ToString(lateBoundWindow.Caption, CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private sealed class DelegateDisposable : IDisposable

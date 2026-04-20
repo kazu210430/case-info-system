@@ -90,8 +90,6 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal WordInteropService WordInteropService { get; private set; }
 
-        internal LocalWorkCopyService LocalWorkCopyService { get; private set; }
-
         internal KernelWorkbookService KernelWorkbookService { get; private set; }
 
         internal KernelWorkbookLifecycleService KernelWorkbookLifecycleService { get; private set; }
@@ -234,7 +232,6 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentNamePromptService = documentComposition.DocumentNamePromptService;
             DocumentExecutionModeService = documentComposition.DocumentExecutionModeService;
             WordInteropService = documentComposition.WordInteropService;
-            LocalWorkCopyService = documentComposition.LocalWorkCopyService;
             WorkbookRibbonCommandService = new WorkbookRibbonCommandService(ExcelInteropService, pathCompatibilityService, _logger);
             var workbookResetDefinitionRepository = new WorkbookResetDefinitionRepository();
             WorkbookResetCommandService = new WorkbookResetCommandService(
@@ -385,11 +382,8 @@ namespace CaseInfoSystem.ExcelAddIn
             var mergeDataBuilder = new MergeDataBuilder();
             var documentMergeService = new DocumentMergeService(_logger);
             var wordInteropService = new WordInteropService(pathCompatibilityService, _logger);
-            var localWorkCopyService = new LocalWorkCopyService(pathCompatibilityService, wordInteropService, _logger);
             var documentSaveService = new DocumentSaveService(
                 documentOutputService,
-                pathCompatibilityService,
-                localWorkCopyService,
                 wordInteropService,
                 _logger);
             var documentCreateService = new DocumentCreateService(
@@ -428,8 +422,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentExecutionModeService,
                 documentEligibilityDiagnosticsService,
                 documentMasterCatalogDiagnosticsService,
-                wordInteropService,
-                localWorkCopyService);
+                wordInteropService);
         }
     }
 
@@ -442,8 +435,7 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentExecutionModeService documentExecutionModeService,
             DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
             DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
-            WordInteropService wordInteropService,
-            LocalWorkCopyService localWorkCopyService)
+            WordInteropService wordInteropService)
         {
             DocumentCommandService = documentCommandService;
             DocumentNamePromptService = documentNamePromptService;
@@ -451,7 +443,6 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentEligibilityDiagnosticsService = documentEligibilityDiagnosticsService;
             DocumentMasterCatalogDiagnosticsService = documentMasterCatalogDiagnosticsService;
             WordInteropService = wordInteropService;
-            LocalWorkCopyService = localWorkCopyService;
         }
 
         internal DocumentCommandService DocumentCommandService { get; private set; }
@@ -465,8 +456,6 @@ namespace CaseInfoSystem.ExcelAddIn
         internal DocumentMasterCatalogDiagnosticsService DocumentMasterCatalogDiagnosticsService { get; private set; }
 
         internal WordInteropService WordInteropService { get; private set; }
-
-        internal LocalWorkCopyService LocalWorkCopyService { get; private set; }
     }
 
     // Bundles kernel workbook access and lifecycle services that must be initialized together.

@@ -110,28 +110,59 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		internal object AcquireWordApplication (out bool createdNew)
 		{
 			createdNew = false;
+			_logger.Info ("WordInteropService.AcquireWordApplication enter.");
 			if (IsWordApplicationAliveSafe (_cachedWordApplication)) {
+				_logger.Info ("WordInteropService.AcquireWordApplication cached alive.");
+				_logger.Info ("WordInteropService.AcquireWordApplication return app. createdNew=False, source=Cached");
 				return _cachedWordApplication;
 			}
 			_cachedWordApplication = null;
 			object obj = null;
 			try {
+				_logger.Info ("WordInteropService.AcquireWordApplication GetActiveObject start.");
 				obj = GetActiveObject ("Word.Application");
+				_logger.Info ("WordInteropService.AcquireWordApplication GetActiveObject end. hasApp=" + IsWordApplicationAliveSafe (obj));
 			} catch {
+				_logger.Info ("WordInteropService.AcquireWordApplication GetActiveObject end. hasApp=False");
 			}
 			if (!IsWordApplicationAliveSafe (obj)) {
 				obj = null;
 			}
 			if (obj == null) {
 				try {
+					_logger.Info ("WordInteropService.AcquireWordApplication GetTypeFromProgID start.");
 					Type typeFromProgID = GetTypeFromProgID ("Word.Application");
+					_logger.Info ("WordInteropService.AcquireWordApplication GetTypeFromProgID end. hasType=" + (typeFromProgID != null));
 					if (typeFromProgID != null) {
-						obj = CreateInstance (typeFromProgID);
-						if (IsWordApplicationAliveSafe (obj)) {
+						_logger.Info ("WordInteropService.AcquireWordApplication progId type non-null.");
+						DateTimeOffset createInstanceStartedAt = DateTimeOffset.UtcNow;
+						Stopwatch createInstanceStopwatch = Stopwatch.StartNew ();
+						_logger.Info ("WordInteropService.AcquireWordApplication Activator.CreateInstance start. at=" + createInstanceStartedAt.ToString ("O"));
+						try {
+							obj = CreateInstance (typeFromProgID);
+							DateTimeOffset createInstanceEndedAt = DateTimeOffset.UtcNow;
+							_logger.Info ("WordInteropService.AcquireWordApplication Activator.CreateInstance end. at=" + createInstanceEndedAt.ToString ("O") + ", elapsedMs=" + createInstanceStopwatch.ElapsedMilliseconds);
+						} catch (Exception exception) {
+							DateTimeOffset createInstanceFailedAt = DateTimeOffset.UtcNow;
+							_logger.Error (
+								"WordInteropService.AcquireWordApplication Activator.CreateInstance failed. at=" + createInstanceFailedAt.ToString ("O") +
+								", elapsedMs=" + createInstanceStopwatch.ElapsedMilliseconds +
+								", exceptionType=" + exception.GetType ().FullName +
+								", message=" + exception.Message +
+								", hresult=0x" + exception.HResult.ToString ("X8"),
+								exception);
+							throw;
+						}
+						_logger.Info ("WordInteropService.AcquireWordApplication IsWordApplicationAlive start.");
+						bool isAlive = IsWordApplicationAliveSafe (obj);
+						_logger.Info ("WordInteropService.AcquireWordApplication IsWordApplicationAlive end. hasApp=" + isAlive);
+						if (isAlive) {
 							createdNew = true;
 						} else {
 							obj = null;
 						}
+					} else {
+						_logger.Info ("WordInteropService.AcquireWordApplication progId type null.");
 					}
 				} catch (Exception exception) {
 					_logger.Error ("WordInteropService.AcquireWordApplication failed.", exception);
@@ -139,6 +170,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				}
 			}
 			_cachedWordApplication = obj;
+			if (obj == null) {
+				_logger.Info ("WordInteropService.AcquireWordApplication return null.");
+			} else {
+				_logger.Info ("WordInteropService.AcquireWordApplication return app. createdNew=" + createdNew + ", source=" + (createdNew ? "CreateInstance" : "GetActiveObject"));
+			}
 			return obj;
 		}
 
@@ -198,6 +234,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (wordDocument == null) {
 				throw new ArgumentNullException ("wordDocument");
 			}
+			Stopwatch totalStopwatch = Stopwatch.StartNew ();
+			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
 			string text = _pathCompatibilityService.NormalizePath (fullPath);
 			if (text.Length == 0) {
 				throw new InvalidOperationException ("保存先パスが解決されていません。");
@@ -206,7 +244,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (!string.IsNullOrWhiteSpace (directoryName) && !_pathCompatibilityService.EnsureFolderSafe (directoryName)) {
 				throw new InvalidOperationException ("保存先フォルダを作成できませんでした。");
 			}
+			_logger.Debug ("WordInteropService.SaveDocumentAsDocx", "EnsureFolderSafe elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
+			phaseStopwatch.Restart ();
 			((dynamic)wordDocument).SaveAs2 (text, 16);
+			_logger.Debug ("WordInteropService.SaveDocumentAsDocx", "SaveAs2 elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
 			return text;
 		}
 

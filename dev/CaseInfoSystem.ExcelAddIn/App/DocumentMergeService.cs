@@ -9,13 +9,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
 	internal sealed class DocumentMergeService
 	{
+		private sealed class ContentControlEntry
+		{
+			internal object Control { get; set; }
+
+			internal string Tag { get; set; }
+
+			internal string Title { get; set; }
+
+			internal int Type { get; set; }
+		}
+
 		private sealed class ContentControlIndex
 		{
-			internal IDictionary<string, List<object>> ByTag { get; private set; }
+			internal IDictionary<string, List<ContentControlEntry>> ByTag { get; private set; }
 
-			internal IDictionary<string, List<object>> ByTitle { get; private set; }
+			internal IDictionary<string, List<ContentControlEntry>> ByTitle { get; private set; }
 
-			internal IDictionary<string, List<object>> PrimaryKeys { get; private set; }
+			internal IDictionary<string, List<ContentControlEntry>> PrimaryKeys { get; private set; }
 
 			internal IDictionary<string, string> PrimarySources { get; private set; }
 
@@ -25,9 +36,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 			internal ContentControlIndex ()
 			{
-				ByTag = new Dictionary<string, List<object>> (StringComparer.OrdinalIgnoreCase);
-				ByTitle = new Dictionary<string, List<object>> (StringComparer.OrdinalIgnoreCase);
-				PrimaryKeys = new Dictionary<string, List<object>> (StringComparer.OrdinalIgnoreCase);
+				ByTag = new Dictionary<string, List<ContentControlEntry>> (StringComparer.OrdinalIgnoreCase);
+				ByTitle = new Dictionary<string, List<ContentControlEntry>> (StringComparer.OrdinalIgnoreCase);
+				PrimaryKeys = new Dictionary<string, List<ContentControlEntry>> (StringComparer.OrdinalIgnoreCase);
 				PrimarySources = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
 				DuplicatePrimary = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
 			}
@@ -75,7 +86,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (mergeData != null) {
 				foreach (KeyValuePair<string, string> mergeDatum in mergeData) {
 					num2++;
-					List<object> list5 = FindContentControls (contentControlIndex, mergeDatum.Key);
+					List<ContentControlEntry> list5 = FindContentControls (contentControlIndex, mergeDatum.Key);
 					if (list5 == null || list5.Count == 0) {
 						list.Add (mergeDatum.Key ?? string.Empty);
 						continue;
@@ -89,7 +100,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					if (text.Length == 0) {
 						num += list5.Count;
 					}
-					foreach (object item in list5) {
+					foreach (ContentControlEntry item in list5) {
 						if (IsTextContentControl (item)) {
 							WritePlainTextToControl (item, normalizedValueText);
 							num4++;
@@ -103,7 +114,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			num5 = ApplySystemDateContentControls (contentControlIndex, list3, ref skippedNonTextCount);
 			_logger.Debug ("DocumentMergeService.ApplyMergeData", "ValuesApplied elapsed=" + FormatElapsedSeconds (stopwatch2.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (stopwatch.Elapsed) + " mergeKeyCount=" + (mergeData?.Count ?? 0) + " processedKeyCount=" + num2 + " matchedControlCount=" + num3 + " writtenControlCount=" + num4 + " systemDateControlCount=" + num5 + " skippedNonTextCount=" + skippedNonTextCount);
 			stopwatch2.Restart ();
-			foreach (KeyValuePair<string, List<object>> primaryKey in contentControlIndex.PrimaryKeys) {
+			foreach (KeyValuePair<string, List<ContentControlEntry>> primaryKey in contentControlIndex.PrimaryKeys) {
 				if ((mergeData == null || !mergeData.ContainsKey (primaryKey.Key)) && !IsSystemManagedPrimaryKey (primaryKey.Key)) {
 					string text2 = (contentControlIndex.PrimarySources.ContainsKey (primaryKey.Key) ? contentControlIndex.PrimarySources [primaryKey.Key] : string.Empty);
 					list2.Add (text2 + "=" + primaryKey.Key);
@@ -144,13 +155,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			int num = Convert.ToInt32 (val.Count);
 			for (int i = 1; i <= num; i++) {
 				dynamic val2 = val.Item (i);
-				string text = (Convert.ToString (val2.Tag) ?? string.Empty).Trim ();
-				string text2 = (Convert.ToString (val2.Title) ?? string.Empty).Trim ();
+				ContentControlEntry contentControlEntry = new ContentControlEntry
+				{
+					Control = val2,
+					Tag = (Convert.ToString (val2.Tag) ?? string.Empty).Trim (),
+					Title = (Convert.ToString (val2.Title) ?? string.Empty).Trim (),
+					Type = Convert.ToInt32 (val2.Type)
+				};
+				string text = contentControlEntry.Tag;
+				string text2 = contentControlEntry.Title;
 				if (text.Length > 0) {
-					DocumentMergeService.AddControlToIndex (contentControlIndex.ByTag, text, val2);
+					DocumentMergeService.AddControlToIndex (contentControlIndex.ByTag, text, contentControlEntry);
 				}
 				if (text2.Length > 0) {
-					DocumentMergeService.AddControlToIndex (contentControlIndex.ByTitle, text2, val2);
+					DocumentMergeService.AddControlToIndex (contentControlIndex.ByTitle, text2, contentControlEntry);
 				}
 				string text3;
 				string text4;
@@ -165,7 +183,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					text3 = text2;
 					text4 = "Title";
 				}
-				DocumentMergeService.AddControlToIndex (contentControlIndex.PrimaryKeys, text3, val2);
+				DocumentMergeService.AddControlToIndex (contentControlIndex.PrimaryKeys, text3, contentControlEntry);
 				contentControlIndex.PrimarySources [text3] = text4;
 				if (contentControlIndex.PrimaryKeys [text3].Count > 1) {
 					contentControlIndex.DuplicatePrimary [text3] = text4 + ":" + contentControlIndex.PrimaryKeys [text3].Count;
@@ -174,7 +192,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return contentControlIndex;
 		}
 
-		private static List<object> FindContentControls (ContentControlIndex index, string keyText)
+		private static List<ContentControlEntry> FindContentControls (ContentControlIndex index, string keyText)
 		{
 			if (index == null) {
 				return null;
@@ -190,9 +208,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return value2;
 		}
 
-		private static bool IsTextContentControl (object control)
+		private static bool IsTextContentControl (ContentControlEntry control)
 		{
-			int num = Convert.ToInt32 (((dynamic)control).Type);
+			int num = control == null ? -1 : control.Type;
 			return num == 0 || num == 1;
 		}
 
@@ -202,9 +220,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return num != 8 && num != 6;
 		}
 
-		private static bool IsDateContentControl (object control)
+		private static bool IsDateContentControl (ContentControlEntry control)
 		{
-			int num = Convert.ToInt32 (((dynamic)control).Type);
+			int num = control == null ? -1 : control.Type;
 			return num == 6;
 		}
 
@@ -216,7 +234,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			int num = 0;
 			string normalizedValueText = DateTime.Today.ToString ("yyyy/MM/dd", CultureInfo.InvariantCulture);
 			for (int i = 0; i < value.Count; i++) {
-				object control = value [i];
+				ContentControlEntry control = value [i];
 				if (IsDateContentControl (control)) {
 					WritePlainTextToControl (control, normalizedValueText);
 					num++;
@@ -233,9 +251,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return string.Equals ((keyText ?? string.Empty).Trim (), "Date", StringComparison.OrdinalIgnoreCase);
 		}
 
-		private static void WritePlainTextToControl (object control, string normalizedValueText)
+		private static void WritePlainTextToControl (ContentControlEntry control, string normalizedValueText)
 		{
-			((dynamic)control).Range.Text = normalizedValueText ?? string.Empty;
+			if (control == null || control.Control == null) {
+				return;
+			}
+			((dynamic)control.Control).Range.Text = normalizedValueText ?? string.Empty;
 		}
 
 		private static string NormalizeTextForContentControl (string valueText)
@@ -246,9 +267,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return valueText.Replace ("\r\n", '\v'.ToString ()).Replace ("\r", '\v'.ToString ()).Replace ("\n", '\v'.ToString ());
 		}
 
-		private static string BuildControlLabel (string keyText, object control)
+		private static string BuildControlLabel (string keyText, ContentControlEntry control)
 		{
-			return "Key=[" + (keyText ?? string.Empty) + "] Tag=[" + (Convert.ToString (((dynamic)control).Tag) ?? string.Empty).Trim () + "] Title=[" + (Convert.ToString (((dynamic)control).Title) ?? string.Empty).Trim () + "] Type=[" + Convert.ToString (((dynamic)control).Type) + "]";
+			return "Key=[" + (keyText ?? string.Empty) + "] Tag=[" + (control == null ? string.Empty : (control.Tag ?? string.Empty)) + "] Title=[" + (control == null ? string.Empty : (control.Title ?? string.Empty)) + "] Type=[" + (control == null ? string.Empty : control.Type.ToString ()) + "]";
 		}
 
 		private void LogMergeWarnings (IList<string> missingInDocument, IList<string> missingInData, IList<string> skippedNonText, IList<string> duplicateControls, IDictionary<string, string> duplicatePrimary, int emptyKeyCount, int emptyValueCount)
@@ -289,10 +310,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private static void AddControlToIndex (IDictionary<string, List<object>> bucket, string keyText, object control)
+		private static void AddControlToIndex (IDictionary<string, List<ContentControlEntry>> bucket, string keyText, ContentControlEntry control)
 		{
 			if (!bucket.TryGetValue (keyText, out var value)) {
-				value = new List<object> ();
+				value = new List<ContentControlEntry> ();
 				bucket.Add (keyText, value);
 			}
 			value.Add (control);

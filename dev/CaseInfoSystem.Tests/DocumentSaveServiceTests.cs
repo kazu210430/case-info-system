@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.Tests.Fakes;
@@ -9,121 +11,135 @@ namespace CaseInfoSystem.Tests
 	public class DocumentSaveServiceTests
 	{
 		[Fact]
-		public void SaveDocument_WhenPathIsOutsideSyncRoot_SavesDirectly ()
+		public void SaveDocument_WhenFinalFileExists_SavesDirectlyToFinalPathAfterCreatingAdjacentBackup ()
 		{
 			List<string> logs = new List<string> ();
 			List<string> savedPaths = new List<string> ();
-			bool buildLocalWorkCopyPathCalled = false;
-			bool registerLocalWorkCopyCalled = false;
-			const string requestedFinalPath = @"C:\requested\outside.docx";
-			const string preparedFinalPath = @"C:\resolved\outside.docx";
+			List<string> backupFilesDuringSave = new List<string> ();
+			string backupContentDuringSave = string.Empty;
+			using TestFolderScope scope = new TestFolderScope ();
+			string preparedFinalPath = Path.Combine (scope.RootPath, "inside.docx");
+			File.WriteAllText (preparedFinalPath, "old");
 
 			using TestServiceContext context = CreateContext (
 				logs,
 				new DocumentSaveService.DocumentSaveServiceTestHooks
 				{
 					PrepareSavePath = _ => preparedFinalPath,
-					IsUnderSyncRoot = _ => false,
-					BuildLocalWorkCopyPath = _ =>
-					{
-						buildLocalWorkCopyPathCalled = true;
-						return @"C:\temp\unused.docx";
-					},
 					SaveDocumentAsDocx = (document, savePath) =>
 					{
 						savedPaths.Add (savePath);
+						backupFilesDuringSave.AddRange (Directory.GetFiles (scope.RootPath, "inside.bak_*" + Path.GetExtension (preparedFinalPath)));
+						backupContentDuringSave = File.ReadAllText (backupFilesDuringSave[0]);
+						File.WriteAllText (savePath, "new");
 						return savePath;
-					},
-					RegisterLocalWorkCopy = (application, localPath, finalPath) => registerLocalWorkCopyCalled = true
-				});
-
-			DocumentSaveResult result = context.Service.SaveDocument (new object (), new object (), requestedFinalPath);
-
-			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
-			Assert.False (buildLocalWorkCopyPathCalled);
-			Assert.False (registerLocalWorkCopyCalled);
-			Assert.False (result.IsLocalWorkCopy);
-			Assert.Equal (preparedFinalPath, result.SavedPath);
-			Assert.Equal (preparedFinalPath, result.FinalPath);
-			Assert.DoesNotContain (logs, message => message.Contains ("fell back to direct save"));
-			Assert.DoesNotContain (logs, message => message.Contains ("saved via local work copy"));
-		}
-
-		[Fact]
-		public void SaveDocument_WhenLocalWorkCopyPathExists_SavesViaLocalWorkCopy ()
-		{
-			List<string> logs = new List<string> ();
-			List<string> savedPaths = new List<string> ();
-			object registeredWordApplication = null;
-			string registeredLocalPath = null;
-			string registeredFinalPath = null;
-			const string preparedFinalPath = @"C:\Users\kazu2\OneDrive\Docs\inside.docx";
-			const string localWorkCopyPath = @"C:\Users\kazu2\AppData\Local\CaseDocTemp\inside.docx";
-			object wordApplication = new object ();
-
-			using TestServiceContext context = CreateContext (
-				logs,
-				new DocumentSaveService.DocumentSaveServiceTestHooks
-				{
-					PrepareSavePath = _ => preparedFinalPath,
-					IsUnderSyncRoot = _ => true,
-					BuildLocalWorkCopyPath = _ => localWorkCopyPath,
-					SaveDocumentAsDocx = (document, savePath) =>
-					{
-						savedPaths.Add (savePath);
-						return savePath;
-					},
-					RegisterLocalWorkCopy = (application, localPath, finalPath) =>
-					{
-						registeredWordApplication = application;
-						registeredLocalPath = localPath;
-						registeredFinalPath = finalPath;
 					}
-				});
-
-			DocumentSaveResult result = context.Service.SaveDocument (wordApplication, new object (), preparedFinalPath);
-
-			Assert.Equal (new[] { localWorkCopyPath }, savedPaths);
-			Assert.Same (wordApplication, registeredWordApplication);
-			Assert.Equal (localWorkCopyPath, registeredLocalPath);
-			Assert.Equal (preparedFinalPath, registeredFinalPath);
-			Assert.True (result.IsLocalWorkCopy);
-			Assert.Equal (localWorkCopyPath, result.SavedPath);
-			Assert.Equal (preparedFinalPath, result.FinalPath);
-			Assert.Contains (logs, message => message.Contains ("saved via local work copy"));
-		}
-
-		[Fact]
-		public void SaveDocument_WhenLocalWorkCopyPathIsMissing_FallsBackToDirectSave ()
-		{
-			List<string> logs = new List<string> ();
-			List<string> savedPaths = new List<string> ();
-			bool registerLocalWorkCopyCalled = false;
-			const string preparedFinalPath = @"C:\Users\kazu2\OneDrive\Docs\fallback.docx";
-
-			using TestServiceContext context = CreateContext (
-				logs,
-				new DocumentSaveService.DocumentSaveServiceTestHooks
-				{
-					PrepareSavePath = _ => preparedFinalPath,
-					IsUnderSyncRoot = _ => true,
-					BuildLocalWorkCopyPath = _ => string.Empty,
-					SaveDocumentAsDocx = (document, savePath) =>
-					{
-						savedPaths.Add (savePath);
-						return savePath;
-					},
-					RegisterLocalWorkCopy = (application, localPath, finalPath) => registerLocalWorkCopyCalled = true
 				});
 
 			DocumentSaveResult result = context.Service.SaveDocument (new object (), new object (), preparedFinalPath);
 
 			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
-			Assert.False (registerLocalWorkCopyCalled);
+			Assert.Single (backupFilesDuringSave);
+			Assert.Equal ("old", backupContentDuringSave);
+			Assert.Equal ("new", File.ReadAllText (preparedFinalPath));
+			Assert.Empty (Directory.GetFiles (scope.RootPath, "inside.bak_*" + Path.GetExtension (preparedFinalPath)));
+			Assert.Contains (logs, log => log.Contains ("SaveContext mode=Overwrite location=NonSyncRoot"));
 			Assert.False (result.IsLocalWorkCopy);
 			Assert.Equal (preparedFinalPath, result.SavedPath);
 			Assert.Equal (preparedFinalPath, result.FinalPath);
-			Assert.Contains (logs, message => message.Contains ("fell back to direct save"));
+		}
+
+		[Fact]
+		public void SaveDocument_WhenFinalFileDoesNotExist_SavesDirectlyWithoutCreatingBackup ()
+		{
+			List<string> logs = new List<string> ();
+			List<string> savedPaths = new List<string> ();
+			using TestFolderScope scope = new TestFolderScope ();
+			string preparedFinalPath = Path.Combine (scope.RootPath, "new.docx");
+
+			using TestServiceContext context = CreateContext (
+				logs,
+				new DocumentSaveService.DocumentSaveServiceTestHooks
+				{
+					PrepareSavePath = _ => preparedFinalPath,
+					SaveDocumentAsDocx = (document, savePath) =>
+					{
+						savedPaths.Add (savePath);
+						Assert.Empty (Directory.GetFiles (scope.RootPath, "new.bak_*" + Path.GetExtension (preparedFinalPath)));
+						File.WriteAllText (savePath, "new");
+						return savePath;
+					}
+				});
+
+			DocumentSaveResult result = context.Service.SaveDocument (new object (), new object (), preparedFinalPath);
+
+			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
+			Assert.Equal ("new", File.ReadAllText (preparedFinalPath));
+			Assert.Empty (Directory.GetFiles (scope.RootPath, "new.bak_*" + Path.GetExtension (preparedFinalPath)));
+			Assert.Contains (logs, log => log.Contains ("SaveContext mode=CreateNew location=NonSyncRoot"));
+			Assert.False (result.IsLocalWorkCopy);
+			Assert.Equal (preparedFinalPath, result.SavedPath);
+			Assert.Equal (preparedFinalPath, result.FinalPath);
+		}
+
+		[Fact]
+		public void SaveDocument_WhenFinalPathIsUnderSyncRoot_LogsSyncRootSaveContext ()
+		{
+			List<string> logs = new List<string> ();
+			string originalOneDrive = Environment.GetEnvironmentVariable ("OneDrive");
+			using TestFolderScope scope = new TestFolderScope ();
+			string preparedFinalPath = Path.Combine (scope.RootPath, "sync.docx");
+
+			try {
+				Environment.SetEnvironmentVariable ("OneDrive", scope.RootPath);
+				using TestServiceContext context = CreateContext (
+					logs,
+					new DocumentSaveService.DocumentSaveServiceTestHooks
+					{
+						PrepareSavePath = _ => preparedFinalPath,
+						SaveDocumentAsDocx = (document, savePath) =>
+						{
+							File.WriteAllText (savePath, "new");
+							return savePath;
+						}
+					});
+
+				context.Service.SaveDocument (new object (), new object (), preparedFinalPath);
+			} finally {
+				Environment.SetEnvironmentVariable ("OneDrive", originalOneDrive);
+			}
+
+			Assert.Contains (logs, log => log.Contains ("SaveContext mode=CreateNew location=SyncRoot"));
+		}
+
+		[Fact]
+		public void SaveDocument_WhenDirectSaveFails_RestoresExistingFinalFileFromBackup ()
+		{
+			List<string> logs = new List<string> ();
+			List<string> savedPaths = new List<string> ();
+			using TestFolderScope scope = new TestFolderScope ();
+			string preparedFinalPath = Path.Combine (scope.RootPath, "restore.docx");
+			File.WriteAllText (preparedFinalPath, "old");
+
+			using TestServiceContext context = CreateContext (
+				logs,
+				new DocumentSaveService.DocumentSaveServiceTestHooks
+				{
+					PrepareSavePath = _ => preparedFinalPath,
+					SaveDocumentAsDocx = (document, savePath) =>
+					{
+						savedPaths.Add (savePath);
+						File.WriteAllText (savePath, "partial");
+						throw new IOException ("save failed");
+					}
+				});
+
+			IOException exception = Assert.Throws<IOException> (() => context.Service.SaveDocument (new object (), new object (), preparedFinalPath));
+
+			Assert.Equal ("save failed", exception.Message);
+			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
+			Assert.Equal ("old", File.ReadAllText (preparedFinalPath));
+			Assert.Empty (Directory.GetFiles (scope.RootPath, "restore.bak_*" + Path.GetExtension (preparedFinalPath)));
 		}
 
 		private static TestServiceContext CreateContext (List<string> logs, DocumentSaveService.DocumentSaveServiceTestHooks testHooks)
@@ -131,27 +147,43 @@ namespace CaseInfoSystem.Tests
 			Logger logger = OrchestrationTestSupport.CreateLogger (logs);
 			var pathCompatibilityService = new PathCompatibilityService ();
 			var wordInteropService = new WordInteropService (pathCompatibilityService, logger);
-			var localWorkCopyService = new LocalWorkCopyService (pathCompatibilityService, wordInteropService, logger);
 			var documentOutputService = new DocumentOutputService (new ExcelInteropService (), pathCompatibilityService, logger);
-			var service = new DocumentSaveService (documentOutputService, pathCompatibilityService, localWorkCopyService, wordInteropService, logger, testHooks);
-			return new TestServiceContext (service, localWorkCopyService);
+			var service = new DocumentSaveService (documentOutputService, wordInteropService, logger, testHooks);
+			return new TestServiceContext (service);
 		}
 
-		private sealed class TestServiceContext : System.IDisposable
+		private sealed class TestServiceContext : IDisposable
 		{
-			internal TestServiceContext (DocumentSaveService service, LocalWorkCopyService localWorkCopyService)
+			internal TestServiceContext (DocumentSaveService service)
 			{
 				Service = service;
-				_localWorkCopyService = localWorkCopyService;
 			}
 
 			internal DocumentSaveService Service { get; }
 
-			private readonly LocalWorkCopyService _localWorkCopyService;
+			public void Dispose ()
+			{
+			}
+		}
+
+		private sealed class TestFolderScope : IDisposable
+		{
+			internal TestFolderScope ()
+			{
+				RootPath = Path.Combine (Path.GetTempPath (), "CaseInfoSystem.DocumentSaveServiceTests." + Guid.NewGuid ().ToString ("N"));
+				Directory.CreateDirectory (RootPath);
+			}
+
+			internal string RootPath { get; }
 
 			public void Dispose ()
 			{
-				_localWorkCopyService.Dispose ();
+				try {
+					if (Directory.Exists (RootPath)) {
+						Directory.Delete (RootPath, recursive: true);
+					}
+				} catch {
+				}
 			}
 		}
 	}

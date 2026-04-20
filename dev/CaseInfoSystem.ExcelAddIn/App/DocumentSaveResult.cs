@@ -1,4 +1,4 @@
-﻿namespace CaseInfoSystem.ExcelAddIn.App
+namespace CaseInfoSystem.ExcelAddIn.App
 {
     /// <summary>
     internal sealed class DocumentSaveResult

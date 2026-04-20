@@ -43,7 +43,7 @@ namespace CaseInfoSystem.Tests
 			Assert.False (createdNewSecond);
 			Assert.Equal (1, getActiveObjectCalls);
 			Assert.Equal (0, createInstanceCalls);
-			Assert.Empty (logs);
+			Assert.DoesNotContain (logs, message => message.Contains ("failed."));
 		}
 
 		[Fact]

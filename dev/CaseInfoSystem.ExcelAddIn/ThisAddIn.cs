@@ -25,6 +25,10 @@ namespace CaseInfoSystem.ExcelAddIn
         private const string SystemRootFolderName = "案件情報System";
         private const string TraceLogFileName = "CaseInfoSystem.ExcelAddIn_trace.log";
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
+        private static readonly bool DisableSheetActivateForFreezeIsolation = false;
+        private static readonly bool DisableSheetSelectionChangeForFreezeIsolation = false;
+        private static readonly bool DisableSheetChangeForFreezeIsolation = false;
+        private static readonly bool DisableCaseWordWarmupForFreezeIsolation = true;
         private const string KernelSheetCommandSheetCodeName = "shCaseList";
         private const string KernelSheetCommandCellAddress = "AT1";
         private const string ProductTitle = "案件情報System";
@@ -46,7 +50,6 @@ namespace CaseInfoSystem.ExcelAddIn
         private DocumentNamePromptService _documentNamePromptService;
         private DocumentExecutionModeService _documentExecutionModeService;
         private WordInteropService _wordInteropService;
-        private LocalWorkCopyService _localWorkCopyService;
 
         // workbook ライフサイクル
         private KernelWorkbookService _kernelWorkbookService;
@@ -165,7 +168,6 @@ namespace CaseInfoSystem.ExcelAddIn
             _documentNamePromptService = compositionRoot.DocumentNamePromptService;
             _documentExecutionModeService = compositionRoot.DocumentExecutionModeService;
             _wordInteropService = compositionRoot.WordInteropService;
-            _localWorkCopyService = compositionRoot.LocalWorkCopyService;
 
             // workbook ライフサイクル
             _kernelWorkbookService = compositionRoot.KernelWorkbookService;
@@ -214,7 +216,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 StopWordWarmupTimer();
-                _localWorkCopyService?.Dispose();
 
                 _logger.Info("ThisAddIn_Shutdown fired.");
                 return;
@@ -246,9 +247,18 @@ namespace CaseInfoSystem.ExcelAddIn
             ((Excel.AppEvents_Event)Application).WorkbookBeforeSave += Application_WorkbookBeforeSave;
             ((Excel.AppEvents_Event)Application).WorkbookBeforeClose += Application_WorkbookBeforeClose;
             ((Excel.AppEvents_Event)Application).WindowActivate += Application_WindowActivate;
-            ((Excel.AppEvents_Event)Application).SheetActivate += Application_SheetActivate;
-            ((Excel.AppEvents_Event)Application).SheetSelectionChange += Application_SheetSelectionChange;
-            ((Excel.AppEvents_Event)Application).SheetChange += Application_SheetChange;
+            if (!DisableSheetActivateForFreezeIsolation)
+            {
+                ((Excel.AppEvents_Event)Application).SheetActivate += Application_SheetActivate;
+            }
+            if (!DisableSheetSelectionChangeForFreezeIsolation)
+            {
+                ((Excel.AppEvents_Event)Application).SheetSelectionChange += Application_SheetSelectionChange;
+            }
+            if (!DisableSheetChangeForFreezeIsolation)
+            {
+                ((Excel.AppEvents_Event)Application).SheetChange += Application_SheetChange;
+            }
             ((Excel.AppEvents_Event)Application).AfterCalculate += Application_AfterCalculate;
         }
 
@@ -259,9 +269,18 @@ namespace CaseInfoSystem.ExcelAddIn
             ((Excel.AppEvents_Event)Application).WorkbookBeforeSave -= Application_WorkbookBeforeSave;
             ((Excel.AppEvents_Event)Application).WorkbookBeforeClose -= Application_WorkbookBeforeClose;
             ((Excel.AppEvents_Event)Application).WindowActivate -= Application_WindowActivate;
-            ((Excel.AppEvents_Event)Application).SheetActivate -= Application_SheetActivate;
-            ((Excel.AppEvents_Event)Application).SheetSelectionChange -= Application_SheetSelectionChange;
-            ((Excel.AppEvents_Event)Application).SheetChange -= Application_SheetChange;
+            if (!DisableSheetActivateForFreezeIsolation)
+            {
+                ((Excel.AppEvents_Event)Application).SheetActivate -= Application_SheetActivate;
+            }
+            if (!DisableSheetSelectionChangeForFreezeIsolation)
+            {
+                ((Excel.AppEvents_Event)Application).SheetSelectionChange -= Application_SheetSelectionChange;
+            }
+            if (!DisableSheetChangeForFreezeIsolation)
+            {
+                ((Excel.AppEvents_Event)Application).SheetChange -= Application_SheetChange;
+            }
             ((Excel.AppEvents_Event)Application).AfterCalculate -= Application_AfterCalculate;
         }
 
@@ -386,6 +405,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private void Application_SheetActivate(object sh)
         {
+            _logger?.Debug("Application_SheetActivate", "entry.");
             EventBoundaryGuard.Execute(_logger, nameof(Application_SheetActivate), () =>
             {
                 _accountingWorkbookLifecycleService?.HandleSheetActivated(sh);
@@ -393,10 +413,12 @@ namespace CaseInfoSystem.ExcelAddIn
                 _caseWorkbookLifecycleService?.HandleSheetActivated(sh);
                 RefreshTaskPane("SheetActivate", null, null);
             });
+            _logger?.Debug("Application_SheetActivate", "returned.");
         }
 
         private void Application_SheetSelectionChange(object sh, Excel.Range target)
         {
+            _logger?.Debug("Application_SheetSelectionChange", "entry.");
             EventBoundaryGuard.Execute(_logger, nameof(Application_SheetSelectionChange), () =>
             {
                 string sheetName = SafeSheetName(sh);
@@ -404,10 +426,12 @@ namespace CaseInfoSystem.ExcelAddIn
                 _logger?.Debug("Application_SheetSelectionChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
                 _accountingSheetControlService?.HandleSheetSelectionChange(sh, target);
             });
+            _logger?.Debug("Application_SheetSelectionChange", "returned.");
         }
 
         private void Application_SheetChange(object sh, Excel.Range target)
         {
+            _logger?.Debug("Application_SheetChange", "entry.");
             EventBoundaryGuard.Execute(_logger, nameof(Application_SheetChange), () =>
             {
                 string sheetName = SafeSheetName(sh);
@@ -417,6 +441,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _caseWorkbookLifecycleService?.HandleSheetChanged((sh as Excel.Worksheet)?.Parent as Excel.Workbook);
                 _accountingSheetControlService?.HandleSheetChange(sh, target);
             });
+            _logger?.Debug("Application_SheetChange", "returned.");
         }
 
         private void Application_AfterCalculate()
@@ -425,7 +450,9 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 _logger?.Debug("Application_AfterCalculate", "fired.");
                 _accountingSheetControlService?.HandleAfterCalculate(Application);
+                _logger?.Debug("Application_AfterCalculate", "after AccountingSheetControlService.HandleAfterCalculate returned.");
             });
+            _logger?.Debug("Application_AfterCalculate", "EventBoundaryGuard.Execute returned.");
         }
 
         private void HandleKernelSheetCommand(Excel.Worksheet worksheet, Excel.Range target)
@@ -1383,6 +1410,12 @@ namespace CaseInfoSystem.ExcelAddIn
         // Word warm-up
         private void ScheduleWordWarmup()
         {
+            if (DisableCaseWordWarmupForFreezeIsolation)
+            {
+                _logger?.Info("Word warm-up skipped for freeze isolation.");
+                return;
+            }
+
             if (_wordInteropService == null)
             {
                 return;

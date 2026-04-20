@@ -105,14 +105,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 throw new InvalidOperationException("案件データを管理定義に従って解決できませんでした。");
             }
 
+            var totalStopwatch = Stopwatch.StartNew();
+            var phaseStopwatch = Stopwatch.StartNew();
             string documentName = ResolveDocumentName(workbook, templateSpec);
+            _logger.Debug("DocumentCreateService.Prepare", "DocumentNameResolved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
+            phaseStopwatch.Restart();
             string outputPath = _documentOutputService.BuildDocumentOutputPath(workbook, documentName, caseContext.CustomerName);
+            _logger.Debug("DocumentCreateService.Prepare", "OutputPathResolved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed) + " output=" + (outputPath ?? string.Empty));
+            phaseStopwatch.Restart();
             if (string.IsNullOrWhiteSpace(outputPath))
             {
                 throw new InvalidOperationException("出力先パスを作成できませんでした。");
             }
 
             IReadOnlyDictionary<string, string> mergeData = _mergeDataBuilder.BuildMergeData(caseContext);
+            _logger.Debug("DocumentCreateService.Prepare", "MergeDataBuilt elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed) + " mergeFieldCount=" + mergeData.Count.ToString());
             ExecuteWordCreate(workbook, templateSpec, outputPath, mergeData, documentName);
         }
 

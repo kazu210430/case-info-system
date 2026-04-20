@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 
 namespace CaseInfoSystem.ExcelAddIn.App
@@ -9,24 +11,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly PathCompatibilityService _pathCompatibilityService;
 
-		private readonly LocalWorkCopyService _localWorkCopyService;
-
 		private readonly WordInteropService _wordInteropService;
 
 		private readonly Logger _logger;
 
 		private readonly DocumentSaveServiceTestHooks _testHooks;
 
-		internal DocumentSaveService (DocumentOutputService documentOutputService, PathCompatibilityService pathCompatibilityService, LocalWorkCopyService localWorkCopyService, WordInteropService wordInteropService, Logger logger)
-			: this (documentOutputService, pathCompatibilityService, localWorkCopyService, wordInteropService, logger, testHooks: null)
+		internal DocumentSaveService (DocumentOutputService documentOutputService, WordInteropService wordInteropService, Logger logger)
+			: this (documentOutputService, wordInteropService, logger, testHooks: null)
 		{
 		}
 
-		internal DocumentSaveService (DocumentOutputService documentOutputService, PathCompatibilityService pathCompatibilityService, LocalWorkCopyService localWorkCopyService, WordInteropService wordInteropService, Logger logger, DocumentSaveServiceTestHooks testHooks)
+		internal DocumentSaveService (DocumentOutputService documentOutputService, WordInteropService wordInteropService, Logger logger, DocumentSaveServiceTestHooks testHooks)
 		{
 			_documentOutputService = documentOutputService ?? throw new ArgumentNullException ("documentOutputService");
-			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
-			_localWorkCopyService = localWorkCopyService ?? throw new ArgumentNullException ("localWorkCopyService");
+			_pathCompatibilityService = new PathCompatibilityService ();
 			_wordInteropService = wordInteropService ?? throw new ArgumentNullException ("wordInteropService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 			_testHooks = testHooks;
@@ -37,24 +36,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (wordDocument == null) {
 				throw new ArgumentNullException ("wordDocument");
 			}
-			string text = PrepareSavePath (requestedFinalPath);
-			if (text.Length == 0) {
+
+			Stopwatch totalStopwatch = Stopwatch.StartNew ();
+			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
+			string finalPath = PrepareSavePath (requestedFinalPath);
+			_logger.Debug ("DocumentSaveService.SaveDocument", "PrepareSavePath elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + (finalPath ?? string.Empty));
+			if (finalPath.Length == 0) {
 				throw new InvalidOperationException ("保存先パスを準備できませんでした。");
 			}
-			if (!IsUnderSyncRoot (text)) {
-				string savedPath = SaveDocumentAsDocx (wordDocument, text);
-				return new DocumentSaveResult (savedPath, text, isLocalWorkCopy: false);
-			}
-			string text2 = BuildLocalWorkCopyPath (text);
-			if (text2.Length == 0) {
-				_logger.Info ("DocumentSaveService fell back to direct save because local work copy path was not prepared. final=" + text);
-				string savedPath2 = SaveDocumentAsDocx (wordDocument, text);
-				return new DocumentSaveResult (savedPath2, text, isLocalWorkCopy: false);
-			}
-			string text3 = SaveDocumentAsDocx (wordDocument, text2);
-			RegisterLocalWorkCopy (wordApplication, text3, text);
-			_logger.Info ("DocumentSaveService saved via local work copy. local=" + text3 + ", final=" + text);
-			return new DocumentSaveResult (text3, text, isLocalWorkCopy: true);
+
+			string savedPath = SaveDirectWithBackup (wordDocument, finalPath);
+			_logger.Info ("DocumentSaveService direct save completed. final=" + finalPath + ", totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed));
+			return new DocumentSaveResult (savedPath, finalPath, isLocalWorkCopy: false);
 		}
 
 		private string PrepareSavePath (string requestedFinalPath)
@@ -65,19 +58,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return _documentOutputService.PrepareSavePath (requestedFinalPath);
 		}
 
-		private bool IsUnderSyncRoot (string finalPath)
-		{
-			return (_testHooks != null && _testHooks.IsUnderSyncRoot != null) ? _testHooks.IsUnderSyncRoot (finalPath) : _pathCompatibilityService.IsUnderSyncRoot (finalPath);
-		}
-
-		private string BuildLocalWorkCopyPath (string finalPath)
-		{
-			if (_testHooks != null && _testHooks.BuildLocalWorkCopyPath != null) {
-				return _testHooks.BuildLocalWorkCopyPath (finalPath) ?? string.Empty;
-			}
-			return _localWorkCopyService.BuildLocalWorkCopyPath (finalPath);
-		}
-
 		private string SaveDocumentAsDocx (object wordDocument, string savePath)
 		{
 			if (_testHooks != null && _testHooks.SaveDocumentAsDocx != null) {
@@ -86,26 +66,113 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return _wordInteropService.SaveDocumentAsDocx (wordDocument, savePath);
 		}
 
-		private void RegisterLocalWorkCopy (object wordApplication, string localPath, string finalPath)
+		private string SaveDirectWithBackup (object wordDocument, string finalPath)
 		{
-			if (_testHooks != null && _testHooks.RegisterLocalWorkCopy != null) {
-				_testHooks.RegisterLocalWorkCopy (wordApplication, localPath, finalPath);
+			Stopwatch totalStopwatch = Stopwatch.StartNew ();
+			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
+			string backupPath = BuildBackupPath (finalPath);
+			bool finalExists = FileExistsSafe (finalPath);
+			bool isUnderSyncRoot = _pathCompatibilityService.IsUnderSyncRoot (finalPath);
+			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveContext mode=" + FormatSaveMode (finalExists) + " location=" + FormatSaveLocation (isUnderSyncRoot) + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+			bool backupCreated = false;
+			if (finalExists) {
+				CreateBackupFile (finalPath, backupPath);
+				backupCreated = true;
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupCreated elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+			} else {
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupSkipped elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+			}
+
+			phaseStopwatch.Restart ();
+			try {
+				string savedPath = SaveDocumentAsDocx (wordDocument, finalPath);
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveDocumentAsDocx elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				phaseStopwatch.Restart ();
+				TryDeleteFileQuietly (backupPath);
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupCleanup elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				return savedPath;
+			} catch {
+				if (backupCreated) {
+					RestoreBackupFileIfPossible (backupPath, finalPath);
+					_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupRestore elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				}
+				throw;
+			}
+		}
+
+		private bool FileExistsSafe (string path)
+		{
+			return _pathCompatibilityService.FileExistsSafe (path);
+		}
+
+		private static string BuildBackupPath (string finalPath)
+		{
+			string directoryName = Path.GetDirectoryName (finalPath) ?? string.Empty;
+			string fileNameWithoutExtension = Path.GetFileNameWithoutExtension (finalPath);
+			string extension = Path.GetExtension (finalPath);
+			if (fileNameWithoutExtension.Length == 0) {
+				fileNameWithoutExtension = "document";
+			}
+			string fileName = fileNameWithoutExtension + ".bak_" + Guid.NewGuid ().ToString ("N") + extension;
+			return Path.Combine (directoryName, fileName);
+		}
+
+		private void CreateBackupFile (string finalPath, string backupPath)
+		{
+			try {
+				File.Copy (finalPath, backupPath, overwrite: false);
+			} catch (Exception exception) {
+				_logger.Error ("DocumentSaveService failed to create backup file before save.", exception);
+				throw new IOException ("保存前バックアップの作成に失敗しました。", exception);
+			}
+		}
+
+		private void RestoreBackupFileIfPossible (string backupPath, string finalPath)
+		{
+			if (!FileExistsSafe (backupPath)) {
 				return;
 			}
-			_localWorkCopyService.RegisterLocalWorkCopy (wordApplication, localPath, finalPath);
+			try {
+				File.Copy (backupPath, finalPath, overwrite: true);
+				TryDeleteFileQuietly (backupPath);
+			} catch (Exception exception) {
+				_logger.Warn ("DocumentSaveService could not restore backup file after save failure. backup=" + backupPath + ", final=" + finalPath + ", error=" + exception.Message);
+			}
+		}
+
+		private static void TryDeleteFileQuietly (string path)
+		{
+			if (string.IsNullOrWhiteSpace (path)) {
+				return;
+			}
+			try {
+				if (File.Exists (path)) {
+					File.Delete (path);
+				}
+			} catch {
+			}
 		}
 
 		internal sealed class DocumentSaveServiceTestHooks
 		{
 			internal Func<string, string> PrepareSavePath { get; set; }
 
-			internal Func<string, bool> IsUnderSyncRoot { get; set; }
-
-			internal Func<string, string> BuildLocalWorkCopyPath { get; set; }
-
 			internal Func<object, string, string> SaveDocumentAsDocx { get; set; }
+		}
 
-			internal Action<object, string, string> RegisterLocalWorkCopy { get; set; }
+		private static string FormatElapsedSeconds (TimeSpan elapsed)
+		{
+			return elapsed.TotalSeconds.ToString ("0.000");
+		}
+
+		private static string FormatSaveMode (bool finalExists)
+		{
+			return finalExists ? "Overwrite" : "CreateNew";
+		}
+
+		private static string FormatSaveLocation (bool isUnderSyncRoot)
+		{
+			return isUnderSyncRoot ? "SyncRoot" : "NonSyncRoot";
 		}
 	}
 }

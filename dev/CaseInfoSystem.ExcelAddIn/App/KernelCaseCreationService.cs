@@ -98,7 +98,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return KernelNamingService.BuildCaseBookName (customerName, extension);
 		}
 
-		private KernelCaseCreationResult CreateSavedCase (Workbook kernelWorkbook, KernelCaseCreationPlan plan)
+		internal KernelCaseCreationResult CreateSavedCase (Workbook kernelWorkbook, KernelCaseCreationPlan plan)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
 			CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession hiddenCaseWorkbookSession = null;
@@ -147,6 +147,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private string PrepareWorkingCaseWorkbookPath (string finalCaseWorkbookPath, string reason, Stopwatch stopwatch)
 		{
+			// OneDrive など同期配下の CASE だけは、hidden Excel による初期化中のフリーズ回避のため
+			// 一時的にローカル作業コピーへ退避する。適用範囲は CASE 初期化中のみで、表示・運用は final path に戻す。
 			if (!_kernelCasePathService.IsUnderSyncRoot (finalCaseWorkbookPath)) {
 				return finalCaseWorkbookPath;
 			}
@@ -162,6 +164,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void FinalizeWorkingCaseWorkbookPath (string workingCaseWorkbookPath, string finalCaseWorkbookPath, string reason, Stopwatch stopwatch)
 		{
+			// 作業コピーは初期化が終わった時点で final path へ戻し、CASE の実体を temp に残さない。
 			if (!string.Equals (workingCaseWorkbookPath, finalCaseWorkbookPath, StringComparison.OrdinalIgnoreCase)) {
 				if (!_kernelCasePathService.MoveLocalWorkingCaseToFinalPath (workingCaseWorkbookPath, finalCaseWorkbookPath)) {
 					throw new IOException ("Initialized CASE workbook could not be moved to final path.");

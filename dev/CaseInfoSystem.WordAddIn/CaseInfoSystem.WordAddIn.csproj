@@ -15,6 +15,9 @@
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <BootstrapperComponentsLocation>HomeSite</BootstrapperComponentsLocation>
     <ResolveComReferenceSilent>true</ResolveComReferenceSilent>
+    <GeneratedDeployVersion Condition="'$(GeneratedDeployVersion)' == ''">$([System.DateTime]::Now.ToString('1.yyMM.ddHH.mmss'))</GeneratedDeployVersion>
+    <ApplicationVersion>$(GeneratedDeployVersion)</ApplicationVersion>
+    <ApplicationRevision>0</ApplicationRevision>
   </PropertyGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.VSTORuntime.4.0">

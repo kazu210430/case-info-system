@@ -144,20 +144,45 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		internal void HandleAfterCalculate (Microsoft.Office.Interop.Excel.Application application)
 		{
-			if (application == null || _suppressAfterCalculateHandling || _suppressCheckboxEventHandling) {
+			if (application == null) {
+				_logger.Debug ("AccountingSheetControlService", "HandleAfterCalculate enter. guard=ApplicationNull");
 				return;
 			}
+			if (_suppressAfterCalculateHandling || _suppressCheckboxEventHandling) {
+				_logger.Debug ("AccountingSheetControlService", "HandleAfterCalculate enter. guard=Suppressed, suppressAfterCalculate=" + _suppressAfterCalculateHandling + ", suppressCheckbox=" + _suppressCheckboxEventHandling);
+				return;
+			}
+			_logger.Debug ("AccountingSheetControlService", "HandleAfterCalculate enter. guard=Passed");
 			if (IsCutCopyInProgress (application)) {
-				_logger.Debug ("AccountingSheetControlService", "HandleAfterCalculate skipped because cut/copy mode is active.");
+				_logger.Debug ("AccountingSheetControlService", "HandleAfterCalculate branch=SkippedCutCopyMode");
 				return;
 			}
 			Workbook workbook = null;
 			try {
 				_suppressAfterCalculateHandling = true;
 				workbook = application.ActiveWorkbook;
-				if (_workbookRoleResolver.IsAccountingWorkbook (workbook) && !ShouldSuspendForActiveSheet (application, workbook)) {
+				string workbookKey = GetWorkbookKey (workbook);
+				string activeSheetName = string.Empty;
+				string activeWindowCaption = string.Empty;
+				try {
+					activeSheetName = (application.ActiveSheet as Worksheet)?.CodeName ?? (application.ActiveSheet as Worksheet)?.Name ?? string.Empty;
+				} catch {
+					activeSheetName = string.Empty;
+				}
+				try {
+					activeWindowCaption = application.ActiveWindow?.Caption as string ?? string.Empty;
+				} catch {
+					activeWindowCaption = string.Empty;
+				}
+				bool isAccountingWorkbook = _workbookRoleResolver.IsAccountingWorkbook (workbook);
+				bool shouldSuspend = isAccountingWorkbook && ShouldSuspendForActiveSheet (application, workbook);
+				_logger.Info ("AccountingSheetControlService HandleAfterCalculate target workbook=" + workbookKey + ", window=" + activeWindowCaption + ", activeSheet=" + activeSheetName + ", role=" + (isAccountingWorkbook ? "Accounting" : "Other") + ", shouldSuspend=" + shouldSuspend);
+				if (isAccountingWorkbook && !shouldSuspend) {
 					EnsureVstoManagedControls (workbook);
 					TrackWorkbookCheckboxChanges (workbook);
+					_logger.Info ("AccountingSheetControlService HandleAfterCalculate completed. workbook=" + workbookKey + ", branch=AccountingHandled");
+				} else {
+					_logger.Info ("AccountingSheetControlService HandleAfterCalculate completed. workbook=" + workbookKey + ", branch=" + (isAccountingWorkbook ? "Suspended" : "NonAccountingWorkbook"));
 				}
 			} catch (Exception exception) {
 				_logger.Error ("AccountingSheetControlService.HandleAfterCalculate failed.", exception);

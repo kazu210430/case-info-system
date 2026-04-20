@@ -256,7 +256,6 @@
     <Compile Include="Infrastructure\FolderWindowService.cs" />
     <Compile Include="Infrastructure\KernelWorkbookResolverService.cs" />
     <Compile Include="Infrastructure\Logger.cs" />
-    <Compile Include="Infrastructure\LocalWorkCopyService.cs" />
     <Compile Include="Infrastructure\MasterTemplateCatalogService.cs" />
     <Compile Include="Infrastructure\PathCompatibilityService.cs" />
     <Compile Include="Infrastructure\WorkbookClipboardPreservationService.cs" />

@@ -115,6 +115,51 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         }
     }
 
+    internal sealed class FolderWindowService
+    {
+        internal Action<string, string> OnOpenFolder { get; set; }
+
+        internal void OpenFolder(string folderPath, string reason)
+        {
+            OnOpenFolder?.Invoke(folderPath, reason);
+        }
+    }
+
+    internal sealed class CaseWorkbookOpenStrategy
+    {
+        internal Func<string, HiddenCaseWorkbookSession> OnOpenHiddenWorkbook { get; set; }
+
+        internal HiddenCaseWorkbookSession OpenHiddenWorkbook(string caseWorkbookPath)
+        {
+            return OnOpenHiddenWorkbook == null
+                ? new HiddenCaseWorkbookSession(new Excel.Application(), new Excel.Workbook { FullName = caseWorkbookPath ?? string.Empty })
+                : OnOpenHiddenWorkbook(caseWorkbookPath);
+        }
+
+        internal sealed class HiddenCaseWorkbookSession
+        {
+            internal HiddenCaseWorkbookSession(Excel.Application application, Excel.Workbook workbook)
+            {
+                Application = application;
+                Workbook = workbook;
+            }
+
+            internal Excel.Application Application { get; }
+
+            internal Excel.Workbook Workbook { get; }
+        }
+    }
+
+    internal sealed class CaseWorkbookInitializer
+    {
+        internal Action<Excel.Workbook, Excel.Workbook, KernelCaseCreationPlan> OnInitializeForHiddenCreate { get; set; }
+
+        internal void InitializeForHiddenCreate(Excel.Workbook kernelWorkbook, Excel.Workbook caseWorkbook, KernelCaseCreationPlan plan)
+        {
+            OnInitializeForHiddenCreate?.Invoke(kernelWorkbook, caseWorkbook, plan);
+        }
+    }
+
     internal sealed class TaskPaneSnapshotBuilderService
     {
         internal sealed class TaskPaneBuildResult
@@ -143,6 +188,73 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    internal sealed class KernelCasePathService
+    {
+        internal Func<Excel.Workbook, string> OnResolveSystemRoot { get; set; }
+
+        internal Func<string, string> OnResolveBaseWorkbookPath { get; set; }
+
+        internal Func<KernelCaseCreationRequest, string, string> OnResolveCaseFolderPath { get; set; }
+
+        internal Func<string, bool> OnEnsureFolderExists { get; set; }
+
+        internal Func<string, string> OnResolveCaseWorkbookExtension { get; set; }
+
+        internal Func<string, string, string> OnBuildCaseWorkbookPath { get; set; }
+
+        internal Func<string, bool> OnIsUnderSyncRoot { get; set; }
+
+        internal Func<string, string> OnBuildLocalWorkingCaseWorkbookPath { get; set; }
+
+        internal Func<string, string, bool> OnMoveLocalWorkingCaseToFinalPath { get; set; }
+
+        internal string ResolveSystemRoot(Excel.Workbook kernelWorkbook)
+        {
+            return OnResolveSystemRoot == null ? string.Empty : OnResolveSystemRoot(kernelWorkbook);
+        }
+
+        internal string ResolveBaseWorkbookPath(string systemRoot)
+        {
+            return OnResolveBaseWorkbookPath == null ? string.Empty : OnResolveBaseWorkbookPath(systemRoot);
+        }
+
+        internal string ResolveCaseFolderPath(KernelCaseCreationRequest request, string folderName)
+        {
+            return OnResolveCaseFolderPath == null ? string.Empty : OnResolveCaseFolderPath(request, folderName);
+        }
+
+        internal bool EnsureFolderExists(string folderPath)
+        {
+            return OnEnsureFolderExists == null || OnEnsureFolderExists(folderPath);
+        }
+
+        internal string ResolveCaseWorkbookExtension(string baseWorkbookPath)
+        {
+            return OnResolveCaseWorkbookExtension == null ? string.Empty : OnResolveCaseWorkbookExtension(baseWorkbookPath);
+        }
+
+        internal string BuildCaseWorkbookPath(string folderPath, string caseWorkbookName)
+        {
+            return OnBuildCaseWorkbookPath == null ? string.Empty : OnBuildCaseWorkbookPath(folderPath, caseWorkbookName);
+        }
+
+        internal bool IsUnderSyncRoot(string path)
+        {
+            return OnIsUnderSyncRoot != null && OnIsUnderSyncRoot(path);
+        }
+
+        internal string BuildLocalWorkingCaseWorkbookPath(string finalCaseWorkbookPath)
+        {
+            return OnBuildLocalWorkingCaseWorkbookPath == null ? string.Empty : OnBuildLocalWorkingCaseWorkbookPath(finalCaseWorkbookPath);
+        }
+
+        internal bool MoveLocalWorkingCaseToFinalPath(string localWorkingPath, string finalCaseWorkbookPath)
+        {
+            return OnMoveLocalWorkingCaseToFinalPath == null
+                || OnMoveLocalWorkingCaseToFinalPath(localWorkingPath, finalCaseWorkbookPath);
+        }
+    }
+
     internal sealed class DocumentExecutionEligibilityService
     {
         internal Func<Excel.Workbook, string, string, CaseInfoSystem.ExcelAddIn.Domain.DocumentExecutionEligibility> OnEvaluate { get; set; }

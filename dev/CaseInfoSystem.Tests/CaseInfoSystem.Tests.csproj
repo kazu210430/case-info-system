@@ -30,9 +30,9 @@
     <Compile Include="TaskPaneManagerThinOrchestrationTests.cs" />
     <Compile Include="DocumentCommandServiceTests.cs" />
     <Compile Include="DocumentExecutionModeServiceTests.cs" />
-    <Compile Include="LocalWorkCopyServiceTests.cs" />
     <Compile Include="WordInteropServiceTests.cs" />
     <Compile Include="DocumentSaveServiceTests.cs" />
+    <Compile Include="KernelCaseCreationServiceTests.cs" />
     <Compile Include="PathCompatibilityServiceTests.cs" />
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
@@ -77,6 +77,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveResult.cs" Link="Source\App\DocumentSaveResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveService.cs" Link="Source\App\DocumentSaveService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\EventBoundaryGuard.cs" Link="Source\App\EventBoundaryGuard.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseCreationService.cs" Link="Source\App\KernelCaseCreationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseTaskPaneViewStateBuilder.cs" Link="Source\App\CaseTaskPaneViewStateBuilder.cs" />
@@ -88,6 +89,10 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolutionPolicy.cs" Link="Source\App\KernelWorkbookResolutionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingSetSpec.cs" Link="Source\Domain\AccountingSetSpec.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationMode.cs" Link="Source\Domain\KernelCaseCreationMode.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationPlan.cs" Link="Source\Domain\KernelCaseCreationPlan.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationRequest.cs" Link="Source\Domain\KernelCaseCreationRequest.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationResult.cs" Link="Source\Domain\KernelCaseCreationResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookContext.cs" Link="Source\Domain\WorkbookContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
@@ -96,7 +101,6 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordInteropService.cs" Link="Source\Infrastructure\WordInteropService.cs" />
-    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\LocalWorkCopyService.cs" Link="Source\Infrastructure\LocalWorkCopyService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ITaskPaneView.cs" Link="Source\UI\ITaskPaneView.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneHost.cs" Link="Source\UI\TaskPaneHost.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneModels.cs" Link="Source\UI\TaskPaneModels.cs" />

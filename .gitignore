@@ -27,4 +27,7 @@ build/hot-reload-backups/
 # - dev/Deploy/**
 
 /build/
-/.github/build/
+/.github/build/*
+!/.github/build/packages/
+/.github/build/packages/*
+!/.github/build/packages/*.nupkg

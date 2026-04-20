@@ -32,6 +32,8 @@
   <PropertyGroup>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <ProjectToolsDir>$(MSBuildProjectDirectory)\Tools</ProjectToolsDir>
+    <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == '' and Exists('$(MSBuildProjectDirectory)\..\..\.github\build\windowsapicodepack\Microsoft.WindowsAPICodePack.dll')">$(MSBuildProjectDirectory)\..\..\.github\build\windowsapicodepack</WindowsApiCodePackDir>
+    <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == '' and Exists('$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack\Microsoft.WindowsAPICodePack.dll')">$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack</WindowsApiCodePackDir>
     <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == ''">$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack</WindowsApiCodePackDir>
     <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">$(MSBuildProjectDirectory)\CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
     <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.ExcelAddIn</UnifiedDeployPackageDir>

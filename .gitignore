@@ -31,3 +31,6 @@ build/hot-reload-backups/
 !/.github/build/packages/
 /.github/build/packages/*
 !/.github/build/packages/*.nupkg
+!/.github/build/windowsapicodepack/
+/.github/build/windowsapicodepack/*
+!/.github/build/windowsapicodepack/*.dll

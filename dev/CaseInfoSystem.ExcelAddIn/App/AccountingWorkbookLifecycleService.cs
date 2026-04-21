@@ -81,7 +81,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_accountingWorkbookService.ClearAccountingImportTargetHighlight (workbook);
 				}
 				_accountingPaymentHistoryImportService.HandleSheetActivated (workbook, text);
-				_accountingFormHelperService.HandleSheetActivated (workbook, (workbook.Application == null) ? null : workbook.Application.ActiveWindow, text);
+				Application application = workbook.Application;
+				_accountingFormHelperService.HandleSheetActivated (workbook, (application == null) ? null : application.ActiveWindow, text);
 			} catch (Exception exception) {
 				_logger.Error ("Accounting workbook sheet activation handling failed.", exception);
 			}

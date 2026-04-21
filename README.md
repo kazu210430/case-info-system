@@ -31,26 +31,32 @@
 - `dev/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx`
 - `dev/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn_TemporaryKey.pfx`
 
-これらの証明書ファイルは現時点のリポジトリでは確認できませんでした。ローカル配置方法は TODO です。
+これらの `.pfx` はリポジトリにありますが、`dotnet build` で署名を有効にしたまま VSTO プロジェクトをビルドすると、環境によっては `ResolveKeySource` が証明書ストア参照で失敗します。開発中のコンパイル確認では `SignManifests=false` を付けた未署名ビルドを使ってください。
 
 ### 初回復元
 
 ```powershell
-dotnet restore .\dev\CaseInfoSystem.slnx
+dotnet restore .\dev\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.csproj
+dotnet restore .\dev\CaseInfoSystem.WordAddIn\CaseInfoSystem.WordAddIn.csproj
+dotnet restore .\dev\CaseInfoSystem.Tests\CaseInfoSystem.Tests.csproj
 ```
 
 ## ビルド
 
-通常のビルドは次を使用します。
+通常の開発向けビルドは次を使用します。
 
 ```powershell
-dotnet build .\dev\CaseInfoSystem.slnx -c Release
+dotnet build .\dev\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.csproj -c Release -p:SignManifests=false -p:ManifestCertificateThumbprint=
+dotnet build .\dev\CaseInfoSystem.WordAddIn\CaseInfoSystem.WordAddIn.csproj -c Release -p:SignManifests=false -p:ManifestCertificateThumbprint=
+dotnet build .\dev\CaseInfoSystem.ExcelLauncher\CaseInfoSystem.ExcelLauncher.csproj -c Release
 ```
 
 補足:
 
-- このコマンドはソリューション全体のビルド導線です。
-- CI では `msbuild .\dev\CaseInfoSystem.slnx /restore /t:Build /p:Configuration=Release /p:SignManifests=false /p:ManifestCertificateThumbprint=` を使用し、署名依存を外してコンパイル検証を行います。
+- `dev/CaseInfoSystem.slnx` に対する `dotnet restore` / `dotnet build` は、この環境では終了コード 1 で失敗することがあり、通常手順としては使っていません。
+- VSTO プロジェクトは `SignManifests=false` を付けると `dotnet build` で DLL までのコンパイル確認ができます。
+- 署名付き manifest / `.vsto` を含む配布ビルドは、証明書ストアと VSTO パッケージング前提を満たす別経路です。
+- CI では `dotnet build <VSTO csproj> -p:SignManifests=false -p:ManifestCertificateThumbprint=` と `dotnet test` を組み合わせ、署名依存を外してコンパイル検証を行います。
 - 配布物生成や実機同期の確認は CI の対象外です。
 
 ## テスト

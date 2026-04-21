@@ -387,11 +387,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
     }
 
-    internal sealed class TransientPaneSuppressionService
-    {
-        internal bool IsSuppressed(Excel.Workbook workbook) => false;
-    }
-
     internal sealed class KernelWorkbookLifecycleService
     {
         internal bool RequestManagedCloseFromHomeExit(Excel.Workbook workbook) => true;

@@ -92,7 +92,10 @@ namespace CaseInfoSystem.Tests
                 caseWorkbookInitializer,
                 caseWorkbookOpenStrategy,
                 new FolderWindowService(),
-                new TransientPaneSuppressionService(),
+                new TransientPaneSuppressionService(
+                    new FakeExcelInteropService(),
+                    new PathCompatibilityService(),
+                    OrchestrationTestSupport.CreateLogger(logs)),
                 new ExcelInteropService(),
                 OrchestrationTestSupport.CreateLogger(logs));
 

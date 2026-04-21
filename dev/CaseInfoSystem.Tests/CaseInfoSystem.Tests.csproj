@@ -51,9 +51,12 @@
     <Compile Include="KernelWorkbookServicePolicyTests.cs" />
     <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
     <Compile Include="KernelWorkbookWindowRestorePolicyTests.cs" />
+    <Compile Include="NavigationServiceTests.cs" />
     <Compile Include="TaskPaneHostReusePolicyTests.cs" />
     <Compile Include="TaskPaneManagerOrchestrationPolicyTests.cs" />
     <Compile Include="TaskPanePostActionRefreshPolicyTests.cs" />
+    <Compile Include="TransientPaneSuppressionServiceTests.cs" />
+    <Compile Include="WorkbookSessionServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationPolicy.cs" Link="Source\App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostPreparationPolicy.cs" Link="Source\App\TaskPaneHostPreparationPolicy.cs" />
@@ -82,7 +85,11 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveService.cs" Link="Source\App\DocumentSaveService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\EventBoundaryGuard.cs" Link="Source\App\EventBoundaryGuard.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseCreationService.cs" Link="Source\App\KernelCaseCreationService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\NavigationService.cs" Link="Source\App\NavigationService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookContextSeed.cs" Link="Source\App\WorkbookContextSeed.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookSessionService.cs" Link="Source\App\WorkbookSessionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseTaskPaneViewStateBuilder.cs" Link="Source\App\CaseTaskPaneViewStateBuilder.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
@@ -101,7 +108,9 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IExcelInteropService.cs" Link="Source\Infrastructure\IExcelInteropService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IPathCompatibilityService.cs" Link="Source\Infrastructure\IPathCompatibilityService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IWorkbookRoleResolver.cs" Link="Source\Infrastructure\IWorkbookRoleResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordInteropService.cs" Link="Source\Infrastructure\WordInteropService.cs" />
@@ -114,5 +123,6 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationControl.cs" Link="Source\UI\AccountingNavigationControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocTaskPaneControl.cs" Link="Source\UI\DocTaskPaneControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocumentButtonsControl.cs" Link="Source\UI\DocumentButtonsControl.cs" />
+    <Compile Include="Fakes\TestDoubles.cs" />
   </ItemGroup>
 </Project>

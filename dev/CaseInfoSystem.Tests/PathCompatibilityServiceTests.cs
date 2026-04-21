@@ -179,6 +179,26 @@ namespace CaseInfoSystem.Tests
 			Assert.DoesNotContain (Directory.GetFiles (destinationFolder), path => path != destinationPath);
 		}
 
+		[Fact]
+		public void PromoteAdjacentStagingFileSafe_WhenDestinationExists_ReplacesFileWithoutCreatingExtraWorkingCopy ()
+		{
+			using TestEnvironmentScope scope = new TestEnvironmentScope ();
+			PathCompatibilityService service = new PathCompatibilityService ();
+			string destinationFolder = Path.Combine (scope.TempRoot, "destination");
+			Directory.CreateDirectory (destinationFolder);
+			string stagingPath = Path.Combine (destinationFolder, "result.tmp_stage.docx");
+			string destinationPath = Path.Combine (destinationFolder, "result.docx");
+			File.WriteAllText (stagingPath, "new");
+			File.WriteAllText (destinationPath, "old");
+
+			bool moved = service.PromoteAdjacentStagingFileSafe (stagingPath, destinationPath);
+
+			Assert.True (moved);
+			Assert.False (File.Exists (stagingPath));
+			Assert.Equal ("new", File.ReadAllText (destinationPath));
+			Assert.DoesNotContain (Directory.GetFiles (destinationFolder), path => path != destinationPath);
+		}
+
 		private sealed class TestEnvironmentScope : IDisposable
 		{
 			private readonly string _originalOneDrive;

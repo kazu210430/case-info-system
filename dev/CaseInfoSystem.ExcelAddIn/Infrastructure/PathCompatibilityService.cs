@@ -373,6 +373,61 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return false;
         }
 
+        internal bool PromoteAdjacentStagingFileSafe(string stagingPath, string destinationPath)
+        {
+            string normalizedStaging = NormalizePath(stagingPath);
+            string normalizedDestination = NormalizePath(destinationPath);
+            if (normalizedStaging.Length == 0 || normalizedDestination.Length == 0)
+            {
+                return false;
+            }
+
+            if (!FileExistsSafe(normalizedStaging))
+            {
+                return false;
+            }
+
+            string destinationFolder = GetParentFolderPath(normalizedDestination);
+            if (destinationFolder.Length > 0 && !EnsureFolderSafe(destinationFolder))
+            {
+                return false;
+            }
+
+            string stagingFolder = GetParentFolderPath(normalizedStaging);
+            if (!string.Equals(stagingFolder, destinationFolder, StringComparison.OrdinalIgnoreCase))
+            {
+                return MoveFileSafe(normalizedStaging, normalizedDestination);
+            }
+
+            for (int retry = 1; retry <= MoveRetryCountPrimary; retry++)
+            {
+                try
+                {
+                    PromoteAdjacentStagingFileToDestinationSafely(normalizedStaging, normalizedDestination);
+                    return true;
+                }
+                catch
+                {
+                    WaitRetryTickMs(100);
+                }
+            }
+
+            for (int retry = 1; retry <= MoveRetryCountFallback; retry++)
+            {
+                try
+                {
+                    PromoteAdjacentStagingFileToDestinationSafely(normalizedStaging, normalizedDestination);
+                    return true;
+                }
+                catch
+                {
+                    WaitRetryTickMs(150);
+                }
+            }
+
+            return false;
+        }
+
         private void PromoteFileToDestinationSafely(string normalizedSource, string normalizedDestination)
         {
             string replacementTempPath = BuildAdjacentTempFilePath(normalizedDestination);
@@ -399,6 +454,32 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             catch
             {
                 TryDeleteFileQuietly(replacementTempPath);
+                RestoreDestinationFromBackupIfNeeded(normalizedDestination, backupTempPath);
+                TryDeleteFileQuietly(backupTempPath);
+                throw;
+            }
+        }
+
+        private void PromoteAdjacentStagingFileToDestinationSafely(string normalizedStaging, string normalizedDestination)
+        {
+            string backupTempPath = BuildAdjacentBackupFilePath(normalizedDestination);
+
+            try
+            {
+                if (File.Exists(normalizedDestination))
+                {
+                    if (!TryReplaceFile(normalizedStaging, normalizedDestination, backupTempPath))
+                    {
+                        ReplaceFileViaBackupSwap(normalizedStaging, normalizedDestination, backupTempPath);
+                    }
+                }
+                else
+                {
+                    File.Move(normalizedStaging, normalizedDestination);
+                }
+            }
+            catch
+            {
                 RestoreDestinationFromBackupIfNeeded(normalizedDestination, backupTempPath);
                 TryDeleteFileQuietly(backupTempPath);
                 throw;

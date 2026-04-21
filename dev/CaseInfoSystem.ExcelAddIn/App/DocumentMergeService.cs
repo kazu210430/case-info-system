@@ -102,8 +102,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					}
 					foreach (ContentControlEntry item in list5) {
 						if (IsTextContentControl (item)) {
-							WritePlainTextToControl (item, normalizedValueText);
-							num4++;
+							if (TryWritePlainTextToControl (item, normalizedValueText, mergeDatum.Key)) {
+								num4++;
+							}
 						} else {
 							list3.Add (BuildControlLabel (mergeDatum.Key ?? string.Empty, item));
 							skippedNonTextCount++;
@@ -148,7 +149,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger.Debug ("DocumentMergeService.RemoveContentControlsKeepText", "Completed elapsed=" + FormatElapsedSeconds (stopwatch.Elapsed) + " initialCount=" + num + " deletedCount=" + num2 + " skippedCheckBoxCount=" + num3);
 		}
 
-		private static ContentControlIndex BuildContentControlIndex (object wordDocument)
+		private ContentControlIndex BuildContentControlIndex (object wordDocument)
 		{
 			dynamic val = ((dynamic)wordDocument).ContentControls;
 			ContentControlIndex contentControlIndex = new ContentControlIndex ();
@@ -158,9 +159,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				ContentControlEntry contentControlEntry = new ContentControlEntry
 				{
 					Control = val2,
-					Tag = (Convert.ToString (val2.Tag) ?? string.Empty).Trim (),
-					Title = (Convert.ToString (val2.Title) ?? string.Empty).Trim (),
-					Type = Convert.ToInt32 (val2.Type)
+					Tag = GetStringPropertySafe (val2, "Tag"),
+					Title = GetStringPropertySafe (val2, "Title"),
+					Type = GetIntPropertySafe (val2, "Type")
 				};
 				string text = contentControlEntry.Tag;
 				string text2 = contentControlEntry.Title;
@@ -226,9 +227,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return num == 6;
 		}
 
-		private static int ApplySystemDateContentControls (ContentControlIndex index, IList<string> skippedNonText, ref int skippedNonTextCount)
+		private int ApplySystemDateContentControls (ContentControlIndex index, IList<string> skippedNonText, ref int skippedNonTextCount)
 		{
-			if (index == null || !index.ByTag.TryGetValue ("Date", out var value) || value == null || value.Count == 0) {
+			if (index == null || !index.ByTag.TryGetValue (TodayDatePickerTag, out var value) || value == null || value.Count == 0) {
 				return 0;
 			}
 			int num = 0;
@@ -236,10 +237,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			for (int i = 0; i < value.Count; i++) {
 				ContentControlEntry control = value [i];
 				if (IsDateContentControl (control)) {
-					WritePlainTextToControl (control, normalizedValueText);
-					num++;
+					if (TryWritePlainTextToControl (control, normalizedValueText, TodayDatePickerTag)) {
+						num++;
+					}
 				} else {
-					skippedNonText?.Add (BuildControlLabel ("Date", control));
+					skippedNonText?.Add (BuildControlLabel (TodayDatePickerTag, control));
 					skippedNonTextCount++;
 				}
 			}
@@ -248,15 +250,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static bool IsSystemManagedPrimaryKey (string keyText)
 		{
-			return string.Equals ((keyText ?? string.Empty).Trim (), "Date", StringComparison.OrdinalIgnoreCase);
+			return string.Equals ((keyText ?? string.Empty).Trim (), TodayDatePickerTag, StringComparison.OrdinalIgnoreCase);
 		}
 
-		private static void WritePlainTextToControl (ContentControlEntry control, string normalizedValueText)
+		private bool TryWritePlainTextToControl (ContentControlEntry control, string normalizedValueText, string keyText)
 		{
 			if (control == null || control.Control == null) {
-				return;
+				return false;
 			}
-			((dynamic)control.Control).Range.Text = normalizedValueText ?? string.Empty;
+			try {
+				((dynamic)control.Control).Range.Text = normalizedValueText ?? string.Empty;
+				return true;
+			} catch (Exception exception) {
+				_logger.Warn ("DocumentMergeService failed to write content control. " + BuildControlLabel (keyText ?? string.Empty, control) + " error=" + exception.Message);
+				return false;
+			}
 		}
 
 		private static string NormalizeTextForContentControl (string valueText)
@@ -322,6 +330,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private static string FormatElapsedSeconds (TimeSpan elapsed)
 		{
 			return elapsed.TotalSeconds.ToString ("0.000");
+		}
+
+		private string GetStringPropertySafe (dynamic control, string propertyName)
+		{
+			try {
+				switch (propertyName) {
+				case "Tag":
+					return (Convert.ToString (control.Tag) ?? string.Empty).Trim ();
+				case "Title":
+					return (Convert.ToString (control.Title) ?? string.Empty).Trim ();
+				default:
+					return string.Empty;
+				}
+			} catch (Exception exception) {
+				_logger.Warn ("DocumentMergeService could not read ContentControl." + (propertyName ?? string.Empty) + ". error=" + exception.Message);
+				return string.Empty;
+			}
+		}
+
+		private int GetIntPropertySafe (dynamic control, string propertyName)
+		{
+			try {
+				if (string.Equals (propertyName, "Type", StringComparison.Ordinal)) {
+					return Convert.ToInt32 (control.Type);
+				}
+			} catch (Exception exception) {
+				_logger.Warn ("DocumentMergeService could not read ContentControl." + (propertyName ?? string.Empty) + ". error=" + exception.Message);
+			}
+			return -1;
 		}
 	}
 }

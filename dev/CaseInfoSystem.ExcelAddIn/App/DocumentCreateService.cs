@@ -213,6 +213,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 SetStatusBar("文書作成：保存中...");
                 DocumentSaveResult saveResult = _documentSaveService.SaveDocument(wordApplication, wordDocument, outputPath);
+                if (saveResult == null || saveResult.ActiveDocument == null)
+                {
+                    throw new InvalidOperationException("保存後の Word 文書を再取得できませんでした。");
+                }
+                wordDocument = saveResult.ActiveDocument;
                 savedPath = saveResult.FinalPath;
                 _logger.Debug("ExecuteCreateDocument", "Saved path=" + (savedPath ?? string.Empty) + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
                 phaseStopwatch.Restart();

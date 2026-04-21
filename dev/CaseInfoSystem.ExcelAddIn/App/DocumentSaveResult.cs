@@ -4,11 +4,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class DocumentSaveResult
     {
         /// <summary>
-        internal DocumentSaveResult(string savedPath, string finalPath, bool isLocalWorkCopy)
+        internal DocumentSaveResult(string savedPath, string finalPath, bool isLocalWorkCopy, object activeDocument = null)
         {
             SavedPath = savedPath ?? string.Empty;
             FinalPath = finalPath ?? string.Empty;
             IsLocalWorkCopy = isLocalWorkCopy;
+            ActiveDocument = activeDocument;
         }
 
         /// <summary>
@@ -19,5 +20,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         /// <summary>
         internal bool IsLocalWorkCopy { get; }
+
+        /// <summary>
+        internal object ActiveDocument { get; }
     }
 }

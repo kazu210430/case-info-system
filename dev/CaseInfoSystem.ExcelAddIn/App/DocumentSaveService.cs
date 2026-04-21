@@ -42,12 +42,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			string finalPath = PrepareSavePath (requestedFinalPath);
 			_logger.Debug ("DocumentSaveService.SaveDocument", "PrepareSavePath elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + (finalPath ?? string.Empty));
 			if (finalPath.Length == 0) {
-				throw new InvalidOperationException ("保存先パスを準備できませんでした。");
+				throw new InvalidOperationException ("Save path could not be resolved.");
 			}
 
-			string savedPath = SaveDirectWithBackup (wordDocument, finalPath);
-			_logger.Info ("DocumentSaveService direct save completed. final=" + finalPath + ", totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed));
-			return new DocumentSaveResult (savedPath, finalPath, isLocalWorkCopy: false);
+			DocumentSaveOutcome saveOutcome = SaveViaAdjacentTempReplace (wordApplication, wordDocument, finalPath);
+			_logger.Info ("DocumentSaveService save completed. final=" + finalPath + ", totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed));
+			return new DocumentSaveResult (saveOutcome.SavedPath, finalPath, isLocalWorkCopy: false, saveOutcome.ActiveDocument);
 		}
 
 		private string PrepareSavePath (string requestedFinalPath)
@@ -58,44 +58,52 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return _documentOutputService.PrepareSavePath (requestedFinalPath);
 		}
 
-		private string SaveDocumentAsDocx (object wordDocument, string savePath)
+		private string SaveDocumentCopyAsDocx (object wordDocument, string savePath)
 		{
-			if (_testHooks != null && _testHooks.SaveDocumentAsDocx != null) {
-				return _testHooks.SaveDocumentAsDocx (wordDocument, savePath) ?? string.Empty;
+			if (_testHooks != null && _testHooks.SaveDocumentCopyAsDocx != null) {
+				return _testHooks.SaveDocumentCopyAsDocx (wordDocument, savePath) ?? string.Empty;
 			}
-			return _wordInteropService.SaveDocumentAsDocx (wordDocument, savePath);
+			return _wordInteropService.SaveDocumentCopyAsDocx (wordDocument, savePath);
 		}
 
-		private string SaveDirectWithBackup (object wordDocument, string finalPath)
+		private object OpenDocument (object wordApplication, string fullPath)
+		{
+			if (_testHooks != null && _testHooks.OpenDocument != null) {
+				return _testHooks.OpenDocument (wordApplication, fullPath);
+			}
+			return _wordInteropService.OpenDocument (wordApplication, fullPath);
+		}
+
+		private DocumentSaveOutcome SaveViaAdjacentTempReplace (object wordApplication, object wordDocument, string finalPath)
 		{
 			Stopwatch totalStopwatch = Stopwatch.StartNew ();
 			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
-			string backupPath = BuildBackupPath (finalPath);
+			string stagingPath = BuildStagingPath (finalPath);
 			bool finalExists = FileExistsSafe (finalPath);
 			bool isUnderSyncRoot = _pathCompatibilityService.IsUnderSyncRoot (finalPath);
 			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveContext mode=" + FormatSaveMode (finalExists) + " location=" + FormatSaveLocation (isUnderSyncRoot) + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
-			bool backupCreated = false;
-			if (finalExists) {
-				CreateBackupFile (finalPath, backupPath);
-				backupCreated = true;
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupCreated elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
-			} else {
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupSkipped elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
-			}
-
-			phaseStopwatch.Restart ();
 			try {
-				string savedPath = SaveDocumentAsDocx (wordDocument, finalPath);
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveDocumentAsDocx elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
-				phaseStopwatch.Restart ();
-				TryDeleteFileQuietly (backupPath);
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupCleanup elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
-				return savedPath;
-			} catch {
-				if (backupCreated) {
-					RestoreBackupFileIfPossible (backupPath, finalPath);
-					_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "BackupRestore elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				string stagingSavedPath = SaveDocumentCopyAsDocx (wordDocument, stagingPath);
+				if (string.IsNullOrWhiteSpace (stagingSavedPath) || !FileExistsSafe (stagingSavedPath)) {
+					throw new IOException ("Staging save failed.");
 				}
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSaved elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " staging=" + stagingSavedPath);
+				phaseStopwatch.Restart ();
+				if (!_pathCompatibilityService.PromoteAdjacentStagingFileSafe (stagingSavedPath, finalPath)) {
+					throw new IOException ("Atomic replace failed.");
+				}
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReplaced elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				phaseStopwatch.Restart ();
+				object activeDocument = OpenDocument (wordApplication, finalPath);
+				if (activeDocument == null) {
+					throw new IOException ("Reopen after save failed.");
+				}
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReopened elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				object originalDocument = wordDocument;
+				_wordInteropService.CloseDocumentNoSave (ref originalDocument);
+				return new DocumentSaveOutcome (finalPath, activeDocument);
+			} catch {
+				TryDeleteFileQuietly (stagingPath);
 				throw;
 			}
 		}
@@ -105,7 +113,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return _pathCompatibilityService.FileExistsSafe (path);
 		}
 
-		private static string BuildBackupPath (string finalPath)
+		private static string BuildStagingPath (string finalPath)
 		{
 			string directoryName = Path.GetDirectoryName (finalPath) ?? string.Empty;
 			string fileNameWithoutExtension = Path.GetFileNameWithoutExtension (finalPath);
@@ -113,31 +121,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (fileNameWithoutExtension.Length == 0) {
 				fileNameWithoutExtension = "document";
 			}
-			string fileName = fileNameWithoutExtension + ".bak_" + Guid.NewGuid ().ToString ("N") + extension;
+			string fileName = fileNameWithoutExtension + ".tmp_" + Guid.NewGuid ().ToString ("N") + extension;
 			return Path.Combine (directoryName, fileName);
-		}
-
-		private void CreateBackupFile (string finalPath, string backupPath)
-		{
-			try {
-				File.Copy (finalPath, backupPath, overwrite: false);
-			} catch (Exception exception) {
-				_logger.Error ("DocumentSaveService failed to create backup file before save.", exception);
-				throw new IOException ("保存前バックアップの作成に失敗しました。", exception);
-			}
-		}
-
-		private void RestoreBackupFileIfPossible (string backupPath, string finalPath)
-		{
-			if (!FileExistsSafe (backupPath)) {
-				return;
-			}
-			try {
-				File.Copy (backupPath, finalPath, overwrite: true);
-				TryDeleteFileQuietly (backupPath);
-			} catch (Exception exception) {
-				_logger.Warn ("DocumentSaveService could not restore backup file after save failure. backup=" + backupPath + ", final=" + finalPath + ", error=" + exception.Message);
-			}
 		}
 
 		private static void TryDeleteFileQuietly (string path)
@@ -157,7 +142,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			internal Func<string, string> PrepareSavePath { get; set; }
 
-			internal Func<object, string, string> SaveDocumentAsDocx { get; set; }
+			internal Func<object, string, string> SaveDocumentCopyAsDocx { get; set; }
+
+			internal Func<object, string, object> OpenDocument { get; set; }
+		}
+
+		private sealed class DocumentSaveOutcome
+		{
+			internal DocumentSaveOutcome (string savedPath, object activeDocument)
+			{
+				SavedPath = savedPath ?? string.Empty;
+				ActiveDocument = activeDocument;
+			}
+
+			internal string SavedPath { get; }
+
+			internal object ActiveDocument { get; }
 		}
 
 		private static string FormatElapsedSeconds (TimeSpan elapsed)

@@ -229,6 +229,91 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
+		public void SaveDocumentCopyAsDocx_WhenSaveCopyAsThrows_ReturnsNullAndLogsError ()
+		{
+			List<string> logs = new List<string> ();
+			WordInteropService service = CreateService (logs, testHooks: null);
+			var wordDocument = new ThrowingSaveCopyWordDocument ();
+			string targetPath = Path.Combine (Path.GetTempPath (), Guid.NewGuid ().ToString ("N"), "output.docx");
+
+			string result = service.SaveDocumentCopyAsDocx (wordDocument, targetPath);
+
+			Assert.Null (result);
+			Assert.Equal (1, wordDocument.SaveCopyAsCalls);
+			Assert.Contains (logs, message => message.Contains ("WordInteropService.SaveDocumentCopyAsDocx save failed."));
+			Assert.Contains (logs, message => message.Contains ("COMException: save copy failed"));
+		}
+
+		[Fact]
+		public void OpenDocument_WhenDocumentsOpenThrows_ReturnsNullAndLogsError ()
+		{
+			List<string> logs = new List<string> ();
+			WordInteropService service = CreateService (logs, testHooks: null);
+			var wordApplication = new ThrowingOpenWordApplication ();
+			string targetPath = Path.GetTempFileName ();
+			try {
+				object result = service.OpenDocument (wordApplication, targetPath);
+
+				Assert.Null (result);
+				Assert.Equal (1, wordApplication.Documents.OpenCalls);
+				Assert.Contains (logs, message => message.Contains ("WordInteropService.OpenDocument Documents.Open failed."));
+				Assert.Contains (logs, message => message.Contains ("COMException: open failed"));
+			} finally {
+				File.Delete (targetPath);
+			}
+		}
+
+		[Fact]
+		public void BeginPerformanceScope_WhenExistingWordIsReused_DoesNotTouchVisible ()
+		{
+			WordInteropService service = CreateService (new List<string> (), testHooks: null);
+			var wordApplication = new PerformanceWordApplication ();
+
+			WordInteropService.WordPerformanceState state = service.BeginPerformanceScope (wordApplication, hideWhenNew: true, createdNewWord: false);
+
+			Assert.False (state.HasVisible);
+			Assert.Equal (0, wordApplication.VisibleReadCount);
+			Assert.Equal (0, wordApplication.VisibleWriteCount);
+			Assert.False (wordApplication.ScreenUpdating);
+			Assert.Equal (0, wordApplication.DisplayAlerts);
+		}
+
+		[Fact]
+		public void BeginPerformanceScope_WhenNewWordIsHidden_CapturesAndChangesVisible ()
+		{
+			WordInteropService service = CreateService (new List<string> (), testHooks: null);
+			var wordApplication = new PerformanceWordApplication ();
+
+			WordInteropService.WordPerformanceState state = service.BeginPerformanceScope (wordApplication, hideWhenNew: true, createdNewWord: true);
+
+			Assert.True (state.HasVisible);
+			Assert.Equal (1, wordApplication.VisibleReadCount);
+			Assert.Equal (1, wordApplication.VisibleWriteCount);
+			Assert.False (wordApplication.Visible);
+		}
+
+		[Fact]
+		public void ShowDocument_WhenWordWindowComesToFrontImmediately_SkipsRetrySleep ()
+		{
+			int sleepCalls = 0;
+			IntPtr hwnd = new IntPtr (1234);
+			var testHooks = new WordInteropService.WordInteropServiceTestHooks
+			{
+				GetForegroundWindow = () => hwnd,
+				Sleep = milliseconds => sleepCalls++
+			};
+			WordInteropService service = CreateService (new List<string> (), testHooks);
+			var wordApplication = new ShowDocumentWordApplication (hwnd);
+			var wordDocument = new ActivatableDocument ();
+
+			service.ShowDocument (wordApplication, wordDocument);
+
+			Assert.Equal (0, sleepCalls);
+			Assert.True (wordDocument.Activated);
+			Assert.True (wordApplication.Activated);
+		}
+
+		[Fact]
 		public void IsDocumentOpen_WhenMatchingDocumentExists_ReturnsTrue ()
 		{
 			WordInteropService service = CreateService (new List<string> (), testHooks: null);
@@ -309,6 +394,103 @@ namespace CaseInfoSystem.Tests
 			{
 				AddCalls++;
 				throw new COMException ("add failed");
+			}
+		}
+
+		public sealed class ThrowingSaveCopyWordDocument
+		{
+			public int SaveCopyAsCalls { get; private set; }
+
+			public void SaveCopyAs (string fullPath)
+			{
+				SaveCopyAsCalls++;
+				throw new COMException ("save copy failed");
+			}
+		}
+
+		public sealed class ThrowingOpenWordApplication
+		{
+			public ThrowingOpenDocumentsCollection Documents { get; } = new ThrowingOpenDocumentsCollection ();
+		}
+
+		public sealed class ThrowingOpenDocumentsCollection
+		{
+			public int OpenCalls { get; private set; }
+
+			public object Open (string fullPath)
+			{
+				OpenCalls++;
+				throw new COMException ("open failed");
+			}
+		}
+
+		public sealed class PerformanceWordApplication
+		{
+			private bool _visible = true;
+
+			public bool ScreenUpdating { get; set; } = true;
+
+			public int DisplayAlerts { get; set; } = 1;
+
+			public int VisibleReadCount { get; private set; }
+
+			public int VisibleWriteCount { get; private set; }
+
+			public bool Visible
+			{
+				get
+				{
+					VisibleReadCount++;
+					return _visible;
+				}
+				set
+				{
+					VisibleWriteCount++;
+					_visible = value;
+				}
+			}
+		}
+
+		public sealed class ShowDocumentWordApplication
+		{
+			private readonly ShowDocumentWindow _activeWindow;
+
+			internal ShowDocumentWordApplication (IntPtr hwnd)
+			{
+				_activeWindow = new ShowDocumentWindow (hwnd);
+			}
+
+			public bool Visible { get; set; }
+
+			public bool Activated { get; private set; }
+
+			public ShowDocumentWindow ActiveWindow => _activeWindow;
+
+			public int Hwnd => _activeWindow.Hwnd;
+
+			public void Activate ()
+			{
+				Activated = true;
+			}
+		}
+
+		public sealed class ShowDocumentWindow
+		{
+			internal ShowDocumentWindow (IntPtr hwnd)
+			{
+				Hwnd = hwnd.ToInt32 ();
+			}
+
+			public int Hwnd { get; }
+		}
+
+		public sealed class ActivatableDocument
+		{
+			public bool Activated { get; private set; }
+
+			public void Activate ()
+			{
+				Activated = true;
 			}
 		}
 	}

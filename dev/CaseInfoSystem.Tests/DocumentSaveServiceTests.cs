@@ -11,12 +11,12 @@ namespace CaseInfoSystem.Tests
 	public class DocumentSaveServiceTests
 	{
 		[Fact]
-		public void SaveDocument_WhenFinalFileExists_SavesDirectlyToFinalPathAfterCreatingAdjacentBackup ()
+		public void SaveDocument_WhenFinalFileExists_SavesToAdjacentTempThenReplacesFinalFile ()
 		{
 			List<string> logs = new List<string> ();
 			List<string> savedPaths = new List<string> ();
-			List<string> backupFilesDuringSave = new List<string> ();
-			string backupContentDuringSave = string.Empty;
+			List<string> openedPaths = new List<string> ();
+			object reopenedDocument = new object ();
 			using TestFolderScope scope = new TestFolderScope ();
 			string preparedFinalPath = Path.Combine (scope.RootPath, "inside.docx");
 			File.WriteAllText (preparedFinalPath, "old");
@@ -26,31 +26,38 @@ namespace CaseInfoSystem.Tests
 				new DocumentSaveService.DocumentSaveServiceTestHooks
 				{
 					PrepareSavePath = _ => preparedFinalPath,
-					SaveDocumentAsDocx = (document, savePath) =>
+					SaveDocumentCopyAsDocx = (document, savePath) =>
 					{
 						savedPaths.Add (savePath);
-						backupFilesDuringSave.AddRange (Directory.GetFiles (scope.RootPath, "inside.bak_*" + Path.GetExtension (preparedFinalPath)));
-						backupContentDuringSave = File.ReadAllText (backupFilesDuringSave[0]);
+						Assert.NotEqual (preparedFinalPath, savePath);
+						Assert.Equal ("old", File.ReadAllText (preparedFinalPath));
+						Assert.Equal (scope.RootPath, Path.GetDirectoryName (savePath));
 						File.WriteAllText (savePath, "new");
 						return savePath;
+					},
+					OpenDocument = (application, fullPath) =>
+					{
+						openedPaths.Add (fullPath);
+						return reopenedDocument;
 					}
 				});
 
-			DocumentSaveResult result = context.Service.SaveDocument (new object (), new object (), preparedFinalPath);
+			DocumentSaveResult result = context.Service.SaveDocument (new object (), new ClosableWordDocument (), preparedFinalPath);
 
-			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
-			Assert.Single (backupFilesDuringSave);
-			Assert.Equal ("old", backupContentDuringSave);
+			Assert.Single (savedPaths);
+			Assert.Single (openedPaths);
+			Assert.Equal (preparedFinalPath, openedPaths[0]);
 			Assert.Equal ("new", File.ReadAllText (preparedFinalPath));
-			Assert.Empty (Directory.GetFiles (scope.RootPath, "inside.bak_*" + Path.GetExtension (preparedFinalPath)));
+			Assert.Empty (Directory.GetFiles (scope.RootPath, "inside.tmp_*" + Path.GetExtension (preparedFinalPath)));
 			Assert.Contains (logs, log => log.Contains ("SaveContext mode=Overwrite location=NonSyncRoot"));
 			Assert.False (result.IsLocalWorkCopy);
 			Assert.Equal (preparedFinalPath, result.SavedPath);
 			Assert.Equal (preparedFinalPath, result.FinalPath);
+			Assert.Same (reopenedDocument, result.ActiveDocument);
 		}
 
 		[Fact]
-		public void SaveDocument_WhenFinalFileDoesNotExist_SavesDirectlyWithoutCreatingBackup ()
+		public void SaveDocument_WhenFinalFileDoesNotExist_StillUsesAdjacentTempBeforeFinalPlacement ()
 		{
 			List<string> logs = new List<string> ();
 			List<string> savedPaths = new List<string> ();
@@ -62,24 +69,27 @@ namespace CaseInfoSystem.Tests
 				new DocumentSaveService.DocumentSaveServiceTestHooks
 				{
 					PrepareSavePath = _ => preparedFinalPath,
-					SaveDocumentAsDocx = (document, savePath) =>
+					SaveDocumentCopyAsDocx = (document, savePath) =>
 					{
 						savedPaths.Add (savePath);
-						Assert.Empty (Directory.GetFiles (scope.RootPath, "new.bak_*" + Path.GetExtension (preparedFinalPath)));
+						Assert.NotEqual (preparedFinalPath, savePath);
+						Assert.False (File.Exists (preparedFinalPath));
 						File.WriteAllText (savePath, "new");
 						return savePath;
-					}
+					},
+					OpenDocument = (application, fullPath) => new object ()
 				});
 
-			DocumentSaveResult result = context.Service.SaveDocument (new object (), new object (), preparedFinalPath);
+			DocumentSaveResult result = context.Service.SaveDocument (new object (), new ClosableWordDocument (), preparedFinalPath);
 
-			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
+			Assert.Single (savedPaths);
 			Assert.Equal ("new", File.ReadAllText (preparedFinalPath));
-			Assert.Empty (Directory.GetFiles (scope.RootPath, "new.bak_*" + Path.GetExtension (preparedFinalPath)));
+			Assert.Empty (Directory.GetFiles (scope.RootPath, "new.tmp_*" + Path.GetExtension (preparedFinalPath)));
 			Assert.Contains (logs, log => log.Contains ("SaveContext mode=CreateNew location=NonSyncRoot"));
 			Assert.False (result.IsLocalWorkCopy);
 			Assert.Equal (preparedFinalPath, result.SavedPath);
 			Assert.Equal (preparedFinalPath, result.FinalPath);
+			Assert.NotNull (result.ActiveDocument);
 		}
 
 		[Fact]
@@ -97,14 +107,15 @@ namespace CaseInfoSystem.Tests
 					new DocumentSaveService.DocumentSaveServiceTestHooks
 					{
 						PrepareSavePath = _ => preparedFinalPath,
-						SaveDocumentAsDocx = (document, savePath) =>
+						SaveDocumentCopyAsDocx = (document, savePath) =>
 						{
 							File.WriteAllText (savePath, "new");
 							return savePath;
-						}
+						},
+						OpenDocument = (application, fullPath) => new object ()
 					});
 
-				context.Service.SaveDocument (new object (), new object (), preparedFinalPath);
+				context.Service.SaveDocument (new object (), new ClosableWordDocument (), preparedFinalPath);
 			} finally {
 				Environment.SetEnvironmentVariable ("OneDrive", originalOneDrive);
 			}
@@ -113,7 +124,7 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
-		public void SaveDocument_WhenDirectSaveFails_RestoresExistingFinalFileFromBackup ()
+		public void SaveDocument_WhenStagingSaveFails_LeavesExistingFinalFileUntouched ()
 		{
 			List<string> logs = new List<string> ();
 			List<string> savedPaths = new List<string> ();
@@ -126,7 +137,7 @@ namespace CaseInfoSystem.Tests
 				new DocumentSaveService.DocumentSaveServiceTestHooks
 				{
 					PrepareSavePath = _ => preparedFinalPath,
-					SaveDocumentAsDocx = (document, savePath) =>
+					SaveDocumentCopyAsDocx = (document, savePath) =>
 					{
 						savedPaths.Add (savePath);
 						File.WriteAllText (savePath, "partial");
@@ -134,12 +145,13 @@ namespace CaseInfoSystem.Tests
 					}
 				});
 
-			IOException exception = Assert.Throws<IOException> (() => context.Service.SaveDocument (new object (), new object (), preparedFinalPath));
+			IOException exception = Assert.Throws<IOException> (() => context.Service.SaveDocument (new object (), new ClosableWordDocument (), preparedFinalPath));
 
 			Assert.Equal ("save failed", exception.Message);
-			Assert.Equal (new[] { preparedFinalPath }, savedPaths);
+			Assert.Single (savedPaths);
+			Assert.NotEqual (preparedFinalPath, savedPaths[0]);
 			Assert.Equal ("old", File.ReadAllText (preparedFinalPath));
-			Assert.Empty (Directory.GetFiles (scope.RootPath, "restore.bak_*" + Path.GetExtension (preparedFinalPath)));
+			Assert.Empty (Directory.GetFiles (scope.RootPath, "restore.tmp_*" + Path.GetExtension (preparedFinalPath)));
 		}
 
 		private static TestServiceContext CreateContext (List<string> logs, DocumentSaveService.DocumentSaveServiceTestHooks testHooks)
@@ -184,6 +196,16 @@ namespace CaseInfoSystem.Tests
 					}
 				} catch {
 				}
+			}
+		}
+
+		private sealed class ClosableWordDocument
+		{
+			public bool Closed { get; private set; }
+
+			public void Close (bool saveChanges)
+			{
+				Closed = true;
 			}
 		}
 	}

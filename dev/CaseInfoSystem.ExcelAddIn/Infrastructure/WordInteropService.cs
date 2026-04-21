@@ -23,6 +23,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			internal Func<string, string> NormalizePath { get; set; }
 
 			internal Func<string, bool> FileExists { get; set; }
+
+			internal Func<IntPtr> GetForegroundWindow { get; set; }
+
+			internal Action<int> Sleep { get; set; }
 		}
 
 		internal sealed class WordPerformanceState
@@ -231,23 +235,80 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal string SaveDocumentAsDocx (object wordDocument, string fullPath)
 		{
+			return SaveDocumentCore (wordDocument, fullPath, saveCopyOnly: false);
+		}
+
+		internal string SaveDocumentCopyAsDocx (object wordDocument, string fullPath)
+		{
+			return SaveDocumentCore (wordDocument, fullPath, saveCopyOnly: true);
+		}
+
+		internal object OpenDocument (object wordApplication, string fullPath)
+		{
+			if (wordApplication == null) {
+				_logger.Warn ("WordInteropService.OpenDocument skipped because wordApplication was null.");
+				return null;
+			}
+			string text;
+			try {
+				text = _pathCompatibilityService.NormalizePath (fullPath);
+			} catch (Exception exception) {
+				_logger.Error ("WordInteropService.OpenDocument path normalization failed.", exception);
+				return null;
+			}
+			if (text.Length == 0) {
+				_logger.Warn ("WordInteropService.OpenDocument path was empty.");
+				return null;
+			}
+			if (!FileExistsSafe (text)) {
+				_logger.Warn ("WordInteropService.OpenDocument target not found. path=" + text);
+				return null;
+			}
+			try {
+				return ((dynamic)wordApplication).Documents.Open (text);
+			} catch (Exception exception2) {
+				_logger.Error ("WordInteropService.OpenDocument Documents.Open failed.", exception2);
+				return null;
+			}
+		}
+
+		private string SaveDocumentCore (object wordDocument, string fullPath, bool saveCopyOnly)
+		{
 			if (wordDocument == null) {
 				throw new ArgumentNullException ("wordDocument");
 			}
 			Stopwatch totalStopwatch = Stopwatch.StartNew ();
 			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
-			string text = _pathCompatibilityService.NormalizePath (fullPath);
+			string text;
+			try {
+				text = _pathCompatibilityService.NormalizePath (fullPath);
+			} catch (Exception exception) {
+				_logger.Error ("WordInteropService." + (saveCopyOnly ? "SaveDocumentCopyAsDocx" : "SaveDocumentAsDocx") + " path normalization failed.", exception);
+				return null;
+			}
 			if (text.Length == 0) {
-				throw new InvalidOperationException ("保存先パスが解決されていません。");
+				_logger.Warn ("WordInteropService." + (saveCopyOnly ? "SaveDocumentCopyAsDocx" : "SaveDocumentAsDocx") + " path was empty.");
+				return null;
 			}
 			string directoryName = Path.GetDirectoryName (text);
 			if (!string.IsNullOrWhiteSpace (directoryName) && !_pathCompatibilityService.EnsureFolderSafe (directoryName)) {
-				throw new InvalidOperationException ("保存先フォルダを作成できませんでした。");
+				_logger.Warn ("WordInteropService." + (saveCopyOnly ? "SaveDocumentCopyAsDocx" : "SaveDocumentAsDocx") + " could not create directory. path=" + text);
+				return null;
 			}
-			_logger.Debug ("WordInteropService.SaveDocumentAsDocx", "EnsureFolderSafe elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
+			string procedureName = saveCopyOnly ? "WordInteropService.SaveDocumentCopyAsDocx" : "WordInteropService.SaveDocumentAsDocx";
+			_logger.Debug (procedureName, "EnsureFolderSafe elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
 			phaseStopwatch.Restart ();
-			((dynamic)wordDocument).SaveAs2 (text, 16);
-			_logger.Debug ("WordInteropService.SaveDocumentAsDocx", "SaveAs2 elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
+			try {
+				if (saveCopyOnly) {
+					((dynamic)wordDocument).SaveCopyAs (text);
+				} else {
+					((dynamic)wordDocument).SaveAs2 (text, 16);
+				}
+			} catch (Exception exception2) {
+				_logger.Error (procedureName + " save failed.", exception2);
+				return null;
+			}
+			_logger.Debug (procedureName, (saveCopyOnly ? "SaveCopyAs" : "SaveAs2") + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
 			return text;
 		}
 
@@ -258,15 +319,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				return wordPerformanceState;
 			}
 			try {
+				bool flag = hideWhenNew && createdNewWord;
 				wordPerformanceState.HasScreenUpdating = true;
 				wordPerformanceState.ScreenUpdating = (object)((dynamic)wordApplication).ScreenUpdating;
 				wordPerformanceState.HasDisplayAlerts = true;
 				wordPerformanceState.DisplayAlerts = (object)((dynamic)wordApplication).DisplayAlerts;
-				wordPerformanceState.HasVisible = true;
-				wordPerformanceState.Visible = (object)((dynamic)wordApplication).Visible;
+				if (flag) {
+					wordPerformanceState.HasVisible = true;
+					wordPerformanceState.Visible = (object)((dynamic)wordApplication).Visible;
+				}
 				((dynamic)wordApplication).ScreenUpdating = false;
 				((dynamic)wordApplication).DisplayAlerts = 0;
-				if (hideWhenNew && createdNewWord) {
+				if (flag) {
 					((dynamic)wordApplication).Visible = false;
 				}
 			} catch {
@@ -423,6 +487,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			return (_testHooks != null && _testHooks.FileExists != null) ? _testHooks.FileExists (path) : _pathCompatibilityService.FileExistsSafe (path);
 		}
 
+		private IntPtr GetForegroundWindowSafe ()
+		{
+			if (_testHooks != null && _testHooks.GetForegroundWindow != null) {
+				return _testHooks.GetForegroundWindow ();
+			}
+			return GetForegroundWindow ();
+		}
+
+		private void SleepSafe (int milliseconds)
+		{
+			if (_testHooks != null && _testHooks.Sleep != null) {
+				_testHooks.Sleep (milliseconds);
+			} else {
+				Thread.Sleep (milliseconds);
+			}
+		}
+
 		private static string FormatElapsedSeconds (TimeSpan elapsed)
 		{
 			return elapsed.TotalSeconds.ToString ("0.000");
@@ -450,14 +531,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		private static void TryBringWordToFront (dynamic wordApplication)
+		private void TryBringWordToFront (dynamic wordApplication)
 		{
 			try {
 				IntPtr intPtr = WordInteropService.GetPrimaryWordWindowHandle (wordApplication);
 				if (!(intPtr == IntPtr.Zero)) {
-					for (int i = 0; i < 8; i++) {
+					for (int i = 0; i < ForegroundRetryCount; i++) {
+						if (GetForegroundWindowSafe () == intPtr) {
+							return;
+						}
 						TryBringWindowToFront (intPtr);
-						Thread.Sleep (120);
+						if (GetForegroundWindowSafe () == intPtr) {
+							return;
+						}
+						SleepSafe (ForegroundRetryDelayMs);
 					}
 				}
 			} catch {

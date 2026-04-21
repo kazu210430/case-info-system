@@ -161,11 +161,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			try {
 				_suppressAfterCalculateHandling = true;
 				workbook = application.ActiveWorkbook;
+				Worksheet activeWorksheet = null;
 				string workbookKey = GetWorkbookKey (workbook);
 				string activeSheetName = string.Empty;
 				string activeWindowCaption = string.Empty;
 				try {
-					activeSheetName = (application.ActiveSheet as Worksheet)?.CodeName ?? (application.ActiveSheet as Worksheet)?.Name ?? string.Empty;
+					activeWorksheet = application.ActiveSheet as Worksheet;
+					activeSheetName = activeWorksheet?.CodeName ?? activeWorksheet?.Name ?? string.Empty;
 				} catch {
 					activeSheetName = string.Empty;
 				}
@@ -175,7 +177,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					activeWindowCaption = string.Empty;
 				}
 				bool isAccountingWorkbook = _workbookRoleResolver.IsAccountingWorkbook (workbook);
-				bool shouldSuspend = isAccountingWorkbook && ShouldSuspendForActiveSheet (application, workbook);
+				bool shouldSuspend = isAccountingWorkbook && ShouldSuspendForActiveSheet (application, workbook, activeWorksheet);
 				_logger.Info ("AccountingSheetControlService HandleAfterCalculate target workbook=" + workbookKey + ", window=" + activeWindowCaption + ", activeSheet=" + activeSheetName + ", role=" + (isAccountingWorkbook ? "Accounting" : "Other") + ", shouldSuspend=" + shouldSuspend);
 				if (isAccountingWorkbook && !shouldSuspend) {
 					EnsureVstoManagedControls (workbook);
@@ -301,13 +303,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private bool ShouldSuspendForActiveSheet (Microsoft.Office.Interop.Excel.Application application, Workbook workbook)
+		private bool ShouldSuspendForActiveSheet (Microsoft.Office.Interop.Excel.Application application, Workbook workbook, Worksheet activeWorksheet)
 		{
 			if (application == null || workbook == null || !_workbookRoleResolver.IsAccountingWorkbook (workbook)) {
 				return false;
 			}
 			try {
-				if (!(application.ActiveSheet is Worksheet worksheet)) {
+				Worksheet worksheet = activeWorksheet;
+				if (worksheet == null) {
+					worksheet = application.ActiveSheet as Worksheet;
+				}
+				if (worksheet == null) {
 					return false;
 				}
 				Workbook workbook2 = worksheet.Parent as Workbook;

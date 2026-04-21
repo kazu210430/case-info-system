@@ -1,6 +1,8 @@
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
+using CaseInfoSystem.Tests.Fakes;
 using Xunit;
+using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.Tests
 {
@@ -109,6 +111,72 @@ namespace CaseInfoSystem.Tests
             PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(showedExistingPane, shouldShowWithRenderPane);
 
             Assert.Equal((PaneDisplayPolicyResult)expected, result);
+        }
+
+        [Theory]
+        [InlineData(false, true, false, false, 3)]
+        [InlineData(false, false, false, false, 2)]
+        [InlineData(true, true, false, true, 1)]
+        public void Decide_UsesHideOnlyForNonDisplayTargetWithManagedPane(
+            bool shouldDisplayPane,
+            bool hasManagedPane,
+            bool showedExistingPane,
+            bool shouldShowWithRenderPane,
+            int expected)
+        {
+            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+                shouldDisplayPane,
+                hasManagedPane,
+                showedExistingPane,
+                shouldShowWithRenderPane);
+
+            Assert.Equal((PaneDisplayPolicyResult)expected, result);
+        }
+
+        [Fact]
+        public void Decide_ReturnsReject_WhenRequestIsNotAccepted()
+        {
+            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+                request: null,
+                taskPaneManager: null,
+                workbook: null,
+                window: new Excel.Window { Hwnd = 101 },
+                shouldDisplayPane: true);
+
+            Assert.Equal(PaneDisplayPolicyResult.Reject, result);
+        }
+
+        [Fact]
+        public void Decide_ReturnsReject_WhenTargetWindowIsMissing()
+        {
+            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+                TaskPaneDisplayRequest.ForWindowActivate(),
+                taskPaneManager: null,
+                workbook: null,
+                window: null,
+                shouldDisplayPane: true);
+
+            Assert.Equal(PaneDisplayPolicyResult.Reject, result);
+        }
+
+        [Fact]
+        public void Decide_ReturnsHide_WhenRequestIsAccepted_AndManagedPaneRemains_ForNonDisplayTarget()
+        {
+            var manager = new TaskPaneManager(
+                OrchestrationTestSupport.CreateLogger(new System.Collections.Generic.List<string>()),
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new System.Collections.Generic.List<string>()),
+                testHooks: null);
+            var targetWindow = new Excel.Window { Hwnd = 123 };
+            manager.RegisterHost(OrchestrationTestSupport.CreateTaskPaneHost(new CaseInfoSystem.ExcelAddIn.UI.DocumentButtonsControl(), "123"));
+
+            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+                TaskPaneDisplayRequest.ForWindowActivate(),
+                manager,
+                workbook: null,
+                window: targetWindow,
+                shouldDisplayPane: false);
+
+            Assert.Equal(PaneDisplayPolicyResult.Hide, result);
         }
     }
 }

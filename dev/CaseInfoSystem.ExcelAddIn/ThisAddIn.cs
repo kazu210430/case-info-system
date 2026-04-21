@@ -796,10 +796,19 @@ namespace CaseInfoSystem.ExcelAddIn
                 _taskPaneManager?.PrepareTargetWindowForForcedRefresh(targetWindow);
             }
 
-            PaneDisplayPolicyResult displayPolicyResult = PaneDisplayPolicy.Decide(_taskPaneManager, workbook, targetWindow);
+            PaneDisplayPolicyResult displayPolicyResult = PaneDisplayPolicy.Decide(
+                request,
+                _taskPaneManager,
+                workbook,
+                targetWindow,
+                ShouldDisplayPaneForWorkbook(workbook));
             switch (displayPolicyResult)
             {
                 case PaneDisplayPolicyResult.ShowExisting:
+                    return;
+
+                case PaneDisplayPolicyResult.Hide:
+                    _taskPaneManager?.HidePaneForWindow(targetWindow);
                     return;
 
                 case PaneDisplayPolicyResult.Reject:
@@ -808,6 +817,19 @@ namespace CaseInfoSystem.ExcelAddIn
 
             string reason = request == null ? string.Empty : request.ToReasonString();
             RefreshTaskPane(reason, workbook, targetWindow);
+        }
+
+        private bool ShouldDisplayPaneForWorkbook(Excel.Workbook workbook)
+        {
+            if (_workbookRoleResolver == null)
+            {
+                return true;
+            }
+
+            WorkbookRole role = _workbookRoleResolver.Resolve(workbook);
+            return role == WorkbookRole.Kernel
+                || role == WorkbookRole.Case
+                || role == WorkbookRole.Accounting;
         }
 
         private void RefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)

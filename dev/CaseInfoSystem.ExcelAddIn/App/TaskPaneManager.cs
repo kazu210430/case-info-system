@@ -302,6 +302,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 isRenderSignatureCurrent);
         }
 
+        internal bool HasManagedPaneForWindow(Excel.Window window)
+        {
+            string windowKey = SafeGetWindowKey(window);
+            return !string.IsNullOrWhiteSpace(windowKey)
+                && _hostsByWindowKey.ContainsKey(windowKey);
+        }
+
         private void EvaluateDisplayRequestPaneState(
             Excel.Workbook workbook,
             Excel.Window window,

@@ -99,6 +99,16 @@ namespace CaseInfoSystem.ExcelAddIn
             get { return _logger; }
         }
 
+        internal static string GetPrimaryTraceLogRelativePath()
+        {
+            return Path.Combine("logs", TraceLogFileName);
+        }
+
+        internal static string GetPrimaryTraceLogPath()
+        {
+            return Path.Combine(ResolveLogDirectory(), TraceLogFileName);
+        }
+
         internal bool ShouldShowKernelHomeOnStartup(Excel.Workbook workbook)
         {
             return _kernelWorkbookService.ShouldShowHomeOnStartup(workbook);
@@ -917,9 +927,10 @@ namespace CaseInfoSystem.ExcelAddIn
 
             try
             {
-                string logDirectory = ResolveLogDirectory();
+                string primaryLogPath = GetPrimaryTraceLogPath();
+                string logDirectory = Path.GetDirectoryName(primaryLogPath) ?? ResolveLogDirectory();
                 Directory.CreateDirectory(logDirectory);
-                File.AppendAllText(Path.Combine(logDirectory, TraceLogFileName), line + Environment.NewLine, TraceLogEncoding);
+                File.AppendAllText(primaryLogPath, line + Environment.NewLine, TraceLogEncoding);
             }
             catch
             {

@@ -257,7 +257,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				return;
 			}
 			if (Globals.ThisAddIn == null) {
-				MessageBox.Show ("シートを開けませんでした。logs\\KernelHomeAddin_trace.log を確認してください。", "案件情報System");
+				MessageBox.Show ("シートを開けませんでした。" + ThisAddIn.GetPrimaryTraceLogRelativePath () + " を確認してください。", "案件情報System");
 				return;
 			}
 			_keepBackendSessionOnClose = true;
@@ -267,7 +267,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			Hide ();
 			_kernelWorkbookService.CompleteHomeNavigation (showExcel: true);
 			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPaneFromHome (codeName, "KernelHomeForm.OpenSheet")) {
-				MessageBox.Show ("シートを開けませんでした。logs\\KernelHomeAddin_trace.log を確認してください。", "案件情報System");
+				MessageBox.Show ("シートを開けませんでした。" + ThisAddIn.GetPrimaryTraceLogRelativePath () + " を確認してください。", "案件情報System");
 			} else {
 				if (Globals.ThisAddIn != null) {
 					Globals.ThisAddIn.ScheduleWorkbookTaskPaneRefresh (_kernelWorkbookService.GetOpenKernelWorkbook (), "KernelHomeForm.OpenSheet.PostClose");

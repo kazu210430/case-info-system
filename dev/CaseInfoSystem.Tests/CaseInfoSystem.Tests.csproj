@@ -57,6 +57,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationPolicy.cs" Link="Source\App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostPreparationPolicy.cs" Link="Source\App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostReusePolicy.cs" Link="Source\App\TaskPaneHostReusePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\PaneDisplayPolicy.cs" Link="Source\App\PaneDisplayPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRequest.cs" Link="Source\App\TaskPaneDisplayRequest.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPanePostActionRefreshPolicy.cs" Link="Source\App\TaskPanePostActionRefreshPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshPreconditionPolicy.cs" Link="Source\App\TaskPaneRefreshPreconditionPolicy.cs" />
     <!-- CaseWorkbookLifecycleService policies -->

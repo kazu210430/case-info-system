@@ -138,7 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 HandleExternalWorkbookDetected,
                 ShouldSuppressCasePaneRefresh,
                 // 非同期 UI 更新
-                RefreshTaskPane,
+                RequestTaskPaneDisplayForTargetWindow,
                 ScheduleWordWarmup,
                 TaskPaneRefreshOrchestrationService.PendingPaneRefreshMaxAttempts,
                 KernelSheetCommandSheetCodeName,
@@ -788,6 +788,28 @@ namespace CaseInfoSystem.ExcelAddIn
         }
 
         // Task pane / HOME 表示の VSTO 境界
+        // WindowActivate / post-action refresh から共通で入る最小限の入口。
+        internal void RequestTaskPaneDisplayForTargetWindow(TaskPaneDisplayRequest request, Excel.Workbook workbook, Excel.Window targetWindow)
+        {
+            if (request != null && request.RefreshIntent == TaskPaneDisplayRefreshIntent.ForceRefresh)
+            {
+                _taskPaneManager?.PrepareTargetWindowForForcedRefresh(targetWindow);
+            }
+
+            PaneDisplayPolicyResult displayPolicyResult = PaneDisplayPolicy.Decide(_taskPaneManager, workbook, targetWindow);
+            switch (displayPolicyResult)
+            {
+                case PaneDisplayPolicyResult.ShowExisting:
+                    return;
+
+                case PaneDisplayPolicyResult.Reject:
+                    return;
+            }
+
+            string reason = request == null ? string.Empty : request.ToReasonString();
+            RefreshTaskPane(reason, workbook, targetWindow);
+        }
+
         private void RefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
         {
             int refreshCallId = ++_kernelFlickerTraceRefreshCallSequence;

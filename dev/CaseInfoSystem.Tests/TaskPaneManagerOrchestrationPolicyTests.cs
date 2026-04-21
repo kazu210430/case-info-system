@@ -82,5 +82,33 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(expected, result);
         }
+
+        [Theory]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(false, false, true)]
+        public void ShouldReject_OnlyReturnsTrue_WhenNeitherExistingNorRenderPathApplies(
+            bool showedExistingPane,
+            bool shouldShowWithRenderPane,
+            bool expected)
+        {
+            bool result = TaskPaneDisplayRejectPolicy.ShouldReject(showedExistingPane, shouldShowWithRenderPane);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Theory]
+        [InlineData(true, false, 0)]
+        [InlineData(false, true, 1)]
+        [InlineData(false, false, 2)]
+        public void Decide_ReturnsThreeWayDisplayResult(
+            bool showedExistingPane,
+            bool shouldShowWithRenderPane,
+            int expected)
+        {
+            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(showedExistingPane, shouldShowWithRenderPane);
+
+            Assert.Equal((PaneDisplayPolicyResult)expected, result);
+        }
     }
 }

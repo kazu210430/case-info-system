@@ -22,7 +22,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Action<string> _showKernelHomePlaceholderWithExternalWorkbookSuppression;
         private readonly Action<Excel.Workbook, string> _handleExternalWorkbookDetected;
         private readonly Func<string, Excel.Workbook, bool> _shouldSuppressCasePaneRefresh;
-        private readonly Action<string, Excel.Workbook, Excel.Window> _refreshTaskPane;
+        private readonly Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> _refreshTaskPane;
         private readonly Action _scheduleWordWarmup;
         private readonly int _pendingPaneRefreshMaxAttempts;
         private readonly string _kernelSheetCommandSheetCodeName;
@@ -42,7 +42,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Action<string> showKernelHomePlaceholderWithExternalWorkbookSuppression,
             Action<Excel.Workbook, string> handleExternalWorkbookDetected,
             Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh,
-            Action<string, Excel.Workbook, Excel.Window> refreshTaskPane,
+            Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> refreshTaskPane,
             Action scheduleWordWarmup,
             int pendingPaneRefreshMaxAttempts,
             string kernelSheetCommandSheetCodeName,
@@ -527,7 +527,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Func<string, Excel.Workbook, Excel.Window, bool> _isTaskPaneRefreshSucceeded;
         private readonly Action<Excel.Workbook, string> _handleExternalWorkbookDetected;
         private readonly Func<string, Excel.Workbook, bool> _shouldSuppressCasePaneRefresh;
-        private readonly Action<string, Excel.Workbook, Excel.Window> _refreshTaskPane;
+        private readonly Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> _refreshTaskPane;
         private readonly Action _scheduleWordWarmup;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
@@ -541,7 +541,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Func<string, Excel.Workbook, Excel.Window, bool> isTaskPaneRefreshSucceeded,
             Action<Excel.Workbook, string> handleExternalWorkbookDetected,
             Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh,
-            Action<string, Excel.Workbook, Excel.Window> refreshTaskPane,
+            Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> refreshTaskPane,
             Action scheduleWordWarmup,
             Func<KernelHomeForm> getKernelHomeForm,
             Func<int> getTaskPaneRefreshSuppressionCount,

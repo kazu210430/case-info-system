@@ -222,6 +222,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal Action<string> RefreshActiveTaskPaneHandler { get; set; }
 
+        internal Action<CaseInfoSystem.ExcelAddIn.App.TaskPaneDisplayRequest, Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window> RequestTaskPaneDisplayForTargetWindowHandler { get; set; }
+
         internal Func<string, string, bool> ShowKernelSheetAndRefreshPaneHandler { get; set; }
 
         internal Microsoft.Office.Tools.CustomTaskPane CreateTaskPane(Microsoft.Office.Interop.Excel.Window window, UserControl control)
@@ -257,6 +259,14 @@ namespace CaseInfoSystem.ExcelAddIn
         internal void RefreshActiveTaskPane(string reason)
         {
             RefreshActiveTaskPaneHandler?.Invoke(reason);
+        }
+
+        internal void RequestTaskPaneDisplayForTargetWindow(
+            CaseInfoSystem.ExcelAddIn.App.TaskPaneDisplayRequest request,
+            Microsoft.Office.Interop.Excel.Workbook workbook,
+            Microsoft.Office.Interop.Excel.Window targetWindow)
+        {
+            RequestTaskPaneDisplayForTargetWindowHandler?.Invoke(request, workbook, targetWindow);
         }
 
         internal bool ShowKernelSheetAndRefreshPane(string kernelTransitionSheetCodeName, string kernelTransitionReason)

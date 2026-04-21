@@ -186,6 +186,8 @@
     <Compile Include="App\TaskPaneManager.cs" />
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />
+    <Compile Include="App\PaneDisplayPolicy.cs" />
+    <Compile Include="App\TaskPaneDisplayRequest.cs" />
     <Compile Include="App\TaskPanePostActionRefreshPolicy.cs" />
     <Compile Include="App\TaskPaneRefreshPreconditionPolicy.cs" />
     <Compile Include="App\TaskPaneDisplayRetryCoordinator.cs" />

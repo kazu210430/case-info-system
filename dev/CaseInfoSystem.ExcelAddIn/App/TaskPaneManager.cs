@@ -267,6 +267,88 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return true;
         }
 
+        internal bool TryShowExistingPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
+        {
+            EvaluateDisplayRequestPaneState(
+                workbook,
+                window,
+                out bool hasExistingHost,
+                out bool isSameWorkbook,
+                out bool isRenderSignatureCurrent);
+
+            if (!TaskPaneShowExistingPolicy.ShouldShowExisting(
+                hasExistingHost: hasExistingHost,
+                isSameWorkbook: isSameWorkbook,
+                isRenderSignatureCurrent: isRenderSignatureCurrent))
+            {
+                return false;
+            }
+
+            return TryShowExistingPane(workbook, window, "DisplayRequest.ShowExisting");
+        }
+
+        internal bool ShouldShowWithRenderPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
+        {
+            EvaluateDisplayRequestPaneState(
+                workbook,
+                window,
+                out bool hasExistingHost,
+                out bool isSameWorkbook,
+                out bool isRenderSignatureCurrent);
+
+            return TaskPaneShowWithRenderPolicy.ShouldShowWithRender(
+                hasExistingHost,
+                isSameWorkbook,
+                isRenderSignatureCurrent);
+        }
+
+        private void EvaluateDisplayRequestPaneState(
+            Excel.Workbook workbook,
+            Excel.Window window,
+            out bool hasExistingHost,
+            out bool isSameWorkbook,
+            out bool isRenderSignatureCurrent)
+        {
+            hasExistingHost = false;
+            isSameWorkbook = false;
+            isRenderSignatureCurrent = false;
+
+            string windowKey = SafeGetWindowKey(window);
+            if (string.IsNullOrWhiteSpace(windowKey)
+                || !_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                return;
+            }
+
+            hasExistingHost = true;
+            string workbookFullName = workbook == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+            isSameWorkbook =
+                !string.IsNullOrWhiteSpace(workbookFullName)
+                && string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase);
+            if (!isSameWorkbook)
+            {
+                return;
+            }
+
+            WorkbookRole role = GetHostedWorkbookRole(host);
+            if (role == WorkbookRole.Unknown)
+            {
+                return;
+            }
+
+            string renderSignature = BuildRenderSignature(
+                new WorkbookContext(
+                    workbook,
+                    window,
+                    role,
+                    _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
+                    workbookFullName,
+                    _excelInteropService.GetActiveSheetCodeName(workbook)));
+            isRenderSignatureCurrent =
+                !string.IsNullOrWhiteSpace(host.LastRenderSignature)
+                && string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
+        }
+
         internal void HideAll()
         {
             foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
@@ -784,21 +866,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (decision == TaskPanePostActionRefreshDecision.DeferAndInvalidateSignature)
             {
-                host.LastRenderSignature = string.Empty;
+                InvalidateHostRenderStateForForcedRefresh(host);
                 _logger.Info("CASE pane refresh after case-list action was deferred so Kernel navigation can take the foreground.");
                 return;
             }
 
-            RefreshCaseHostAfterAction(host, workbook, control);
+            RefreshCaseHostAfterAction(host, workbook, control, actionKind);
         }
 
-        private void RefreshCaseHostAfterAction(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control)
+        private void RefreshCaseHostAfterAction(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
         {
             if (host == null || workbook == null || control == null)
             {
                 return;
             }
 
+            if (_addIn != null && host.Window != null)
+            {
+                _addIn.RequestTaskPaneDisplayForTargetWindow(
+                    TaskPaneDisplayRequest.ForPostActionRefresh(actionKind),
+                    workbook,
+                    host.Window);
+                return;
+            }
+
+            InvalidateHostRenderStateForForcedRefresh(host);
             RenderCaseHostAfterAction(control, workbook);
             host.LastRenderSignature = BuildRenderSignature(
                 new WorkbookContext(
@@ -814,6 +906,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
             _logger.Info("CASE pane refreshed after action. workbook=" + (host.WorkbookFullName ?? string.Empty));
+        }
+
+        internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)
+        {
+            string windowKey = SafeGetWindowKey(targetWindow);
+            if (string.IsNullOrWhiteSpace(windowKey))
+            {
+                return;
+            }
+
+            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                InvalidateHostRenderStateForForcedRefresh(host);
+            }
+        }
+
+        private static void InvalidateHostRenderStateForForcedRefresh(TaskPaneHost host)
+        {
+            if (host == null)
+            {
+                return;
+            }
+
+            host.LastRenderSignature = string.Empty;
         }
 
         /// <summary>
@@ -1115,6 +1231,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return host.Control.GetType().Name;
         }
 
+        private static WorkbookRole GetHostedWorkbookRole(TaskPaneHost host)
+        {
+            if (host == null || host.Control == null)
+            {
+                return WorkbookRole.Unknown;
+            }
+
+            if (host.Control is DocumentButtonsControl)
+            {
+                return WorkbookRole.Case;
+            }
+
+            if (host.Control is KernelNavigationControl)
+            {
+                return WorkbookRole.Kernel;
+            }
+
+            if (host.Control is AccountingNavigationControl)
+            {
+                return WorkbookRole.Accounting;
+            }
+
+            return WorkbookRole.Unknown;
+        }
+
         private string FormatWorkbookDescriptor(Excel.Workbook workbook)
         {
             return FormatWorkbookDescriptor(workbook, null);
@@ -1178,6 +1319,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal Func<string, string, bool> TryShowHost { get; set; }
 
             internal Action<string> OnCasePaneUpdatedNotification { get; set; }
+        }
+    }
+
+    internal static class TaskPaneShowExistingPolicy
+    {
+        internal static bool ShouldShowExisting(bool hasExistingHost, bool isSameWorkbook, bool isRenderSignatureCurrent)
+        {
+            return hasExistingHost && isSameWorkbook && isRenderSignatureCurrent;
+        }
+    }
+
+    internal static class TaskPaneShowWithRenderPolicy
+    {
+        internal static bool ShouldShowWithRender(bool hasExistingHost, bool isSameWorkbook, bool isRenderSignatureCurrent)
+        {
+            return !hasExistingHost || !isSameWorkbook || !isRenderSignatureCurrent;
         }
     }
 }

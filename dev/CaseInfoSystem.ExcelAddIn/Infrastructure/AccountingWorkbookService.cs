@@ -55,7 +55,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			_logger.Info ("Accounting workbook open in current application. path=" + workbookPath);
 			Workbook workbook = _application.Workbooks.Open (workbookPath, 0, false, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
-			_logger.Info ("Accounting workbook open completed. workbook=" + (workbook == null ? string.Empty : (workbook.FullName ?? workbook.Name ?? string.Empty)) + ", activeWorkbook=" + ((_application == null || _application.ActiveWorkbook == null) ? string.Empty : (_application.ActiveWorkbook.FullName ?? _application.ActiveWorkbook.Name ?? string.Empty)));
+			Workbook activeWorkbook = _application.ActiveWorkbook;
+			_logger.Info ("Accounting workbook open completed. workbook=" + (workbook == null ? string.Empty : (workbook.FullName ?? workbook.Name ?? string.Empty)) + ", activeWorkbook=" + (activeWorkbook == null ? string.Empty : (activeWorkbook.FullName ?? activeWorkbook.Name ?? string.Empty)));
 			return workbook;
 		}
 
@@ -94,7 +95,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					ReleaseComObject (window);
 				}
 			}
-			_logger.Info ("Accounting workbook windows visibility updated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", visible=" + visible + ", activeWorkbook=" + ((_application == null || _application.ActiveWorkbook == null) ? string.Empty : (_application.ActiveWorkbook.FullName ?? _application.ActiveWorkbook.Name ?? string.Empty)));
+			Workbook activeWorkbook = _application.ActiveWorkbook;
+			_logger.Info ("Accounting workbook windows visibility updated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", visible=" + visible + ", activeWorkbook=" + (activeWorkbook == null ? string.Empty : (activeWorkbook.FullName ?? activeWorkbook.Name ?? string.Empty)));
 		}
 
 		internal void SaveAsMacroEnabled (Workbook workbook, string savePath)
@@ -802,7 +804,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				worksheet = GetWorksheet (workbook, "請求書");
 				range = ((_Worksheet)worksheet).get_Range ((object)"A3", Type.Missing);
 				workbook.Activate ();
-				_logger.Info ("Accounting invoice entry workbook activated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", activeWorkbook=" + ((_application == null || _application.ActiveWorkbook == null) ? string.Empty : (_application.ActiveWorkbook.FullName ?? _application.ActiveWorkbook.Name ?? string.Empty)));
+				Workbook activeWorkbook = _application.ActiveWorkbook;
+				_logger.Info ("Accounting invoice entry workbook activated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", activeWorkbook=" + (activeWorkbook == null ? string.Empty : (activeWorkbook.FullName ?? activeWorkbook.Name ?? string.Empty)));
 				worksheet.Activate ();
 				_logger.Info ("Accounting invoice entry worksheet activated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", sheet=" + (worksheet == null ? string.Empty : (worksheet.CodeName ?? worksheet.Name ?? string.Empty)));
 				try {

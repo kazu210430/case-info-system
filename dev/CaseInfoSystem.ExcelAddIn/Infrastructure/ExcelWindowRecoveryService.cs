@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -44,7 +45,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 reason,
                 bringToFront,
                 ensureWindowVisible: true,
-                activateWindow: true);
+                activateWindow: true,
+                allowWindowCreation: true);
+        }
+
+        internal bool TryRecoverWorkbookWindowUsingExistingWindows(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            return TryRecoverWorkbookWindowInternal(
+                workbook,
+                reason,
+                bringToFront,
+                ensureWindowVisible: true,
+                activateWindow: true,
+                allowWindowCreation: false);
         }
 
         internal bool TryRecoverWorkbookWindowWithoutShowing(Excel.Workbook workbook, string reason, bool bringToFront)
@@ -54,10 +67,22 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 reason,
                 bringToFront,
                 ensureWindowVisible: false,
-                activateWindow: false);
+                activateWindow: false,
+                allowWindowCreation: true);
         }
 
-        private bool TryRecoverWorkbookWindowInternal(Excel.Workbook workbook, string reason, bool bringToFront, bool ensureWindowVisible, bool activateWindow)
+        internal bool TryRecoverWorkbookWindowWithoutShowingUsingExistingWindows(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            return TryRecoverWorkbookWindowInternal(
+                workbook,
+                reason,
+                bringToFront,
+                ensureWindowVisible: false,
+                activateWindow: false,
+                allowWindowCreation: false);
+        }
+
+        private bool TryRecoverWorkbookWindowInternal(Excel.Workbook workbook, string reason, bool bringToFront, bool ensureWindowVisible, bool activateWindow, bool allowWindowCreation)
         {
             if (workbook == null)
             {
@@ -66,14 +91,17 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
             bool recoveredScreenUpdating = EnsureScreenUpdatingEnabled(reason, workbookFullName);
-            Excel.Window window = ResolveWindow(workbook, reason, workbookFullName);
+            LogWindowResolutionSnapshot("before-resolve", workbook, reason, workbookFullName, allowWindowCreation);
+            Excel.Window window = ResolveWindow(workbook, reason, workbookFullName, allowWindowCreation);
             if (window == null)
             {
                 _logger.Warn(
                     "Excel window recovery skipped because workbook window could not be resolved. reason="
                     + (reason ?? string.Empty)
                     + ", workbook="
-                    + workbookFullName);
+                    + workbookFullName
+                    + ", allowWindowCreation="
+                    + allowWindowCreation.ToString());
                 return false;
             }
 
@@ -117,7 +145,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 + ", ensureWindowVisible="
                 + ensureWindowVisible.ToString()
                 + ", activateWindow="
-                + activateWindow.ToString());
+                + activateWindow.ToString()
+                + ", allowWindowCreation="
+                + allowWindowCreation.ToString()
+                + ", resolvedWindow="
+                + DescribeWindow(window));
             return true;
         }
 
@@ -188,24 +220,138 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         }
 
         /// <summary>
-        private Excel.Window ResolveWindow(Excel.Workbook workbook, string reason, string workbookFullName)
+        private Excel.Window ResolveWindow(Excel.Workbook workbook, string reason, string workbookFullName, bool allowWindowCreation)
         {
             Excel.Window visibleWindow = _excelInteropService.GetFirstVisibleWindow(workbook);
             if (visibleWindow != null)
             {
+                _logger.Info(
+                    "ResolveWindow resolved workbook visible window. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(visibleWindow));
                 return visibleWindow;
+            }
+
+            Excel.Window workbookWindow = TryGetFirstWorkbookWindow(workbook);
+            if (workbookWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook window from Workbook.Windows. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(workbookWindow));
+                return workbookWindow;
+            }
+
+            Excel.Window applicationWindow = TryFindApplicationWindowForWorkbook(workbook, workbookFullName, visibleOnly: true);
+            if (applicationWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook window from Application.Windows. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(applicationWindow));
+                return applicationWindow;
+            }
+
+            Excel.Window activeWindow = TryGetActiveWindowForWorkbook(workbookFullName);
+            if (activeWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook window from ActiveWindow. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(activeWindow));
+                return activeWindow;
             }
 
             try
             {
-                if (workbook.Windows.Count > 0)
-                {
-                    return workbook.Windows[1];
-                }
+                workbook.Activate();
             }
             catch (Exception ex)
             {
-                _logger.Error("ResolveWindow failed.", ex);
+                _logger.Debug(
+                    nameof(ExcelWindowRecoveryService),
+                    "ResolveWindow workbook.Activate failed. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", message="
+                    + ex.Message);
+            }
+
+            LogWindowResolutionSnapshot("after-activate", workbook, reason, workbookFullName, allowWindowCreation);
+
+            visibleWindow = _excelInteropService.GetFirstVisibleWindow(workbook);
+            if (visibleWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook visible window after workbook.Activate. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(visibleWindow));
+                return visibleWindow;
+            }
+
+            workbookWindow = TryGetFirstWorkbookWindow(workbook);
+            if (workbookWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook window from Workbook.Windows after workbook.Activate. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(workbookWindow));
+                return workbookWindow;
+            }
+
+            applicationWindow = TryFindApplicationWindowForWorkbook(workbook, workbookFullName, visibleOnly: false);
+            if (applicationWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook window from Application.Windows after workbook.Activate. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(applicationWindow));
+                return applicationWindow;
+            }
+
+            activeWindow = TryGetActiveWindowForWorkbook(workbookFullName);
+            if (activeWindow != null)
+            {
+                _logger.Info(
+                    "ResolveWindow resolved workbook window from ActiveWindow after workbook.Activate. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", window="
+                    + DescribeWindow(activeWindow));
+                return activeWindow;
+            }
+
+            if (!allowWindowCreation)
+            {
+                _logger.Warn(
+                    "ResolveWindow could not find an existing workbook window and skipped NewWindow. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty));
+                return null;
             }
 
             return TryRecreateWindow(workbook, reason, workbookFullName);
@@ -247,7 +393,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                         "Workbook window recreated by NewWindow. reason="
                         + (reason ?? string.Empty)
                         + ", workbook="
-                        + (workbookFullName ?? string.Empty));
+                        + (workbookFullName ?? string.Empty)
+                        + ", window="
+                        + DescribeWindow(createdWindow));
                     return createdWindow;
                 }
             }
@@ -262,6 +410,319 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return null;
+        }
+
+        private Excel.Window TryGetFirstWorkbookWindow(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                int count = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                for (int index = 1; index <= count; index++)
+                {
+                    Excel.Window window = workbook.Windows[index];
+                    if (window != null)
+                    {
+                        return window;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("TryGetFirstWorkbookWindow failed.", ex);
+            }
+
+            return null;
+        }
+
+        private Excel.Window TryGetActiveWindowForWorkbook(string workbookFullName)
+        {
+            if (string.IsNullOrWhiteSpace(workbookFullName))
+            {
+                return null;
+            }
+
+            try
+            {
+                Excel.Workbook activeWorkbook = _excelInteropService.GetActiveWorkbook();
+                string activeWorkbookFullName = _excelInteropService.GetWorkbookFullName(activeWorkbook);
+                if (!string.Equals(activeWorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                return _excelInteropService.GetActiveWindow();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("TryGetActiveWindowForWorkbook failed.", ex);
+                return null;
+            }
+        }
+
+        private Excel.Window TryFindApplicationWindowForWorkbook(Excel.Workbook workbook, string workbookFullName, bool visibleOnly)
+        {
+            object windowsObject = null;
+            dynamic windowsCollection = null;
+            try
+            {
+                dynamic lateBoundApplication = _application;
+                windowsCollection = lateBoundApplication.Windows;
+                windowsObject = windowsCollection;
+                if (windowsCollection == null)
+                {
+                    return null;
+                }
+
+                int count = Convert.ToInt32(windowsCollection.Count, CultureInfo.InvariantCulture);
+                for (int index = 1; index <= count; index++)
+                {
+                    Excel.Window window = null;
+                    try
+                    {
+                        window = windowsCollection[index] as Excel.Window;
+                    }
+                    catch
+                    {
+                        window = null;
+                    }
+
+                    if (window == null)
+                    {
+                        continue;
+                    }
+
+                    if (visibleOnly && !SafeWindowVisibleValue(window))
+                    {
+                        continue;
+                    }
+
+                    if (DoesWindowBelongToWorkbook(window, workbook, workbookFullName))
+                    {
+                        return window;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(
+                    nameof(ExcelWindowRecoveryService),
+                    "TryFindApplicationWindowForWorkbook failed. workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", message="
+                    + ex.Message);
+            }
+            finally
+            {
+                ReleaseComObject(windowsObject);
+            }
+
+            return null;
+        }
+
+        private bool DoesWindowBelongToWorkbook(Excel.Window window, Excel.Workbook workbook, string workbookFullName)
+        {
+            if (window == null)
+            {
+                return false;
+            }
+
+            object parent = null;
+            try
+            {
+                dynamic lateBoundWindow = window;
+                parent = lateBoundWindow.Parent;
+                Excel.Workbook parentWorkbook = parent as Excel.Workbook;
+                if (ReferenceEquals(parentWorkbook, workbook))
+                {
+                    return true;
+                }
+
+                string parentWorkbookFullName = _excelInteropService.GetWorkbookFullName(parentWorkbook);
+                if (!string.IsNullOrWhiteSpace(parentWorkbookFullName)
+                    && string.Equals(parentWorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                if (!ReferenceEquals(parent, workbook))
+                {
+                    ReleaseComObject(parent);
+                }
+            }
+
+            return CaptionMatchesWorkbookName(SafeWindowCaption(window), SafeWorkbookName(workbook));
+        }
+
+        private void LogWindowResolutionSnapshot(string stage, Excel.Workbook workbook, string reason, string workbookFullName, bool allowWindowCreation)
+        {
+            if (allowWindowCreation)
+            {
+                return;
+            }
+
+            _logger.Info(
+                "ResolveWindow snapshot. stage="
+                + (stage ?? string.Empty)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + (workbookFullName ?? string.Empty)
+                + ", applicationWorkbooks.Count="
+                + GetApplicationWorkbookCount().ToString(CultureInfo.InvariantCulture)
+                + ", applicationWindows.Count="
+                + GetApplicationWindowCount().ToString(CultureInfo.InvariantCulture)
+                + ", workbook.Windows.Count="
+                + GetWorkbookWindowCount(workbook).ToString(CultureInfo.InvariantCulture)
+                + ", activeWorkbook="
+                + SafeWorkbookFullName(_excelInteropService.GetActiveWorkbook())
+                + ", activeWindow="
+                + DescribeWindow(_excelInteropService.GetActiveWindow())
+                + ", workbookWindows="
+                + DescribeWorkbookWindows(workbook)
+                + ", applicationWindows="
+                + DescribeApplicationWindows(workbook, workbookFullName));
+        }
+
+        private int GetApplicationWorkbookCount()
+        {
+            try
+            {
+                return _application == null || _application.Workbooks == null ? 0 : _application.Workbooks.Count;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        private int GetApplicationWindowCount()
+        {
+            object windowsObject = null;
+            dynamic windowsCollection = null;
+            try
+            {
+                dynamic lateBoundApplication = _application;
+                windowsCollection = lateBoundApplication.Windows;
+                windowsObject = windowsCollection;
+                return windowsCollection == null
+                    ? 0
+                    : Convert.ToInt32(windowsCollection.Count, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return -1;
+            }
+            finally
+            {
+                ReleaseComObject(windowsObject);
+            }
+        }
+
+        private static int GetWorkbookWindowCount(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null || workbook.Windows == null ? 0 : workbook.Windows.Count;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        private string DescribeWorkbookWindows(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return "none";
+            }
+
+            try
+            {
+                int count = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                if (count == 0)
+                {
+                    return "none";
+                }
+
+                string[] descriptors = new string[count];
+                for (int index = 1; index <= count; index++)
+                {
+                    descriptors[index - 1] = "index="
+                        + index.ToString(CultureInfo.InvariantCulture)
+                        + ",window="
+                        + DescribeWindow(workbook.Windows[index]);
+                }
+
+                return string.Join(" | ", descriptors);
+            }
+            catch (Exception ex)
+            {
+                return "enumeration-failed:" + ex.GetType().Name;
+            }
+        }
+
+        private string DescribeApplicationWindows(Excel.Workbook workbook, string workbookFullName)
+        {
+            object windowsObject = null;
+            dynamic windowsCollection = null;
+            try
+            {
+                dynamic lateBoundApplication = _application;
+                windowsCollection = lateBoundApplication.Windows;
+                windowsObject = windowsCollection;
+                if (windowsCollection == null)
+                {
+                    return "none";
+                }
+
+                int count = Convert.ToInt32(windowsCollection.Count, CultureInfo.InvariantCulture);
+                if (count == 0)
+                {
+                    return "none";
+                }
+
+                string[] descriptors = new string[count];
+                for (int index = 1; index <= count; index++)
+                {
+                    Excel.Window window = null;
+                    try
+                    {
+                        window = windowsCollection[index] as Excel.Window;
+                    }
+                    catch
+                    {
+                        window = null;
+                    }
+
+                    descriptors[index - 1] = "index="
+                        + index.ToString(CultureInfo.InvariantCulture)
+                        + ",window="
+                        + DescribeWindow(window)
+                        + ",belongsToTarget="
+                        + DoesWindowBelongToWorkbook(window, workbook, workbookFullName).ToString();
+                }
+
+                return string.Join(" | ", descriptors);
+            }
+            catch (Exception ex)
+            {
+                return "enumeration-failed:" + ex.GetType().Name;
+            }
+            finally
+            {
+                ReleaseComObject(windowsObject);
+            }
         }
 
         /// <summary>
@@ -328,6 +789,140 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             catch (Exception ex)
             {
                 _logger.Debug(nameof(ExcelWindowRecoveryService), "PromoteWindow failed but recovery continues. reason=" + (reason ?? string.Empty) + ", workbook=" + (workbookFullName ?? string.Empty) + ", message=" + ex.Message);
+            }
+        }
+
+        private static string DescribeWindow(Excel.Window window)
+        {
+            return "hwnd=\""
+                + SafeWindowHwnd(window)
+                + "\",caption=\""
+                + SafeWindowCaption(window)
+                + "\",visible=\""
+                + SafeWindowVisible(window)
+                + "\",state=\""
+                + SafeWindowState(window)
+                + "\"";
+        }
+
+        private static string SafeWorkbookFullName(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? string.Empty : workbook.FullName ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWorkbookName(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? string.Empty : workbook.Name ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWindowHwnd(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : Convert.ToString(window.Hwnd, CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWindowCaption(Excel.Window window)
+        {
+            try
+            {
+                if (window == null)
+                {
+                    return string.Empty;
+                }
+
+                dynamic lateBoundWindow = window;
+                return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string SafeWindowVisible(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : window.Visible.ToString();
+            }
+            catch
+            {
+                return "error";
+            }
+        }
+
+        private static bool SafeWindowVisibleValue(Excel.Window window)
+        {
+            try
+            {
+                return window != null && window.Visible;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string SafeWindowState(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : window.WindowState.ToString();
+            }
+            catch
+            {
+                return "error";
+            }
+        }
+
+        private static bool CaptionMatchesWorkbookName(string caption, string workbookName)
+        {
+            if (string.IsNullOrWhiteSpace(caption) || string.IsNullOrWhiteSpace(workbookName))
+            {
+                return false;
+            }
+
+            if (string.Equals(caption, workbookName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return caption.StartsWith(workbookName + ":", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void ReleaseComObject(object comObject)
+        {
+            if (comObject == null || !Marshal.IsComObject(comObject))
+            {
+                return;
+            }
+
+            try
+            {
+                Marshal.FinalReleaseComObject(comObject);
+            }
+            catch
+            {
             }
         }
 

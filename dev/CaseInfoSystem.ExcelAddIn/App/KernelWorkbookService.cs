@@ -770,7 +770,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _excelWindowRecoveryService.EnsureApplicationVisible("KernelWorkbookService.EnsureWorkbookVisible", _excelInteropService.GetWorkbookFullName(workbook));
             }
 
-            _excelWindowRecoveryService.TryRecoverWorkbookWindow(
+            _excelWindowRecoveryService.TryRecoverWorkbookWindowUsingExistingWindows(
                 workbook,
                 "KernelWorkbookService.EnsureWorkbookVisible",
                 bringToFront: !shouldAvoidGlobalRestore);

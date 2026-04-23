@@ -72,7 +72,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 if (workbook != null)
                 {
-                    _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    if (ShouldReuseExistingWindowsOnly(reason))
+                    {
+                        _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowingUsingExistingWindows(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    }
+                    else
+                    {
+                        _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    }
                 }
                 else
                 {
@@ -285,7 +292,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + stopwatch.ElapsedMilliseconds.ToString());
 
             bool recovered = workbook != null
-                ? _excelWindowRecoveryService.TryRecoverWorkbookWindow(workbook, "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true)
+                ? RecoverWorkbookWindowForFinalForeground(workbook, reason)
                 : _excelWindowRecoveryService.TryRecoverActiveWorkbookWindow("TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true);
 
             _logger?.Info(
@@ -326,6 +333,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ",activeSheet=\""
                 + (context.ActiveSheetCodeName ?? string.Empty)
                 + "\"";
+        }
+
+        private bool RecoverWorkbookWindowForFinalForeground(Excel.Workbook workbook, string reason)
+        {
+            if (ShouldReuseExistingWindowsOnly(reason))
+            {
+                return _excelWindowRecoveryService.TryRecoverWorkbookWindowUsingExistingWindows(
+                    workbook,
+                    "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty),
+                    bringToFront: true);
+            }
+
+            return _excelWindowRecoveryService.TryRecoverWorkbookWindow(
+                workbook,
+                "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty),
+                bringToFront: true);
+        }
+
+        private static bool ShouldReuseExistingWindowsOnly(string reason)
+        {
+            return !string.IsNullOrWhiteSpace(reason)
+                && reason.IndexOf("KernelHomeForm.OpenSheet", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string FormatWorkbookDescriptor(Excel.Workbook workbook)

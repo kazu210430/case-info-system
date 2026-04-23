@@ -143,6 +143,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal bool TryRecoverWorkbookWindow(Excel.Workbook workbook, string reason, bool bringToFront)
         {
+            return TryRecoverWorkbookWindowCore(workbook, reason, allowWindowCreation: true);
+        }
+
+        internal bool TryRecoverWorkbookWindowUsingExistingWindows(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            return TryRecoverWorkbookWindowCore(workbook, reason, allowWindowCreation: false);
+        }
+
+        internal bool TryRecoverWorkbookWindowWithoutShowing(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            return TryRecoverWorkbookWindowCore(workbook, reason, allowWindowCreation: true);
+        }
+
+        internal bool TryRecoverWorkbookWindowWithoutShowingUsingExistingWindows(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            return TryRecoverWorkbookWindowCore(workbook, reason, allowWindowCreation: false);
+        }
+
+        private bool TryRecoverWorkbookWindowCore(Excel.Workbook workbook, string reason, bool allowWindowCreation)
+        {
             if (workbook == null)
             {
                 return false;
@@ -153,6 +173,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             Excel.Window window = _excelInteropService == null
                 ? null
                 : _excelInteropService.GetFirstVisibleWindow(workbook);
+            if (window == null
+                && _excelInteropService != null
+                && string.Equals(_excelInteropService.GetWorkbookFullName(_excelInteropService.GetActiveWorkbook()), workbook.FullName, StringComparison.OrdinalIgnoreCase))
+            {
+                window = _excelInteropService.GetActiveWindow();
+            }
             if (window == null)
             {
                 workbook.Activate();
@@ -160,9 +186,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     window = workbook.Windows[1];
                 }
+                else if (_excelInteropService != null
+                    && string.Equals(_excelInteropService.GetWorkbookFullName(_excelInteropService.GetActiveWorkbook()), workbook.FullName, StringComparison.OrdinalIgnoreCase))
+                {
+                    window = _excelInteropService.GetActiveWindow();
+                }
             }
 
-            if (window == null)
+            if (window == null && allowWindowCreation)
             {
                 window = workbook.NewWindow();
             }

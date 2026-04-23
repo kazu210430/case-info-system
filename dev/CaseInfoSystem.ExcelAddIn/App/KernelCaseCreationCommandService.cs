@@ -101,6 +101,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					return kernelCaseCreationResult;
 				}
 				if (!ShouldPromptToOpenCreatedCase (kernelCaseCreationResult.Mode)) {
+					PresentCaseFolderBestEffort (kernelCaseCreationResult, "KernelCaseCreationCommandService.Execute.NoPrompt");
 					kernelCaseCreationResult.ShouldCloseKernelHome = false;
 					_logger.Info ("Kernel case command completed without open prompt. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 					return kernelCaseCreationResult;
@@ -120,6 +121,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			CreatedCaseOpenDecision createdCaseOpenDecision = _createdCaseOpenPromptService.ConfirmOpenCreatedCase ();
 			_logger.Info ("Kernel case open decision received. mode=" + result.Mode.ToString () + ", decision=" + createdCaseOpenDecision.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			if (createdCaseOpenDecision == CreatedCaseOpenDecision.Skip) {
+				PresentCaseFolderBestEffort (result, "KernelCaseCreationCommandService.CompleteInteractiveOpenFlow.Skip");
 				result.ShouldCloseKernelHome = true;
 				return result;
 			}
@@ -138,6 +140,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private static bool ShouldPromptToOpenCreatedCase (KernelCaseCreationMode mode)
 		{
 			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
+		}
+
+		private void PresentCaseFolderBestEffort (KernelCaseCreationResult result, string reason)
+		{
+			if (!ShouldPresentCaseFolder (result)) {
+				return;
+			}
+			_kernelCasePresentationService.OpenCaseFolder (result.CaseFolderPath, reason);
+		}
+
+		private static bool ShouldPresentCaseFolder (KernelCaseCreationResult result)
+		{
+			return result != null && result.Success && !string.IsNullOrWhiteSpace (result.CaseFolderPath);
 		}
 
 		private static void ValidateRequest (KernelCaseCreationRequest request)

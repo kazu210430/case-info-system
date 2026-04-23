@@ -17,21 +17,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly CaseWorkbookOpenStrategy _caseWorkbookOpenStrategy;
 
-		private readonly FolderWindowService _folderWindowService;
-
 		private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
 
 		private readonly ExcelInteropService _excelInteropService;
 
 		private readonly Logger _logger;
 
-		internal KernelCaseCreationService (KernelWorkbookService kernelWorkbookService, KernelCasePathService kernelCasePathService, CaseWorkbookInitializer caseWorkbookInitializer, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, FolderWindowService folderWindowService, TransientPaneSuppressionService transientPaneSuppressionService, ExcelInteropService excelInteropService, Logger logger)
+		internal KernelCaseCreationService (KernelWorkbookService kernelWorkbookService, KernelCasePathService kernelCasePathService, CaseWorkbookInitializer caseWorkbookInitializer, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, TransientPaneSuppressionService transientPaneSuppressionService, ExcelInteropService excelInteropService, Logger logger)
 		{
 			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
 			_kernelCasePathService = kernelCasePathService ?? throw new ArgumentNullException ("kernelCasePathService");
 			_caseWorkbookInitializer = caseWorkbookInitializer ?? throw new ArgumentNullException ("caseWorkbookInitializer");
 			_caseWorkbookOpenStrategy = caseWorkbookOpenStrategy ?? throw new ArgumentNullException ("caseWorkbookOpenStrategy");
-			_folderWindowService = folderWindowService ?? throw new ArgumentNullException ("folderWindowService");
 			_transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException ("transientPaneSuppressionService");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
@@ -76,7 +73,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (!_kernelCasePathService.EnsureFolderExists (text4)) {
 				throw new InvalidOperationException ("CASE folder could not be created.");
 			}
-			OpenCaseFolderEarly (text4, request.Mode, outerStopwatch);
 			string extension = _kernelCasePathService.ResolveCaseWorkbookExtension (text2);
 			string caseWorkbookName = BuildCaseWorkbookName (customerName, extension);
 			string caseWorkbookPath = _kernelCasePathService.BuildCaseWorkbookPath (text4, caseWorkbookName);
@@ -170,19 +166,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					throw new IOException ("Initialized CASE workbook could not be moved to final path.");
 				}
 				_logger.Info ("Kernel case local working copy finalized. reason=" + reason + ", finalPath=" + finalCaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-			}
-		}
-
-		private void OpenCaseFolderEarly (string caseFolderPath, KernelCaseCreationMode mode, Stopwatch stopwatch)
-		{
-			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
-				return;
-			}
-			try {
-				_folderWindowService.OpenFolder (caseFolderPath, "KernelCaseCreationService.OpenCaseFolderEarly");
-				_logger.Info ("Kernel case folder opened before save completed. mode=" + mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-			} catch (Exception exception) {
-				_logger.Error ("OpenCaseFolderEarly failed.", exception);
 			}
 		}
 	}

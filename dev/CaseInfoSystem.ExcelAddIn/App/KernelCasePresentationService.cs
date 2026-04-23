@@ -73,13 +73,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal void OpenCaseFolder (string caseFolderPath)
+		internal void OpenCaseFolder (string caseFolderPath, string reason)
 		{
 			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
 				return;
 			}
 			try {
-				_folderWindowService.OpenFolder (caseFolderPath, "KernelCasePresentationService.OpenCaseFolder");
+				_folderWindowService.OpenFolder (caseFolderPath, reason ?? "KernelCasePresentationService.OpenCaseFolder");
 			} catch (Exception exception) {
 				_logger.Error ("OpenCaseFolder failed.", exception);
 			}

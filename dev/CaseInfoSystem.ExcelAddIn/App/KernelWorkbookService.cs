@@ -884,18 +884,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (shouldSkipHideExcelMainWindow)
             {
+                Excel.Workbook workbookToConceal = kernelWorkbook ?? activeWorkbook;
                 LogKernelFlickerTrace(
                     "source=KernelWorkbookService action=apply-home-display-decision trigger="
                     + (triggerReason ?? string.Empty)
-                    + ", decision=skip-hide-excel-main-window, reason=active-kernel-workbook-still-visible, visibleWorkbookCount="
+                    + ", decision=conceal-kernel-windows-and-hide-excel-main-window, reason=active-kernel-workbook-still-visible, visibleWorkbookCount="
                     + CountVisibleWorkbooksSafe().ToString()
                     + ", activeWorkbook="
                     + FormatWorkbookDescriptor(activeWorkbook)
+                    + ", concealTarget="
+                    + FormatWorkbookDescriptor(workbookToConceal)
                     + ", kernelWindowTargets="
                     + kernelWindowTargets);
+                ConcealKernelWorkbookWindowsForHomeDisplay(workbookToConceal, "ApplyHomeDisplayVisibility:" + (triggerReason ?? string.Empty));
                 _logger.Info(
-                    "ApplyHomeDisplayVisibility skipped hiding Excel main window because the active kernel workbook remained visible.");
-                return;
+                    "ApplyHomeDisplayVisibility concealed kernel windows before hiding Excel main window because the active kernel workbook remained visible.");
             }
 
             LogKernelFlickerTrace(
@@ -1259,6 +1262,45 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             catch
             {
+            }
+        }
+
+        private void ConcealKernelWorkbookWindowsForHomeDisplay(Excel.Workbook workbook, string triggerReason)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                for (int index = 1; index <= windowCount; index++)
+                {
+                    Excel.Window window = null;
+                    try
+                    {
+                        window = workbook.Windows[index];
+                        if (window == null)
+                        {
+                            continue;
+                        }
+
+                        SetKernelWindowVisibleFalse(
+                            workbook,
+                            window,
+                            index,
+                            "ConcealKernelWorkbookWindowsForHomeDisplay|" + (triggerReason ?? string.Empty));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("ConcealKernelWorkbookWindowsForHomeDisplay window conceal failed. index=" + index.ToString(), ex);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("ConcealKernelWorkbookWindowsForHomeDisplay failed.", ex);
             }
         }
 

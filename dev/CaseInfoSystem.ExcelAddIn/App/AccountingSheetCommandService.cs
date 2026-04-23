@@ -46,17 +46,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (string.IsNullOrWhiteSpace (targetSheetName)) {
 				throw new InvalidOperationException ("対象シートを特定できません。");
 			}
-			if (string.Equals (targetSheetName, "会計依頼書", StringComparison.OrdinalIgnoreCase)) {
-				_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A4:X4", targetSheetName, "A4:X4");
-				_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A14:Y44", targetSheetName, "A14:Y44");
-				_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A3", targetSheetName, "AB3");
-				_accountingWorkbookService.CopyValueRange (workbook, targetSheetName, "Y3", targetSheetName, "A3");
-				_logger.Info ("Accounting request sheet imported from source. source=" + sourceSheetName + ", target=" + targetSheetName);
-			} else {
-				_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A3:X4", targetSheetName, "A3:X4");
-				_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A14:Y44", targetSheetName, "A14:Y44");
-				_logger.Info ("Accounting form sheet imported from source. source=" + sourceSheetName + ", target=" + targetSheetName);
-			}
+			_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A3:X4", targetSheetName, "A3:X4");
+			_accountingWorkbookService.CopyFormulaRange (workbook, sourceSheetName, "A14:Y44", targetSheetName, "A14:Y44");
+			_logger.Info ("Accounting form sheet imported from source. source=" + sourceSheetName + ", target=" + targetSheetName);
 		}
 
 		private void ResetSheet (Workbook workbook, string targetSheetName)
@@ -100,7 +92,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void ResetAccountingRequestSheet (Workbook workbook)
 		{
-			_accountingWorkbookService.CopyFormulaRange (workbook, "リカバリ", "Y4:Z4", "会計依頼書", "Y3:Z3");
 			ApplyCommonRecovery (workbook, "会計依頼書");
 			_accountingWorkbookService.WriteCell (workbook, "会計依頼書", "B6", "以下のとおり会計処理をお願いします。");
 			_logger.Info ("Accounting request sheet reset completed.");

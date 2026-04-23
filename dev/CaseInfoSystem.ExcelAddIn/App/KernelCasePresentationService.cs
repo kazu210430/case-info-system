@@ -83,6 +83,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
+		internal void OpenCaseFolderAndWait (string caseFolderPath, string reason)
+		{
+			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
+				return;
+			}
+			try {
+				IntPtr intPtr = _folderWindowService.OpenFolderAndWait (caseFolderPath, reason ?? "KernelCasePresentationService.OpenCaseFolderAndWait");
+				_logger.Info ("CASE folder open-and-wait completed. folderPath=" + caseFolderPath + ", explorerWindowFound=" + (intPtr != IntPtr.Zero));
+			} catch (Exception exception) {
+				_logger.Error ("OpenCaseFolderAndWait failed.", exception);
+			}
+		}
+
 		internal KernelCaseCreationResult OpenCreatedCase (KernelCaseCreationResult result)
 		{
 			if (result == null) {

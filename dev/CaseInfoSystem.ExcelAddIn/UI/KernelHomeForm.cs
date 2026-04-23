@@ -320,7 +320,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				BringToFront ();
 				ForceBringToFront ("KernelHomeForm.RestoreHomeToForegroundAfterCaseCreation");
 				PrepareCustomerInputForNextBatchCreate ();
-				BeginForegroundRetry ();
 			}
 		}
 

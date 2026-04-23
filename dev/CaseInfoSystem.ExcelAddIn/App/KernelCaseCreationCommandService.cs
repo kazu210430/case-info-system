@@ -140,12 +140,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (!ShouldPresentCaseFolder (result)) {
 				return;
 			}
+			if (ShouldWaitForCaseFolderPresentation (result.Mode)) {
+				_kernelCasePresentationService.OpenCaseFolderAndWait (result.CaseFolderPath, reason);
+				return;
+			}
 			_kernelCasePresentationService.OpenCaseFolder (result.CaseFolderPath, reason);
 		}
 
 		private static bool ShouldPresentCaseFolder (KernelCaseCreationResult result)
 		{
 			return result != null && result.Success && !string.IsNullOrWhiteSpace (result.CaseFolderPath);
+		}
+
+		private static bool ShouldWaitForCaseFolderPresentation (KernelCaseCreationMode mode)
+		{
+			return mode == KernelCaseCreationMode.CreateCaseBatch;
 		}
 
 		private static void ValidateRequest (KernelCaseCreationRequest request)

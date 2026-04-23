@@ -43,7 +43,7 @@ dotnet restore .\dev\CaseInfoSystem.Tests\CaseInfoSystem.Tests.csproj
 
 ## ビルド
 
-通常の開発向けビルドは次を使用します。
+VSTO プロジェクトの `dotnet build` は、DLL までのコンパイル確認用です。`Addins/` への実機反映や Word / Excel 上での有効化までは行いません。
 
 ```powershell
 dotnet build .\dev\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.csproj -c Release -p:SignManifests=false -p:ManifestCertificateThumbprint=
@@ -51,11 +51,18 @@ dotnet build .\dev\CaseInfoSystem.WordAddIn\CaseInfoSystem.WordAddIn.csproj -c R
 dotnet build .\dev\CaseInfoSystem.ExcelLauncher\CaseInfoSystem.ExcelLauncher.csproj -c Release
 ```
 
+実機反映を伴う `Debug` ビルドは、VSTO パッケージングが有効な `MSBuild.exe` の `DeployDebugAddIn` ターゲットを使います。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-DeployDebugAddIns.ps1 -Project WordAddIn
+```
+
 補足:
 
 - `dev/CaseInfoSystem.slnx` に対する `dotnet restore` / `dotnet build` は、この環境では終了コード 1 で失敗することがあり、通常手順としては使っていません。
 - VSTO プロジェクトは `SignManifests=false` を付けると `dotnet build` で DLL までのコンパイル確認ができます。
 - 署名付き manifest / `.vsto` を含む配布ビルドは、証明書ストアと VSTO パッケージング前提を満たす別経路です。
+- `Addins/` への同期と Office 側の有効化確認が必要なときは、`dotnet build` ではなく `scripts/Invoke-DeployDebugAddIns.ps1` か `MSBuild.exe /t:DeployDebugAddIn` を使ってください。
 - CI では `dotnet build <VSTO csproj> -p:SignManifests=false -p:ManifestCertificateThumbprint=` と `dotnet test` を組み合わせ、署名依存を外してコンパイル検証を行います。
 - 配布物生成や実機同期の確認は CI の対象外です。
 

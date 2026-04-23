@@ -51,6 +51,12 @@
 
 ## 手で実行する例
 
+Word を実機反映付きでビルド:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-DeployDebugAddIns.ps1 -Project WordAddIn
+```
+
 両方をバックアップ:
 
 ```powershell

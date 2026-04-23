@@ -159,6 +159,23 @@ namespace Microsoft.Office.Interop.Excel
 
         public void Activate()
         {
+            if (Application != null)
+            {
+                Application.ActiveWorkbook = this;
+                Application.ActiveWindow = Windows.Count > 0 ? Windows[1] : null;
+            }
+        }
+
+        public Window NewWindow()
+        {
+            var window = new Window();
+            Windows.Add(window);
+            if (Application != null)
+            {
+                Application.ActiveWorkbook = this;
+                Application.ActiveWindow = window;
+            }
+            return window;
         }
     }
 

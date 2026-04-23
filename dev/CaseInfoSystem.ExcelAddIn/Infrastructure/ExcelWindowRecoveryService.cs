@@ -66,7 +66,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
             bool recoveredScreenUpdating = EnsureScreenUpdatingEnabled(reason, workbookFullName);
-            Excel.Window window = ResolveWindow(workbook);
+            Excel.Window window = ResolveWindow(workbook, reason, workbookFullName);
             if (window == null)
             {
                 _logger.Warn(
@@ -188,7 +188,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         }
 
         /// <summary>
-        private Excel.Window ResolveWindow(Excel.Workbook workbook)
+        private Excel.Window ResolveWindow(Excel.Workbook workbook, string reason, string workbookFullName)
         {
             Excel.Window visibleWindow = _excelInteropService.GetFirstVisibleWindow(workbook);
             if (visibleWindow != null)
@@ -198,13 +198,70 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             try
             {
-                return workbook.Windows.Count > 0 ? workbook.Windows[1] : null;
+                if (workbook.Windows.Count > 0)
+                {
+                    return workbook.Windows[1];
+                }
             }
             catch (Exception ex)
             {
                 _logger.Error("ResolveWindow failed.", ex);
-                return null;
             }
+
+            return TryRecreateWindow(workbook, reason, workbookFullName);
+        }
+
+        private Excel.Window TryRecreateWindow(Excel.Workbook workbook, string reason, string workbookFullName)
+        {
+            try
+            {
+                workbook.Activate();
+                if (workbook.Windows.Count > 0)
+                {
+                    _logger.Info(
+                        "Workbook window recreated by activation. reason="
+                        + (reason ?? string.Empty)
+                        + ", workbook="
+                        + (workbookFullName ?? string.Empty));
+                    return workbook.Windows[1];
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(
+                    nameof(ExcelWindowRecoveryService),
+                    "Workbook activation did not recreate a window. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", message="
+                    + ex.Message);
+            }
+
+            try
+            {
+                Excel.Window createdWindow = workbook.NewWindow();
+                if (createdWindow != null)
+                {
+                    _logger.Info(
+                        "Workbook window recreated by NewWindow. reason="
+                        + (reason ?? string.Empty)
+                        + ", workbook="
+                        + (workbookFullName ?? string.Empty));
+                    return createdWindow;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    "TryRecreateWindow failed. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty),
+                    ex);
+            }
+
+            return null;
         }
 
         /// <summary>

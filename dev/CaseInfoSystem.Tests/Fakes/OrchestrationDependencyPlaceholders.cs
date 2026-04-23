@@ -9,15 +9,34 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
     internal sealed class ExcelInteropService
     {
+        private readonly Excel.Application _application;
+
+        internal ExcelInteropService()
+        {
+        }
+
+        internal ExcelInteropService(Excel.Application application, Logger logger, PathCompatibilityService pathCompatibilityService)
+        {
+            _application = application;
+        }
+
         internal Func<Excel.Workbook, Excel.Window> OnGetActiveWindow { get; set; }
 
         internal Func<CaseInfoSystem.ExcelAddIn.Domain.CaseContext, bool> OnTryNormalizeCaseListRowHeight { get; set; }
 
         internal Func<IEnumerable<Excel.Workbook>> OnGetOpenWorkbooks { get; set; }
 
-        internal Excel.Workbook GetActiveWorkbook() => null;
+        internal Excel.Workbook GetActiveWorkbook() => _application?.ActiveWorkbook;
 
-        internal Excel.Window GetActiveWindow() => OnGetActiveWindow != null ? OnGetActiveWindow(null) : null;
+        internal Excel.Window GetActiveWindow()
+        {
+            if (OnGetActiveWindow != null)
+            {
+                return OnGetActiveWindow(null);
+            }
+
+            return _application?.ActiveWindow;
+        }
 
         internal string GetWorkbookFullName(Excel.Workbook workbook) => workbook == null ? string.Empty : workbook.FullName ?? string.Empty;
 
@@ -97,15 +116,66 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
     internal sealed class ExcelWindowRecoveryService
     {
+        private readonly Excel.Application _application;
+        private readonly ExcelInteropService _excelInteropService;
+
+        internal ExcelWindowRecoveryService()
+        {
+        }
+
+        internal ExcelWindowRecoveryService(Excel.Application application, ExcelInteropService excelInteropService, Logger logger)
+        {
+            _application = application;
+            _excelInteropService = excelInteropService;
+        }
+
         internal void EnsureApplicationVisible(string reason, string workbookFullName)
         {
+            if (_application != null)
+            {
+                _application.Visible = true;
+            }
         }
 
         internal bool TryRestoreMainWindow(bool bringToFront) => true;
 
         internal bool TryRestoreWorkbookWindow(Excel.Workbook workbook, bool bringToFront) => true;
 
-        internal bool TryRecoverWorkbookWindow(Excel.Workbook workbook, string reason, bool bringToFront) => true;
+        internal bool TryRecoverWorkbookWindow(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            if (workbook == null)
+            {
+                return false;
+            }
+
+            EnsureApplicationVisible(reason, workbook.FullName);
+
+            Excel.Window window = _excelInteropService == null
+                ? null
+                : _excelInteropService.GetFirstVisibleWindow(workbook);
+            if (window == null)
+            {
+                workbook.Activate();
+                if (workbook.Windows.Count > 0)
+                {
+                    window = workbook.Windows[1];
+                }
+            }
+
+            if (window == null)
+            {
+                window = workbook.NewWindow();
+            }
+
+            if (window == null)
+            {
+                return false;
+            }
+
+            window.Visible = true;
+            window.Activate();
+            return true;
+        }
     }
 
     internal sealed class UserErrorService

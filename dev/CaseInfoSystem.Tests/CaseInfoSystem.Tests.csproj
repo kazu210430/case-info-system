@@ -54,6 +54,7 @@
     <Compile Include="KernelWorkbookWindowRestorePolicyTests.cs" />
     <Compile Include="NavigationServiceTests.cs" />
     <Compile Include="ExcelAddInTraceInfrastructureTests.cs" />
+    <Compile Include="ExcelWindowRecoveryServiceTests.cs" />
     <Compile Include="TaskPaneHostReusePolicyTests.cs" />
     <Compile Include="TaskPaneManagerOrchestrationPolicyTests.cs" />
     <Compile Include="TaskPanePostActionRefreshPolicyTests.cs" />

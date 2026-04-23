@@ -558,8 +558,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             try
             {
                 _application.EnableEvents = false;
-                ReleaseHomeDisplay(true);
-                EnsureWorkbookVisible(workbook);
+                PrepareWorkbookForSheetNavigation(workbook, codeName);
                 Excel.Worksheet worksheet = _excelInteropService.FindWorksheetByCodeName(workbook, codeName);
                 if (worksheet == null)
                 {
@@ -574,6 +573,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 _application.EnableEvents = previousEnableEvents;
             }
+        }
+
+        private void PrepareWorkbookForSheetNavigation(Excel.Workbook workbook, string codeName)
+        {
+            if (_isHomeDisplayPrepared)
+            {
+                DismissPreparedHomeDisplayState("ShowSheetByCodeName:" + (codeName ?? string.Empty));
+            }
+
+            EnsureWorkbookVisible(workbook);
         }
 
         private Excel.Workbook GetOrOpenKernelWorkbook()

@@ -33,6 +33,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             TaskPaneDisplayRequest request = TaskPaneDisplayRequest.ForWindowActivate();
             string reason = request.ToReasonString();
+            if (Globals.ThisAddIn != null && Globals.ThisAddIn.ShouldIgnoreWindowActivateDuringCaseProtection(workbook, window))
+            {
+                return;
+            }
+
             _handleExternalWorkbookDetected?.Invoke(workbook, reason);
             if (_shouldSuppressCasePaneRefresh != null && _shouldSuppressCasePaneRefresh(reason, workbook))
             {

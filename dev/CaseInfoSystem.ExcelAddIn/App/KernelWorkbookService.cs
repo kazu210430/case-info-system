@@ -2,10 +2,10 @@
 using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
-using Microsoft.WindowsAPICodePack.Dialogs;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
@@ -13,7 +13,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class KernelWorkbookService
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
-        private const string SystemRootPropName = "SYSTEM_ROOT";
         private const int SwHide = 0;
         private const int SwShow = 5;
         private const int SwRestore = 9;
@@ -25,6 +24,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly KernelWorkbookServiceTestHooks _testHooks;
+        private readonly KernelWorkbookStateService _kernelWorkbookStateService;
+        private readonly KernelWorkbookSettingsService _kernelWorkbookSettingsService;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
         private bool _isHomeDisplayPrepared;
 
@@ -59,6 +60,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testHooks = null;
+            _kernelWorkbookStateService = new KernelWorkbookStateService(_application, _excelInteropService, _pathCompatibilityService, _logger);
+            _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
         }
 
         internal KernelWorkbookService(KernelCaseInteractionState kernelCaseInteractionState, Logger logger, KernelWorkbookServiceTestHooks testHooks)
@@ -70,52 +73,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testHooks = testHooks;
+            _kernelWorkbookStateService = new KernelWorkbookStateService(
+                _application,
+                _excelInteropService,
+                _pathCompatibilityService,
+                _logger,
+                getOpenKernelWorkbookOverride: _testHooks == null ? null : _testHooks.GetOpenKernelWorkbook,
+                resolveKernelWorkbookPathOverride: _testHooks == null ? null : _testHooks.ResolveKernelWorkbookPath,
+                findOpenWorkbookOverride: _testHooks == null ? null : _testHooks.FindOpenWorkbook,
+                hasOtherVisibleWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherVisibleWorkbook,
+                hasOtherWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherWorkbook);
+            _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
         }
 
         internal Excel.Workbook GetOpenKernelWorkbook()
         {
-            try
-            {
-                foreach (Excel.Workbook workbook in _application.Workbooks)
-                {
-                    if (WorkbookFileNameResolver.IsKernelWorkbookName(_excelInteropService.GetWorkbookName(workbook)))
-                    {
-                        return workbook;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("GetOpenKernelWorkbook failed.", ex);
-            }
-
-            return null;
+            return _kernelWorkbookStateService.GetOpenKernelWorkbook();
         }
 
         internal bool IsKernelWorkbook(Excel.Workbook workbook)
         {
-            return WorkbookFileNameResolver.IsKernelWorkbookName(_excelInteropService.GetWorkbookName(workbook));
+            return _kernelWorkbookStateService.IsKernelWorkbook(workbook);
         }
 
         internal Excel.Workbook ResolveKernelWorkbook(Domain.WorkbookContext context)
         {
-            Excel.Workbook openKernelWorkbook = GetOpenKernelWorkbookCore();
-            string kernelPath = KernelWorkbookResolutionPolicy.ResolveKernelWorkbookPath(
-                hasOpenKernelWorkbook: openKernelWorkbook != null,
-                systemRoot: context == null ? string.Empty : context.SystemRoot,
-                resolvePath: root => ResolveKernelWorkbookPathCore(root));
-
-            if (openKernelWorkbook != null)
-            {
-                return openKernelWorkbook;
-            }
-
-            if (string.IsNullOrWhiteSpace(kernelPath))
-            {
-                return null;
-            }
-
-            return FindOpenWorkbookCore(kernelPath);
+            return _kernelWorkbookStateService.ResolveKernelWorkbook(context);
         }
 
         internal bool TryShowSheetByCodeName(Domain.WorkbookContext context, string sheetCodeName, string reason)
@@ -138,55 +121,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool ShouldShowHomeOnStartup(Excel.Workbook startupWorkbook = null)
         {
-            bool hasExplicitKernelStartupContext = HasExplicitKernelStartupContext(startupWorkbook);
-            bool hasKernelWorkbookContext = hasExplicitKernelStartupContext && HasKernelWorkbookContext();
-            bool isStartupWorkbookKernel = hasExplicitKernelStartupContext && hasKernelWorkbookContext && IsKernelWorkbook(startupWorkbook);
-            bool hasVisibleNonKernelWorkbook = hasExplicitKernelStartupContext && hasKernelWorkbookContext && !isStartupWorkbookKernel && HasVisibleNonKernelWorkbook();
-            return KernelWorkbookStartupDisplayPolicy.ShouldShowHomeOnStartup(
-                hasExplicitKernelStartupContext,
-                hasKernelWorkbookContext,
-                isStartupWorkbookKernel,
-                hasVisibleNonKernelWorkbook);
+            return _kernelWorkbookStateService.ShouldShowHomeOnStartup(startupWorkbook);
         }
 
         internal string DescribeStartupState()
         {
-            string activeWorkbookName = "(null)";
-            bool activeIsKernel = false;
-            bool hasOpenKernelWorkbook = false;
-            bool hasVisibleNonKernelWorkbook = false;
-
-            try
-            {
-                Excel.Workbook activeWorkbook = _application.ActiveWorkbook;
-                if (activeWorkbook != null)
-                {
-                    activeWorkbookName = _excelInteropService.GetWorkbookName(activeWorkbook);
-                    activeIsKernel = IsKernelWorkbook(activeWorkbook);
-                }
-            }
-            catch
-            {
-                activeWorkbookName = "(error)";
-            }
-
-            try
-            {
-                hasOpenKernelWorkbook = GetOpenKernelWorkbook() != null;
-                hasVisibleNonKernelWorkbook = HasVisibleNonKernelWorkbook();
-            }
-            catch
-            {
-            }
-
-            return "activeWorkbook="
-                + activeWorkbookName
-                + ", activeIsKernel="
-                + activeIsKernel
-                + ", hasOpenKernelWorkbook="
-                + hasOpenKernelWorkbook
-                + ", hasVisibleNonKernelWorkbook="
-                + hasVisibleNonKernelWorkbook;
+            return _kernelWorkbookStateService.DescribeStartupState();
         }
 
         internal KernelSettingsState LoadSettings()
@@ -198,10 +138,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return new KernelSettingsState();
             }
 
-            string nameRuleA = _excelInteropService.TryGetDocumentProperty(workbook, "NAME_RULE_A");
-            string nameRuleB = _excelInteropService.TryGetDocumentProperty(workbook, "NAME_RULE_B");
-            string defaultRoot = _excelInteropService.TryGetDocumentProperty(workbook, "DEFAULT_ROOT");
-            string systemRoot = TryGetKernelWorkbookDirectory(workbook);
+            string nameRuleA = _kernelWorkbookSettingsService.LoadNameRuleA(workbook);
+            string nameRuleB = _kernelWorkbookSettingsService.LoadNameRuleB(workbook);
+            string defaultRoot = _kernelWorkbookSettingsService.LoadDefaultRoot(workbook);
+            string systemRoot = KernelWorkbookResolver.TryGetKernelWorkbookDirectory(workbook, _excelInteropService, _pathCompatibilityService, _logger, IsKernelWorkbook);
 
             _logger.Info(
                 "Kernel settings loaded. workbook="
@@ -219,15 +159,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 SystemRoot = systemRoot,
                 DefaultRoot = defaultRoot,
-                NameRuleA = KernelNamingService.NormalizeNameRuleA(string.IsNullOrWhiteSpace(nameRuleA) ? "YYYY" : nameRuleA),
-                NameRuleB = KernelNamingService.NormalizeNameRuleB(string.IsNullOrWhiteSpace(nameRuleB) ? "DOC" : nameRuleB)
+                NameRuleA = nameRuleA,
+                NameRuleB = nameRuleB
             };
-        }
-
-        internal string ResolveCurrentCaseWorkbookExtension(string systemRoot)
-        {
-            string baseWorkbookPath = WorkbookFileNameResolver.ResolveExistingBaseWorkbookPath(systemRoot, _pathCompatibilityService);
-            return WorkbookFileNameResolver.GetWorkbookExtensionOrDefault(baseWorkbookPath);
         }
 
         internal void PrepareForHomeDisplay()
@@ -291,7 +225,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            SetDocumentProperty(workbook, "NAME_RULE_A", ruleA);
+            _kernelWorkbookSettingsService.SaveNameRuleA(workbook, ruleA);
             workbook.Save();
         }
 
@@ -303,7 +237,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            SetDocumentProperty(workbook, "NAME_RULE_B", ruleB);
+            _kernelWorkbookSettingsService.SaveNameRuleB(workbook, ruleB);
             workbook.Save();
         }
 
@@ -315,13 +249,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return null;
             }
 
-            string selectedPath = SelectFolderPath("既定フォルダを選択してください。", _excelInteropService.TryGetDocumentProperty(workbook, "DEFAULT_ROOT"));
+            string selectedPath = _kernelWorkbookSettingsService.SelectDefaultRoot(workbook);
             if (string.IsNullOrWhiteSpace(selectedPath))
             {
                 return null;
             }
 
-            SetDocumentProperty(workbook, "DEFAULT_ROOT", selectedPath);
             workbook.Save();
             return selectedPath;
         }
@@ -485,20 +418,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _testHooks != null && _testHooks.GetOpenKernelWorkbook != null
                 ? _testHooks.GetOpenKernelWorkbook()
                 : GetOpenKernelWorkbook();
-        }
-
-        private string ResolveKernelWorkbookPathCore(string systemRoot)
-        {
-            return _testHooks != null && _testHooks.ResolveKernelWorkbookPath != null
-                ? _testHooks.ResolveKernelWorkbookPath(systemRoot)
-                : WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
-        }
-
-        private Excel.Workbook FindOpenWorkbookCore(string workbookPath)
-        {
-            return _testHooks != null && _testHooks.FindOpenWorkbook != null
-                ? _testHooks.FindOpenWorkbook(workbookPath)
-                : _excelInteropService.FindOpenWorkbook(workbookPath);
         }
 
         private bool HasOtherVisibleWorkbookCore(Excel.Workbook workbook)
@@ -705,103 +624,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private string ResolveKernelWorkbookPathFromAvailableSystemRoot()
         {
-            string systemRoot = ResolveSystemRootFromAvailableWorkbooks();
+            string systemRoot = KernelWorkbookResolver.ResolveSystemRootFromAvailableWorkbooks(_application, _excelInteropService, _pathCompatibilityService, _logger, IsKernelWorkbook);
             if (string.IsNullOrWhiteSpace(systemRoot))
             {
                 return null;
             }
 
             return WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
-        }
-
-        private string ResolveSystemRootFromAvailableWorkbooks()
-        {
-            string systemRoot = GetSystemRootFromWorkbook(_application.ActiveWorkbook);
-            if (!string.IsNullOrWhiteSpace(systemRoot))
-            {
-                return systemRoot;
-            }
-
-            foreach (Excel.Workbook workbook in _application.Workbooks)
-            {
-                systemRoot = GetSystemRootFromWorkbook(workbook);
-                if (!string.IsNullOrWhiteSpace(systemRoot))
-                {
-                    return systemRoot;
-                }
-            }
-
-            return string.Empty;
-        }
-
-        private string GetSystemRootFromWorkbook(Excel.Workbook workbook)
-        {
-            string systemRoot = NormalizePath(_excelInteropService.TryGetDocumentProperty(workbook, SystemRootPropName));
-            if (string.IsNullOrWhiteSpace(systemRoot))
-            {
-                string workbookPathFallback = TryGetKernelWorkbookDirectory(workbook);
-                if (string.IsNullOrWhiteSpace(workbookPathFallback))
-                {
-                    return string.Empty;
-                }
-
-                _logger.Info("GetSystemRootFromWorkbook fallback used workbook directory. workbook=" + _excelInteropService.GetWorkbookFullName(workbook));
-                return workbookPathFallback;
-            }
-
-            string kernelWorkbookPath = WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
-            return string.IsNullOrWhiteSpace(kernelWorkbookPath) ? string.Empty : systemRoot;
-        }
-
-        private string TryGetKernelWorkbookDirectory(Excel.Workbook workbook)
-        {
-            if (!IsKernelWorkbook(workbook))
-            {
-                return string.Empty;
-            }
-
-            string workbookFullName = NormalizePath(_excelInteropService.GetWorkbookFullName(workbook));
-            if (string.IsNullOrWhiteSpace(workbookFullName) || !File.Exists(workbookFullName))
-            {
-                return string.Empty;
-            }
-
-            string workbookDirectory;
-            try
-            {
-                workbookDirectory = Path.GetDirectoryName(workbookFullName);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("TryGetKernelWorkbookDirectory Path.GetDirectoryName failed.", ex);
-                return string.Empty;
-            }
-
-            workbookDirectory = NormalizePath(workbookDirectory);
-            if (string.IsNullOrWhiteSpace(workbookDirectory))
-            {
-                return string.Empty;
-            }
-
-            string kernelWorkbookPath = WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(workbookDirectory, _pathCompatibilityService);
-            return string.IsNullOrWhiteSpace(kernelWorkbookPath) ? string.Empty : workbookDirectory;
-        }
-
-        private static string NormalizePath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
-            }
-            catch
-            {
-                return path.Trim();
-            }
         }
 
         private void SaveAndCloseKernelWorkbook(Excel.Workbook workbook)
@@ -908,134 +737,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private string SelectFolderPath(string dialogTitle, string initialDirectory)
-        {
-            using (CommonOpenFileDialog dialog = new CommonOpenFileDialog())
-            {
-                dialog.IsFolderPicker = true;
-                dialog.Multiselect = false;
-                dialog.Title = dialogTitle;
-                dialog.EnsurePathExists = true;
-                dialog.AllowNonFileSystemItems = false;
-
-                if (!string.IsNullOrWhiteSpace(initialDirectory) && Directory.Exists(initialDirectory))
-                {
-                    dialog.InitialDirectory = initialDirectory;
-                    dialog.DefaultDirectory = initialDirectory;
-                }
-
-                if (dialog.ShowDialog() != CommonFileDialogResult.Ok)
-                {
-                    return null;
-                }
-
-                return dialog.FileName;
-            }
-        }
-
-        private static void SetDocumentProperty(Excel.Workbook workbook, string propertyName, string value)
-        {
-            dynamic properties = workbook.CustomDocumentProperties;
-            try
-            {
-                properties[propertyName].Value = value;
-            }
-            catch
-            {
-                const int MsoPropertyTypeString = 4;
-                properties.Add(propertyName, false, MsoPropertyTypeString, value);
-            }
-        }
-
         private bool HasOtherVisibleWorkbook(Excel.Workbook workbookToIgnore)
         {
-            foreach (Excel.Workbook workbook in _application.Workbooks)
-            {
-                if (workbookToIgnore != null && ReferenceEquals(workbook, workbookToIgnore))
-                {
-                    continue;
-                }
-
-                if (workbook.Windows.Count > 0 && workbook.Windows.Cast<Excel.Window>().Any(window => window.Visible))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return _kernelWorkbookStateService.HasOtherVisibleWorkbook(workbookToIgnore);
         }
 
         private bool HasOtherWorkbook(Excel.Workbook workbookToIgnore)
         {
-            foreach (Excel.Workbook workbook in _application.Workbooks)
-            {
-                if (workbookToIgnore != null && ReferenceEquals(workbook, workbookToIgnore))
-                {
-                    continue;
-                }
-
-                return true;
-            }
-
-            return false;
+            return _kernelWorkbookStateService.HasOtherWorkbook(workbookToIgnore);
         }
 
         private bool HasVisibleNonKernelWorkbook()
         {
-            foreach (Excel.Workbook workbook in _application.Workbooks)
-            {
-                if (IsKernelWorkbook(workbook))
-                {
-                    continue;
-                }
-
-                if (workbook.Windows.Count > 0 && workbook.Windows.Cast<Excel.Window>().Any(window => window.Visible))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private bool HasExplicitKernelStartupContext(Excel.Workbook startupWorkbook)
-        {
-            if (IsKernelWorkbook(startupWorkbook))
-            {
-                return true;
-            }
-
-            try
-            {
-                return IsKernelWorkbook(_application.ActiveWorkbook);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private bool HasKernelWorkbookContext()
-        {
-            try
-            {
-                if (IsKernelWorkbook(_application.ActiveWorkbook))
-                {
-                    return true;
-                }
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                return GetOpenKernelWorkbook() != null;
-            }
-            catch
-            {
-                return false;
-            }
+            return _kernelWorkbookStateService.HasVisibleNonKernelWorkbook();
         }
 
         private void EnsureWorkbookVisible(Excel.Workbook workbook)
@@ -1154,6 +868,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            Excel.Workbook activeWorkbook = null;
+            bool shouldSkipHideExcelMainWindow = false;
+            try
+            {
+                activeWorkbook = _application == null ? null : _application.ActiveWorkbook;
+                shouldSkipHideExcelMainWindow = activeWorkbook != null
+                    && IsKernelWorkbook(activeWorkbook)
+                    && CountVisibleWorkbooksSafe() >= 1;
+            }
+            catch
+            {
+                shouldSkipHideExcelMainWindow = false;
+            }
+
+            if (shouldSkipHideExcelMainWindow)
+            {
+                LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=apply-home-display-decision trigger="
+                    + (triggerReason ?? string.Empty)
+                    + ", decision=skip-hide-excel-main-window, reason=active-kernel-workbook-still-visible, visibleWorkbookCount="
+                    + CountVisibleWorkbooksSafe().ToString()
+                    + ", activeWorkbook="
+                    + FormatWorkbookDescriptor(activeWorkbook)
+                    + ", kernelWindowTargets="
+                    + kernelWindowTargets);
+                _logger.Info(
+                    "ApplyHomeDisplayVisibility skipped hiding Excel main window because the active kernel workbook remained visible.");
+                return;
+            }
+
             LogKernelFlickerTrace(
                 "source=KernelWorkbookService action=apply-home-display-decision trigger="
                 + (triggerReason ?? string.Empty)
@@ -1184,18 +928,112 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             try
             {
+                LogHideExcelMainWindowState("before");
                 IntPtr hwnd = new IntPtr(_application.Hwnd);
                 ShowWindow(hwnd, SwHide);
                 _application.Visible = false;
+                LogHideExcelMainWindowState("after");
             }
             catch
             {
             }
         }
 
-        private void HideKernelWorkbookWindows()
+        private void LogHideExcelMainWindowState(string stage)
         {
-            HideKernelWorkbookWindows("HideKernelWorkbookWindows.ResolveOpenKernelWorkbook", GetOpenKernelWorkbook());
+            _logger.Info(
+                "HideExcelMainWindow state. stage="
+                + (stage ?? string.Empty)
+                + ", applicationVisible="
+                + SafeApplicationVisible()
+                + ", applicationHwnd="
+                + SafeApplicationHwnd()
+                + ", activeWorkbook="
+                + SafeActiveWorkbookDescriptor()
+                + ", activeWindow="
+                + SafeActiveWindowDescriptor()
+                + ", visibleWorkbookCount="
+                + CountVisibleWorkbooksSafe().ToString());
+        }
+
+        private string SafeApplicationVisible()
+        {
+            try
+            {
+                return _application == null ? string.Empty : _application.Visible.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeApplicationHwnd()
+        {
+            try
+            {
+                return _application == null ? string.Empty : Convert.ToString(_application.Hwnd, CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeActiveWorkbookDescriptor()
+        {
+            try
+            {
+                Excel.Workbook workbook = _application == null ? null : _application.ActiveWorkbook;
+                return workbook == null ? string.Empty : GetWorkbookFullNameCore(workbook);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeActiveWindowDescriptor()
+        {
+            try
+            {
+                Excel.Window window = _application == null ? null : _application.ActiveWindow;
+                return window == null ? string.Empty : FormatWindowDescriptor(window);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private int CountVisibleWorkbooksSafe()
+        {
+            try
+            {
+                int count = 0;
+                foreach (Excel.Workbook workbook in _application.Workbooks)
+                {
+                    if (workbook == null || workbook.Windows == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (Excel.Window window in workbook.Windows)
+                    {
+                        if (window != null && window.Visible)
+                        {
+                            count++;
+                            break;
+                        }
+                    }
+                }
+
+                return count;
+            }
+            catch
+            {
+                return -1;
+            }
         }
 
         private void HideKernelWorkbookWindows(Excel.Workbook workbook)
@@ -1417,37 +1255,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 EnsureExcelApplicationVisible();
                 IntPtr hwnd = new IntPtr(_application.Hwnd);
-                SetForegroundWindow(hwnd);
-            }
-            catch
-            {
-            }
-        }
-
-        private void BringExcelToFront()
-        {
-            try
-            {
-                IntPtr hwnd = new IntPtr(_application.Hwnd);
-                ShowWindow(hwnd, SwRestore);
-                SetForegroundWindow(hwnd);
-            }
-            catch
-            {
-            }
-        }
-
-        private void BringWorkbookWindowToFront(Excel.Window window)
-        {
-            if (window == null)
-            {
-                return;
-            }
-
-            try
-            {
-                IntPtr hwnd = new IntPtr(window.Hwnd);
-                ShowWindow(hwnd, SwRestore);
                 SetForegroundWindow(hwnd);
             }
             catch

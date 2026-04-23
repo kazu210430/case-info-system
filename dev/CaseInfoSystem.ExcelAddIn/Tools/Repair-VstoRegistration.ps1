@@ -89,6 +89,10 @@ function Ensure-VstoSecurityInclusion {
         try {
             $item = Get-ItemProperty -LiteralPath $child.PSPath
             if ([string]$item.Url -eq $ExpectedUrl) {
+                if ([string]$item.PublicKey -eq $expectedPublicKey) {
+                    return
+                }
+
                 Set-ItemProperty -LiteralPath $child.PSPath -Name Url -Value $ExpectedUrl
                 Set-ItemProperty -LiteralPath $child.PSPath -Name PublicKey -Value $expectedPublicKey
                 return
@@ -181,10 +185,34 @@ function Set-ComAddInRegistration {
         New-Item -Path $addInPath -Force | Out-Null
     }
 
-    Set-ItemProperty -LiteralPath $addInPath -Name FriendlyName -Value 'CaseInfoSystem.ExcelAddIn'
-    Set-ItemProperty -LiteralPath $addInPath -Name Description -Value 'CaseInfoSystem.ExcelAddIn'
-    Set-ItemProperty -LiteralPath $addInPath -Name Manifest -Value ($ExpectedUrl + '|vstolocal')
-    New-ItemProperty -LiteralPath $addInPath -Name LoadBehavior -PropertyType DWord -Value 3 -Force | Out-Null
+    $expectedFriendlyName = 'CaseInfoSystem.ExcelAddIn'
+    $expectedDescription = 'CaseInfoSystem.ExcelAddIn'
+    $expectedManifest = $ExpectedUrl + '|vstolocal'
+    $expectedLoadBehavior = 3
+
+    $current = Get-ItemProperty -LiteralPath $addInPath
+    if ([string]$current.FriendlyName -eq $expectedFriendlyName -and
+        [string]$current.Description -eq $expectedDescription -and
+        [string]$current.Manifest -eq $expectedManifest -and
+        [int]$current.LoadBehavior -eq $expectedLoadBehavior) {
+        return
+    }
+
+    if ([string]$current.FriendlyName -ne $expectedFriendlyName) {
+        Set-ItemProperty -LiteralPath $addInPath -Name FriendlyName -Value $expectedFriendlyName
+    }
+
+    if ([string]$current.Description -ne $expectedDescription) {
+        Set-ItemProperty -LiteralPath $addInPath -Name Description -Value $expectedDescription
+    }
+
+    if ([string]$current.Manifest -ne $expectedManifest) {
+        Set-ItemProperty -LiteralPath $addInPath -Name Manifest -Value $expectedManifest
+    }
+
+    if ([int]$current.LoadBehavior -ne $expectedLoadBehavior) {
+        New-ItemProperty -LiteralPath $addInPath -Name LoadBehavior -PropertyType DWord -Value $expectedLoadBehavior -Force | Out-Null
+    }
 }
 
 $expectedUrl = Convert-ToFileUri -Path $RuntimeManifestPath

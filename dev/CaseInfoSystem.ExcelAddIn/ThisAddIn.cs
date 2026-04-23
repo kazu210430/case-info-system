@@ -2,9 +2,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Management;
+using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -22,8 +21,6 @@ namespace CaseInfoSystem.ExcelAddIn
     {
         // 定数
         private const string TaskPaneTitle = "案件情報System";
-        private const string SystemRootFolderName = "案件情報System";
-        private const string TraceLogFileName = "CaseInfoSystem.ExcelAddIn_trace.log";
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private static readonly bool DisableSheetActivateForFreezeIsolation = false;
         private static readonly bool DisableSheetSelectionChangeForFreezeIsolation = false;
@@ -33,8 +30,6 @@ namespace CaseInfoSystem.ExcelAddIn
         private const string KernelSheetCommandCellAddress = "AT1";
         private const string ProductTitle = "案件情報System";
         private const int WordWarmupDelayMs = 1500;
-        private static readonly Encoding TraceLogEncoding = new UTF8Encoding(false);
-
         // 基盤
         private Logger _logger;
         private ExcelInteropService _excelInteropService;
@@ -43,6 +38,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private NavigationService _navigationService;
         private WorkbookSessionService _workbookSessionService;
         private TransientPaneSuppressionService _transientPaneSuppressionService;
+        private CaseWorkbookOpenStrategy _caseWorkbookOpenStrategy;
 
         // 文書実行
         private CaseContextFactory _caseContextFactory;
@@ -58,6 +54,8 @@ namespace CaseInfoSystem.ExcelAddIn
         private AccountingWorkbookLifecycleService _accountingWorkbookLifecycleService;
         private AccountingSheetControlService _accountingSheetControlService;
         private WorkbookClipboardPreservationService _workbookClipboardPreservationService;
+        private SheetEventCoordinator _sheetEventCoordinator;
+        private WorkbookLifecycleCoordinator _workbookLifecycleCoordinator;
 
         // Kernel 操作
         private KernelCaseCreationCommandService _kernelCaseCreationCommandService;
@@ -66,8 +64,6 @@ namespace CaseInfoSystem.ExcelAddIn
         private WorkbookRibbonCommandService _workbookRibbonCommandService;
         private WorkbookCaseTaskPaneRefreshCommandService _workbookCaseTaskPaneRefreshCommandService;
         private WorkbookResetCommandService _workbookResetCommandService;
-        private KernelSheetCommandTriggerService _kernelSheetCommandTriggerService;
-
         // UI / Pane 調停
         private WorkbookEventCoordinator _workbookEventCoordinator;
         private KernelWorkbookAvailabilityService _kernelWorkbookAvailabilityService;
@@ -101,12 +97,12 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal static string GetPrimaryTraceLogRelativePath()
         {
-            return Path.Combine("logs", TraceLogFileName);
+            return ExcelAddInTraceLogWriter.GetPrimaryTraceLogRelativePath();
         }
 
         internal static string GetPrimaryTraceLogPath()
         {
-            return Path.Combine(ResolveLogDirectory(), TraceLogFileName);
+            return ExcelAddInTraceLogWriter.GetPrimaryTraceLogPath();
         }
 
         internal bool ShouldShowKernelHomeOnStartup(Excel.Workbook workbook)
@@ -127,8 +123,9 @@ namespace CaseInfoSystem.ExcelAddIn
         // VSTO ライフサイクル
         private void ThisAddIn_Startup(object sender, EventArgs e)
         {
-            _logger = new Logger(LogTrace);
-            TraceProcessLaunchContext();
+            _logger = new Logger(ExcelAddInTraceLogWriter.Write);
+            ExcelProcessLaunchContextTracer.Trace(_logger);
+            AddInDeploymentDiagnosticsTracer.Trace(_logger);
 
             // Composition Root から VSTO 境界で使う依存と delegate を受け取る。
             var compositionRoot = new AddInCompositionRoot(
@@ -147,6 +144,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 ShowKernelHomePlaceholderWithExternalWorkbookSuppression,
                 HandleExternalWorkbookDetected,
                 ShouldSuppressCasePaneRefresh,
+                RefreshTaskPane,
                 // 非同期 UI 更新
                 RequestTaskPaneDisplayForTargetWindow,
                 ScheduleWordWarmup,
@@ -171,6 +169,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _navigationService = compositionRoot.NavigationService;
             _workbookSessionService = compositionRoot.WorkbookSessionService;
             _transientPaneSuppressionService = compositionRoot.TransientPaneSuppressionService;
+            _caseWorkbookOpenStrategy = compositionRoot.CaseWorkbookOpenStrategy;
 
             // 文書実行
             _caseContextFactory = compositionRoot.CaseContextFactory;
@@ -186,6 +185,8 @@ namespace CaseInfoSystem.ExcelAddIn
             _accountingWorkbookLifecycleService = compositionRoot.AccountingWorkbookLifecycleService;
             _accountingSheetControlService = compositionRoot.AccountingSheetControlService;
             _workbookClipboardPreservationService = compositionRoot.WorkbookClipboardPreservationService;
+            _sheetEventCoordinator = compositionRoot.SheetEventCoordinator;
+            _workbookLifecycleCoordinator = compositionRoot.WorkbookLifecycleCoordinator;
 
             // Kernel 操作
             _kernelCaseCreationCommandService = compositionRoot.KernelCaseCreationCommandService;
@@ -194,8 +195,6 @@ namespace CaseInfoSystem.ExcelAddIn
             _workbookRibbonCommandService = compositionRoot.WorkbookRibbonCommandService;
             _workbookCaseTaskPaneRefreshCommandService = compositionRoot.WorkbookCaseTaskPaneRefreshCommandService;
             _workbookResetCommandService = compositionRoot.WorkbookResetCommandService;
-            _kernelSheetCommandTriggerService = compositionRoot.KernelSheetCommandTriggerService;
-
             // UI / Pane 調停
             _workbookEventCoordinator = compositionRoot.WorkbookEventCoordinator;
             _kernelWorkbookAvailabilityService = compositionRoot.KernelWorkbookAvailabilityService;
@@ -226,12 +225,13 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 StopWordWarmupTimer();
+                _caseWorkbookOpenStrategy?.ShutdownLegacyHiddenApplication();
 
                 _logger.Info("ThisAddIn_Shutdown fired.");
                 return;
             }
 
-            LogTrace("ThisAddIn_Shutdown fired.");
+            ExcelAddInTraceLogWriter.Write("ThisAddIn_Shutdown fired.");
         }
 
         private void InternalStartup()
@@ -298,32 +298,12 @@ namespace CaseInfoSystem.ExcelAddIn
         private void Application_WorkbookOpen(Excel.Workbook workbook)
         {
             EnsureKernelFlickerTraceForWorkbookOpen(workbook);
-            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookOpen), () =>
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=ExcelEventBoundary action=fire event=WorkbookOpen workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", activeState="
-                    + FormatActiveExcelState());
-                _logger?.Info("Excel WorkbookOpen fired. workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
-                _workbookEventCoordinator.OnWorkbookOpen(workbook);
-            });
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookOpen), () => _workbookLifecycleCoordinator?.OnWorkbookOpen(workbook));
         }
 
         private void Application_WorkbookActivate(Excel.Workbook workbook)
         {
-            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () =>
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=ExcelEventBoundary action=fire event=WorkbookActivate workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", activeState="
-                    + FormatActiveExcelState());
-                _logger?.Info("Excel WorkbookActivate fired. workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
-                _workbookEventCoordinator.OnWorkbookActivate(workbook);
-            });
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () => _workbookLifecycleCoordinator?.OnWorkbookActivate(workbook));
         }
 
         private void Application_WindowActivate(Excel.Workbook workbook, Excel.Window window)
@@ -347,58 +327,6 @@ namespace CaseInfoSystem.ExcelAddIn
             });
         }
 
-        // event handler から調停 service へ渡す delegate 入口
-        internal void HandleWorkbookOpenEvent(Excel.Workbook workbook)
-        {
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=WorkbookEventCoordinator action=enter event=WorkbookOpen workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", activeState="
-                + FormatActiveExcelState());
-            _logger?.Info("TaskPane event entry. event=WorkbookOpen, workbook=" + SafeWorkbookFullName(workbook) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
-
-            // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
-            HandleExternalWorkbookDetected(workbook, "WorkbookOpen");
-            _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
-            _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _kernelHomeCoordinator.HandleKernelWorkbookBecameAvailable("WorkbookOpen", workbook);
-            RefreshTaskPane("WorkbookOpen", workbook, null);
-        }
-
-        internal void HandleWorkbookActivateEvent(Excel.Workbook workbook)
-        {
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=WorkbookEventCoordinator action=enter event=WorkbookActivate workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", activeState="
-                + FormatActiveExcelState());
-            _logger?.Info("TaskPane event entry. event=WorkbookActivate, workbook=" + SafeWorkbookFullName(workbook) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
-
-            // 外部 workbook 検知 -> lifecycle 同期 -> Kernel HOME 判定 -> pane 更新
-            HandleExternalWorkbookDetected(workbook, "WorkbookActivate");
-            _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
-            _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _kernelHomeCoordinator.HandleKernelWorkbookBecameAvailable("WorkbookActivate", workbook);
-            if (ShouldSuppressCasePaneRefresh("WorkbookActivate", workbook))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=WorkbookEventCoordinator action=suppress-refresh event=WorkbookActivate workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", activeState="
-                    + FormatActiveExcelState());
-                return;
-            }
-
-            RefreshTaskPane("WorkbookActivate", workbook, null);
-        }
-
         internal void HandleWindowActivateEvent(Excel.Workbook workbook, Excel.Window window)
         {
             _logger?.Info(
@@ -416,25 +344,22 @@ namespace CaseInfoSystem.ExcelAddIn
         private void Application_SheetActivate(object sh)
         {
             _logger?.Debug("Application_SheetActivate", "entry.");
-            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetActivate), () =>
-            {
-                _accountingWorkbookLifecycleService?.HandleSheetActivated(sh);
-                _accountingSheetControlService?.HandleSheetActivated(sh);
-                _caseWorkbookLifecycleService?.HandleSheetActivated(sh);
-                RefreshTaskPane("SheetActivate", null, null);
-            });
+            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetActivate), () => _sheetEventCoordinator?.OnSheetActivate(sh));
             _logger?.Debug("Application_SheetActivate", "returned.");
         }
 
         private void Application_SheetSelectionChange(object sh, Excel.Range target)
         {
             _logger?.Debug("Application_SheetSelectionChange", "entry.");
+            if (!(sh is Excel.Worksheet) || target == null)
+            {
+                _logger?.Debug("Application_SheetSelectionChange", "returned.");
+                return;
+            }
+
             EventBoundaryGuard.Execute(_logger, nameof(Application_SheetSelectionChange), () =>
             {
-                string sheetName = SafeSheetName(sh);
-                string targetAddress = SafeRangeAddress(target);
-                _logger?.Debug("Application_SheetSelectionChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
-                _accountingSheetControlService?.HandleSheetSelectionChange(sh, target);
+                _sheetEventCoordinator?.OnSheetSelectionChange(sh, target);
             });
             _logger?.Debug("Application_SheetSelectionChange", "returned.");
         }
@@ -442,32 +367,14 @@ namespace CaseInfoSystem.ExcelAddIn
         private void Application_SheetChange(object sh, Excel.Range target)
         {
             _logger?.Debug("Application_SheetChange", "entry.");
-            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetChange), () =>
-            {
-                string sheetName = SafeSheetName(sh);
-                string targetAddress = SafeRangeAddress(target);
-                _logger?.Debug("Application_SheetChange", "fired. sheet=" + sheetName + ", target=" + targetAddress);
-                HandleKernelSheetCommand(sh as Excel.Worksheet, target);
-                _caseWorkbookLifecycleService?.HandleSheetChanged((sh as Excel.Worksheet)?.Parent as Excel.Workbook);
-                _accountingSheetControlService?.HandleSheetChange(sh, target);
-            });
+            EventBoundaryGuard.Execute(_logger, nameof(Application_SheetChange), () => _sheetEventCoordinator?.OnSheetChange(sh, target));
             _logger?.Debug("Application_SheetChange", "returned.");
         }
 
         private void Application_AfterCalculate()
         {
-            EventBoundaryGuard.Execute(_logger, nameof(Application_AfterCalculate), () =>
-            {
-                _logger?.Debug("Application_AfterCalculate", "fired.");
-                _accountingSheetControlService?.HandleAfterCalculate(Application);
-                _logger?.Debug("Application_AfterCalculate", "after AccountingSheetControlService.HandleAfterCalculate returned.");
-            });
+            EventBoundaryGuard.Execute(_logger, nameof(Application_AfterCalculate), () => _sheetEventCoordinator?.OnAfterCalculate(Application));
             _logger?.Debug("Application_AfterCalculate", "EventBoundaryGuard.Execute returned.");
-        }
-
-        private void HandleKernelSheetCommand(Excel.Worksheet worksheet, Excel.Range target)
-        {
-            _kernelSheetCommandTriggerService?.Handle(worksheet, target);
         }
 
         private void ClearKernelSheetCommandCell(Excel.Range commandCell)
@@ -543,188 +450,6 @@ namespace CaseInfoSystem.ExcelAddIn
             }
         }
 
-        // 起動診断ログ
-        private void TraceProcessLaunchContext()
-        {
-            if (_logger == null)
-            {
-                return;
-            }
-
-            try
-            {
-                Process current = Process.GetCurrentProcess();
-                int currentProcessId = current.Id;
-                int parentProcessId = TryGetParentProcessId(currentProcessId);
-                string parentSummary = GetProcessSummary(parentProcessId);
-                string currentCommandLine = TryGetProcessCommandLine(currentProcessId);
-                string excelProcesses = BuildExcelProcessSnapshot(currentProcessId);
-
-                _logger.Info(
-                    "Process launch context. currentPid="
-                    + currentProcessId.ToString(CultureInfo.InvariantCulture)
-                    + ", currentName="
-                    + SafeProcessName(current)
-                    + ", sessionId="
-                    + current.SessionId.ToString(CultureInfo.InvariantCulture)
-                    + ", startTime="
-                    + SafeProcessStartTime(current)
-                    + ", parentPid="
-                    + parentProcessId.ToString(CultureInfo.InvariantCulture)
-                    + ", parent="
-                    + parentSummary
-                    + ", commandLine="
-                    + currentCommandLine
-                    + ", excelProcesses=["
-                    + excelProcesses
-                    + "]");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("TraceProcessLaunchContext failed.", ex);
-            }
-        }
-
-        private static int TryGetParentProcessId(int processId)
-        {
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher(
-                    "SELECT ParentProcessId FROM Win32_Process WHERE ProcessId = " + processId.ToString(CultureInfo.InvariantCulture)))
-                {
-                    foreach (ManagementObject process in searcher.Get())
-                    {
-                        object parentProcessId = process["ParentProcessId"];
-                        if (parentProcessId == null)
-                        {
-                            return 0;
-                        }
-
-                        return Convert.ToInt32(parentProcessId, CultureInfo.InvariantCulture);
-                    }
-                }
-            }
-            catch
-            {
-                return 0;
-            }
-
-            return 0;
-        }
-
-        private static string TryGetProcessCommandLine(int processId)
-        {
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher(
-                    "SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + processId.ToString(CultureInfo.InvariantCulture)))
-                {
-                    foreach (ManagementObject process in searcher.Get())
-                    {
-                        object commandLine = process["CommandLine"];
-                        return commandLine == null ? string.Empty : Convert.ToString(commandLine, CultureInfo.InvariantCulture) ?? string.Empty;
-                    }
-                }
-            }
-            catch
-            {
-                return string.Empty;
-            }
-
-            return string.Empty;
-        }
-
-        private static string GetProcessSummary(int processId)
-        {
-            if (processId <= 0)
-            {
-                return "(unknown)";
-            }
-
-            try
-            {
-                using (Process process = Process.GetProcessById(processId))
-                {
-                    return "pid="
-                        + process.Id.ToString(CultureInfo.InvariantCulture)
-                        + ",name="
-                        + SafeProcessName(process)
-                        + ",startTime="
-                        + SafeProcessStartTime(process);
-                }
-            }
-            catch
-            {
-                return "pid=" + processId.ToString(CultureInfo.InvariantCulture) + ",name=(unavailable)";
-            }
-        }
-
-        private static string BuildExcelProcessSnapshot(int currentProcessId)
-        {
-            var builder = new StringBuilder();
-
-            try
-            {
-                Process[] processes = Process.GetProcessesByName("EXCEL");
-                foreach (Process process in processes)
-                {
-                    using (process)
-                    {
-                        if (builder.Length > 0)
-                        {
-                            builder.Append(" | ");
-                        }
-
-                        builder.Append("pid=");
-                        builder.Append(process.Id.ToString(CultureInfo.InvariantCulture));
-                        builder.Append(",name=");
-                        builder.Append(SafeProcessName(process));
-                        builder.Append(",startTime=");
-                        builder.Append(SafeProcessStartTime(process));
-                        builder.Append(",isCurrent=");
-                        builder.Append((process.Id == currentProcessId).ToString());
-                        builder.Append(",commandLine=");
-                        builder.Append(TryGetProcessCommandLine(process.Id));
-                    }
-                }
-            }
-            catch
-            {
-                return builder.ToString();
-            }
-
-            return builder.ToString();
-        }
-
-        private static string SafeProcessName(Process process)
-        {
-            try
-            {
-                return process == null ? string.Empty : process.ProcessName ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string SafeProcessStartTime(Process process)
-        {
-            try
-            {
-                if (process == null)
-                {
-                    return string.Empty;
-                }
-
-                return process.StartTime.ToString("O", CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
         // Excel workbook lifecycle event handler
         private void Application_WorkbookBeforeSave(Excel.Workbook workbook, bool saveAsUi, ref bool cancel)
         {
@@ -749,50 +474,9 @@ namespace CaseInfoSystem.ExcelAddIn
 
             void HandleBeforeClose(ref bool innerCancel)
             {
-                _logger?.Info(
-                    "Excel WorkbookBeforeClose fired. workbook="
-                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
-                    + ", cancel="
-                    + innerCancel.ToString());
-
-                if (innerCancel)
+                if (_workbookLifecycleCoordinator != null)
                 {
-                    return;
-                }
-
-                _caseWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook, ref innerCancel);
-                if (innerCancel)
-                {
-                    return;
-                }
-
-                _kernelWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook, ref innerCancel);
-                if (innerCancel)
-                {
-                    return;
-                }
-
-                _workbookClipboardPreservationService?.PreserveCopiedValuesForClosingWorkbook(workbook);
-                _accountingWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook);
-
-                if (_accountingSheetControlService != null)
-                {
-                    _accountingSheetControlService.RemoveWorkbookState(workbook);
-                }
-
-                if (_accountingWorkbookLifecycleService != null)
-                {
-                    _accountingWorkbookLifecycleService.RemoveWorkbookState(workbook);
-                }
-
-                if (_caseWorkbookLifecycleService != null)
-                {
-                    _caseWorkbookLifecycleService.RemoveWorkbookState(workbook);
-                }
-
-                if (_taskPaneManager != null)
-                {
-                    _taskPaneManager.RemoveWorkbookPanes(workbook);
+                    _workbookLifecycleCoordinator.OnWorkbookBeforeClose(workbook, ref innerCancel);
                 }
             }
         }
@@ -809,9 +493,9 @@ namespace CaseInfoSystem.ExcelAddIn
             PaneDisplayPolicyResult displayPolicyResult = PaneDisplayPolicy.Decide(
                 request,
                 _taskPaneManager,
+                _workbookRoleResolver,
                 workbook,
-                targetWindow,
-                ShouldDisplayPaneForWorkbook(workbook));
+                targetWindow);
             switch (displayPolicyResult)
             {
                 case PaneDisplayPolicyResult.ShowExisting:
@@ -827,19 +511,6 @@ namespace CaseInfoSystem.ExcelAddIn
 
             string reason = request == null ? string.Empty : request.ToReasonString();
             RefreshTaskPane(reason, workbook, targetWindow);
-        }
-
-        private bool ShouldDisplayPaneForWorkbook(Excel.Workbook workbook)
-        {
-            if (_workbookRoleResolver == null)
-            {
-                return true;
-            }
-
-            WorkbookRole role = _workbookRoleResolver.Resolve(workbook);
-            return role == WorkbookRole.Kernel
-                || role == WorkbookRole.Case
-                || role == WorkbookRole.Accounting;
         }
 
         private void RefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -919,41 +590,6 @@ namespace CaseInfoSystem.ExcelAddIn
             CustomTaskPanes.Remove(pane);
         }
 
-        private void LogTrace(string message)
-        {
-            string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)
-                + " [PID=" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "] CaseInfoSystem: "
-                + (message ?? string.Empty);
-
-            try
-            {
-                string primaryLogPath = GetPrimaryTraceLogPath();
-                string logDirectory = Path.GetDirectoryName(primaryLogPath) ?? ResolveLogDirectory();
-                Directory.CreateDirectory(logDirectory);
-                File.AppendAllText(primaryLogPath, line + Environment.NewLine, TraceLogEncoding);
-            }
-            catch
-            {
-                // ログ書き込み失敗時でも Add-in 起動は継続する。
-            }
-
-            try
-            {
-                string fallbackDirectory = Path.Combine(Path.GetTempPath(), "CaseInfoSystem.ExcelAddIn");
-                Directory.CreateDirectory(fallbackDirectory);
-                File.AppendAllText(Path.Combine(fallbackDirectory, TraceLogFileName), line + Environment.NewLine, TraceLogEncoding);
-            }
-            catch
-            {
-                // フォールバックログ失敗時でも Add-in は停止させない。
-            }
-        }
-        private static string ResolveLogDirectory()
-        {
-            string userDocuments = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            return Path.Combine(userDocuments, SystemRootFolderName, "logs");
-        }
-
         // Kernel HOME / sheet 遷移
         private void ShowKernelHomePlaceholder()
         {
@@ -990,9 +626,39 @@ namespace CaseInfoSystem.ExcelAddIn
                 _kernelHomeForm.Show();
             }
 
+            TraceRuntimeExecutionObservation("ShowKernelHomePlaceholder");
             _kernelWorkbookService.PrepareForHomeDisplayFromSheet();
             _kernelHomeForm.Activate();
             _kernelHomeForm.BringToFront();
+        }
+
+        private void TraceRuntimeExecutionObservation(string reason)
+        {
+            if (_logger == null)
+            {
+                return;
+            }
+
+            try
+            {
+                string assemblyLocation = Assembly.GetExecutingAssembly().Location ?? string.Empty;
+                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
+                string primaryLogPath = ExcelAddInTraceLogWriter.GetPrimaryTraceLogPath();
+                string fallbackLogPath = Path.Combine(Path.GetTempPath(), "CaseInfoSystem.ExcelAddIn", "CaseInfoSystem.ExcelAddIn_trace.log");
+                string processId = Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture);
+
+                _logger.Info(
+                    "Runtime execution observed. reason=" + (reason ?? string.Empty)
+                    + ", assemblyLocation=" + assemblyLocation
+                    + ", appDomainBaseDirectory=" + baseDirectory
+                    + ", primaryLogPath=" + primaryLogPath
+                    + ", fallbackLogPath=" + fallbackLogPath
+                    + ", pid=" + processId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Runtime execution observation failed. reason=" + (reason ?? string.Empty), ex);
+            }
         }
 
         internal bool ShowKernelSheetAndRefreshPaneFromHome(string sheetCodeName, string reason)
@@ -1078,7 +744,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _logger?.Info("Kernel home requested from COM automation.");
             if (_logger == null)
             {
-                LogTrace("Kernel home requested from COM automation.");
+            ExcelAddInTraceLogWriter.Write("Kernel home requested from COM automation.");
             }
             ShowKernelHomePlaceholderWithExternalWorkbookSuppression("KernelAutomationService.ShowHome");
         }
@@ -1096,7 +762,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
-            LogTrace((message ?? string.Empty) + " exception=" + (ex == null ? string.Empty : ex.ToString()));
+            ExcelAddInTraceLogWriter.Write((message ?? string.Empty) + " exception=" + (ex == null ? string.Empty : ex.ToString()));
         }
 
         public void ShowKernelHomeFromSheet()
@@ -1184,7 +850,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _logger?.Info("COM automation service requested.");
             if (_logger == null)
             {
-                LogTrace("COM automation service requested before startup.");
+                ExcelAddInTraceLogWriter.Write("COM automation service requested before startup.");
             }
             return _kernelAutomationService;
         }
@@ -1335,6 +1001,29 @@ namespace CaseInfoSystem.ExcelAddIn
         internal void SuppressUpcomingCasePaneActivationRefresh(string workbookFullName, string reason)
         {
             _kernelHomeCasePaneSuppressionCoordinator?.SuppressUpcomingCasePaneActivationRefresh(workbookFullName, reason);
+        }
+
+        internal void BeginCaseWorkbookActivateProtection(Excel.Workbook workbook, Excel.Window window, string reason)
+        {
+            _kernelHomeCasePaneSuppressionCoordinator?.BeginCaseWorkbookActivateProtection(workbook, window, reason);
+        }
+
+        internal bool ShouldIgnoreWorkbookActivateDuringCaseProtection(Excel.Workbook workbook)
+        {
+            return _kernelHomeCasePaneSuppressionCoordinator != null
+                && _kernelHomeCasePaneSuppressionCoordinator.ShouldIgnoreWorkbookActivateDuringProtection(workbook);
+        }
+
+        internal bool ShouldIgnoreWindowActivateDuringCaseProtection(Excel.Workbook workbook, Excel.Window window)
+        {
+            return _kernelHomeCasePaneSuppressionCoordinator != null
+                && _kernelHomeCasePaneSuppressionCoordinator.ShouldIgnoreWindowActivateDuringProtection(workbook, window);
+        }
+
+        internal bool ShouldIgnoreTaskPaneRefreshDuringCaseProtection(string reason, Excel.Workbook workbook, Excel.Window window)
+        {
+            return _kernelHomeCasePaneSuppressionCoordinator != null
+                && _kernelHomeCasePaneSuppressionCoordinator.ShouldIgnoreTaskPaneRefreshDuringProtection(reason, workbook, window);
         }
 
         private bool ShouldSuppressCasePaneRefresh(string eventName, Excel.Workbook workbook)

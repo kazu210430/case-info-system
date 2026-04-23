@@ -228,6 +228,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			try {
 				return ((dynamic)wordApplication).Documents.Add (text, false);
 			} catch (Exception exception2) {
+				_logger.Warn ("WordInteropService.CreateDocumentFromTemplate Documents.Add exception. template=" + text + ", " + DescribeException (exception2));
 				_logger.Error ("WordInteropService.CreateDocumentFromTemplate Documents.Add failed.", exception2);
 				return null;
 			}
@@ -241,6 +242,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		internal string SaveDocumentCopyAsDocx (object wordDocument, string fullPath)
 		{
 			return SaveDocumentCore (wordDocument, fullPath, saveCopyOnly: true);
+		}
+
+		internal string TryGetDocumentPath (object wordDocument)
+		{
+			if (wordDocument == null) {
+				return null;
+			}
+			try {
+				return Convert.ToString (((dynamic)wordDocument).Path) ?? string.Empty;
+			} catch {
+				return null;
+			}
 		}
 
 		internal object OpenDocument (object wordApplication, string fullPath)
@@ -267,6 +280,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			try {
 				return ((dynamic)wordApplication).Documents.Open (text);
 			} catch (Exception exception2) {
+				_logger.Warn ("WordInteropService.OpenDocument Documents.Open exception. path=" + text + ", " + DescribeException (exception2));
 				_logger.Error ("WordInteropService.OpenDocument Documents.Open failed.", exception2);
 				return null;
 			}
@@ -298,18 +312,59 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			string procedureName = saveCopyOnly ? "WordInteropService.SaveDocumentCopyAsDocx" : "WordInteropService.SaveDocumentAsDocx";
 			_logger.Debug (procedureName, "EnsureFolderSafe elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
 			phaseStopwatch.Restart ();
+			string documentState = DescribeDocumentSaveState (wordDocument);
+			bool requiresUnsavedDocumentFallback = saveCopyOnly && RequiresUnsavedDocumentCopyFallback (wordDocument);
+			string unsavedDocumentWorkingPath = null;
+			_logger.Debug (procedureName, "SaveStart targetPath=" + text + ", saveCopyOnly=" + saveCopyOnly + ", " + documentState);
 			try {
-				if (saveCopyOnly) {
+				if (requiresUnsavedDocumentFallback) {
+					unsavedDocumentWorkingPath = BuildUnsavedDocumentWorkingPath (text);
+					_logger.Debug (procedureName, "UnsavedDocumentFallbackStart workingPath=" + unsavedDocumentWorkingPath + ", targetPath=" + text);
+					SaveDocumentAsLegacyDocx (wordDocument, unsavedDocumentWorkingPath);
+					_logger.Debug (procedureName, "UnsavedDocumentFallbackSavedWorking workingPath=" + unsavedDocumentWorkingPath + ", workingFileExists=" + FileExistsSafe (unsavedDocumentWorkingPath));
+					File.Copy (unsavedDocumentWorkingPath, text, overwrite: false);
+					_logger.Debug (procedureName, "UnsavedDocumentFallbackCopiedToStaging workingPath=" + unsavedDocumentWorkingPath + ", targetPath=" + text + ", targetFileExists=" + FileExistsSafe (text));
+				} else if (saveCopyOnly) {
 					((dynamic)wordDocument).SaveCopyAs (text);
 				} else {
-					((dynamic)wordDocument).SaveAs2 (text, 16);
+					((dynamic)wordDocument).SaveAs2 (text, WordFormatDocumentDefault);
 				}
 			} catch (Exception exception2) {
-				_logger.Error (procedureName + " save failed.", exception2);
+				_logger.Warn (procedureName + " exception. procedureName=" + procedureName + ", targetPath=" + text + ", saveCopyOnly=" + saveCopyOnly + ", workingPath=" + (unsavedDocumentWorkingPath ?? string.Empty) + ", " + documentState + ", " + DescribeException (exception2));
+				_logger.Error (procedureName + " save failed. procedureName=" + procedureName + ", targetPath=" + text + ", saveCopyOnly=" + saveCopyOnly + ", workingPath=" + (unsavedDocumentWorkingPath ?? string.Empty) + ", " + documentState, exception2);
 				return null;
 			}
-			_logger.Debug (procedureName, (saveCopyOnly ? "SaveCopyAs" : "SaveAs2") + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " path=" + text);
+			_logger.Debug (procedureName, (saveCopyOnly ? "SaveCopyAs" : "SaveAs2") + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " targetPath=" + text + ", saveCopyOnly=" + saveCopyOnly + ", workingPath=" + (unsavedDocumentWorkingPath ?? string.Empty));
 			return text;
+		}
+
+		private bool RequiresUnsavedDocumentCopyFallback (object wordDocument)
+		{
+			string documentPath = TryGetDocumentPath (wordDocument);
+			return documentPath != null && documentPath.Length == 0;
+		}
+
+		private static void SaveDocumentAsLegacyDocx (object wordDocument, string fullPath)
+		{
+			((dynamic)wordDocument).SaveAs (FileName: fullPath, FileFormat: WordFormatDocumentDefault);
+		}
+
+		private string BuildUnsavedDocumentWorkingPath (string targetPath)
+		{
+			string directoryName = _pathCompatibilityService.GetLocalTempWorkFolder ("CaseInfoSystem.WordSaveStaging");
+			if (string.IsNullOrWhiteSpace (directoryName)) {
+				directoryName = Path.GetTempPath ();
+			}
+			string fileNameWithoutExtension = Path.GetFileNameWithoutExtension (targetPath);
+			string extension = Path.GetExtension (targetPath);
+			if (fileNameWithoutExtension.Length == 0) {
+				fileNameWithoutExtension = "document";
+			}
+			if (extension.Length == 0) {
+				extension = ".docx";
+			}
+			string fileName = fileNameWithoutExtension + ".saveas_" + Guid.NewGuid ().ToString ("N") + extension;
+			return Path.Combine (directoryName, fileName);
 		}
 
 		internal WordPerformanceState BeginPerformanceScope (object wordApplication, bool hideWhenNew, bool createdNewWord)
@@ -507,6 +562,57 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		private static string FormatElapsedSeconds (TimeSpan elapsed)
 		{
 			return elapsed.TotalSeconds.ToString ("0.000");
+		}
+
+		private static string DescribeException (Exception exception)
+		{
+			if (exception == null) {
+				return "exceptionType=(null), message=(null), hresult=(null), innerType=(none), innerMessage=(none), innerHresult=(none)";
+			}
+
+			Exception innerException = exception.InnerException;
+			return
+				"exceptionType=" + exception.GetType ().FullName +
+				", message=" + exception.Message +
+				", hresult=0x" + exception.HResult.ToString ("X8") +
+				", innerType=" + (innerException == null ? "(none)" : innerException.GetType ().FullName) +
+				", innerMessage=" + (innerException == null ? "(none)" : innerException.Message) +
+				", innerHresult=" + (innerException == null ? "(none)" : "0x" + innerException.HResult.ToString ("X8"));
+		}
+
+		private static string DescribeDocumentSaveState (object wordDocument)
+		{
+			return
+				"documentPath=" + GetDocumentPathForLog (wordDocument) +
+				", documentReadOnly=" + GetDocumentReadOnlyForLog (wordDocument) +
+				", documentSaved=" + GetDocumentSavedForLog (wordDocument);
+		}
+
+		private static string GetDocumentPathForLog (object wordDocument)
+		{
+			try {
+				return Convert.ToString (((dynamic)wordDocument).Path) ?? string.Empty;
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ", hresult=0x" + exception.HResult.ToString ("X8") + ")";
+			}
+		}
+
+		private static string GetDocumentReadOnlyForLog (object wordDocument)
+		{
+			try {
+				return Convert.ToString (((dynamic)wordDocument).ReadOnly) ?? string.Empty;
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ", hresult=0x" + exception.HResult.ToString ("X8") + ")";
+			}
+		}
+
+		private static string GetDocumentSavedForLog (object wordDocument)
+		{
+			try {
+				return Convert.ToString (((dynamic)wordDocument).Saved) ?? string.Empty;
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ", hresult=0x" + exception.HResult.ToString ("X8") + ")";
+			}
 		}
 
 		private static void ReleaseComObject (object comObject)

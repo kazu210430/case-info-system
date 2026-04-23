@@ -178,5 +178,32 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(PaneDisplayPolicyResult.Hide, result);
         }
+
+        [Theory]
+        [InlineData(1, true)]
+        [InlineData(2, true)]
+        [InlineData(3, true)]
+        [InlineData(0, false)]
+        public void ShouldDisplayPane_UsesHandledWorkbookRoles(
+            int role,
+            bool expected)
+        {
+            var resolver = new FakeWorkbookRoleResolver
+            {
+                Role = (WorkbookRole)role
+            };
+
+            bool result = PaneDisplayPolicy.ShouldDisplayPane(resolver, workbook: null);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void ShouldDisplayPane_ReturnsTrue_WhenResolverIsMissing()
+        {
+            bool result = PaneDisplayPolicy.ShouldDisplayPane(workbookRoleResolver: null, workbook: null);
+
+            Assert.True(result);
+        }
     }
 }

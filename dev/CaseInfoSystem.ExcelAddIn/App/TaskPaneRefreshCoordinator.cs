@@ -72,11 +72,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 if (workbook != null)
                 {
-                    _excelWindowRecoveryService.TryRecoverWorkbookWindow(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
                 }
                 else
                 {
-                    _excelWindowRecoveryService.TryRecoverActiveWorkbookWindow("TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    _excelWindowRecoveryService.TryRecoverActiveWorkbookWindowWithoutShowing("TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
                 }
             }
 
@@ -129,14 +129,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool refreshed = TryRefreshPaneAndScheduleWarmup(context, reason, stopwatch);
             if (refreshed && window != null && _excelWindowRecoveryService != null)
             {
-                if (workbook != null)
-                {
-                    _excelWindowRecoveryService.TryRecoverWorkbookWindow(workbook, "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true);
-                }
-                else
-                {
-                    _excelWindowRecoveryService.TryRecoverActiveWorkbookWindow("TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true);
-                }
+                GuaranteeFinalForegroundAfterRefresh(context, workbook, reason, stopwatch);
             }
 
             _logger?.Info(
@@ -278,6 +271,43 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return refreshed;
+        }
+
+        private void GuaranteeFinalForegroundAfterRefresh(WorkbookContext context, Excel.Workbook workbook, string reason, Stopwatch stopwatch)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=final-foreground-guarantee-start reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
+
+            bool recovered = workbook != null
+                ? _excelWindowRecoveryService.TryRecoverWorkbookWindow(workbook, "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true)
+                : _excelWindowRecoveryService.TryRecoverActiveWorkbookWindow("TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true);
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=final-foreground-guarantee-end reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", recovered="
+                + recovered.ToString()
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
+
+            Excel.Workbook protectedWorkbook = context == null ? workbook : context.Workbook;
+            Excel.Window protectedWindow = context == null ? null : context.Window;
+            if (context != null && context.Role == WorkbookRole.Case && protectedWorkbook != null && protectedWindow != null)
+            {
+                Globals.ThisAddIn.BeginCaseWorkbookActivateProtection(
+                    protectedWorkbook,
+                    protectedWindow,
+                    "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty));
+            }
         }
 
         private static string FormatContextDescriptor(WorkbookContext context)

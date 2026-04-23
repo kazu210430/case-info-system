@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -10,8 +11,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private const string PromptMessage = "案件情報を開きますか？";
 
-		private CreatedCaseOpenPromptForm ()
+		private readonly Action _shownCallback;
+
+		private CreatedCaseOpenPromptForm (Action shownCallback)
 		{
+			_shownCallback = shownCallback;
 			Text = "案件情報System";
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -52,9 +56,15 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.Controls.Add (button2);
 		}
 
-		internal static CreatedCaseOpenDecision ShowPrompt (IWin32Window owner)
+		protected override void OnShown (EventArgs e)
 		{
-			using (CreatedCaseOpenPromptForm createdCaseOpenPromptForm = new CreatedCaseOpenPromptForm ()) {
+			base.OnShown (e);
+			_shownCallback?.Invoke ();
+		}
+
+		internal static CreatedCaseOpenDecision ShowPrompt (IWin32Window owner, Action shownCallback)
+		{
+			using (CreatedCaseOpenPromptForm createdCaseOpenPromptForm = new CreatedCaseOpenPromptForm (shownCallback)) {
 				DialogResult dialogResult = ((owner == null) ? createdCaseOpenPromptForm.ShowDialog () : createdCaseOpenPromptForm.ShowDialog (owner));
 				return (dialogResult != DialogResult.Yes) ? CreatedCaseOpenDecision.Skip : CreatedCaseOpenDecision.Open;
 			}

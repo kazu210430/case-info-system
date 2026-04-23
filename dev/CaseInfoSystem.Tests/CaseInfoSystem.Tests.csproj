@@ -19,6 +19,7 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Management" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,6 +53,7 @@
     <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
     <Compile Include="KernelWorkbookWindowRestorePolicyTests.cs" />
     <Compile Include="NavigationServiceTests.cs" />
+    <Compile Include="ExcelAddInTraceInfrastructureTests.cs" />
     <Compile Include="TaskPaneHostReusePolicyTests.cs" />
     <Compile Include="TaskPaneManagerOrchestrationPolicyTests.cs" />
     <Compile Include="TaskPanePostActionRefreshPolicyTests.cs" />
@@ -98,6 +100,9 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStartupDisplayPolicy.cs" Link="Source\App\KernelWorkbookStartupDisplayPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookPromotionPolicy.cs" Link="Source\App\KernelWorkbookPromotionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolutionPolicy.cs" Link="Source\App\KernelWorkbookResolutionPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolver.cs" Link="Source\App\KernelWorkbookResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookSettingsService.cs" Link="Source\App\KernelWorkbookSettingsService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStateService.cs" Link="Source\App\KernelWorkbookStateService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingSetSpec.cs" Link="Source\Domain\AccountingSetSpec.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationMode.cs" Link="Source\Domain\KernelCaseCreationMode.cs" />
@@ -111,6 +116,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IExcelInteropService.cs" Link="Source\Infrastructure\IExcelInteropService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IPathCompatibilityService.cs" Link="Source\Infrastructure\IPathCompatibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IWorkbookRoleResolver.cs" Link="Source\Infrastructure\IWorkbookRoleResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelAddInTraceLogWriter.cs" Link="Source\Infrastructure\ExcelAddInTraceLogWriter.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelProcessLaunchContextTracer.cs" Link="Source\Infrastructure\ExcelProcessLaunchContextTracer.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordInteropService.cs" Link="Source\Infrastructure\WordInteropService.cs" />

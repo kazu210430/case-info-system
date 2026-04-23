@@ -74,35 +74,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return _wordInteropService.OpenDocument (wordApplication, fullPath);
 		}
 
+		private string TryGetDocumentPath (object wordDocument)
+		{
+			return _wordInteropService.TryGetDocumentPath (wordDocument);
+		}
+
 		private DocumentSaveOutcome SaveViaAdjacentTempReplace (object wordApplication, object wordDocument, string finalPath)
 		{
 			Stopwatch totalStopwatch = Stopwatch.StartNew ();
 			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
 			string stagingPath = BuildStagingPath (finalPath);
+			string documentPathBeforeSave = TryGetDocumentPath (wordDocument);
+			bool wasUnsavedDocument = documentPathBeforeSave != null && documentPathBeforeSave.Length == 0;
 			bool finalExists = FileExistsSafe (finalPath);
+			bool stagingExists = FileExistsSafe (stagingPath);
 			bool isUnderSyncRoot = _pathCompatibilityService.IsUnderSyncRoot (finalPath);
 			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveContext mode=" + FormatSaveMode (finalExists) + " location=" + FormatSaveLocation (isUnderSyncRoot) + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSavePrecheck saveCopyOnly=True, " + DescribeStagingSaveContext (finalPath, stagingPath, finalExists, stagingExists));
+			string currentStep = "SaveDocumentCopyAsDocx";
+			string stagingWorkingDocumentPath = string.Empty;
 			try {
 				string stagingSavedPath = SaveDocumentCopyAsDocx (wordDocument, stagingPath);
+				stagingWorkingDocumentPath = DetectStagingWorkingDocumentPath (wordDocument, stagingSavedPath, wasUnsavedDocument);
+				currentStep = "ValidateStagingSavedPath";
 				if (string.IsNullOrWhiteSpace (stagingSavedPath) || !FileExistsSafe (stagingSavedPath)) {
 					throw new IOException ("Staging save failed.");
 				}
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSaved elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " staging=" + stagingSavedPath);
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSaved elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " saveCopyOnly=True final=" + finalPath + " staging=" + stagingSavedPath);
 				phaseStopwatch.Restart ();
+				currentStep = "PromoteAdjacentStagingFileSafe";
 				if (!_pathCompatibilityService.PromoteAdjacentStagingFileSafe (stagingSavedPath, finalPath)) {
 					throw new IOException ("Atomic replace failed.");
 				}
 				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReplaced elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
 				phaseStopwatch.Restart ();
+				currentStep = "OpenDocument";
 				object activeDocument = OpenDocument (wordApplication, finalPath);
 				if (activeDocument == null) {
 					throw new IOException ("Reopen after save failed.");
 				}
 				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReopened elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
 				object originalDocument = wordDocument;
+				currentStep = "CloseOriginalDocument";
 				_wordInteropService.CloseDocumentNoSave (ref originalDocument);
+				TryDeleteFileQuietly (stagingWorkingDocumentPath);
 				return new DocumentSaveOutcome (finalPath, activeDocument);
-			} catch {
+			} catch (Exception exception) {
+				_logger.Error ("DocumentSaveService.SaveDirectWithBackup failed. step=" + currentStep + ", saveCopyOnly=True, finalPath=" + (finalPath ?? string.Empty) + ", tempPath=" + (stagingPath ?? string.Empty), exception);
 				TryDeleteFileQuietly (stagingPath);
 				throw;
 			}
@@ -123,6 +141,82 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			string fileName = fileNameWithoutExtension + ".tmp_" + Guid.NewGuid ().ToString ("N") + extension;
 			return Path.Combine (directoryName, fileName);
+		}
+
+		private string DetectStagingWorkingDocumentPath (object wordDocument, string stagingSavedPath, bool wasUnsavedDocument)
+		{
+			if (!wasUnsavedDocument) {
+				return string.Empty;
+			}
+			string currentDocumentPath = TryGetDocumentPath (wordDocument);
+			if (string.IsNullOrWhiteSpace (currentDocumentPath)) {
+				return string.Empty;
+			}
+			if (string.Equals (currentDocumentPath, stagingSavedPath, StringComparison.OrdinalIgnoreCase)) {
+				return string.Empty;
+			}
+			return currentDocumentPath;
+		}
+
+		private static string DescribeStagingSaveContext (string finalPath, string stagingPath, bool finalExists, bool stagingExists)
+		{
+			string parentDirectory = SafeGetDirectoryName (finalPath);
+			return
+				"finalPath=" + (finalPath ?? string.Empty) +
+				", tempPath=" + (stagingPath ?? string.Empty) +
+				", finalParentDirectory=" + parentDirectory +
+				", finalParentDirectoryExists=" + SafeDirectoryExists (parentDirectory) +
+				", finalFileExists=" + finalExists +
+				", tempFileExists=" + stagingExists +
+				", finalExtension=" + SafeGetExtension (finalPath) +
+				", finalPathLength=" + SafeGetPathLength (finalPath) +
+				", tempPathLength=" + SafeGetPathLength (stagingPath) +
+				", finalFileName=" + SafeGetFileName (finalPath) +
+				", tempFileName=" + SafeGetFileName (stagingPath);
+		}
+
+		private static string SafeGetDirectoryName (string path)
+		{
+			try {
+				return Path.GetDirectoryName (path) ?? string.Empty;
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ")";
+			}
+		}
+
+		private static string SafeGetExtension (string path)
+		{
+			try {
+				return Path.GetExtension (path) ?? string.Empty;
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ")";
+			}
+		}
+
+		private static string SafeGetFileName (string path)
+		{
+			try {
+				return Path.GetFileName (path) ?? string.Empty;
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ")";
+			}
+		}
+
+		private static string SafeDirectoryExists (string path)
+		{
+			if (string.IsNullOrWhiteSpace (path)) {
+				return "False";
+			}
+			try {
+				return Directory.Exists (path) ? "True" : "False";
+			} catch (Exception exception) {
+				return "Unknown(" + exception.GetType ().FullName + ")";
+			}
+		}
+
+		private static int SafeGetPathLength (string path)
+		{
+			return path == null ? -1 : path.Length;
 		}
 
 		private static void TryDeleteFileQuietly (string path)

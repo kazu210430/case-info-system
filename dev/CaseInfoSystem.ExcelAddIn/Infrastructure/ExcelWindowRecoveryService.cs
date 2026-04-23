@@ -39,13 +39,32 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         /// <summary>
         internal bool TryRecoverWorkbookWindow(Excel.Workbook workbook, string reason, bool bringToFront)
         {
+            return TryRecoverWorkbookWindowInternal(
+                workbook,
+                reason,
+                bringToFront,
+                ensureWindowVisible: true,
+                activateWindow: true);
+        }
+
+        internal bool TryRecoverWorkbookWindowWithoutShowing(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            return TryRecoverWorkbookWindowInternal(
+                workbook,
+                reason,
+                bringToFront,
+                ensureWindowVisible: false,
+                activateWindow: false);
+        }
+
+        private bool TryRecoverWorkbookWindowInternal(Excel.Workbook workbook, string reason, bool bringToFront, bool ensureWindowVisible, bool activateWindow)
+        {
             if (workbook == null)
             {
                 return false;
             }
 
             string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
-            bool recoveredApplicationVisibility = EnsureApplicationVisible(reason, workbookFullName);
             bool recoveredScreenUpdating = EnsureScreenUpdatingEnabled(reason, workbookFullName);
             Excel.Window window = ResolveWindow(workbook);
             if (window == null)
@@ -58,19 +77,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return false;
             }
 
-            bool recoveredWindowVisibility = EnsureWindowVisible(window, reason, workbookFullName);
+            bool recoveredWindowVisibility = ensureWindowVisible
+                && EnsureWindowVisible(window, reason, workbookFullName);
             bool recoveredWindowState = EnsureWindowRestored(window, reason, workbookFullName);
+            bool recoveredApplicationVisibility = EnsureApplicationVisible(reason, workbookFullName);
 
-            try
+            if (activateWindow)
             {
-                window.Activate();
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(nameof(ExcelWindowRecoveryService), "window.Activate failed but recovery continues. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", message=" + ex.Message);
+                try
+                {
+                    window.Activate();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(nameof(ExcelWindowRecoveryService), "window.Activate failed but recovery continues. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", message=" + ex.Message);
+                }
             }
 
-            if (bringToFront && (recoveredApplicationVisibility || recoveredScreenUpdating || recoveredWindowVisibility || recoveredWindowState))
+            if (bringToFront
+                && (ensureWindowVisible || window.Visible)
+                && (recoveredApplicationVisibility || recoveredScreenUpdating || recoveredWindowVisibility || recoveredWindowState))
             {
                 PromoteExcelWindow(window, reason, workbookFullName);
             }
@@ -87,7 +113,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 + ", windowVisibleRecovered="
                 + recoveredWindowVisibility.ToString()
                 + ", windowStateRecovered="
-                + recoveredWindowState.ToString());
+                + recoveredWindowState.ToString()
+                + ", ensureWindowVisible="
+                + ensureWindowVisible.ToString()
+                + ", activateWindow="
+                + activateWindow.ToString());
             return true;
         }
 
@@ -96,6 +126,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             Excel.Workbook activeWorkbook = _excelInteropService.GetActiveWorkbook();
             return activeWorkbook != null && TryRecoverWorkbookWindow(activeWorkbook, reason, bringToFront);
+        }
+
+        internal bool TryRecoverActiveWorkbookWindowWithoutShowing(string reason, bool bringToFront)
+        {
+            Excel.Workbook activeWorkbook = _excelInteropService.GetActiveWorkbook();
+            return activeWorkbook != null && TryRecoverWorkbookWindowWithoutShowing(activeWorkbook, reason, bringToFront);
         }
 
         /// <summary>
@@ -196,7 +232,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        /// <summary>
         private bool EnsureWindowRestored(Excel.Window window, string reason, string workbookFullName)
         {
             try

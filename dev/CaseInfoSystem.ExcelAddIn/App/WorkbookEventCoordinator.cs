@@ -11,16 +11,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _addin = addin;
         }
 
-        internal void OnWorkbookOpen(Excel.Workbook workbook)
-        {
-            _addin.HandleWorkbookOpenEvent(workbook);
-        }
-
-        internal void OnWorkbookActivate(Excel.Workbook workbook)
-        {
-            _addin.HandleWorkbookActivateEvent(workbook);
-        }
-
         internal void OnWindowActivate(Excel.Workbook workbook, Excel.Window window)
         {
             _addin.HandleWindowActivateEvent(workbook, window);

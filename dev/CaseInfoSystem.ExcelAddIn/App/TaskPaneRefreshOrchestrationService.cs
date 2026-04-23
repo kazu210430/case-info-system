@@ -67,6 +67,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", activeState="
                 + FormatActiveState());
+            if (Globals.ThisAddIn != null && Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=ignore-during-protection refreshAttemptId="
+                    + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", inputWindow="
+                    + FormatWindowDescriptor(window)
+                    + ", activeState="
+                    + FormatActiveState());
+                return TaskPaneRefreshAttemptResult.Skipped();
+            }
+
             TaskPaneRefreshAttemptResult result = _taskPaneRefreshCoordinator.TryRefreshTaskPane(
                 reason,
                 workbook,
@@ -328,6 +345,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 reason,
                 (targetWorkbook, targetReason) =>
                 {
+                    EnsureWorkbookWindowVisibleForTaskPaneDisplay(targetWorkbook, targetReason, attemptNumber);
                     Excel.Window resolvedWindow = ResolveWorkbookPaneWindow(targetWorkbook, targetReason, activateWorkbook: true);
                     _logger?.Info("TaskPane wait-ready attempt window. reason=" + (targetReason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(targetWorkbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(resolvedWindow) + ", activeWorkbookMatches=" + IsActiveWorkbookMatch(targetWorkbook).ToString() + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
                     return resolvedWindow;
@@ -340,6 +358,44 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     return refreshAttemptResult;
                 });
             return result.RefreshAttemptResult.IsRefreshSucceeded;
+        }
+
+        private void EnsureWorkbookWindowVisibleForTaskPaneDisplay(Excel.Workbook workbook, string reason, int attemptNumber)
+        {
+            if (attemptNumber != 1 || workbook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Excel.Window workbookWindow = _excelInteropService == null
+                    ? null
+                    : _excelInteropService.GetFirstVisibleWindow(workbook);
+                if (workbookWindow == null)
+                {
+                    workbookWindow = workbook.Windows.Count > 0 ? workbook.Windows[1] : null;
+                }
+
+                if (workbookWindow == null)
+                {
+                    _logger?.Warn("TaskPane wait-ready pre-visibility skipped because workbook window could not be resolved. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook));
+                    return;
+                }
+
+                if (workbookWindow.Visible)
+                {
+                    _logger?.Info("TaskPane wait-ready pre-visibility skipped because workbook window is already visible. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
+                    return;
+                }
+
+                workbookWindow.Visible = true;
+                _logger?.Info("TaskPane wait-ready workbook window made visible. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error("EnsureWorkbookWindowVisibleForTaskPaneDisplay failed. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook), ex);
+            }
         }
 
         private void WaitForTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber)

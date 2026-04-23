@@ -58,8 +58,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private bool _isClosingBySession;
 
-		private int _ensureHomeDisplayHiddenRequestSequence;
-
 		private string _kernelFlickerTraceId = string.Empty;
 
 
@@ -588,11 +586,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void RequestEnsureHomeDisplayHidden (string triggerSource)
 		{
 			EnsureKernelFlickerTraceContext (triggerSource);
-			int requestSequence = ++_ensureHomeDisplayHiddenRequestSequence;
 			string requestReason = "source="
 				+ (triggerSource ?? string.Empty)
-				+ ",requestSequence="
-				+ requestSequence.ToString ()
 				+ ",foregroundRetryCount="
 				+ _foregroundRetryCount.ToString ()
 				+ ",formVisible="

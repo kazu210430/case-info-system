@@ -1,3 +1,5 @@
+using CaseInfoSystem.ExcelAddIn.Domain;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
@@ -12,6 +14,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal static class PaneDisplayPolicy
     {
+        internal static PaneDisplayPolicyResult Decide(
+            TaskPaneDisplayRequest request,
+            TaskPaneManager taskPaneManager,
+            IWorkbookRoleResolver workbookRoleResolver,
+            Excel.Workbook workbook,
+            Excel.Window window)
+        {
+            return Decide(
+                request,
+                taskPaneManager,
+                workbook,
+                window,
+                ShouldDisplayPane(workbookRoleResolver, workbook));
+        }
+
         internal static PaneDisplayPolicyResult Decide(
             TaskPaneDisplayRequest request,
             TaskPaneManager taskPaneManager,
@@ -56,6 +73,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 hasManagedPane,
                 showedExistingPane,
                 shouldShowWithRenderPane);
+        }
+
+        internal static bool ShouldDisplayPane(IWorkbookRoleResolver workbookRoleResolver, Excel.Workbook workbook)
+        {
+            if (workbookRoleResolver == null)
+            {
+                return true;
+            }
+
+            WorkbookRole role = workbookRoleResolver.Resolve(workbook);
+            return role == WorkbookRole.Kernel
+                || role == WorkbookRole.Case
+                || role == WorkbookRole.Accounting;
         }
 
         internal static PaneDisplayPolicyResult Decide(bool showedExistingPane, bool shouldShowWithRenderPane)

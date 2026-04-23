@@ -119,9 +119,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         internal Action<string, string> OnOpenFolder { get; set; }
 
+        internal Func<string, string, IntPtr> OnOpenFolderAndWait { get; set; }
+
         internal void OpenFolder(string folderPath, string reason)
         {
             OnOpenFolder?.Invoke(folderPath, reason);
+        }
+
+        internal IntPtr OpenFolderAndWait(string folderPath, string reason)
+        {
+            return OnOpenFolderAndWait == null
+                ? IntPtr.Zero
+                : OnOpenFolderAndWait(folderPath, reason);
         }
     }
 
@@ -132,27 +141,72 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         internal HiddenCaseWorkbookSession OpenHiddenWorkbook(string caseWorkbookPath)
         {
             return OnOpenHiddenWorkbook == null
-                ? new HiddenCaseWorkbookSession(new Excel.Application(), new Excel.Workbook { FullName = caseWorkbookPath ?? string.Empty })
+                ? new HiddenCaseWorkbookSession(new Excel.Application(), new Excel.Workbook { FullName = caseWorkbookPath ?? string.Empty }, "legacy-isolated")
                 : OnOpenHiddenWorkbook(caseWorkbookPath);
         }
 
         internal sealed class HiddenCaseWorkbookSession
         {
-            internal HiddenCaseWorkbookSession(Excel.Application application, Excel.Workbook workbook)
+            private readonly Action _closeAction;
+            private bool _closed;
+
+            internal HiddenCaseWorkbookSession(Excel.Application application, Excel.Workbook workbook, string routeName = "legacy-isolated", Action closeAction = null)
             {
                 Application = application;
                 Workbook = workbook;
+                RouteName = routeName ?? string.Empty;
+                _closeAction = closeAction ?? (() =>
+                {
+                    Workbook.Close(false, null, null);
+                    Application.Quit();
+                });
             }
 
             internal Excel.Application Application { get; }
 
             internal Excel.Workbook Workbook { get; }
+
+            internal string RouteName { get; }
+
+            internal void Close()
+            {
+                ExecuteClose();
+            }
+
+            internal void Abort()
+            {
+                ExecuteClose();
+            }
+
+            private void ExecuteClose()
+            {
+                if (_closed)
+                {
+                    return;
+                }
+
+                _closeAction();
+                _closed = true;
+            }
         }
     }
 
     internal sealed class CaseWorkbookInitializer
     {
+        internal Action<Excel.Workbook, Excel.Workbook, KernelCaseCreationPlan> OnInitializeForVisibleCreate { get; set; }
+
         internal Action<Excel.Workbook, Excel.Workbook, KernelCaseCreationPlan> OnInitializeForHiddenCreate { get; set; }
+
+        internal void InitializeForVisibleCreate(Excel.Workbook kernelWorkbook, Excel.Workbook caseWorkbook, KernelCaseCreationPlan plan)
+        {
+            if (OnInitializeForVisibleCreate != null)
+            {
+                OnInitializeForVisibleCreate(kernelWorkbook, caseWorkbook, plan);
+                return;
+            }
+
+            OnInitializeForHiddenCreate?.Invoke(kernelWorkbook, caseWorkbook, plan);
+        }
 
         internal void InitializeForHiddenCreate(Excel.Workbook kernelWorkbook, Excel.Workbook caseWorkbook, KernelCaseCreationPlan plan)
         {
@@ -389,7 +443,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class KernelWorkbookLifecycleService
     {
+        internal IDisposable BeginManagedCloseScope(Excel.Workbook workbook) => new NoOpDisposable();
+
         internal bool RequestManagedCloseFromHomeExit(Excel.Workbook workbook) => true;
+
+        private sealed class NoOpDisposable : IDisposable
+        {
+            public void Dispose()
+            {
+            }
+        }
     }
 
     internal sealed class DocumentOutputService

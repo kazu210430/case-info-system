@@ -501,7 +501,7 @@ namespace CaseInfoSystem.Tests
             Assert.False(second);
             Assert.Equal(1, buildCalls);
             Assert.Equal(0, notifyCalls);
-            Assert.Equal(2, showCalls);
+            Assert.Equal(3, showCalls);
         }
 
         private static TaskPaneManager CreateFullManager(
@@ -514,8 +514,6 @@ namespace CaseInfoSystem.Tests
                 new ExcelInteropService(),
                 snapshotBuilderService ?? new TaskPaneSnapshotBuilderService(),
                 CreateDocumentCommandService(),
-                new DocumentEligibilityDiagnosticsService(),
-                new DocumentMasterCatalogDiagnosticsService(),
                 new DocumentNamePromptService(),
                 new KernelCommandService(),
                 new AccountingSheetCommandService(),

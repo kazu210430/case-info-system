@@ -22,6 +22,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Action<string> _showKernelHomePlaceholderWithExternalWorkbookSuppression;
         private readonly Action<Excel.Workbook, string> _handleExternalWorkbookDetected;
         private readonly Func<string, Excel.Workbook, bool> _shouldSuppressCasePaneRefresh;
+        private readonly Action<string, Excel.Workbook, Excel.Window> _refreshTaskPaneByReason;
         private readonly Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> _refreshTaskPane;
         private readonly Action _scheduleWordWarmup;
         private readonly int _pendingPaneRefreshMaxAttempts;
@@ -42,6 +43,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Action<string> showKernelHomePlaceholderWithExternalWorkbookSuppression,
             Action<Excel.Workbook, string> handleExternalWorkbookDetected,
             Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh,
+            Action<string, Excel.Workbook, Excel.Window> refreshTaskPaneByReason,
             Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> refreshTaskPane,
             Action scheduleWordWarmup,
             int pendingPaneRefreshMaxAttempts,
@@ -61,6 +63,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _showKernelHomePlaceholderWithExternalWorkbookSuppression = showKernelHomePlaceholderWithExternalWorkbookSuppression;
             _handleExternalWorkbookDetected = handleExternalWorkbookDetected;
             _shouldSuppressCasePaneRefresh = shouldSuppressCasePaneRefresh;
+            _refreshTaskPaneByReason = refreshTaskPaneByReason;
             _refreshTaskPane = refreshTaskPane;
             _scheduleWordWarmup = scheduleWordWarmup;
             _pendingPaneRefreshMaxAttempts = pendingPaneRefreshMaxAttempts;
@@ -79,6 +82,8 @@ namespace CaseInfoSystem.ExcelAddIn
         internal WorkbookSessionService WorkbookSessionService { get; private set; }
 
         internal TransientPaneSuppressionService TransientPaneSuppressionService { get; private set; }
+
+        internal CaseWorkbookOpenStrategy CaseWorkbookOpenStrategy { get; private set; }
 
         internal CaseContextFactory CaseContextFactory { get; private set; }
 
@@ -123,6 +128,10 @@ namespace CaseInfoSystem.ExcelAddIn
         internal KernelWorkbookAvailabilityService KernelWorkbookAvailabilityService { get; private set; }
 
         internal WorkbookEventCoordinator WorkbookEventCoordinator { get; private set; }
+
+        internal SheetEventCoordinator SheetEventCoordinator { get; private set; }
+
+        internal WorkbookLifecycleCoordinator WorkbookLifecycleCoordinator { get; private set; }
 
         internal KernelHomeCoordinator KernelHomeCoordinator { get; private set; }
 
@@ -244,9 +253,11 @@ namespace CaseInfoSystem.ExcelAddIn
             // Case creation stays here because it still spans kernel, case workbook, and UI-facing coordination.
             var caseWorkbookInitializer = new CaseWorkbookInitializer(ExcelInteropService, caseTemplateSnapshotService, caseListFieldDefinitionRepository);
             var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy(_application, WorkbookRoleResolver, _logger);
+            CaseWorkbookOpenStrategy = caseWorkbookOpenStrategy;
             var createdCaseOpenPromptService = new CreatedCaseOpenPromptService(_logger);
-            var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, ExcelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, TransientPaneSuppressionService, _logger);
-            var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, TransientPaneSuppressionService, ExcelInteropService, _logger);
+            var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
+            var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, ExcelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, TransientPaneSuppressionService, _logger);
+            var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, TransientPaneSuppressionService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCaseOpenPromptService, ExcelInteropService, _logger);
             KernelUserDataReflectionService = new KernelUserDataReflectionService(
                 KernelWorkbookService,
@@ -315,8 +326,6 @@ namespace CaseInfoSystem.ExcelAddIn
                     ExcelInteropService,
                     WorkbookRoleResolver,
                     DocumentCommandService,
-                    documentComposition.DocumentEligibilityDiagnosticsService,
-                    documentComposition.DocumentMasterCatalogDiagnosticsService,
                     DocumentNamePromptService,
                     KernelCommandService,
                     accountingSheetCommandService,
@@ -329,6 +338,26 @@ namespace CaseInfoSystem.ExcelAddIn
             TaskPaneManager = taskPaneComposition.TaskPaneManager;
             WindowActivatePaneHandlingService = taskPaneComposition.WindowActivatePaneHandlingService;
             TaskPaneRefreshOrchestrationService = taskPaneComposition.TaskPaneRefreshOrchestrationService;
+            SheetEventCoordinator = new SheetEventCoordinator(
+                _logger,
+                KernelSheetCommandTriggerService,
+                CaseWorkbookLifecycleService,
+                AccountingWorkbookLifecycleService,
+                AccountingSheetControlService,
+                _refreshTaskPaneByReason);
+            WorkbookLifecycleCoordinator = new WorkbookLifecycleCoordinator(
+                _logger,
+                ExcelInteropService,
+                KernelWorkbookLifecycleService,
+                CaseWorkbookLifecycleService,
+                AccountingWorkbookLifecycleService,
+                AccountingSheetControlService,
+                WorkbookClipboardPreservationService,
+                TaskPaneManager,
+                KernelHomeCoordinator,
+                _handleExternalWorkbookDetected,
+                _refreshTaskPaneByReason,
+                _shouldSuppressCasePaneRefresh);
         }
     }
 
@@ -368,17 +397,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentOutputService,
                 _logger);
             var documentExecutionPolicyService = new DocumentExecutionPolicyService(_logger, excelInteropService);
-            var documentEligibilityDiagnosticsService = new DocumentEligibilityDiagnosticsService(
-                documentExecutionModeService,
-                documentExecutionEligibilityService,
-                documentExecutionPolicyService,
-                _logger);
-            var documentMasterCatalogDiagnosticsService = new DocumentMasterCatalogDiagnosticsService(
-                masterTemplateCatalogService,
-                documentExecutionEligibilityService,
-                documentExecutionPolicyService,
-                documentExecutionModeService,
-                _logger);
             var mergeDataBuilder = new MergeDataBuilder();
             var documentMergeService = new DocumentMergeService(_logger);
             var wordInteropService = new WordInteropService(pathCompatibilityService, _logger);
@@ -420,8 +438,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentCommandService,
                 documentNamePromptService,
                 documentExecutionModeService,
-                documentEligibilityDiagnosticsService,
-                documentMasterCatalogDiagnosticsService,
                 wordInteropService);
         }
     }
@@ -433,15 +449,11 @@ namespace CaseInfoSystem.ExcelAddIn
             DocumentCommandService documentCommandService,
             DocumentNamePromptService documentNamePromptService,
             DocumentExecutionModeService documentExecutionModeService,
-            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
-            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
             WordInteropService wordInteropService)
         {
             DocumentCommandService = documentCommandService;
             DocumentNamePromptService = documentNamePromptService;
             DocumentExecutionModeService = documentExecutionModeService;
-            DocumentEligibilityDiagnosticsService = documentEligibilityDiagnosticsService;
-            DocumentMasterCatalogDiagnosticsService = documentMasterCatalogDiagnosticsService;
             WordInteropService = wordInteropService;
         }
 
@@ -450,10 +462,6 @@ namespace CaseInfoSystem.ExcelAddIn
         internal DocumentNamePromptService DocumentNamePromptService { get; private set; }
 
         internal DocumentExecutionModeService DocumentExecutionModeService { get; private set; }
-
-        internal DocumentEligibilityDiagnosticsService DocumentEligibilityDiagnosticsService { get; private set; }
-
-        internal DocumentMasterCatalogDiagnosticsService DocumentMasterCatalogDiagnosticsService { get; private set; }
 
         internal WordInteropService WordInteropService { get; private set; }
     }
@@ -566,8 +574,6 @@ namespace CaseInfoSystem.ExcelAddIn
             ExcelInteropService excelInteropService,
             WorkbookRoleResolver workbookRoleResolver,
             DocumentCommandService documentCommandService,
-            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
-            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
             DocumentNamePromptService documentNamePromptService,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -595,8 +601,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 excelInteropService,
                 taskPaneSnapshotBuilderService,
                 documentCommandService,
-                documentEligibilityDiagnosticsService,
-                documentMasterCatalogDiagnosticsService,
                 documentNamePromptService,
                 kernelCommandService,
                 accountingSheetCommandService,

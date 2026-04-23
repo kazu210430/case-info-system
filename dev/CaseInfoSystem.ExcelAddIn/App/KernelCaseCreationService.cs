@@ -19,17 +19,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
 
+		private readonly CaseWorkbookLifecycleService _caseWorkbookLifecycleService;
+
 		private readonly ExcelInteropService _excelInteropService;
 
 		private readonly Logger _logger;
 
-		internal KernelCaseCreationService (KernelWorkbookService kernelWorkbookService, KernelCasePathService kernelCasePathService, CaseWorkbookInitializer caseWorkbookInitializer, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, TransientPaneSuppressionService transientPaneSuppressionService, ExcelInteropService excelInteropService, Logger logger)
+		internal KernelCaseCreationService (KernelWorkbookService kernelWorkbookService, KernelCasePathService kernelCasePathService, CaseWorkbookInitializer caseWorkbookInitializer, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, TransientPaneSuppressionService transientPaneSuppressionService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, ExcelInteropService excelInteropService, Logger logger)
 		{
 			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
 			_kernelCasePathService = kernelCasePathService ?? throw new ArgumentNullException ("kernelCasePathService");
 			_caseWorkbookInitializer = caseWorkbookInitializer ?? throw new ArgumentNullException ("caseWorkbookInitializer");
 			_caseWorkbookOpenStrategy = caseWorkbookOpenStrategy ?? throw new ArgumentNullException ("caseWorkbookOpenStrategy");
 			_transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException ("transientPaneSuppressionService");
+			_caseWorkbookLifecycleService = caseWorkbookLifecycleService ?? throw new ArgumentNullException ("caseWorkbookLifecycleService");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
@@ -97,20 +100,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal KernelCaseCreationResult CreateSavedCase (Workbook kernelWorkbook, KernelCaseCreationPlan plan)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession hiddenCaseWorkbookSession = null;
-			string text = PrepareWorkingCaseWorkbookPath (plan.CaseWorkbookPath, "CreateSavedCase", stopwatch);
+			Workbook workbook = null;
+			Application application = null;
+			bool previousDisplayAlerts = true;
+			bool transientSuppressionRegistered = false;
 			try {
-				hiddenCaseWorkbookSession = _caseWorkbookOpenStrategy.OpenHiddenWorkbook (text);
-				_logger.Info ("Kernel saved CASE session ready. path=" + text + ", appHwnd=" + SafeApplicationHwnd (hiddenCaseWorkbookSession.Application));
-				_caseWorkbookInitializer.InitializeForHiddenCreate (kernelWorkbook, hiddenCaseWorkbookSession.Workbook, plan);
-				_logger.Info ("Kernel saved CASE initialized. path=" + text + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				hiddenCaseWorkbookSession.Workbook.Save ();
-				_logger.Info ("Kernel saved CASE saved. path=" + text + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				hiddenCaseWorkbookSession.Workbook.Close (false, Type.Missing, Type.Missing);
-				_logger.Info ("Kernel saved CASE session quitting. path=" + text + ", appHwnd=" + SafeApplicationHwnd (hiddenCaseWorkbookSession.Application));
-				hiddenCaseWorkbookSession.Application.Quit ();
-				hiddenCaseWorkbookSession = null;
-				FinalizeWorkingCaseWorkbookPath (text, plan.CaseWorkbookPath, "CreateSavedCase", stopwatch);
+				application = (kernelWorkbook == null) ? null : kernelWorkbook.Application;
+				if (application == null) {
+					throw new InvalidOperationException ("Excel application could not be resolved.");
+				}
+				previousDisplayAlerts = application.DisplayAlerts;
+				_transientPaneSuppressionService.SuppressPath (plan.CaseWorkbookPath, "KernelCaseCreationService.CreateSavedCase");
+				transientSuppressionRegistered = true;
+				workbook = application.Workbooks.Open (plan.CaseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
+				_logger.Info ("Kernel saved CASE workbook opened. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				_caseWorkbookInitializer.InitializeForVisibleCreate (kernelWorkbook, workbook, plan);
+				_logger.Info ("Kernel saved CASE initialized. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				workbook.Save ();
+				_logger.Info ("Kernel saved CASE saved. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
+					WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose (workbook);
+					application.DisplayAlerts = false;
+					workbook.Close (false, Type.Missing, Type.Missing);
+				}
+				workbook = null;
+				_transientPaneSuppressionService.ReleasePath (plan.CaseWorkbookPath, "KernelCaseCreationService.CreateSavedCase.Completed");
+				transientSuppressionRegistered = false;
+				_logger.Info ("Kernel saved CASE workbook closed. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("Saved CASE created. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return new KernelCaseCreationResult {
 					Success = true,
@@ -121,14 +137,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				};
 			} catch {
 				try {
-					if (hiddenCaseWorkbookSession != null) {
-						hiddenCaseWorkbookSession.Workbook.Close (false, Type.Missing, Type.Missing);
-						_logger.Info ("Kernel saved CASE session quitting after failure. path=" + text + ", appHwnd=" + SafeApplicationHwnd (hiddenCaseWorkbookSession.Application));
-						hiddenCaseWorkbookSession.Application.Quit ();
+					if (workbook != null) {
+						using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
+							WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose (workbook);
+							if (application != null) {
+								application.DisplayAlerts = false;
+							}
+							workbook.Close (false, Type.Missing, Type.Missing);
+						}
 					}
 				} catch {
 				}
 				throw;
+			} finally {
+				if (transientSuppressionRegistered) {
+					try {
+						_transientPaneSuppressionService.ReleasePath (plan.CaseWorkbookPath, "KernelCaseCreationService.CreateSavedCase.Finally");
+					} catch {
+					}
+				}
+				try {
+					if (application != null) {
+						application.DisplayAlerts = previousDisplayAlerts;
+					}
+				} catch {
+				}
 			}
 		}
 
@@ -139,6 +172,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch {
 				return string.Empty;
 			}
+		}
+
+		private void LogCreateSavedCasePhase (string phaseName, string path, string routeName, Stopwatch stopwatch, long phaseStartElapsedMs)
+		{
+			_logger.Info ("Kernel saved CASE phase completed. phase=" + (phaseName ?? string.Empty) + ", path=" + (path ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", phaseElapsedMs=" + Math.Max (0L, stopwatch.ElapsedMilliseconds - phaseStartElapsedMs) + ", totalElapsedMs=" + stopwatch.ElapsedMilliseconds);
 		}
 
 		private string PrepareWorkingCaseWorkbookPath (string finalCaseWorkbookPath, string reason, Stopwatch stopwatch)
@@ -168,5 +206,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Kernel case local working copy finalized. reason=" + reason + ", finalPath=" + finalCaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			}
 		}
+
 	}
 }

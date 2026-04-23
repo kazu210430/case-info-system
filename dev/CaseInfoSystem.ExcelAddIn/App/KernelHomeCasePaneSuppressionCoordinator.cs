@@ -9,6 +9,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class KernelHomeCasePaneSuppressionCoordinator
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private static readonly TimeSpan SuppressionDuration = TimeSpan.FromSeconds(5);
 
         private readonly WorkbookRoleResolver _workbookRoleResolver;
@@ -21,6 +22,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private int _suppressCasePaneOnWorkbookActivateCount;
         private int _suppressCasePaneOnWindowActivateCount;
         private DateTime _suppressCasePaneUntilUtc;
+        private string _protectedCaseWorkbookFullName;
+        private string _protectedCaseWindowHwnd;
+        private DateTime _protectedCaseWorkbookActivateUntilUtc;
         private bool _kernelHomeExternalCloseBusy;
         private bool _kernelHomeExternalCloseRequested;
 
@@ -177,6 +181,103 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + _suppressCasePaneUntilUtc.ToString("O", CultureInfo.InvariantCulture));
         }
 
+        internal void BeginCaseWorkbookActivateProtection(Excel.Workbook workbook, Excel.Window window, string reason)
+        {
+            string workbookFullName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+            string windowHwnd = SafeWindowHwnd(window);
+            WorkbookRole workbookRole = _workbookRoleResolver == null ? WorkbookRole.Unknown : _workbookRoleResolver.Resolve(workbook);
+            if (workbookRole != WorkbookRole.Case
+                || string.IsNullOrWhiteSpace(workbookFullName)
+                || string.IsNullOrWhiteSpace(windowHwnd))
+            {
+                return;
+            }
+
+            _protectedCaseWorkbookFullName = workbookFullName;
+            _protectedCaseWindowHwnd = windowHwnd;
+            _protectedCaseWorkbookActivateUntilUtc = DateTime.UtcNow.Add(SuppressionDuration);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookActivateProtection action=start reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + workbookFullName
+                + ", windowHwnd="
+                + windowHwnd
+                + ", protectUntilUtc="
+                + _protectedCaseWorkbookActivateUntilUtc.ToString("O", CultureInfo.InvariantCulture));
+        }
+
+        internal bool ShouldIgnoreWorkbookActivateDuringProtection(Excel.Workbook workbook)
+        {
+            string workbookFullName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+            string activeWindowHwnd = SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow());
+            if (!IsProtectedCaseProtectionTarget(workbookFullName, activeWindowHwnd))
+            {
+                return false;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookActivateProtection action=ignore event=WorkbookActivate workbook="
+                + workbookFullName
+                + ", activeWindowHwnd="
+                + activeWindowHwnd
+                + ", protectUntilUtc="
+                + _protectedCaseWorkbookActivateUntilUtc.ToString("O", CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        internal bool ShouldIgnoreWindowActivateDuringProtection(Excel.Workbook workbook, Excel.Window window)
+        {
+            string workbookFullName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+            string windowHwnd = SafeWindowHwnd(window);
+            if (!IsProtectedCaseProtectionTarget(workbookFullName, windowHwnd))
+            {
+                return false;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WindowActivateProtection action=ignore event=WindowActivate workbook="
+                + workbookFullName
+                + ", windowHwnd="
+                + windowHwnd
+                + ", protectUntilUtc="
+                + _protectedCaseWorkbookActivateUntilUtc.ToString("O", CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        internal bool ShouldIgnoreTaskPaneRefreshDuringProtection(string reason, Excel.Workbook workbook, Excel.Window window)
+        {
+            if (!IsProtectedCaseProtectionActive())
+            {
+                return false;
+            }
+
+            string activeWindowHwnd = SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow());
+            if (!string.Equals(_protectedCaseWindowHwnd, activeWindowHwnd, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string workbookFullName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+            string windowHwnd = SafeWindowHwnd(window);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshProtection action=ignore reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + workbookFullName
+                + ", windowHwnd="
+                + windowHwnd
+                + ", activeWindowHwnd="
+                + activeWindowHwnd
+                + ", protectUntilUtc="
+                + _protectedCaseWorkbookActivateUntilUtc.ToString("O", CultureInfo.InvariantCulture));
+            return true;
+        }
+
         internal bool ShouldSuppressCasePaneRefresh(string eventName, Excel.Workbook workbook)
         {
             string workbookFullName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
@@ -284,6 +385,76 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + (reason ?? string.Empty)
                 + ", workbook="
                 + workbookFullName);
+        }
+
+        private bool IsProtectedCaseProtectionTarget(string workbookFullName, string windowHwnd)
+        {
+            if (!IsProtectedCaseProtectionActive())
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(workbookFullName)
+                || string.IsNullOrWhiteSpace(windowHwnd))
+            {
+                return false;
+            }
+
+            return string.Equals(_protectedCaseWorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(_protectedCaseWindowHwnd, windowHwnd, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsProtectedCaseProtectionActive()
+        {
+            if (DateTime.UtcNow > _protectedCaseWorkbookActivateUntilUtc)
+            {
+                ClearCaseWorkbookActivateProtection("Expired");
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(_protectedCaseWorkbookFullName)
+                || string.IsNullOrWhiteSpace(_protectedCaseWindowHwnd))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ClearCaseWorkbookActivateProtection(string reason)
+        {
+            if (string.IsNullOrWhiteSpace(_protectedCaseWorkbookFullName)
+                && string.IsNullOrWhiteSpace(_protectedCaseWindowHwnd)
+                && _protectedCaseWorkbookActivateUntilUtc == DateTime.MinValue)
+            {
+                return;
+            }
+
+            string workbookFullName = _protectedCaseWorkbookFullName ?? string.Empty;
+            string windowHwnd = _protectedCaseWindowHwnd ?? string.Empty;
+            _protectedCaseWorkbookFullName = string.Empty;
+            _protectedCaseWindowHwnd = string.Empty;
+            _protectedCaseWorkbookActivateUntilUtc = DateTime.MinValue;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookActivateProtection action=clear reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + workbookFullName
+                + ", windowHwnd="
+                + windowHwnd);
+        }
+
+        private static string SafeWindowHwnd(Excel.Window window)
+        {
+            try
+            {
+                return window == null ? string.Empty : Convert.ToString(window.Hwnd, CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 }

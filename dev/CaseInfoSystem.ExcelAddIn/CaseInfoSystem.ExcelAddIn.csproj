@@ -35,17 +35,21 @@
     <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == '' and Exists('$(MSBuildProjectDirectory)\..\..\.github\build\windowsapicodepack\Microsoft.WindowsAPICodePack.dll')">$(MSBuildProjectDirectory)\..\..\.github\build\windowsapicodepack</WindowsApiCodePackDir>
     <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == '' and Exists('$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack\Microsoft.WindowsAPICodePack.dll')">$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack</WindowsApiCodePackDir>
     <WindowsApiCodePackDir Condition="'$(WindowsApiCodePackDir)' == ''">$(MSBuildProjectDirectory)\..\..\build\windowsapicodepack</WindowsApiCodePackDir>
-    <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">$(MSBuildProjectDirectory)\CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
+    <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == '' and Exists('$(MSBuildProjectDirectory)\CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx')">$(MSBuildProjectDirectory)\CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
+    <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">
+    </AddInManifestKeyFile>
+    <ManifestKeyFile Condition="'$(ManifestKeyFile)' == ''">$(AddInManifestKeyFile)</ManifestKeyFile>
+    <ManifestCertificateThumbprint Condition="'$(ManifestCertificateThumbprint)' == '' and '$(AddInManifestKeyFile)' != ''">6B9D20C90791706E34767379DA43A92579582E8B</ManifestCertificateThumbprint>
+    <CertificateThumbprint Condition="'$(CertificateThumbprint)' == '' and '$(ManifestCertificateThumbprint)' != ''">$(ManifestCertificateThumbprint)</CertificateThumbprint>
     <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.ExcelAddIn</UnifiedDeployPackageDir>
     <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\Addins\CaseInfoSystem.ExcelAddIn</RuntimeAddInDir>
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
     <RuntimeManifestPath>$(RuntimeAddInDirFull)\CaseInfoSystem.ExcelAddIn.vsto</RuntimeManifestPath>
     <VstoInstallerPath Condition="'$(VstoInstallerPath)' == ''">C:\Program Files\Common Files\microsoft shared\VSTO\10.0\VSTOInstaller.exe</VstoInstallerPath>
     <DebugDeployPackageDir Condition="'$(DebugDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\DebugPackage\CaseInfoSystem.ExcelAddIn</DebugDeployPackageDir>
-    <SignManifests>true</SignManifests>
-    <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(SignManifests)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == '' and '$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true'">false</EnableVstoPackaging>
     <EnableVstoPackaging Condition="'$(EnableVstoPackaging)' == ''">true</EnableVstoPackaging>
+    <AllowCoreBuildWithoutVstoPackaging Condition="'$(AllowCoreBuildWithoutVstoPackaging)' == ''">false</AllowCoreBuildWithoutVstoPackaging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -54,6 +58,7 @@
     <OutputPath>bin\Debug\</OutputPath>
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
     <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
+    <SignManifests>false</SignManifests>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
@@ -62,7 +67,11 @@
     <OutputPath>bin\Release\</OutputPath>
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
     <DefineConstants>$(DefineConstants);TRACE</DefineConstants>
+    <SignManifests>false</SignManifests>
     <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' and '$(ManifestKeyFile)' != '' ">
+    <SignManifests>true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Accessibility" />
@@ -99,7 +108,7 @@
     </Reference>
     <Reference Update="stdole">
       <Private>False</Private>
-    </Reference>    
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="Config\DocumentExecutionMode.txt">
@@ -180,6 +189,9 @@
     <Compile Include="App\KernelNamingService.cs" />
     <Compile Include="App\KernelWorkbookAvailabilityService.cs" />
     <Compile Include="App\KernelWorkbookResolutionPolicy.cs" />
+    <Compile Include="App\KernelWorkbookResolver.cs" />
+    <Compile Include="App\KernelWorkbookSettingsService.cs" />
+    <Compile Include="App\KernelWorkbookStateService.cs" />
     <Compile Include="App\KernelWorkbookService.cs" />
     <Compile Include="App\MergeDataBuilder.cs" />
     <Compile Include="App\NavigationService.cs" />
@@ -187,6 +199,7 @@
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />
     <Compile Include="App\PaneDisplayPolicy.cs" />
+    <Compile Include="App\SheetEventCoordinator.cs" />
     <Compile Include="App\TaskPaneDisplayRequest.cs" />
     <Compile Include="App\TaskPanePostActionRefreshPolicy.cs" />
     <Compile Include="App\TaskPaneRefreshPreconditionPolicy.cs" />
@@ -196,6 +209,7 @@
     <Compile Include="App\TaskPaneRefreshOrchestrationService.cs" />
     <Compile Include="App\TransientPaneSuppressionService.cs" />
     <Compile Include="App\WorkbookCaseTaskPaneRefreshCommandService.cs" />
+    <Compile Include="App\WorkbookLifecycleCoordinator.cs" />
     <Compile Include="App\WindowActivatePaneHandlingService.cs" />
     <Compile Include="App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" />
     <Compile Include="App\WorkbookTaskPaneDisplayAttemptResult.cs" />
@@ -243,6 +257,7 @@
     <Compile Include="Domain\TemplateDefinition.cs" />
     <Compile Include="Infrastructure\AccountingTemplateResolver.cs" />
     <Compile Include="Infrastructure\AccountingWorkbookService.cs" />
+    <Compile Include="Infrastructure\AddInDeploymentDiagnosticsTracer.cs" />
     <Compile Include="Infrastructure\CaseTemplateSnapshotService.cs" />
     <Compile Include="Infrastructure\CaseListFieldDefinitionRepository.cs" />
     <Compile Include="Infrastructure\CaseListHeaderRepository.cs" />
@@ -253,7 +268,9 @@
     <Compile Include="Infrastructure\IExcelInteropService.cs" />
     <Compile Include="Infrastructure\IPathCompatibilityService.cs" />
     <Compile Include="Infrastructure\IWorkbookRoleResolver.cs" />
+    <Compile Include="Infrastructure\ExcelAddInTraceLogWriter.cs" />
     <Compile Include="Infrastructure\ExcelInteropService.cs" />
+    <Compile Include="Infrastructure\ExcelProcessLaunchContextTracer.cs" />
     <Compile Include="Infrastructure\ExcelWindowRecoveryService.cs" />
     <Compile Include="Infrastructure\FolderWindowService.cs" />
     <Compile Include="Infrastructure\KernelWorkbookResolverService.cs" />
@@ -265,6 +282,7 @@
     <Compile Include="Infrastructure\WorkbookFileNameResolver.cs" />
     <Compile Include="Infrastructure\CreatedCaseNoticeService.cs" />
     <Compile Include="Infrastructure\CreatedCaseOpenPromptService.cs" />
+    <Compile Include="Infrastructure\CreatedCasePresentationWaitService.cs" />
     <Compile Include="Infrastructure\UserErrorService.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotParser.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotCacheService.cs" />
@@ -345,6 +363,9 @@
     <Compile Include="UI\CreatedCaseOpenPromptForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="UI\CreatedCasePresentationWaitForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="UI\CompletionNoticeForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -382,13 +403,255 @@
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(VSToolsTargetsRelativePath)')">C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestKeyFile>$(AddInManifestKeyFile)</ManifestKeyFile>
+    <SignManifests Condition="'$(Configuration)' == 'Release' and ('$(MSBuildRuntimeType)' != 'Core' or '$(BuildingInsideVisualStudio)' == 'true')">true</SignManifests>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>6B9D20C90791706E34767379DA43A92579582E8B</ManifestCertificateThumbprint>
+    <SignManifests>true</SignManifests>
   </PropertyGroup>
+  <UsingTask TaskName="NormalizeMsBuildProcessPathEnvironment" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <Task>
+      <Reference Include="System" />
+      <Reference Include="System.Core" />
+      <Using Namespace="System" />
+      <Using Namespace="System.Collections" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        string pathValue = null;
+        string upperPathValue = null;
+
+        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables(EnvironmentVariableTarget.Process))
+        {
+            string key = entry.Key as string;
+            if (string.Equals(key, "Path", StringComparison.Ordinal))
+            {
+                pathValue = entry.Value as string;
+            }
+            else if (string.Equals(key, "PATH", StringComparison.Ordinal))
+            {
+                upperPathValue = entry.Value as string;
+            }
+        }
+
+        if (upperPathValue == null)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(pathValue))
+        {
+            Environment.SetEnvironmentVariable("Path", upperPathValue, EnvironmentVariableTarget.Process);
+        }
+
+        Environment.SetEnvironmentVariable("PATH", null, EnvironmentVariableTarget.Process);
+        Log.LogMessage(MessageImportance.High, "Normalized process environment PATH into Path before CoreCompile.");
+        return true;
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="NormalizeProcessPathEnvironment" BeforeTargets="CoreCompile" Condition="'$(MSBuildRuntimeType)' != 'Core'">
+    <NormalizeMsBuildProcessPathEnvironment />
+  </Target>
+  <UsingTask TaskName="SetMsBuildProcessEnvironmentVariable" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Name ParameterType="System.String" Required="true" />
+      <Value ParameterType="System.String" Required="false" />
+    </ParameterGroup>
+    <Task>
+      <Reference Include="System" />
+      <Using Namespace="System" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        Environment.SetEnvironmentVariable(Name, Value, EnvironmentVariableTarget.Process);
+        Log.LogMessage(MessageImportance.High, "Set process environment variable for MSBuild. name={0}", Name);
+        return true;
+      ]]></Code>
+    </Task>
+  </UsingTask>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(VSToolsPath)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets" Condition="'$(VSToolsPath)' != '' and Exists('$(VSToolsPath)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets') and '$(EnableVstoPackaging)' == 'true'" />
+  <UsingTask TaskName="VerifyClickOnceSigningSettings" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll" Override="true">
+    <ParameterGroup>
+      <SignManifests ParameterType="System.Boolean" Required="false" />
+    </ParameterGroup>
+    <Task>
+      <Reference Include="System" />
+      <Reference Include="System.Core" />
+      <Using Namespace="System" />
+      <Using Namespace="System.Reflection" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        bool bypass = string.Equals(
+            Environment.GetEnvironmentVariable("CASEINFOSYSTEM_SKIP_VERIFY_CLICKONCE_SIGNING"),
+            "1",
+            StringComparison.Ordinal);
+
+        if (bypass && !SignManifests)
+        {
+            Log.LogMessage(
+                MessageImportance.High,
+                "Skipped VerifyClickOnceSigningSettings for DeployDebugAddIn because debug deploy signing bypass is enabled.");
+            return true;
+        }
+
+        Assembly taskAssembly = Assembly.LoadFrom(
+            @"$(VSToolsPath)\OfficeTools\Microsoft.VisualStudio.Tools.Applications.BuildTasks.dll");
+        Type taskType = taskAssembly.GetType(
+            "Microsoft.VisualStudio.Tools.Applications.Hosting.CodeGeneration.VerifyClickOnceSigningSettings",
+            true);
+        object taskInstance = Activator.CreateInstance(taskType);
+        taskType.GetProperty("BuildEngine").SetValue(taskInstance, BuildEngine, null);
+
+        PropertyInfo hostObjectProperty = taskType.GetProperty("HostObject");
+        if (hostObjectProperty != null && hostObjectProperty.CanWrite)
+        {
+            hostObjectProperty.SetValue(taskInstance, HostObject, null);
+        }
+
+        taskType.GetProperty("SignManifests").SetValue(taskInstance, SignManifests, null);
+        MethodInfo executeMethod = taskType.GetMethod("Execute");
+        return executeMethod != null && (bool)executeMethod.Invoke(taskInstance, null);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <UsingTask TaskName="SetInclusionListEntry" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll" Override="true">
+    <ParameterGroup>
+      <DeploymentManifestFullPath ParameterType="System.String" Required="true" />
+      <CertificateThumbprint ParameterType="System.String" Required="false" />
+      <Unregister ParameterType="System.Boolean" Required="false" />
+    </ParameterGroup>
+    <Task>
+      <Reference Include="System" />
+      <Reference Include="System.Core" />
+      <Using Namespace="System" />
+      <Using Namespace="System.Reflection" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        bool bypass = string.Equals(
+            Environment.GetEnvironmentVariable("CASEINFOSYSTEM_SKIP_SET_INCLUSION_LIST_ENTRY"),
+            "1",
+            StringComparison.Ordinal);
+
+        if (bypass)
+        {
+            Log.LogMessage(
+                MessageImportance.High,
+                "Skipped SetInclusionListEntry for DeployDebugAddIn because debug deploy trust-registration bypass is enabled.");
+            return true;
+        }
+
+        Assembly taskAssembly = Assembly.LoadFrom(
+            @"$(VSToolsPath)\OfficeTools\Microsoft.VisualStudio.Tools.Office.BuildTasks.dll");
+        Type taskType = taskAssembly.GetType(
+            "Microsoft.VisualStudio.Tools.Office.BuildTasks.SetInclusionListEntry",
+            true);
+        object taskInstance = Activator.CreateInstance(taskType);
+        taskType.GetProperty("BuildEngine").SetValue(taskInstance, BuildEngine, null);
+
+        PropertyInfo hostObjectProperty = taskType.GetProperty("HostObject");
+        if (hostObjectProperty != null && hostObjectProperty.CanWrite)
+        {
+            hostObjectProperty.SetValue(taskInstance, HostObject, null);
+        }
+
+        taskType.GetProperty("DeploymentManifestFullPath").SetValue(taskInstance, DeploymentManifestFullPath, null);
+        PropertyInfo certificateThumbprintProperty = taskType.GetProperty("CertificateThumbprint");
+        if (certificateThumbprintProperty != null && certificateThumbprintProperty.CanWrite)
+        {
+            certificateThumbprintProperty.SetValue(taskInstance, CertificateThumbprint, null);
+        }
+
+        PropertyInfo unregisterProperty = taskType.GetProperty("Unregister");
+        if (unregisterProperty != null && unregisterProperty.CanWrite)
+        {
+            unregisterProperty.SetValue(taskInstance, Unregister, null);
+        }
+
+        MethodInfo executeMethod = taskType.GetMethod("Execute");
+        return executeMethod != null && (bool)executeMethod.Invoke(taskInstance, null);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <UsingTask TaskName="SetOffice2007AddInRegistration" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll" Override="true">
+    <ParameterGroup>
+      <Url ParameterType="System.String" Required="true" />
+      <AddInName ParameterType="System.String" Required="true" />
+      <OfficeApplication ParameterType="System.String" Required="true" />
+      <FriendlyName ParameterType="System.String" Required="false" />
+      <Description ParameterType="System.String" Required="false" />
+      <LoadBehavior ParameterType="System.Int32" Required="false" />
+      <Unregister ParameterType="System.Boolean" Required="false" />
+    </ParameterGroup>
+    <Task>
+      <Reference Include="System" />
+      <Reference Include="System.Core" />
+      <Using Namespace="System" />
+      <Using Namespace="System.Reflection" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        bool bypass = string.Equals(
+            Environment.GetEnvironmentVariable("CASEINFOSYSTEM_SKIP_SET_OFFICE2007_ADDIN_REGISTRATION"),
+            "1",
+            StringComparison.Ordinal);
+
+        if (bypass)
+        {
+            Log.LogMessage(
+                MessageImportance.High,
+                "Skipped SetOffice2007AddInRegistration for DeployDebugAddIn because debug deploy Office registration bypass is enabled.");
+            return true;
+        }
+
+        Assembly taskAssembly = Assembly.LoadFrom(
+            @"$(VSToolsPath)\OfficeTools\Microsoft.VisualStudio.Tools.Office.BuildTasks.dll");
+        Type taskType = taskAssembly.GetType(
+            "Microsoft.VisualStudio.Tools.Office.BuildTasks.SetOffice2007AddInRegistration",
+            true);
+        object taskInstance = Activator.CreateInstance(taskType);
+        taskType.GetProperty("BuildEngine").SetValue(taskInstance, BuildEngine, null);
+
+        PropertyInfo hostObjectProperty = taskType.GetProperty("HostObject");
+        if (hostObjectProperty != null && hostObjectProperty.CanWrite)
+        {
+            hostObjectProperty.SetValue(taskInstance, HostObject, null);
+        }
+
+        taskType.GetProperty("Url").SetValue(taskInstance, Url, null);
+        taskType.GetProperty("AddInName").SetValue(taskInstance, AddInName, null);
+        taskType.GetProperty("OfficeApplication").SetValue(taskInstance, OfficeApplication, null);
+
+        PropertyInfo friendlyNameProperty = taskType.GetProperty("FriendlyName");
+        if (friendlyNameProperty != null && friendlyNameProperty.CanWrite)
+        {
+            friendlyNameProperty.SetValue(taskInstance, FriendlyName, null);
+        }
+
+        PropertyInfo descriptionProperty = taskType.GetProperty("Description");
+        if (descriptionProperty != null && descriptionProperty.CanWrite)
+        {
+            descriptionProperty.SetValue(taskInstance, Description, null);
+        }
+
+        PropertyInfo loadBehaviorProperty = taskType.GetProperty("LoadBehavior");
+        if (loadBehaviorProperty != null && loadBehaviorProperty.CanWrite)
+        {
+            loadBehaviorProperty.SetValue(taskInstance, LoadBehavior, null);
+        }
+
+        PropertyInfo unregisterProperty = taskType.GetProperty("Unregister");
+        if (unregisterProperty != null && unregisterProperty.CanWrite)
+        {
+            unregisterProperty.SetValue(taskInstance, Unregister, null);
+        }
+
+        MethodInfo executeMethod = taskType.GetMethod("Execute");
+        return executeMethod != null && (bool)executeMethod.Invoke(taskInstance, null);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="PrepareDebugDeployClickOnceSigningBypass" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true' and '$(MSBuildRuntimeType)' != 'Core'">
+    <SetMsBuildProcessEnvironmentVariable Name="CASEINFOSYSTEM_SKIP_VERIFY_CLICKONCE_SIGNING" Value="1" />
+    <SetMsBuildProcessEnvironmentVariable Name="CASEINFOSYSTEM_SKIP_SET_INCLUSION_LIST_ENTRY" Value="1" />
+    <SetMsBuildProcessEnvironmentVariable Name="CASEINFOSYSTEM_SKIP_SET_OFFICE2007_ADDIN_REGISTRATION" Value="1" />
+    <Message Text="Enabled DeployDebugAddIn-only bypasses for ClickOnce signing verification, inclusion-list trust registration, and Office add-in registration." Importance="High" />
+  </Target>
+  <Target Name="BlockCoreBuildWithoutVstoPackaging" BeforeTargets="Build" Condition="'$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true' and '$(EnableVstoPackaging)' != 'true' and '$(AllowCoreBuildWithoutVstoPackaging)' != 'true' and Exists('$(RuntimeAddInDirFull)')">
+    <Error Text="CaseInfoSystem.ExcelAddIn cannot be reflected to the runtime Addins directory from dotnet build because VSTO packaging is disabled under MSBuild Core. Use MSBuild.exe /t:DeployDebugAddIn, or pass /p:AllowCoreBuildWithoutVstoPackaging=true only when you intentionally want a compile-only build." />
+  </Target>
   <Target Name="UpdateUnifiedDeployPackage" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <ItemGroup>
       <DeployPackageExistingFiles Include="$(UnifiedDeployPackageDir)\*.*" />
@@ -438,7 +701,7 @@
     <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1&quot; -Mode Verify -Project ExcelAddIn -Configuration $(Configuration)" />
   </Target>
   <Target Name="DeployReleaseAddIn" DependsOnTargets="Build;UpdateUnifiedDeployPackage" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'" />
-  <Target Name="DeployDebugAddIn" DependsOnTargets="Build;SyncRuntimeAddInDebug" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'" />
+  <Target Name="DeployDebugAddIn" DependsOnTargets="PrepareDebugDeployClickOnceSigningBypass;Build;SyncRuntimeAddInDebug" Condition="'$(Configuration)' != 'Release' and '$(EnableVstoPackaging)' == 'true'" />
   <ProjectExtensions>
     <VisualStudio>
       <FlavorProperties GUID="{BAA0C2D2-18E2-41B9-852F-F413020CAA33}">

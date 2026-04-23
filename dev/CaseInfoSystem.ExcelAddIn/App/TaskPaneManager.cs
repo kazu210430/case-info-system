@@ -15,8 +15,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ExcelInteropService _excelInteropService;
         private readonly TaskPaneSnapshotBuilderService _taskPaneSnapshotBuilderService;
         private readonly DocumentCommandService _documentCommandService;
-        private readonly DocumentEligibilityDiagnosticsService _documentEligibilityDiagnosticsService;
-        private readonly DocumentMasterCatalogDiagnosticsService _documentMasterCatalogDiagnosticsService;
         private readonly DocumentNamePromptService _documentNamePromptService;
         private readonly KernelCommandService _kernelCommandService;
         private readonly AccountingSheetCommandService _accountingSheetCommandService;
@@ -35,8 +33,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelInteropService excelInteropService,
             TaskPaneSnapshotBuilderService taskPaneSnapshotBuilderService,
             DocumentCommandService documentCommandService,
-            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
-            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
             DocumentNamePromptService documentNamePromptService,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -50,8 +46,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 excelInteropService,
                 taskPaneSnapshotBuilderService,
                 documentCommandService,
-                documentEligibilityDiagnosticsService,
-                documentMasterCatalogDiagnosticsService,
                 documentNamePromptService,
                 kernelCommandService,
                 accountingSheetCommandService,
@@ -69,8 +63,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelInteropService excelInteropService,
             TaskPaneSnapshotBuilderService taskPaneSnapshotBuilderService,
             DocumentCommandService documentCommandService,
-            DocumentEligibilityDiagnosticsService documentEligibilityDiagnosticsService,
-            DocumentMasterCatalogDiagnosticsService documentMasterCatalogDiagnosticsService,
             DocumentNamePromptService documentNamePromptService,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -85,8 +77,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _taskPaneSnapshotBuilderService = taskPaneSnapshotBuilderService ?? throw new ArgumentNullException(nameof(taskPaneSnapshotBuilderService));
             _documentCommandService = documentCommandService ?? throw new ArgumentNullException(nameof(documentCommandService));
-            _documentEligibilityDiagnosticsService = documentEligibilityDiagnosticsService ?? throw new ArgumentNullException(nameof(documentEligibilityDiagnosticsService));
-            _documentMasterCatalogDiagnosticsService = documentMasterCatalogDiagnosticsService ?? throw new ArgumentNullException(nameof(documentMasterCatalogDiagnosticsService));
             _documentNamePromptService = documentNamePromptService ?? throw new ArgumentNullException(nameof(documentNamePromptService));
             _kernelCommandService = kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService));
             _accountingSheetCommandService = accountingSheetCommandService ?? throw new ArgumentNullException(nameof(accountingSheetCommandService));
@@ -105,8 +95,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _excelInteropService = null;
             _taskPaneSnapshotBuilderService = null;
             _documentCommandService = null;
-            _documentEligibilityDiagnosticsService = null;
-            _documentMasterCatalogDiagnosticsService = null;
             _documentNamePromptService = null;
             _kernelCommandService = null;
             _accountingSheetCommandService = null;
@@ -119,6 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _testHooks = testHooks;
         }
 
+        // 表示調停責務: refresh の主経路で前提確認、host 解決、reuse、render/show を順序どおり調停する。
         internal bool RefreshPane(WorkbookContext context, string reason)
         {
             int refreshPaneCallId = ++_kernelFlickerTraceRefreshPaneSequence;
@@ -130,102 +119,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + (reason ?? string.Empty)
                 + ", context="
                 + FormatContextDescriptor(context));
-            WorkbookRole role = context == null ? WorkbookRole.Unknown : context.Role;
-            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey: null))
+            if (!TryAcceptRefreshPaneRequest(context, reason, refreshPaneCallId, out WorkbookRole role, out string windowKey))
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason=PreconditionPolicyRole"
-                    + ", role="
-                    + role.ToString());
-                HideAll();
                 return false;
             }
 
-            string windowKey = SafeGetWindowKey(context.Window);
-            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey))
+            TaskPaneHost host = ResolveRefreshHost(context, windowKey, refreshPaneCallId);
+            if (TryReuseCaseHostForRefresh(host, context, reason, windowKey, refreshPaneCallId))
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason=PreconditionPolicyWindowKey"
-                    + ", role="
-                    + role.ToString()
-                    + ", windowKey="
-                    + windowKey);
-                HideAll();
-                _logger.Warn("RefreshPane skipped because windowKey was empty. reason=" + (reason ?? string.Empty));
-                return false;
-            }
-
-            RemoveStaleKernelHosts(context, windowKey);
-            TaskPaneHost host = GetOrReplaceHost(windowKey, context.Window, context.Role);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=host-selected refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host));
-            if (ShouldReuseCaseHostWithoutRender(host, context, reason))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=reuse-case-host refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", host="
-                    + FormatHostDescriptor(host)
-                    + ", reason="
-                    + (reason ?? string.Empty));
-                PrepareHostsBeforeShow(host);
-                if (!TryShowHost(host, "RefreshPane.ReuseCaseHost"))
-                {
-                    _logger.Warn("RefreshPane skipped because reused CASE host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-                    return false;
-                }
-
-                _logger.Info("TaskPane reused. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
                 return true;
             }
 
-            string renderSignature = BuildRenderSignature(context);
-            bool renderRequired = !string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=render-evaluate refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host)
-                + ", renderRequired="
-                + renderRequired.ToString());
-            if (renderRequired)
-            {
-                RenderHost(host, context, reason);
-                host.LastRenderSignature = renderSignature;
-            }
-            else
-            {
-                _logger.Debug(nameof(TaskPaneManager), "RefreshPane render skipped because the host state did not change. windowKey=" + windowKey + ", role=" + context.Role);
-            }
-
-            PrepareHostsBeforeShow(host);
-            if (!TryShowHost(host, "RefreshPane"))
-            {
-                _logger.Warn("RefreshPane skipped because host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-                return false;
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=refresh-pane-end refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host)
-                + ", result=Shown");
-            _logger.Info("TaskPane refreshed. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
-            return true;
+            return RenderAndShowHostForRefresh(host, context, reason, windowKey, refreshPaneCallId);
         }
 
         internal bool TryShowExistingPane(Excel.Workbook workbook, Excel.Window window, string reason)
@@ -356,6 +261,123 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 && string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
         }
 
+        private bool TryAcceptRefreshPaneRequest(WorkbookContext context, string reason, int refreshPaneCallId, out WorkbookRole role, out string windowKey)
+        {
+            role = context == null ? WorkbookRole.Unknown : context.Role;
+            windowKey = string.Empty;
+            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey: null))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
+                    + refreshPaneCallId.ToString()
+                    + ", reason=PreconditionPolicyRole"
+                    + ", role="
+                    + role.ToString());
+                HideAll();
+                return false;
+            }
+
+            windowKey = SafeGetWindowKey(context.Window);
+            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
+                    + refreshPaneCallId.ToString()
+                    + ", reason=PreconditionPolicyWindowKey"
+                    + ", role="
+                    + role.ToString()
+                    + ", windowKey="
+                    + windowKey);
+                HideAll();
+                _logger.Warn("RefreshPane skipped because windowKey was empty. reason=" + (reason ?? string.Empty));
+                return false;
+            }
+
+            return true;
+        }
+
+        private TaskPaneHost ResolveRefreshHost(WorkbookContext context, string windowKey, int refreshPaneCallId)
+        {
+            RemoveStaleKernelHosts(context, windowKey);
+            TaskPaneHost host = GetOrReplaceHost(windowKey, context.Window, context.Role);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=host-selected refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host));
+            return host;
+        }
+
+        private bool TryReuseCaseHostForRefresh(TaskPaneHost host, WorkbookContext context, string reason, string windowKey, int refreshPaneCallId)
+        {
+            if (!ShouldReuseCaseHostWithoutRender(host, context, reason))
+            {
+                return false;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=reuse-case-host refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", reason="
+                + (reason ?? string.Empty));
+            PrepareHostsBeforeShow(host);
+            if (!TryShowHost(host, "RefreshPane.ReuseCaseHost"))
+            {
+                _logger.Warn("RefreshPane skipped because reused CASE host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
+                return false;
+            }
+
+            _logger.Info("TaskPane reused. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
+            return true;
+        }
+
+        private bool RenderAndShowHostForRefresh(TaskPaneHost host, WorkbookContext context, string reason, string windowKey, int refreshPaneCallId)
+        {
+            string renderSignature = BuildRenderSignature(context);
+            bool renderRequired = !string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=render-evaluate refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", renderRequired="
+                + renderRequired.ToString());
+            if (renderRequired)
+            {
+                RenderHost(host, context, reason);
+                host.LastRenderSignature = renderSignature;
+            }
+            else
+            {
+                _logger.Debug(nameof(TaskPaneManager), "RefreshPane render skipped because the host state did not change. windowKey=" + windowKey + ", role=" + context.Role);
+            }
+
+            PrepareHostsBeforeShow(host);
+            if (!TryShowHost(host, "RefreshPane"))
+            {
+                _logger.Warn("RefreshPane skipped because host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
+                return false;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=refresh-pane-end refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", result=Shown");
+            _logger.Info("TaskPane refreshed. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
+            return true;
+        }
+
+        // Host lifecycle 責務: windowKey 単位の host 集合を保持し、hide/dispose/create/remove を担う。
         internal void HideAll()
         {
             foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
@@ -656,41 +678,57 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 reason);
         }
 
+        // Render 制御責務: role ごとの描画と signature 更新対象を分離し、再描画条件は上位から受け取る。
         private void RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
         {
             host.WorkbookFullName = context.WorkbookFullName;
 
             if (host.Control is KernelNavigationControl kernelControl)
             {
-                _logger.Info("RenderHost start. role=Kernel, workbook=" + (context.WorkbookFullName ?? string.Empty));
-                kernelControl.Render(KernelNavigationDefinitions.CreateForSheet(context.ActiveSheetCodeName));
-                _logger.Info("RenderHost completed. role=Kernel, workbook=" + (context.WorkbookFullName ?? string.Empty));
+                RenderKernelHost(kernelControl, context);
                 return;
             }
 
             if (host.Control is AccountingNavigationControl accountingControl)
             {
-                _logger.Info("RenderHost start. role=Accounting, workbook=" + (context.WorkbookFullName ?? string.Empty));
-                accountingControl.Render(AccountingNavigationDefinitions.CreateForSheet(context.ActiveSheetCodeName));
-                _logger.Info("RenderHost completed. role=Accounting, workbook=" + (context.WorkbookFullName ?? string.Empty));
+                RenderAccountingHost(accountingControl, context);
                 return;
             }
 
             if (host.Control is DocumentButtonsControl caseControl)
             {
-                _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
-                bool? originalWorkbookSavedState = TryGetWorkbookSavedState(context.Workbook);
-                TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _taskPaneSnapshotBuilderService.BuildSnapshotText(context.Workbook);
-                string snapshotText = buildResult.SnapshotText;
-                _logger.Info("RenderHost snapshot acquired. role=Case, length=" + snapshotText.Length.ToString());
-                TaskPaneSnapshot snapshot = TaskPaneSnapshotParser.Parse(snapshotText);
-                _logger.Info("RenderHost snapshot parsed. role=Case, hasError=" + snapshot.HasError.ToString() + ", tabs=" + snapshot.Tabs.Count.ToString() + ", docs=" + snapshot.DocButtons.Count.ToString());
-                // 処理ブロック: CASE pane の表示判断は App 層で固定化し、UI には描画済み状態だけを渡す。
-                CaseTaskPaneViewState viewState = _caseTaskPaneViewStateBuilder.Build(snapshot, caseControl.SelectedTabName);
-                caseControl.Render(viewState);
-                NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
-                _logger.Info("RenderHost completed. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
+                RenderCaseHost(caseControl, context, reason);
             }
+        }
+
+        private void RenderKernelHost(KernelNavigationControl kernelControl, WorkbookContext context)
+        {
+            _logger.Info("RenderHost start. role=Kernel, workbook=" + (context.WorkbookFullName ?? string.Empty));
+            kernelControl.Render(KernelNavigationDefinitions.CreateForSheet(context.ActiveSheetCodeName));
+            _logger.Info("RenderHost completed. role=Kernel, workbook=" + (context.WorkbookFullName ?? string.Empty));
+        }
+
+        private void RenderAccountingHost(AccountingNavigationControl accountingControl, WorkbookContext context)
+        {
+            _logger.Info("RenderHost start. role=Accounting, workbook=" + (context.WorkbookFullName ?? string.Empty));
+            accountingControl.Render(AccountingNavigationDefinitions.CreateForSheet(context.ActiveSheetCodeName));
+            _logger.Info("RenderHost completed. role=Accounting, workbook=" + (context.WorkbookFullName ?? string.Empty));
+        }
+
+        private void RenderCaseHost(DocumentButtonsControl caseControl, WorkbookContext context, string reason)
+        {
+            _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
+            bool? originalWorkbookSavedState = TryGetWorkbookSavedState(context.Workbook);
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _taskPaneSnapshotBuilderService.BuildSnapshotText(context.Workbook);
+            string snapshotText = buildResult.SnapshotText;
+            _logger.Info("RenderHost snapshot acquired. role=Case, length=" + snapshotText.Length.ToString());
+            TaskPaneSnapshot snapshot = TaskPaneSnapshotParser.Parse(snapshotText);
+            _logger.Info("RenderHost snapshot parsed. role=Case, hasError=" + snapshot.HasError.ToString() + ", tabs=" + snapshot.Tabs.Count.ToString() + ", docs=" + snapshot.DocButtons.Count.ToString());
+            // 処理ブロック: CASE pane の表示判断は App 層で固定化し、UI には描画済み状態だけを渡す。
+            CaseTaskPaneViewState viewState = _caseTaskPaneViewStateBuilder.Build(snapshot, caseControl.SelectedTabName);
+            caseControl.Render(viewState);
+            NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
+            _logger.Info("RenderHost completed. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
         }
 
         /// <summary>
@@ -781,6 +819,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
+        // Action 中継責務: pane UI から受けた操作を workbook/context 解決後に各サービスへ橋渡しする。
         private void CaseControl_ActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(windowKey) || control == null)
@@ -1062,14 +1101,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            WorkbookContext context = new WorkbookContext(
-                workbook,
-                host.Window,
-                WorkbookRole.Kernel,
-                _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
-                _excelInteropService.GetWorkbookFullName(workbook),
-                _excelInteropService.GetActiveSheetCodeName(workbook));
-
+            WorkbookContext context = BuildWorkbookContext(host, workbook, WorkbookRole.Kernel, _excelInteropService.GetActiveSheetCodeName(workbook));
             _kernelCommandService.Execute(context, e.ActionId);
         }
 
@@ -1102,35 +1134,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                string activeSheetCodeName;
-                try
-                {
-                    Excel.Worksheet worksheet = workbook.ActiveSheet as Excel.Worksheet;
-                    activeSheetCodeName = worksheet == null ? string.Empty : worksheet.CodeName ?? string.Empty;
-                }
-                catch
-                {
-                    // 会計 pane の再描画判定で CodeName を取得できない場合は安全側で空文字へフォールバックする。
-                    activeSheetCodeName = string.Empty;
-                }
-
-                WorkbookContext context = new WorkbookContext(
-                    workbook,
-                    host.Window,
-                    WorkbookRole.Accounting,
-                    _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
-                    _excelInteropService.GetWorkbookFullName(workbook),
-                    activeSheetCodeName);
+                WorkbookContext context = BuildWorkbookContext(host, workbook, WorkbookRole.Accounting, TryGetWorksheetCodeName(workbook));
                 _accountingSheetCommandService.Execute(context, e.ActionId);
                 _accountingInternalCommandService.Execute(context, e.ActionId);
 
-                WorkbookContext refreshedContext = new WorkbookContext(
-                    workbook,
-                    host.Window,
-                    WorkbookRole.Accounting,
-                    _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
-                    _excelInteropService.GetWorkbookFullName(workbook),
-                    _excelInteropService.GetActiveSheetCodeName(workbook));
+                WorkbookContext refreshedContext = BuildWorkbookContext(host, workbook, WorkbookRole.Accounting, _excelInteropService.GetActiveSheetCodeName(workbook));
                 RenderHost(host, refreshedContext, "AccountingControl_ActionInvoked");
                 TryShowHost(host, "AccountingControl_ActionInvoked");
             }
@@ -1138,6 +1146,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 _logger.Error("AccountingControl_ActionInvoked failed.", ex);
                 _userErrorService.ShowUserError("AccountingControl_ActionInvoked", ex);
+            }
+        }
+
+        private WorkbookContext BuildWorkbookContext(TaskPaneHost host, Excel.Workbook workbook, WorkbookRole role, string activeSheetCodeName)
+        {
+            return new WorkbookContext(
+                workbook,
+                host.Window,
+                role,
+                _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
+                _excelInteropService.GetWorkbookFullName(workbook),
+                activeSheetCodeName);
+        }
+
+        private static string TryGetWorksheetCodeName(Excel.Workbook workbook)
+        {
+            try
+            {
+                Excel.Worksheet worksheet = workbook.ActiveSheet as Excel.Worksheet;
+                return worksheet == null ? string.Empty : worksheet.CodeName ?? string.Empty;
+            }
+            catch
+            {
+                // 会計 pane の再描画判定で CodeName を取得できない場合は安全側で空文字へフォールバックする。
+                return string.Empty;
             }
         }
 

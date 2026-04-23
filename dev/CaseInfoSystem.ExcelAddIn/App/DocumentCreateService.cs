@@ -167,6 +167,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             WordInteropService.WordPerformanceState wordPerformanceState = null;
             bool createdNewWord = false;
             string savedPath = string.Empty;
+            string stage = "Initialize";
             ExcelUiState excelUiState = null;
             XlWindowState previousWindowState = XlWindowState.xlNormal;
             bool restoreExcelWindowPresentation = true;
@@ -180,6 +181,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 excelUiState = ExcelUiState.Capture(Globals.ThisAddIn.Application);
                 excelUiState.ApplyForDocumentCreate(Globals.ThisAddIn.Application, false);
 
+                stage = "AcquireWordApplication";
                 SetStatusBar("文書作成：Word準備中...");
                 wordApplication = _wordInteropService.AcquireWordApplication(out createdNewWord);
                 if (wordApplication == null)
@@ -192,6 +194,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Debug("ExecuteCreateDocument", "WordReady createdNew=" + createdNewWord.ToString() + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
                 phaseStopwatch.Restart();
 
+                stage = "CreateDocumentFromTemplate";
                 SetStatusBar("文書作成：テンプレから作成中...");
                 wordDocument = _wordInteropService.CreateDocumentFromTemplate(wordApplication, templateSpec.TemplatePath);
                 if (wordDocument == null)
@@ -201,16 +204,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Debug("ExecuteCreateDocument", "DocumentCreated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
                 phaseStopwatch.Restart();
 
+                stage = "ApplyMergeData";
                 SetStatusBar("文書作成：差し込み中...");
                 _documentMergeService.ApplyMergeData(wordDocument, mergeData);
                 _logger.Debug("ExecuteCreateDocument", "MergeApplied elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
                 phaseStopwatch.Restart();
 
+                stage = "RemoveContentControls";
                 SetStatusBar("文書作成：仕上げ中...");
                 _documentMergeService.RemoveContentControlsKeepText(wordDocument);
                 _logger.Debug("ExecuteCreateDocument", "ControlsRemoved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
                 phaseStopwatch.Restart();
 
+                stage = "SaveDocument";
                 SetStatusBar("文書作成：保存中...");
                 DocumentSaveResult saveResult = _documentSaveService.SaveDocument(wordApplication, wordDocument, outputPath);
                 if (saveResult == null || saveResult.ActiveDocument == null)
@@ -222,6 +228,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Debug("ExecuteCreateDocument", "Saved path=" + (savedPath ?? string.Empty) + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
                 phaseStopwatch.Restart();
 
+                stage = "ShowDocument";
                 SetStatusBar("文書作成：完了（Word表示）...");
                 _wordInteropService.ShowDocument(wordApplication, wordDocument);
                 if (wordPerformanceState != null)
@@ -241,6 +248,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             catch (Exception ex)
             {
+                Exception innerException = ex.InnerException;
+                _logger.Warn(
+                    "DocumentCreateService.ExecuteWordCreate context."
+                    + " stage=" + (stage ?? string.Empty)
+                    + ", createdNewWord=" + createdNewWord.ToString()
+                    + ", template=" + (templateSpec == null ? string.Empty : (templateSpec.TemplatePath ?? string.Empty))
+                    + ", output=" + (outputPath ?? string.Empty)
+                    + ", savedPath=" + (savedPath ?? string.Empty)
+                    + ", exceptionType=" + ex.GetType().FullName
+                    + ", message=" + ex.Message
+                    + ", hresult=0x" + ex.HResult.ToString("X8")
+                    + ", innerType=" + (innerException == null ? "(none)" : innerException.GetType().FullName)
+                    + ", innerMessage=" + (innerException == null ? "(none)" : innerException.Message)
+                    + ", innerHresult=" + (innerException == null ? "(none)" : "0x" + innerException.HResult.ToString("X8")));
                 _logger.Error("DocumentCreateService.ExecuteWordCreate failed.", ex);
                 _wordInteropService.RestorePerformanceState(wordApplication, wordPerformanceState);
                 _wordInteropService.CloseDocumentNoSave(ref wordDocument);

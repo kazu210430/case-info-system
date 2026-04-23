@@ -295,21 +295,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			return new ApplicationStateScope (_application, screenUpdating, enableEvents);
 		}
 
-		internal void SetNumberFormatLocal (Workbook workbook, string sheetName, string address, string numberFormatLocal)
-		{
-			Worksheet worksheet = null;
-			Range range = null;
-			try {
-				worksheet = GetWorksheet (workbook, sheetName);
-				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
-				range.NumberFormatLocal = numberFormatLocal ?? string.Empty;
-				_logger.Debug ("AccountingWorkbookService", "SetNumberFormatLocal sheet=" + sheetName + ", address=" + address);
-			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
-			}
-		}
-
 		internal bool EnsureNumberFormatLocal (Workbook workbook, string sheetName, string address, string numberFormatLocal)
 		{
 			Worksheet worksheet = null;
@@ -529,38 +514,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		internal void SetPrintArea (Workbook workbook, string sheetName, string printAreaAddress)
-		{
-			Worksheet worksheet = null;
-			try {
-				worksheet = GetWorksheet (workbook, sheetName);
-				worksheet.PageSetup.PrintArea = printAreaAddress ?? string.Empty;
-				_logger.Debug ("AccountingWorkbookService", "SetPrintArea sheet=" + sheetName + ", area=" + (printAreaAddress ?? string.Empty));
-			} finally {
-				ReleaseComObject (worksheet);
-			}
-		}
-
-		internal string GetAddress (Workbook workbook, string sheetName, string startAddress, string endAddress)
-		{
-			Worksheet worksheet = null;
-			Range range = null;
-			Range range2 = null;
-			Range range3 = null;
-			try {
-				worksheet = GetWorksheet (workbook, sheetName);
-				range = ((_Worksheet)worksheet).get_Range ((object)startAddress, Type.Missing);
-				range2 = ((_Worksheet)worksheet).get_Range ((object)endAddress, Type.Missing);
-				range3 = ((_Worksheet)worksheet).get_Range ((object)range, (object)range2);
-				return Convert.ToString (range3.get_Address ((object)false, (object)false, XlReferenceStyle.xlA1, Type.Missing, Type.Missing)) ?? string.Empty;
-			} finally {
-				ReleaseComObject (range3);
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
-			}
-		}
-
 		internal string ReadNamedRangeText (Workbook workbook, string sheetName, string rangeName)
 		{
 			Worksheet worksheet = null;
@@ -571,22 +524,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				return Convert.ToString ((dynamic)range.Value2) ?? string.Empty;
 			} catch {
 				return string.Empty;
-			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
-			}
-		}
-
-		internal double ReadNamedRangeDouble (Workbook workbook, string sheetName, string rangeName)
-		{
-			Worksheet worksheet = null;
-			Range range = null;
-			try {
-				worksheet = GetWorksheet (workbook, sheetName);
-				range = ResolveNamedRange (workbook, worksheet, rangeName);
-				return Convert.ToDouble ((dynamic)(range.Value2 ?? ((object)0.0)));
-			} catch {
-				return 0.0;
 			} finally {
 				ReleaseComObject (range);
 				ReleaseComObject (worksheet);

@@ -118,13 +118,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (result == null) {
 				throw new ArgumentNullException ("result");
 			}
-			CreatedCaseOpenDecision createdCaseOpenDecision = _createdCaseOpenPromptService.ConfirmOpenCreatedCase ();
-			_logger.Info ("Kernel case open decision received. mode=" + result.Mode.ToString () + ", decision=" + createdCaseOpenDecision.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-			if (createdCaseOpenDecision == CreatedCaseOpenDecision.Skip) {
-				PresentCaseFolderBestEffort (result, "KernelCaseCreationCommandService.CompleteInteractiveOpenFlow.Skip");
-				result.ShouldCloseKernelHome = true;
-				return result;
-			}
+			_logger.Info ("Kernel case auto-open selected. mode=" + result.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			try {
 				KernelCaseCreationResult kernelCaseCreationResult = _kernelCasePresentationService.OpenCreatedCase (result);
 				kernelCaseCreationResult.ShouldCloseKernelHome = true;
@@ -132,7 +126,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return kernelCaseCreationResult;
 			} catch (Exception exception) {
 				_logger.Error ("Kernel case open after save failed.", exception);
-				_createdCaseOpenPromptService.RestorePromptOwnerIfNeeded ();
 				return BuildFailure ("保存は完了しましたが、案件情報を開けませんでした。");
 			}
 		}

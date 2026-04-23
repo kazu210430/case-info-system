@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -21,12 +22,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal CreatedCaseOpenDecision ConfirmOpenCreatedCase ()
+		internal CreatedCaseOpenDecision ConfirmOpenCreatedCase (Stopwatch commandStopwatch)
 		{
 			Thread.Sleep (0);
 			PreparePromptOwnerForModalDisplay ();
+			_logger.Info ("Created CASE open prompt showing requested. stage=before-showdialog, elapsedMs=" + GetElapsedMilliseconds (commandStopwatch));
 			try {
-				CreatedCaseOpenDecision createdCaseOpenDecision = CreatedCaseOpenPromptForm.ShowPrompt (null);
+				CreatedCaseOpenDecision createdCaseOpenDecision = CreatedCaseOpenPromptForm.ShowPrompt (null, OnPromptShown (commandStopwatch));
 				if (createdCaseOpenDecision == CreatedCaseOpenDecision.Skip) {
 					ClearTrackedPromptOwner ();
 				}
@@ -78,6 +80,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		{
 			_temporarilyMinimizedOwner = null;
 			_temporarilyMinimizedOwnerState = FormWindowState.Normal;
+		}
+
+		private Action OnPromptShown (Stopwatch commandStopwatch)
+		{
+			return delegate {
+				_logger.Info ("Created CASE open prompt shown. stage=shown, elapsedMs=" + GetElapsedMilliseconds (commandStopwatch));
+			};
+		}
+
+		private static long GetElapsedMilliseconds (Stopwatch stopwatch)
+		{
+			return (stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds;
 		}
 	}
 }

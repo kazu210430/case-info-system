@@ -83,8 +83,14 @@ namespace Microsoft.Office.Interop.Excel
 
         public Workbooks Workbooks { get; } = new Workbooks();
 
+        public int QuitCallCount { get; private set; }
+
+        public Action QuitBehavior { get; set; }
+
         public void Quit()
         {
+            QuitCallCount++;
+            QuitBehavior?.Invoke();
         }
     }
 
@@ -105,6 +111,8 @@ namespace Microsoft.Office.Interop.Excel
 
     public class Workbook
     {
+        public Application Application { get; set; }
+
         public string FullName { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
@@ -127,6 +135,10 @@ namespace Microsoft.Office.Interop.Excel
 
         public Action SaveBehavior { get; set; }
 
+        public int CloseCallCount { get; private set; }
+
+        public Action CloseBehavior { get; set; }
+
         public void Save()
         {
             SaveCallCount++;
@@ -141,6 +153,8 @@ namespace Microsoft.Office.Interop.Excel
 
         public void Close(bool SaveChanges = false, object Filename = null, object RouteWorkbook = null)
         {
+            CloseCallCount++;
+            CloseBehavior?.Invoke();
         }
 
         public void Activate()
@@ -165,6 +179,8 @@ namespace Microsoft.Office.Interop.Excel
 
         public int Hwnd { get; set; }
 
+        public bool Activated { get; private set; }
+
         public bool FreezePanes { get; set; }
 
         public int SplitRow { get; set; }
@@ -179,6 +195,7 @@ namespace Microsoft.Office.Interop.Excel
 
         public void Activate()
         {
+            Activated = true;
         }
     }
 

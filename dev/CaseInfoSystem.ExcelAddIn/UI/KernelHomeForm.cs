@@ -263,8 +263,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			_sheetNavigationHandled = true;
 			StopForegroundRetry ();
 			Hide ();
-			_kernelWorkbookService.CompleteHomeNavigation (showExcel: true);
-			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPaneFromHome (codeName, "KernelHomeForm.OpenSheet")) {
+			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPane (codeName, "KernelHomeForm.OpenSheet")) {
 				MessageBox.Show ("シートを開けませんでした。" + ThisAddIn.GetPrimaryTraceLogRelativePath () + " を確認してください。", "案件情報System");
 			} else {
 				if (Globals.ThisAddIn != null) {
@@ -319,6 +318,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Activate ();
 				BringToFront ();
 				ForceBringToFront ("KernelHomeForm.RestoreHomeToForegroundAfterCaseCreation");
+				BeginForegroundRetry ();
 				PrepareCustomerInputForNextBatchCreate ();
 			}
 		}

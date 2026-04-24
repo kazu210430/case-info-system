@@ -630,7 +630,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             this.label4.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.label4.ForeColor = System.Drawing.Color.Gray;
-            this.label4.Location = new System.Drawing.Point(60, 45);
+            this.label4.Location = new System.Drawing.Point(60, 49);
             this.label4.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(46, 45);

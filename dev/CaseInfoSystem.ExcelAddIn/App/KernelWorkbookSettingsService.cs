@@ -13,7 +13,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string NameRuleBPropertyName = "NAME_RULE_B";
         private const string DefaultNameRuleA = "YYYY";
         private const string DefaultNameRuleB = "DOC";
-        private const string DefaultRootDialogTitle = "\u65E2\u5B9A\u30D5\u30A9\u30EB\u30C0\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+        private const string DefaultRootDialogTitle = "\u65B0\u898F\u30D5\u30A9\u30EB\u30C0\u306E\u89AA\uFF08\u4FDD\u5B58\u5148\uFF09\u30D5\u30A9\u30EB\u30C0\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044";
 
         internal string LoadNameRuleA(Excel.Workbook workbook)
         {

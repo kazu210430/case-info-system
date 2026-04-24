@@ -24,6 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly DocumentMergeService _documentMergeService;
         private readonly DocumentSaveService _documentSaveService;
         private readonly WordInteropService _wordInteropService;
+        private readonly DocumentPresentationWaitService _documentPresentationWaitService;
         private readonly Logger _logger;
 
         /// <summary>
@@ -43,6 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             DocumentMergeService documentMergeService,
             DocumentSaveService documentSaveService,
             WordInteropService wordInteropService,
+            DocumentPresentationWaitService documentPresentationWaitService,
             Logger logger)
         {
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
@@ -52,6 +54,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _documentMergeService = documentMergeService ?? throw new ArgumentNullException(nameof(documentMergeService));
             _documentSaveService = documentSaveService ?? throw new ArgumentNullException(nameof(documentSaveService));
             _wordInteropService = wordInteropService ?? throw new ArgumentNullException(nameof(wordInteropService));
+            _documentPresentationWaitService = documentPresentationWaitService ?? throw new ArgumentNullException(nameof(documentPresentationWaitService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -171,6 +174,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelUiState excelUiState = null;
             XlWindowState previousWindowState = XlWindowState.xlNormal;
             bool restoreExcelWindowPresentation = true;
+            DocumentPresentationWaitService.WaitSession waitSession = null;
             var totalStopwatch = Stopwatch.StartNew();
             var phaseStopwatch = Stopwatch.StartNew();
 
@@ -180,6 +184,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 previousWindowState = Globals.ThisAddIn.Application.WindowState;
                 excelUiState = ExcelUiState.Capture(Globals.ThisAddIn.Application);
                 excelUiState.ApplyForDocumentCreate(Globals.ThisAddIn.Application, false);
+                waitSession = _documentPresentationWaitService.ShowWaiting(totalStopwatch);
 
                 stage = "AcquireWordApplication";
                 SetStatusBar("文書作成：Word準備中...");
@@ -236,6 +241,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     // 表示後は Visible を元に戻さない。戻すと Word が再び非表示になる。
                     wordPerformanceState.HasVisible = false;
                 }
+                waitSession?.Close();
                 restoreExcelWindowPresentation = false;
                 _logger.Debug("ExecuteCreateDocument", "ShowDocument elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
                 _logger.Info(
@@ -297,6 +303,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
 
+                waitSession?.Dispose();
                 ClearStatusBar();
             }
         }

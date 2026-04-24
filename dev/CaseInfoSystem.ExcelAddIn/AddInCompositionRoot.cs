@@ -400,6 +400,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var mergeDataBuilder = new MergeDataBuilder();
             var documentMergeService = new DocumentMergeService(_logger);
             var wordInteropService = new WordInteropService(pathCompatibilityService, _logger);
+            var documentPresentationWaitService = new DocumentPresentationWaitService(_logger);
             var documentSaveService = new DocumentSaveService(
                 documentOutputService,
                 wordInteropService,
@@ -412,6 +413,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentMergeService,
                 documentSaveService,
                 wordInteropService,
+                documentPresentationWaitService,
                 _logger);
             var screenUpdatingExecutionBridge = new ThisAddInScreenUpdatingExecutionBridge(_addIn);
             var taskPaneRefreshSuppressionBridge = new ThisAddInTaskPaneRefreshSuppressionBridge(_addIn);

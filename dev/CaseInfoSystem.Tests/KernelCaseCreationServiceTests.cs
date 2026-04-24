@@ -13,7 +13,7 @@ namespace CaseInfoSystem.Tests
     public class KernelCaseCreationServiceTests
     {
         [Fact]
-        public void CreateSavedCase_OpensWorkbookInCurrentApplicationAndClosesAfterSave()
+        public void CreateSavedCase_ForInteractiveModes_UsesHiddenSessionAndVisibleInitializer()
         {
             List<string> logs = new List<string>();
             List<string> initializedPaths = new List<string>();
@@ -26,8 +26,8 @@ namespace CaseInfoSystem.Tests
 
             Excel.Workbook kernelWorkbook = new Excel.Workbook
             {
-                FullName = @"C:\System\案件情報System.xlsm",
-                Name = "案件情報System.xlsm",
+                FullName = @"C:\System\譯井ｻｶ諠・ｱSystem.xlsm",
+                Name = "譯井ｻｶ諠・ｱSystem.xlsm",
                 Path = @"C:\System"
             };
             kernelWorkbook.Application = new Excel.Application();
@@ -41,15 +41,22 @@ namespace CaseInfoSystem.Tests
 
             var caseWorkbookInitializer = new CaseWorkbookInitializer
             {
-                OnInitializeForVisibleCreate = (sourceKernelWorkbook, createdCaseWorkbook, plan) =>
+                OnInitializeForVisibleCreate = (_, createdCaseWorkbook, _) =>
                 {
                     initializedPaths.Add(createdCaseWorkbook == null ? string.Empty : createdCaseWorkbook.FullName ?? string.Empty);
                 },
-                OnInitializeForHiddenCreate = (sourceKernelWorkbook, createdCaseWorkbook, plan) =>
-                {
-                    initializedPaths.Add(createdCaseWorkbook == null ? string.Empty : createdCaseWorkbook.FullName ?? string.Empty);
-                }
+                OnInitializeForHiddenCreate = (_, _, _) => throw new InvalidOperationException("interactive flow must preserve visible-create startup state")
             };
+
+            Excel.Application hiddenApplication = new Excel.Application();
+            Excel.Workbook hiddenWorkbook = new Excel.Workbook
+            {
+                FullName = finalCaseWorkbookPath,
+                Name = Path.GetFileName(finalCaseWorkbookPath),
+                Path = caseFolderPath,
+                Application = hiddenApplication
+            };
+            hiddenApplication.Workbooks.Add(hiddenWorkbook);
 
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
@@ -65,11 +72,20 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
+            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
+            {
+                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
+                {
+                    hiddenWorkbook.Close(false, null, null);
+                    hiddenApplication.Quit();
+                })
+            };
+
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
                 new KernelCasePathService(),
                 caseWorkbookInitializer,
-                new CaseWorkbookOpenStrategy(),
+                caseWorkbookOpenStrategy,
                 transientPaneSuppressionService,
                 caseWorkbookLifecycleService,
                 new ExcelInteropService(),
@@ -90,17 +106,17 @@ namespace CaseInfoSystem.Tests
             try
             {
                 KernelCaseCreationResult result = service.CreateSavedCase(kernelWorkbook, plan);
-                Excel.Workbook openedWorkbook = Assert.Single(kernelWorkbook.Application.Workbooks);
 
                 Assert.Equal(new[] { finalCaseWorkbookPath }, initializedPaths);
-                Assert.Equal(finalCaseWorkbookPath, openedWorkbook.FullName);
-                Assert.Equal(1, openedWorkbook.SaveCallCount);
-                Assert.Equal(1, openedWorkbook.CloseCallCount);
+                Assert.Empty(kernelWorkbook.Application.Workbooks);
+                Assert.Equal(1, hiddenWorkbook.SaveCallCount);
+                Assert.Equal(1, hiddenWorkbook.CloseCallCount);
+                Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.True(result.Success);
                 Assert.Equal(finalCaseWorkbookPath, result.CaseWorkbookPath);
                 Assert.True(File.Exists(finalCaseWorkbookPath));
-                Assert.Contains(logs, message => message.IndexOf("workbook opened", StringComparison.OrdinalIgnoreCase) >= 0);
-                Assert.Contains(logs, message => message.IndexOf("workbook closed", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("hidden session opened", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("deferred visible presentation", StringComparison.OrdinalIgnoreCase) >= 0);
             }
             finally
             {
@@ -138,6 +154,16 @@ namespace CaseInfoSystem.Tests
                     GetOpenKernelWorkbook = () => kernelWorkbook
                 });
 
+            Excel.Application hiddenApplication = new Excel.Application();
+            Excel.Workbook hiddenWorkbook = new Excel.Workbook
+            {
+                FullName = caseWorkbookPath,
+                Name = Path.GetFileName(caseWorkbookPath),
+                Path = tempRoot,
+                Application = hiddenApplication
+            };
+            hiddenApplication.Workbooks.Add(hiddenWorkbook);
+
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -152,11 +178,20 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
+            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
+            {
+                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
+                {
+                    hiddenWorkbook.Close(false, null, null);
+                    hiddenApplication.Quit();
+                })
+            };
+
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
                 new KernelCasePathService(),
                 new CaseWorkbookInitializer(),
-                new CaseWorkbookOpenStrategy(),
+                caseWorkbookOpenStrategy,
                 transientPaneSuppressionService,
                 caseWorkbookLifecycleService,
                 new ExcelInteropService(),
@@ -177,11 +212,10 @@ namespace CaseInfoSystem.Tests
             try
             {
                 KernelCaseCreationResult result = service.CreateSavedCase(kernelWorkbook, plan);
-                Excel.Workbook openedWorkbook = Assert.Single(kernelWorkbook.Application.Workbooks);
 
                 Assert.True(result.Success);
                 Assert.True(kernelWorkbook.Application.DisplayAlerts);
-                Assert.Equal(1, openedWorkbook.CloseCallCount);
+                Assert.Equal(1, hiddenWorkbook.CloseCallCount);
             }
             finally
             {
@@ -225,6 +259,16 @@ namespace CaseInfoSystem.Tests
                 OnInitializeForHiddenCreate = (_, _, _) => throw new InvalidOperationException("boom")
             };
 
+            Excel.Application hiddenApplication = new Excel.Application();
+            Excel.Workbook hiddenWorkbook = new Excel.Workbook
+            {
+                FullName = caseWorkbookPath,
+                Name = Path.GetFileName(caseWorkbookPath),
+                Path = tempRoot,
+                Application = hiddenApplication
+            };
+            hiddenApplication.Workbooks.Add(hiddenWorkbook);
+
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -239,11 +283,20 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
+            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
+            {
+                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
+                {
+                    hiddenWorkbook.Close(false, null, null);
+                    hiddenApplication.Quit();
+                })
+            };
+
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
                 new KernelCasePathService(),
                 caseWorkbookInitializer,
-                new CaseWorkbookOpenStrategy(),
+                caseWorkbookOpenStrategy,
                 transientPaneSuppressionService,
                 caseWorkbookLifecycleService,
                 new ExcelInteropService(),
@@ -264,9 +317,8 @@ namespace CaseInfoSystem.Tests
             try
             {
                 Assert.Throws<InvalidOperationException>(() => service.CreateSavedCase(kernelWorkbook, plan));
-                Excel.Workbook openedWorkbook = Assert.Single(kernelWorkbook.Application.Workbooks);
 
-                Assert.Equal(1, openedWorkbook.CloseCallCount);
+                Assert.Equal(1, hiddenWorkbook.CloseCallCount);
                 Assert.True(kernelWorkbook.Application.DisplayAlerts);
             }
             finally

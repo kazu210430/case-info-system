@@ -1,4 +1,5 @@
 # Visual Studio user-local state
+.vs/
 dev/.vs/
 *.suo
 *.user
@@ -7,6 +8,9 @@ dev/.vs/
 Desktop.ini
 Thumbs.db
 ~$*
+*.tmp
+*.temp
+*.log
 
 # .NET build outputs
 [Bb]in/

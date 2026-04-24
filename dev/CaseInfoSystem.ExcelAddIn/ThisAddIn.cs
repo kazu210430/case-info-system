@@ -303,11 +303,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private void Application_WorkbookActivate(Excel.Workbook workbook)
         {
-            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () =>
-            {
-                TraceKernelWorkbookWindowEvent(workbook, "WorkbookActivate");
-                _workbookLifecycleCoordinator?.OnWorkbookActivate(workbook);
-            });
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () => _workbookLifecycleCoordinator?.OnWorkbookActivate(workbook));
         }
 
         private void Application_WindowActivate(Excel.Workbook workbook, Excel.Window window)
@@ -327,7 +323,6 @@ namespace CaseInfoSystem.ExcelAddIn
                     + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
                     + ", windowHwnd="
                     + SafeWindowHwnd(window));
-                TraceKernelWorkbookWindowEvent(workbook, "WindowActivate");
                 _workbookEventCoordinator.OnWindowActivate(workbook, window);
             });
         }
@@ -455,31 +450,6 @@ namespace CaseInfoSystem.ExcelAddIn
             }
         }
 
-        private void TraceKernelWorkbookWindowEvent(Excel.Workbook workbook, string stage)
-        {
-            if (_excelWindowRecoveryService == null || _kernelWorkbookService == null || workbook == null)
-            {
-                return;
-            }
-
-            try
-            {
-                if (!_kernelWorkbookService.IsKernelWorkbook(workbook))
-                {
-                    return;
-                }
-
-                _excelWindowRecoveryService.LogWorkbookWindowSnapshot(
-                    workbook,
-                    "ThisAddIn." + (stage ?? string.Empty),
-                    stage);
-            }
-            catch (Exception ex)
-            {
-                _logger?.Debug(nameof(ThisAddIn), "TraceKernelWorkbookWindowEvent failed. stage=" + (stage ?? string.Empty) + ", message=" + ex.Message);
-            }
-        }
-
         // Excel workbook lifecycle event handler
         private void Application_WorkbookBeforeSave(Excel.Workbook workbook, bool saveAsUi, ref bool cancel)
         {
@@ -504,7 +474,6 @@ namespace CaseInfoSystem.ExcelAddIn
 
             void HandleBeforeClose(ref bool innerCancel)
             {
-                TraceKernelWorkbookWindowEvent(workbook, "WorkbookBeforeClose");
                 if (_workbookLifecycleCoordinator != null)
                 {
                     _workbookLifecycleCoordinator.OnWorkbookBeforeClose(workbook, ref innerCancel);
@@ -653,9 +622,8 @@ namespace CaseInfoSystem.ExcelAddIn
             _kernelHomeForm.Update();
 
             TraceRuntimeExecutionObservation("ShowKernelHomePlaceholder");
-            TraceKernelWorkbookWindowEvent(_kernelWorkbookService == null ? null : _kernelWorkbookService.GetOpenKernelWorkbook(), "HOME表示前");
             _kernelWorkbookService.PrepareForHomeDisplayFromSheet();
-            TraceKernelWorkbookWindowEvent(_kernelWorkbookService == null ? null : _kernelWorkbookService.GetOpenKernelWorkbook(), "HOME表示中");
+            _kernelWorkbookService.EnsureHomeDisplayHidden("ThisAddIn.ShowKernelHomePlaceholder.BeforeShow");
 
             if (!_kernelHomeForm.Visible)
             {
@@ -741,11 +709,37 @@ namespace CaseInfoSystem.ExcelAddIn
             // 処理ブロック: 次に来る activate 系イベントに備えて、Kernel HOME 抑止要求を発行する。
             SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
             _logger?.Info("[Transition] suppression requested. reason=" + reason);
-            // 処理ブロック: sheet 表示前の内部 cleanup として、表示中の HOME UI を退避する。
-            HideKernelHomePlaceholder();
-            // 処理ブロック: 表示実行そのものではなく、対象 sheet の表示要求を発行し、その結果を受けて続行可否を判定する。
-            bool shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName);
-            _logger?.Info("[Transition] sheet shown=" + shown + ", sheet=" + sheetCodeName);
+            bool shouldSuspendScreenUpdating = !string.IsNullOrWhiteSpace(reason)
+                && reason.IndexOf("KernelHomeForm.OpenSheet", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool shown = false;
+            Excel.Workbook kernelWorkbook = null;
+            Action performTransition = () =>
+            {
+                // 処理ブロック: sheet 表示前の内部 cleanup として、表示中の HOME UI を退避する。
+                HideKernelHomePlaceholder();
+                // 処理ブロック: 表示実行そのものではなく、対象 sheet の表示要求を発行し、その結果を受けて続行可否を判定する。
+                shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName);
+                _logger?.Info("[Transition] sheet shown=" + shown + ", sheet=" + sheetCodeName);
+                if (!shown)
+                {
+                    return;
+                }
+
+                // 処理ブロック: pane 同期の実行ではなく、表示後の pane 同期要求を発行する。
+                kernelWorkbook = _kernelWorkbookService.GetOpenKernelWorkbook();
+                _logger?.Info("[Transition] pane refresh requested.");
+                RefreshTaskPane(reason, kernelWorkbook, null);
+            };
+
+            if (shouldSuspendScreenUpdating)
+            {
+                RunWithScreenUpdatingSuspended(performTransition);
+            }
+            else
+            {
+                performTransition();
+            }
+
             if (!shown)
             {
                 // 処理ブロック: sheet 表示失敗時の中断観測として、失敗理由をログへ記録して終了する。
@@ -757,10 +751,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 return false;
             }
 
-            // 処理ブロック: pane 同期の実行ではなく、表示後の pane 同期要求を発行する。
-            Excel.Workbook kernelWorkbook = _kernelWorkbookService.GetOpenKernelWorkbook();
-            _logger?.Info("[Transition] pane refresh requested.");
-            RefreshTaskPane(reason, kernelWorkbook, null);
             // 処理ブロック: 遷移完了後の時点観測として、完了ログへ出す workbook 状態を記録する。
             Excel.Workbook activeWorkbookAfter = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
             _logger?.Info(

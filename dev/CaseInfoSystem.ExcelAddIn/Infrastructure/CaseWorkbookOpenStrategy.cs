@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Excel = Microsoft.Office.Interop.Excel;
 
 
@@ -160,86 +161,40 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private HiddenCaseWorkbookSession OpenHiddenWorkbookWithDedicatedApplication(string caseWorkbookPath)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
-            Excel.Window previousActiveWindow = null;
+            Excel.Application hiddenApplication = null;
             Excel.Workbook workbook = null;
-            bool previousScreenUpdating = _application.ScreenUpdating;
-            bool previousEnableEvents = _application.EnableEvents;
-            bool previousDisplayAlerts = _application.DisplayAlerts;
             try
             {
-                previousActiveWindow = _application.ActiveWindow;
-                _logger.Info(
-                    "Case workbook legacy hidden Excel state captured. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + LegacyHiddenRouteName
-                    + ", screenUpdating="
-                    + previousScreenUpdating.ToString()
-                    + ", enableEvents="
-                    + previousEnableEvents.ToString()
-                    + ", displayAlerts="
-                    + previousDisplayAlerts.ToString()
-                    + ", elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
-                _application.ScreenUpdating = false;
-                _application.EnableEvents = false;
-                _application.DisplayAlerts = false;
-                _logger.Info(
-                    "Case workbook legacy hidden Excel state applied. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + LegacyHiddenRouteName
-                    + ", screenUpdating=false, enableEvents=false, displayAlerts=false, elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
-                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
+                hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, LegacyHiddenRouteName, stopwatch);
+                workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
                 HideOpenedWorkbookWindow(workbook);
-                RestorePreviousWindow(previousActiveWindow);
                 _logger.Info(
                     "Case workbook hidden Excel session opened. path="
                     + (caseWorkbookPath ?? string.Empty)
                     + ", route="
                     + LegacyHiddenRouteName
                     + ", appHwnd="
-                    + SafeApplicationHwnd(_application)
+                    + SafeApplicationHwnd(hiddenApplication)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
                 return new HiddenCaseWorkbookSession(
-                    _application,
+                    hiddenApplication,
                     workbook,
                     LegacyHiddenRouteName,
                     closeAction: () =>
                     {
                         Stopwatch closeStopwatch = Stopwatch.StartNew();
                         _logger.Info("Case workbook hidden session close entered. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + LegacyHiddenRouteName);
-                        try
-                        {
-                            workbook.Close(false, Type.Missing, Type.Missing);
-                            _logger.Info("Case workbook hidden session workbook close completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + LegacyHiddenRouteName + ", elapsedMs=" + closeStopwatch.ElapsedMilliseconds.ToString());
-                        }
-                        finally
-                        {
-                            RestoreSharedApplicationState(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, previousScreenUpdating, previousEnableEvents, previousDisplayAlerts);
-                            RestorePreviousWindow(previousActiveWindow);
-                        }
+                        CleanupDedicatedHiddenSession(caseWorkbookPath, LegacyHiddenRouteName, closeStopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                     },
                     abortAction: () =>
                     {
-                        try
-                        {
-                            workbook.Close(false, Type.Missing, Type.Missing);
-                        }
-                        finally
-                        {
-                            RestoreSharedApplicationState(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, previousScreenUpdating, previousEnableEvents, previousDisplayAlerts);
-                            RestorePreviousWindow(previousActiveWindow);
-                        }
+                        CleanupDedicatedHiddenSession(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                     });
             }
             catch
             {
-                TryCloseWorkbookWithoutSaving(workbook);
-                RestoreSharedApplicationState(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, previousScreenUpdating, previousEnableEvents, previousDisplayAlerts);
-                RestorePreviousWindow(previousActiveWindow);
+                CleanupDedicatedHiddenSession(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                 throw;
             }
         }
@@ -247,87 +202,40 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private HiddenCaseWorkbookSession OpenHiddenWorkbookWithSharedApplication(string caseWorkbookPath)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
-            Excel.Window previousActiveWindow = null;
+            Excel.Application hiddenApplication = null;
             Excel.Workbook workbook = null;
-            bool previousScreenUpdating = _application.ScreenUpdating;
-            bool previousEnableEvents = _application.EnableEvents;
-            bool previousDisplayAlerts = _application.DisplayAlerts;
             try
             {
-                previousActiveWindow = _application.ActiveWindow;
-                _logger.Info(
-                    "Case workbook shared hidden Excel state captured. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", screenUpdating="
-                    + previousScreenUpdating.ToString()
-                    + ", enableEvents="
-                    + previousEnableEvents.ToString()
-                    + ", displayAlerts="
-                    + previousDisplayAlerts.ToString()
-                    + ", elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
-                _application.ScreenUpdating = false;
-                _application.EnableEvents = false;
-                _application.DisplayAlerts = false;
-                _logger.Info(
-                    "Case workbook shared hidden Excel state applied. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", screenUpdating=false, enableEvents=false, displayAlerts=false, elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
-                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
+                hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, SharedHiddenRouteName, stopwatch);
+                workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
                 HideOpenedWorkbookWindow(workbook);
-                RestorePreviousWindow(previousActiveWindow);
                 _logger.Info(
                     "Case workbook hidden Excel session opened. path="
                     + (caseWorkbookPath ?? string.Empty)
                     + ", route="
                     + SharedHiddenRouteName
                     + ", appHwnd="
-                    + SafeApplicationHwnd(_application)
+                    + SafeApplicationHwnd(hiddenApplication)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
                 return new HiddenCaseWorkbookSession(
-                    _application,
+                    hiddenApplication,
                     workbook,
                     SharedHiddenRouteName,
                     closeAction: () =>
                     {
                         Stopwatch closeStopwatch = Stopwatch.StartNew();
                         _logger.Info("Case workbook hidden session close entered. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName);
-                        try
-                        {
-                            _logger.Info("Case workbook hidden session inner save starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName + ", elapsedMs=" + closeStopwatch.ElapsedMilliseconds.ToString());
-                            workbook.Save();
-                            _logger.Info("Case workbook hidden session inner save completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName + ", elapsedMs=" + closeStopwatch.ElapsedMilliseconds.ToString());
-                            _logger.Info("Case workbook hidden session workbook close starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName + ", elapsedMs=" + closeStopwatch.ElapsedMilliseconds.ToString());
-                            workbook.Close(false, Type.Missing, Type.Missing);
-                            _logger.Info("Case workbook hidden session workbook close completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName + ", elapsedMs=" + closeStopwatch.ElapsedMilliseconds.ToString());
-                        }
-                        finally
-                        {
-                            RestoreSharedApplicationState(caseWorkbookPath, SharedHiddenRouteName, stopwatch, previousScreenUpdating, previousEnableEvents, previousDisplayAlerts);
-                            RestorePreviousWindow(previousActiveWindow);
-                            _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName + ", elapsedMs=" + closeStopwatch.ElapsedMilliseconds.ToString());
-                        }
+                        CleanupDedicatedHiddenSession(caseWorkbookPath, SharedHiddenRouteName, closeStopwatch, hiddenApplication, workbook, saveBeforeClose: true);
                     },
                     abortAction: () =>
                     {
-                        try
-                        {
-                            workbook.Close(false, Type.Missing, Type.Missing);
-                        }
-                        finally
-                        {
-                            RestoreSharedApplicationState(caseWorkbookPath, SharedHiddenRouteName, stopwatch, previousScreenUpdating, previousEnableEvents, previousDisplayAlerts);
-                            RestorePreviousWindow(previousActiveWindow);
-                        }
+                        CleanupDedicatedHiddenSession(caseWorkbookPath, SharedHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                     });
             }
             catch
             {
-                TryCloseWorkbookWithoutSaving(workbook);
-                RestoreSharedApplicationState(caseWorkbookPath, SharedHiddenRouteName, stopwatch, previousScreenUpdating, previousEnableEvents, previousDisplayAlerts);
-                RestorePreviousWindow(previousActiveWindow);
+                CleanupDedicatedHiddenSession(caseWorkbookPath, SharedHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                 throw;
             }
         }
@@ -366,6 +274,60 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
+        private Excel.Application CreateDedicatedHiddenApplication(string caseWorkbookPath, string routeName, Stopwatch stopwatch)
+        {
+            Excel.Application hiddenApplication = new Excel.Application();
+            try
+            {
+                hiddenApplication.Visible = false;
+                hiddenApplication.DisplayAlerts = false;
+                hiddenApplication.ScreenUpdating = false;
+                hiddenApplication.UserControl = false;
+                hiddenApplication.EnableEvents = false;
+                _logger.Info(
+                    "Case workbook dedicated hidden Excel created. path="
+                    + (caseWorkbookPath ?? string.Empty)
+                    + ", route="
+                    + (routeName ?? string.Empty)
+                    + ", visible=false, displayAlerts=false, screenUpdating=false, userControl=false, enableEvents=false, elapsedMs="
+                    + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                return hiddenApplication;
+            }
+            catch
+            {
+                TryQuitApplication(hiddenApplication);
+                ReleaseComObject(hiddenApplication);
+                throw;
+            }
+        }
+
+        private void CleanupDedicatedHiddenSession(string caseWorkbookPath, string routeName, Stopwatch stopwatch, Excel.Application application, Excel.Workbook workbook, bool saveBeforeClose)
+        {
+            try
+            {
+                if (saveBeforeClose && workbook != null)
+                {
+                    _logger.Info("Case workbook hidden session inner save starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                    workbook.Save();
+                    _logger.Info("Case workbook hidden session inner save completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                }
+
+                if (workbook != null)
+                {
+                    _logger.Info("Case workbook hidden session workbook close starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                    workbook.Close(false, Type.Missing, Type.Missing);
+                    _logger.Info("Case workbook hidden session workbook close completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                }
+            }
+            finally
+            {
+                TryQuitApplication(application);
+                ReleaseComObject(workbook);
+                ReleaseComObject(application);
+                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+            }
+        }
+
         private void TryCloseWorkbookWithoutSaving(Excel.Workbook workbook)
         {
             if (workbook == null)
@@ -380,6 +342,43 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             catch (Exception ex)
             {
                 _logger.Error("TryCloseWorkbookWithoutSaving failed.", ex);
+            }
+        }
+
+        private void TryQuitApplication(Excel.Application application)
+        {
+            if (application == null)
+            {
+                return;
+            }
+
+            try
+            {
+                application.Quit();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("TryQuitApplication failed.", ex);
+            }
+        }
+
+        private void ReleaseComObject(object comObject)
+        {
+            if (comObject == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (Marshal.IsComObject(comObject))
+                {
+                    Marshal.FinalReleaseComObject(comObject);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("ReleaseComObject failed.", ex);
             }
         }
 

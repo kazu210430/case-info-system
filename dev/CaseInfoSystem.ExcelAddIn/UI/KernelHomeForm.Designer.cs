@@ -51,18 +51,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private Label lblNewCaseTitleSuffix;
 
-		private Panel pnlNewCaseTree;
-
-		private Label lblNewTreeRootPath;
-
-		private Label lblNewTreeDocName;
-
-		private Label lblNewTreeCaseName;
-
-		private Label lblNewTreeFolderName;
-
-		private Label lblNewTreeRootButton;
-
 		private Label lblExistingCaseTitlePrefix;
 
 		private Label lblExistingCaseTitleCase;
@@ -81,11 +69,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private Label lblExistingTreeRootButton;
 
-		private Label label4;
-
 		private Label label6;
-
-		private Label label1;
 
 		private Label label2;
 
@@ -121,14 +105,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewCaseTitleFolder = new System.Windows.Forms.Label();
             this.lblNewCaseTitleCase = new System.Windows.Forms.Label();
             this.lblNewCaseTitleSuffix = new System.Windows.Forms.Label();
-            this.pnlNewCaseTree = new System.Windows.Forms.Panel();
-            this.label1 = new System.Windows.Forms.Label();
-            this.label4 = new System.Windows.Forms.Label();
-            this.lblNewTreeRootPath = new System.Windows.Forms.Label();
-            this.lblNewTreeDocName = new System.Windows.Forms.Label();
-            this.lblNewTreeCaseName = new System.Windows.Forms.Label();
-            this.lblNewTreeFolderName = new System.Windows.Forms.Label();
-            this.lblNewTreeRootButton = new System.Windows.Forms.Label();
             this.lblExistingCaseTitlePrefix = new System.Windows.Forms.Label();
             this.lblExistingCaseTitleCase = new System.Windows.Forms.Label();
             this.lblExistingCaseTitleSuffix = new System.Windows.Forms.Label();
@@ -140,11 +116,20 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblExistingTreeCaseName = new System.Windows.Forms.Label();
             this.lblExistingTreeRootButton = new System.Windows.Forms.Label();
             this.label6 = new System.Windows.Forms.Label();
+            this.lblNewTreeRootButton = new System.Windows.Forms.Label();
+            this.lblNewTreeFolderName = new System.Windows.Forms.Label();
+            this.lblNewTreeCaseName = new System.Windows.Forms.Label();
+            this.lblNewTreeDocName = new System.Windows.Forms.Label();
+            this.lblNewTreeRootPath = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            this.label1 = new System.Windows.Forms.Label();
+            this.pnlNewCaseTree = new System.Windows.Forms.Panel();
+            this.label5 = new System.Windows.Forms.Label();
             this.grpDateRule.SuspendLayout();
             this.grpNameRule.SuspendLayout();
             this.grpScreenSwitch.SuspendLayout();
-            this.pnlNewCaseTree.SuspendLayout();
             this.pnlExistingCaseTree.SuspendLayout();
+            this.pnlNewCaseTree.SuspendLayout();
             this.SuspendLayout();
             // 
             // lblSystemRootTitle
@@ -337,12 +322,16 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnExit
             // 
-            this.btnExit.BackColor = System.Drawing.Color.LightSalmon;
-            this.btnExit.Font = new System.Drawing.Font("Yu Gothic UI", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.btnExit.Location = new System.Drawing.Point(648, 9);
+            this.btnExit.BackColor = System.Drawing.Color.LightCoral;
+            this.btnExit.FlatAppearance.BorderSize = 0;
+            this.btnExit.FlatAppearance.MouseDownBackColor = System.Drawing.Color.OrangeRed;
+            this.btnExit.FlatAppearance.MouseOverBackColor = System.Drawing.Color.OrangeRed;
+            this.btnExit.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExit.Font = new System.Drawing.Font("Yu Gothic UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.btnExit.Location = new System.Drawing.Point(676, 9);
             this.btnExit.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.btnExit.Name = "btnExit";
-            this.btnExit.Size = new System.Drawing.Size(72, 35);
+            this.btnExit.Size = new System.Drawing.Size(44, 31);
             this.btnExit.TabIndex = 17;
             this.btnExit.Text = "終 了";
             this.btnExit.UseVisualStyleBackColor = false;
@@ -370,7 +359,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnCreate
             // 
-            this.btnCreate.BackColor = System.Drawing.Color.Cyan;
+            this.btnCreate.BackColor = System.Drawing.Color.Aqua;
+            this.btnCreate.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
+            this.btnCreate.FlatAppearance.BorderSize = 0;
+            this.btnCreate.FlatAppearance.MouseDownBackColor = System.Drawing.Color.DeepSkyBlue;
+            this.btnCreate.FlatAppearance.MouseOverBackColor = System.Drawing.Color.DeepSkyBlue;
+            this.btnCreate.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCreate.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnCreate.Location = new System.Drawing.Point(543, 271);
             this.btnCreate.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
@@ -427,112 +421,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewCaseTitleSuffix.TabIndex = 12;
             this.lblNewCaseTitleSuffix.Text = "の作成";
             this.lblNewCaseTitleSuffix.Click += new System.EventHandler(this.lblNewCaseTitleSuffix_Click);
-            // 
-            // pnlNewCaseTree
-            // 
-            this.pnlNewCaseTree.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
-            this.pnlNewCaseTree.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.pnlNewCaseTree.Controls.Add(this.label1);
-            this.pnlNewCaseTree.Controls.Add(this.label4);
-            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeRootPath);
-            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeDocName);
-            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeCaseName);
-            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeFolderName);
-            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeRootButton);
-            this.pnlNewCaseTree.Location = new System.Drawing.Point(40, 318);
-            this.pnlNewCaseTree.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
-            this.pnlNewCaseTree.Name = "pnlNewCaseTree";
-            this.pnlNewCaseTree.Size = new System.Drawing.Size(645, 190);
-            this.pnlNewCaseTree.TabIndex = 9;
-            // 
-            // label1
-            // 
-            this.label1.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.label1.ForeColor = System.Drawing.Color.Gray;
-            this.label1.Location = new System.Drawing.Point(142, 95);
-            this.label1.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(40, 90);
-            this.label1.TabIndex = 13;
-            this.label1.Text = "│\r\n├─\r\n│\r\n├─\r\n│";
-            // 
-            // label4
-            // 
-            this.label4.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.label4.ForeColor = System.Drawing.Color.Gray;
-            this.label4.Location = new System.Drawing.Point(60, 53);
-            this.label4.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(46, 45);
-            this.label4.TabIndex = 12;
-            this.label4.Text = "│\r\n├─\r\n│";
-            this.label4.Click += new System.EventHandler(this.label4_Click);
-            // 
-            // lblNewTreeRootPath
-            // 
-            this.lblNewTreeRootPath.AutoEllipsis = true;
-            this.lblNewTreeRootPath.Font = new System.Drawing.Font("Yu Gothic UI", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.lblNewTreeRootPath.ForeColor = System.Drawing.Color.DimGray;
-            this.lblNewTreeRootPath.Location = new System.Drawing.Point(162, 18);
-            this.lblNewTreeRootPath.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.lblNewTreeRootPath.Name = "lblNewTreeRootPath";
-            this.lblNewTreeRootPath.Size = new System.Drawing.Size(517, 33);
-            this.lblNewTreeRootPath.TabIndex = 10;
-            this.lblNewTreeRootPath.Text = "C:\\Users\\kazu2\\OneDrive\\相談フォルダ";
-            // 
-            // lblNewTreeDocName
-            // 
-            this.lblNewTreeDocName.AutoSize = true;
-            this.lblNewTreeDocName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.lblNewTreeDocName.ForeColor = System.Drawing.Color.DimGray;
-            this.lblNewTreeDocName.Location = new System.Drawing.Point(192, 140);
-            this.lblNewTreeDocName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.lblNewTreeDocName.Name = "lblNewTreeDocName";
-            this.lblNewTreeDocName.Size = new System.Drawing.Size(255, 16);
-            this.lblNewTreeDocName.TabIndex = 7;
-            this.lblNewTreeDocName.Text = "20260331_訴状_(例)案件太郎.docx";
-            // 
-            // lblNewTreeCaseName
-            // 
-            this.lblNewTreeCaseName.AutoSize = true;
-            this.lblNewTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.lblNewTreeCaseName.ForeColor = System.Drawing.Color.RoyalBlue;
-            this.lblNewTreeCaseName.Location = new System.Drawing.Point(192, 105);
-            this.lblNewTreeCaseName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.lblNewTreeCaseName.Name = "lblNewTreeCaseName";
-            this.lblNewTreeCaseName.Size = new System.Drawing.Size(175, 16);
-            this.lblNewTreeCaseName.TabIndex = 4;
-            this.lblNewTreeCaseName.Text = "案件情報_(例)案件太郎";
-            this.lblNewTreeCaseName.Click += new System.EventHandler(this.lblNewTreeCaseName_Click);
-            // 
-            // lblNewTreeFolderName
-            // 
-            this.lblNewTreeFolderName.AutoSize = true;
-            this.lblNewTreeFolderName.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.lblNewTreeFolderName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.lblNewTreeFolderName.ForeColor = System.Drawing.Color.ForestGreen;
-            this.lblNewTreeFolderName.Location = new System.Drawing.Point(110, 57);
-            this.lblNewTreeFolderName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.lblNewTreeFolderName.Name = "lblNewTreeFolderName";
-            this.lblNewTreeFolderName.Padding = new System.Windows.Forms.Padding(17, 3, 17, 3);
-            this.lblNewTreeFolderName.Size = new System.Drawing.Size(211, 24);
-            this.lblNewTreeFolderName.TabIndex = 2;
-            this.lblNewTreeFolderName.Text = "20260331_(例)案件太郎";
-            this.lblNewTreeFolderName.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // lblNewTreeRootButton
-            // 
-            this.lblNewTreeRootButton.BackColor = System.Drawing.SystemColors.ButtonHighlight;
-            this.lblNewTreeRootButton.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.lblNewTreeRootButton.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.lblNewTreeRootButton.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.lblNewTreeRootButton.Location = new System.Drawing.Point(28, 16);
-            this.lblNewTreeRootButton.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            this.lblNewTreeRootButton.Name = "lblNewTreeRootButton";
-            this.lblNewTreeRootButton.Size = new System.Drawing.Size(132, 29);
-            this.lblNewTreeRootButton.TabIndex = 0;
-            this.lblNewTreeRootButton.Text = "既定のフォルダ";
-            this.lblNewTreeRootButton.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // lblExistingCaseTitlePrefix
             // 
@@ -622,24 +510,24 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblExistingTreeDocName
             // 
             this.lblExistingTreeDocName.AutoSize = true;
-            this.lblExistingTreeDocName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingTreeDocName.Font = new System.Drawing.Font("BIZ UDゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblExistingTreeDocName.ForeColor = System.Drawing.Color.DimGray;
-            this.lblExistingTreeDocName.Location = new System.Drawing.Point(107, 105);
+            this.lblExistingTreeDocName.Location = new System.Drawing.Point(107, 106);
             this.lblExistingTreeDocName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblExistingTreeDocName.Name = "lblExistingTreeDocName";
-            this.lblExistingTreeDocName.Size = new System.Drawing.Size(255, 16);
+            this.lblExistingTreeDocName.Size = new System.Drawing.Size(248, 15);
             this.lblExistingTreeDocName.TabIndex = 4;
             this.lblExistingTreeDocName.Text = "20260331_訴状_(例)案件太郎.docx";
             // 
             // lblExistingTreeCaseName
             // 
             this.lblExistingTreeCaseName.AutoSize = true;
-            this.lblExistingTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.lblExistingTreeCaseName.ForeColor = System.Drawing.Color.RoyalBlue;
-            this.lblExistingTreeCaseName.Location = new System.Drawing.Point(107, 70);
+            this.lblExistingTreeCaseName.Location = new System.Drawing.Point(107, 71);
             this.lblExistingTreeCaseName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblExistingTreeCaseName.Name = "lblExistingTreeCaseName";
-            this.lblExistingTreeCaseName.Size = new System.Drawing.Size(175, 16);
+            this.lblExistingTreeCaseName.Size = new System.Drawing.Size(166, 15);
             this.lblExistingTreeCaseName.TabIndex = 2;
             this.lblExistingTreeCaseName.Text = "案件情報_(例)案件太郎";
             this.lblExistingTreeCaseName.Click += new System.EventHandler(this.lblExistingTreeCaseName_Click);
@@ -647,11 +535,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // lblExistingTreeRootButton
             // 
             this.lblExistingTreeRootButton.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.lblExistingTreeRootButton.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingTreeRootButton.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblExistingTreeRootButton.ForeColor = System.Drawing.Color.DimGray;
             this.lblExistingTreeRootButton.Location = new System.Drawing.Point(28, 19);
             this.lblExistingTreeRootButton.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
             this.lblExistingTreeRootButton.Name = "lblExistingTreeRootButton";
-            this.lblExistingTreeRootButton.Size = new System.Drawing.Size(183, 29);
+            this.lblExistingTreeRootButton.Size = new System.Drawing.Size(186, 29);
             this.lblExistingTreeRootButton.TabIndex = 0;
             this.lblExistingTreeRootButton.Text = "選択した任意のフォルダ";
             this.lblExistingTreeRootButton.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -666,6 +555,130 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.label6.Size = new System.Drawing.Size(31, 25);
             this.label6.TabIndex = 18;
             this.label6.Text = "＆";
+            // 
+            // lblNewTreeRootButton
+            // 
+            this.lblNewTreeRootButton.AutoSize = true;
+            this.lblNewTreeRootButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.lblNewTreeRootButton.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.lblNewTreeRootButton.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.lblNewTreeRootButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.lblNewTreeRootButton.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeRootButton.ForeColor = System.Drawing.Color.DimGray;
+            this.lblNewTreeRootButton.Location = new System.Drawing.Point(28, 16);
+            this.lblNewTreeRootButton.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.lblNewTreeRootButton.Name = "lblNewTreeRootButton";
+            this.lblNewTreeRootButton.Padding = new System.Windows.Forms.Padding(7);
+            this.lblNewTreeRootButton.Size = new System.Drawing.Size(222, 31);
+            this.lblNewTreeRootButton.TabIndex = 0;
+            this.lblNewTreeRootButton.Text = "新規ﾌｫﾙﾀﾞの親(保存先)ﾌｫﾙﾀﾞ";
+            this.lblNewTreeRootButton.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            // 
+            // lblNewTreeFolderName
+            // 
+            this.lblNewTreeFolderName.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.lblNewTreeFolderName.Font = new System.Drawing.Font("BIZ UDゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeFolderName.ForeColor = System.Drawing.Color.ForestGreen;
+            this.lblNewTreeFolderName.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.lblNewTreeFolderName.Location = new System.Drawing.Point(218, 71);
+            this.lblNewTreeFolderName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.lblNewTreeFolderName.Name = "lblNewTreeFolderName";
+            this.lblNewTreeFolderName.Size = new System.Drawing.Size(426, 24);
+            this.lblNewTreeFolderName.TabIndex = 2;
+            this.lblNewTreeFolderName.Text = "20260331_(例)案件太郎";
+            this.lblNewTreeFolderName.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.lblNewTreeFolderName.Click += new System.EventHandler(this.lblNewTreeFolderName_Click);
+            // 
+            // lblNewTreeCaseName
+            // 
+            this.lblNewTreeCaseName.AutoSize = true;
+            this.lblNewTreeCaseName.Font = new System.Drawing.Font("BIZ UDゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeCaseName.ForeColor = System.Drawing.Color.RoyalBlue;
+            this.lblNewTreeCaseName.Location = new System.Drawing.Point(188, 118);
+            this.lblNewTreeCaseName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.lblNewTreeCaseName.Name = "lblNewTreeCaseName";
+            this.lblNewTreeCaseName.Size = new System.Drawing.Size(166, 15);
+            this.lblNewTreeCaseName.TabIndex = 4;
+            this.lblNewTreeCaseName.Text = "案件情報_(例)案件太郎";
+            this.lblNewTreeCaseName.Click += new System.EventHandler(this.lblNewTreeCaseName_Click);
+            // 
+            // lblNewTreeDocName
+            // 
+            this.lblNewTreeDocName.AutoSize = true;
+            this.lblNewTreeDocName.Font = new System.Drawing.Font("BIZ UDゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeDocName.ForeColor = System.Drawing.Color.DimGray;
+            this.lblNewTreeDocName.Location = new System.Drawing.Point(188, 152);
+            this.lblNewTreeDocName.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.lblNewTreeDocName.Name = "lblNewTreeDocName";
+            this.lblNewTreeDocName.Size = new System.Drawing.Size(248, 15);
+            this.lblNewTreeDocName.TabIndex = 7;
+            this.lblNewTreeDocName.Text = "20260331_訴状_(例)案件太郎.docx";
+            // 
+            // lblNewTreeRootPath
+            // 
+            this.lblNewTreeRootPath.AutoEllipsis = true;
+            this.lblNewTreeRootPath.Font = new System.Drawing.Font("Yu Gothic UI", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.lblNewTreeRootPath.ForeColor = System.Drawing.Color.DimGray;
+            this.lblNewTreeRootPath.Location = new System.Drawing.Point(256, 21);
+            this.lblNewTreeRootPath.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.lblNewTreeRootPath.Name = "lblNewTreeRootPath";
+            this.lblNewTreeRootPath.Size = new System.Drawing.Size(386, 42);
+            this.lblNewTreeRootPath.TabIndex = 10;
+            this.lblNewTreeRootPath.Text = "C:\\Users\\kazu2\\OneDrive\\相談フォルダ";
+            // 
+            // label4
+            // 
+            this.label4.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label4.ForeColor = System.Drawing.Color.Gray;
+            this.label4.Location = new System.Drawing.Point(60, 60);
+            this.label4.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(46, 45);
+            this.label4.TabIndex = 12;
+            this.label4.Text = "│\r\n├─\r\n│";
+            this.label4.Click += new System.EventHandler(this.label4_Click);
+            // 
+            // label1
+            // 
+            this.label1.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label1.ForeColor = System.Drawing.Color.Gray;
+            this.label1.Location = new System.Drawing.Point(142, 107);
+            this.label1.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(40, 75);
+            this.label1.TabIndex = 13;
+            this.label1.Text = "│\r\n├─\r\n│\r\n├─\r\n│";
+            // 
+            // pnlNewCaseTree
+            // 
+            this.pnlNewCaseTree.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.pnlNewCaseTree.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.pnlNewCaseTree.Controls.Add(this.label5);
+            this.pnlNewCaseTree.Controls.Add(this.label1);
+            this.pnlNewCaseTree.Controls.Add(this.label4);
+            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeRootPath);
+            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeDocName);
+            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeCaseName);
+            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeFolderName);
+            this.pnlNewCaseTree.Controls.Add(this.lblNewTreeRootButton);
+            this.pnlNewCaseTree.Location = new System.Drawing.Point(40, 318);
+            this.pnlNewCaseTree.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
+            this.pnlNewCaseTree.Name = "pnlNewCaseTree";
+            this.pnlNewCaseTree.Size = new System.Drawing.Size(645, 190);
+            this.pnlNewCaseTree.TabIndex = 9;
+            // 
+            // label5
+            // 
+            this.label5.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.label5.Font = new System.Drawing.Font("BIZ UDPゴシック", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label5.ForeColor = System.Drawing.Color.Green;
+            this.label5.Location = new System.Drawing.Point(106, 69);
+            this.label5.Margin = new System.Windows.Forms.Padding(5, 0, 5, 0);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(109, 29);
+            this.label5.TabIndex = 15;
+            this.label5.Text = "新規フォルダ";
+            this.label5.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // KernelHomeForm
             // 
@@ -695,6 +708,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.Controls.Add(this.label6);
             this.Controls.Add(this.lblNewCaseTitleFolder);
             this.Font = new System.Drawing.Font("Yu Gothic UI", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.ForeColor = System.Drawing.Color.Black;
             this.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.Name = "KernelHomeForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
@@ -704,13 +718,23 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.grpNameRule.ResumeLayout(false);
             this.grpNameRule.PerformLayout();
             this.grpScreenSwitch.ResumeLayout(false);
-            this.pnlNewCaseTree.ResumeLayout(false);
-            this.pnlNewCaseTree.PerformLayout();
             this.pnlExistingCaseTree.ResumeLayout(false);
             this.pnlExistingCaseTree.PerformLayout();
+            this.pnlNewCaseTree.ResumeLayout(false);
+            this.pnlNewCaseTree.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
 		}
+
+        private Label lblNewTreeRootButton;
+        private Label lblNewTreeFolderName;
+        private Label lblNewTreeCaseName;
+        private Label lblNewTreeDocName;
+        private Label lblNewTreeRootPath;
+        private Label label4;
+        private Label label1;
+        private Panel pnlNewCaseTree;
+        private Label label5;
     }
 }

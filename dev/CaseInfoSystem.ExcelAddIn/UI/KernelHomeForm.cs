@@ -28,6 +28,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private const int CaseCreationStartMinimizeDelayMs = 2000;
 
+		private static readonly Color NewTreeRootButtonBorderColor = Color.Black;
+
+		private static readonly Color NewTreeRootButtonHoverBorderColor = Color.FromArgb (0, 120, 215);
+
+		private static readonly Color NewTreeRootButtonPressedBorderColor = Color.FromArgb (0, 120, 215);
+
 		private readonly KernelWorkbookService _kernelWorkbookService;
 
 		private readonly KernelCaseCreationCommandService _kernelCaseCreationCommandService;
@@ -59,6 +65,10 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private bool _isClosingBySession;
 
 		private string _kernelFlickerTraceId = string.Empty;
+
+		private bool _isNewTreeRootButtonHovered;
+
+		private bool _isNewTreeRootButtonPressed;
 
 
 		[DllImport ("user32.dll")]
@@ -104,6 +114,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.ShowInTaskbar = true;
 			base.WindowState = FormWindowState.Normal;
 			WireEvents ();
+			ConfigureNewTreeRootButtonAppearance ();
 			LoadSettings ();
 			SetCustomerPlaceholder ();
 			RefreshPreview ();
@@ -157,9 +168,25 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			lblNewTreeRootButton.Click += delegate {
 				SelectDefaultRoot ();
 			};
+			lblNewTreeRootButton.MouseEnter += LblNewTreeRootButton_MouseEnter;
+			lblNewTreeRootButton.MouseLeave += LblNewTreeRootButton_MouseLeave;
+			lblNewTreeRootButton.MouseDown += LblNewTreeRootButton_MouseDown;
+			lblNewTreeRootButton.MouseUp += LblNewTreeRootButton_MouseUp;
+			lblNewTreeRootButton.Paint += LblNewTreeRootButton_Paint;
 			base.Shown += KernelHomeForm_Shown;
 			base.FormClosed += KernelHomeForm_FormClosed;
 			ApplyHandCursorToButtons (this);
+		}
+
+		private void ConfigureNewTreeRootButtonAppearance ()
+		{
+			if (lblNewTreeRootButton == null) {
+				return;
+			}
+			lblNewTreeRootButton.BorderStyle = BorderStyle.None;
+			lblNewTreeRootButton.FlatStyle = FlatStyle.Standard;
+			lblNewTreeRootButton.BackColor = Color.FromArgb (255, 252, 245);
+			lblNewTreeRootButton.Cursor = Cursors.Hand;
 		}
 
 		private void LoadSettings ()
@@ -313,10 +340,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void RestoreHomeToForegroundAfterCaseCreation (KernelCaseCreationResult result)
 		{
 			if (result != null && result.Mode == KernelCaseCreationMode.CreateCaseBatch && !base.IsDisposed) {
-				Show ();
+				RequestEnsureHomeDisplayHidden ("KernelHomeForm.RestoreHomeToForegroundAfterCaseCreation.BeforeShow");
+				if (!Visible) {
+					Show ();
+				}
 				base.WindowState = FormWindowState.Normal;
-				Activate ();
-				BringToFront ();
 				ForceBringToFront ("KernelHomeForm.RestoreHomeToForegroundAfterCaseCreation");
 				BeginForegroundRetry ();
 				PrepareCustomerInputForNextBatchCreate ();
@@ -698,6 +726,59 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
+		private void LblNewTreeRootButton_MouseEnter (object sender, EventArgs e)
+		{
+			_isNewTreeRootButtonHovered = true;
+			lblNewTreeRootButton.Invalidate ();
+		}
+
+		private void LblNewTreeRootButton_MouseLeave (object sender, EventArgs e)
+		{
+			_isNewTreeRootButtonHovered = false;
+			_isNewTreeRootButtonPressed = false;
+			lblNewTreeRootButton.Invalidate ();
+		}
+
+		private void LblNewTreeRootButton_MouseDown (object sender, MouseEventArgs e)
+		{
+			if (e.Button != MouseButtons.Left) {
+				return;
+			}
+			_isNewTreeRootButtonPressed = true;
+			lblNewTreeRootButton.Invalidate ();
+		}
+
+		private void LblNewTreeRootButton_MouseUp (object sender, MouseEventArgs e)
+		{
+			_isNewTreeRootButtonPressed = false;
+			lblNewTreeRootButton.Invalidate ();
+		}
+
+		private void LblNewTreeRootButton_Paint (object sender, PaintEventArgs e)
+		{
+			Rectangle rectangle = lblNewTreeRootButton.ClientRectangle;
+			if (rectangle.Width <= 2 || rectangle.Height <= 2) {
+				return;
+			}
+			Color color = GetNewTreeRootButtonBorderColor ();
+			rectangle.Width--;
+			rectangle.Height--;
+			using (Pen pen = new Pen (color)) {
+				e.Graphics.DrawRectangle (pen, rectangle);
+			}
+		}
+
+		private Color GetNewTreeRootButtonBorderColor ()
+		{
+			if (_isNewTreeRootButtonPressed) {
+				return NewTreeRootButtonPressedBorderColor;
+			}
+			if (_isNewTreeRootButtonHovered) {
+				return NewTreeRootButtonHoverBorderColor;
+			}
+			return NewTreeRootButtonBorderColor;
+		}
+
 		private static bool IsImeComposing (Control control)
 		{
 			IntPtr intPtr = ImmGetContext (control.Handle);
@@ -749,6 +830,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 
         private void grpScreenSwitch_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void lblNewTreeFolderName_Click(object sender, EventArgs e)
         {
 
         }

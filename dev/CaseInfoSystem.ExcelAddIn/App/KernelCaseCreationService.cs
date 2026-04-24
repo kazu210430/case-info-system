@@ -131,7 +131,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_transientPaneSuppressionService.ReleasePath (plan.CaseWorkbookPath, "KernelCaseCreationService.CreateSavedCase.Completed");
 				transientSuppressionRegistered = false;
 				_logger.Info ("Kernel saved CASE workbook closed. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				_logger.Info ("Saved CASE created. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				_logger.Info ("Saved CASE created. path=" + plan.CaseWorkbookPath + ", liveWorkbookHandOff=false, elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return new KernelCaseCreationResult {
 					Success = true,
 					Mode = plan.Mode,
@@ -181,9 +181,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				workbook = hiddenCaseWorkbookSession.Workbook;
 				application = hiddenCaseWorkbookSession.Application ?? fallbackApplication;
-				_logger.Info ("Kernel saved CASE workbook hidden session opened. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				_caseWorkbookInitializer.InitializeForHiddenCreate (kernelWorkbook, workbook, plan);
-				_logger.Info ("Kernel saved CASE hidden initialized. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				bool deferredVisiblePresentationRequired = RequiresDeferredVisiblePresentationStartupState (plan.Mode);
+				_logger.Info ("Kernel saved CASE workbook hidden session opened. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", deferredVisiblePresentation=" + deferredVisiblePresentationRequired + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				if (deferredVisiblePresentationRequired) {
+					_caseWorkbookInitializer.InitializeForVisibleCreate (kernelWorkbook, workbook, plan);
+					_logger.Info ("Kernel saved CASE hidden initialized for deferred visible presentation. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				} else {
+					_caseWorkbookInitializer.InitializeForHiddenCreate (kernelWorkbook, workbook, plan);
+					_logger.Info ("Kernel saved CASE hidden initialized. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				}
 				workbook.Save ();
 				_logger.Info ("Kernel saved CASE hidden saved. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
@@ -213,7 +219,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static bool ShouldUseHiddenCreateSession (KernelCaseCreationMode mode)
 		{
-			return mode == KernelCaseCreationMode.CreateCaseBatch;
+			return true;
+		}
+
+		private static bool RequiresDeferredVisiblePresentationStartupState (KernelCaseCreationMode mode)
+		{
+			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
 		}
 
 		private static string SafeApplicationHwnd (Application application)

@@ -185,25 +185,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         }
     }
 
-    internal sealed class FolderWindowService
-    {
-        internal Action<string, string> OnOpenFolder { get; set; }
-
-        internal Func<string, string, IntPtr> OnOpenFolderAndWait { get; set; }
-
-        internal void OpenFolder(string folderPath, string reason)
-        {
-            OnOpenFolder?.Invoke(folderPath, reason);
-        }
-
-        internal IntPtr OpenFolderAndWait(string folderPath, string reason)
-        {
-            return OnOpenFolderAndWait == null
-                ? IntPtr.Zero
-                : OnOpenFolderAndWait(folderPath, reason);
-        }
-    }
-
     internal sealed class CaseWorkbookOpenStrategy
     {
         internal Func<string, HiddenCaseWorkbookSession> OnOpenHiddenWorkbook { get; set; }

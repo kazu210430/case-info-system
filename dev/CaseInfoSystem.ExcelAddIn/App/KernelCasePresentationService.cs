@@ -28,6 +28,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string InitialCursorFieldKey = "顧客_よみ";
 
+		private const int CaseFolderPreOpenConfirmTimeoutMs = 300;
+
 		private readonly Application _application;
 
 		private readonly CaseWorkbookOpenStrategy _caseWorkbookOpenStrategy;
@@ -157,12 +159,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
 				return;
 			}
-			try {
-				IntPtr intPtr = _folderWindowService.OpenFolderAndWait (caseFolderPath, "KernelCasePresentationService.OpenCreatedCase.PreOpen");
-				_logger.Info ("CASE folder pre-open completed. workbookPath=" + (caseWorkbookPath ?? string.Empty) + ", folderPath=" + caseFolderPath + ", explorerWindowFound=" + (intPtr != IntPtr.Zero));
-			} catch (Exception exception) {
-				_logger.Warn ("CASE folder pre-open failed but CASE opening continues. workbookPath=" + (caseWorkbookPath ?? string.Empty) + ", folderPath=" + caseFolderPath + ", message=" + exception.Message);
-			}
+			_logger.Info ("CASE folder pre-open confirm skipped. workbookPath=" + (caseWorkbookPath ?? string.Empty) + ", folderPath=" + caseFolderPath + ", timeoutMs=" + CaseFolderPreOpenConfirmTimeoutMs);
 		}
 
 		private void ShowCreatedCase (Workbook workbook)

@@ -35,6 +35,7 @@
     <Compile Include="DocumentSaveServiceTests.cs" />
     <Compile Include="DocumentMergeServiceTests.cs" />
     <Compile Include="KernelCaseCreationServiceTests.cs" />
+    <Compile Include="FolderWindowServiceTests.cs" />
     <Compile Include="PathCompatibilityServiceTests.cs" />
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
@@ -120,6 +121,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelAddInTraceLogWriter.cs" Link="Source\Infrastructure\ExcelAddInTraceLogWriter.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelProcessLaunchContextTracer.cs" Link="Source\Infrastructure\ExcelProcessLaunchContextTracer.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\FolderWindowService.cs" Link="Source\Infrastructure\FolderWindowService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordInteropService.cs" Link="Source\Infrastructure\WordInteropService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ITaskPaneView.cs" Link="Source\UI\ITaskPaneView.cs" />

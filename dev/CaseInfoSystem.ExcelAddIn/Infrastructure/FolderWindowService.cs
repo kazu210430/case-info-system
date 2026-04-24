@@ -11,9 +11,22 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private const int WaitForFolderWindowIntervalMs = 100;
 
+		internal sealed class TestHooks
+		{
+			internal Func<string, string, bool> StartFolderProcess { get; set; }
+
+			internal Func<string, IntPtr> TryFindExplorerWindow { get; set; }
+
+			internal Action<int> Sleep { get; set; }
+
+			internal Func<DateTime> UtcNow { get; set; }
+		}
+
 		private readonly PathCompatibilityService _pathCompatibilityService;
 
 		private readonly Logger _logger;
+
+		internal TestHooks Hooks { get; set; }
 
 		internal FolderWindowService (PathCompatibilityService pathCompatibilityService, Logger logger)
 		{
@@ -54,9 +67,48 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			return false;
 		}
 
+		internal IntPtr ConfirmFolderWindow (string folderPath, string reason, int timeoutMs)
+		{
+			string text = _pathCompatibilityService.NormalizePath (folderPath);
+			if (string.IsNullOrWhiteSpace (text)) {
+				return IntPtr.Zero;
+			}
+			Stopwatch stopwatch = Stopwatch.StartNew ();
+			try {
+				IntPtr intPtr = TryFindExplorerWindowWithTiming (text, reason, 1, stopwatch);
+				if (intPtr != IntPtr.Zero) {
+					LogConfirmFolderWindowCompleted (text, reason, timeoutMs, stopwatch, 1, intPtr);
+					return intPtr;
+				}
+				if (timeoutMs <= 0) {
+					LogConfirmFolderWindowCompleted (text, reason, timeoutMs, stopwatch, 1, IntPtr.Zero);
+					return IntPtr.Zero;
+				}
+				DateTime dateTime = GetUtcNow ().AddMilliseconds (timeoutMs);
+				int num = 1;
+				while (GetUtcNow () < dateTime) {
+					int milliseconds = Math.Min (WaitForFolderWindowIntervalMs, Math.Max (1, (int)(dateTime - GetUtcNow ()).TotalMilliseconds));
+					Sleep (milliseconds);
+					num++;
+					intPtr = TryFindExplorerWindowWithTiming (text, reason, num, stopwatch);
+					if (intPtr != IntPtr.Zero) {
+						LogConfirmFolderWindowCompleted (text, reason, timeoutMs, stopwatch, num, intPtr);
+						return intPtr;
+					}
+				}
+				LogConfirmFolderWindowCompleted (text, reason, timeoutMs, stopwatch, num, IntPtr.Zero);
+			} catch (Exception exception) {
+				_logger.Error ("ConfirmFolderWindow failed. folder=" + text + ", reason=" + (reason ?? string.Empty) + ", timeoutMs=" + timeoutMs, exception);
+			}
+			return IntPtr.Zero;
+		}
+
 		private bool OpenFolderCore (string normalizedFolderPath, string reason)
 		{
 			_logger.Info ("Folder open requested. folder=" + normalizedFolderPath + ", reason=" + (reason ?? string.Empty));
+			if (Hooks != null && Hooks.StartFolderProcess != null) {
+				return Hooks.StartFolderProcess (normalizedFolderPath, reason);
+			}
 			Process.Start (new ProcessStartInfo {
 				FileName = "explorer.exe",
 				Arguments = "\"" + normalizedFolderPath + "\"",
@@ -80,6 +132,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private IntPtr TryFindExplorerWindow (string folderPath)
 		{
+			if (Hooks != null && Hooks.TryFindExplorerWindow != null) {
+				return Hooks.TryFindExplorerWindow (folderPath);
+			}
 			object obj = null;
 			object obj2 = null;
 			try {
@@ -135,6 +190,36 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				ReleaseComObject (obj);
 			}
 			return IntPtr.Zero;
+		}
+
+		private IntPtr TryFindExplorerWindowWithTiming (string folderPath, string reason, int attempt, Stopwatch overallStopwatch)
+		{
+			Stopwatch stopwatch = Stopwatch.StartNew ();
+			IntPtr intPtr = TryFindExplorerWindow (folderPath);
+			_logger.Info ("ConfirmFolderWindow probe completed. folder=" + folderPath + ", reason=" + (reason ?? string.Empty) + ", attempt=" + attempt + ", tryFindElapsedMs=" + stopwatch.ElapsedMilliseconds + ", totalElapsedMs=" + ((overallStopwatch == null) ? 0L : overallStopwatch.ElapsedMilliseconds) + ", windowFound=" + (intPtr != IntPtr.Zero));
+			return intPtr;
+		}
+
+		private void LogConfirmFolderWindowCompleted (string folderPath, string reason, int timeoutMs, Stopwatch stopwatch, int attempts, IntPtr explorerWindow)
+		{
+			_logger.Info ("ConfirmFolderWindow completed. folder=" + folderPath + ", reason=" + (reason ?? string.Empty) + ", timeoutMs=" + timeoutMs + ", attempts=" + attempts + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds) + ", windowFound=" + (explorerWindow != IntPtr.Zero));
+		}
+
+		private DateTime GetUtcNow ()
+		{
+			if (Hooks != null && Hooks.UtcNow != null) {
+				return Hooks.UtcNow ();
+			}
+			return DateTime.UtcNow;
+		}
+
+		private void Sleep (int milliseconds)
+		{
+			if (Hooks != null && Hooks.Sleep != null) {
+				Hooks.Sleep (milliseconds);
+				return;
+			}
+			Thread.Sleep (milliseconds);
 		}
 
 		private static void ReleaseComObject (object comObject)

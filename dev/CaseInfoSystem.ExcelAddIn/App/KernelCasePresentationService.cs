@@ -188,6 +188,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("ShowCreatedCase deferred presentation started. elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 				_transientPaneSuppressionService.ReleaseWorkbook (workbook, "KernelCasePresentationService.ShowCreatedCase");
 				flag = true;
+				EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
 				Globals.ThisAddIn.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("ShowCreatedCase post-release activation suppression prepared. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady (workbook, "KernelCasePresentationService.ShowCreatedCase.PostRelease");
@@ -211,6 +212,43 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						_logger.Error ("ShowCreatedCase deferred cleanup failed.", exception2);
 					}
 				}
+			}
+		}
+
+		private void EnsureWorkbookWindowVisibleBeforeReadyShow (Workbook workbook, Stopwatch stopwatch)
+		{
+			if (workbook == null) {
+				return;
+			}
+			string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
+			try {
+				Window window = _excelInteropService.GetFirstVisibleWindow (workbook);
+				if (window == null) {
+					int count = workbook.Windows.Count;
+					if (count > 0) {
+						window = workbook.Windows [1];
+					}
+				}
+				if (window == null) {
+					_logger.Warn ("ShowCreatedCase workbook window visibility ensure skipped because workbook window could not be resolved. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+					return;
+				}
+				bool isVisible;
+				try {
+					isVisible = window.Visible;
+				} catch (Exception exception) {
+					_logger.Error ("ShowCreatedCase workbook window visibility ensure failed while reading Window.Visible. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds), exception);
+					return;
+				}
+				if (isVisible) {
+					_logger.Info ("ShowCreatedCase workbook window visibility ensure skipped because workbook window is already visible. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+					return;
+				}
+				_logger.Info ("ShowCreatedCase workbook window visibility ensure start. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				window.Visible = true;
+				_logger.Info ("ShowCreatedCase workbook window made visible before ready-show. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+			} catch (Exception exception2) {
+				_logger.Error ("ShowCreatedCase workbook window visibility ensure failed. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds), exception2);
 			}
 		}
 

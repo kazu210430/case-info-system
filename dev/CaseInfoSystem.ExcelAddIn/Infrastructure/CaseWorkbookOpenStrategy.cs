@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using Excel = Microsoft.Office.Interop.Excel;
 
 
@@ -10,12 +11,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     internal sealed class CaseWorkbookOpenStrategy
     {
         private const string SharedHiddenExcelEnvironmentVariableName = "CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL";
+        private const string HiddenApplicationCacheEnvironmentVariableName = "CASEINFO_EXPERIMENT_HIDDEN_APP_CACHE";
+        private const string HiddenApplicationCacheIdleSecondsEnvironmentVariableName = "CASEINFO_EXPERIMENT_HIDDEN_APP_CACHE_IDLE_SECONDS";
         private const string LegacyHiddenRouteName = "legacy-isolated";
         private const string SharedHiddenRouteName = "experimental-shared";
         private const string CreatedCaseDisplayHiddenRouteName = "created-case-display";
+        private const string HiddenApplicationCacheRouteName = "app-cache";
+        private const string HiddenApplicationCacheBypassInUseRouteName = "app-cache-bypass-inuse";
+        private const int DefaultHiddenApplicationCacheIdleSeconds = 15;
         private readonly Excel.Application _application;
         private readonly WorkbookRoleResolver _workbookRoleResolver;
         private readonly Logger _logger;
+        private readonly object _hiddenApplicationCacheSync = new object();
+        private CachedHiddenApplicationSlot _cachedHiddenApplication;
+        private Timer _hiddenApplicationIdleTimer;
 
         internal CaseWorkbookOpenStrategy(Excel.Application application, WorkbookRoleResolver workbookRoleResolver, Logger logger)
         {
@@ -31,7 +40,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal void ShutdownLegacyHiddenApplication()
         {
-            // legacy-isolated no longer owns a dedicated hidden Excel instance.
+            CachedHiddenApplicationSlot slotToDispose = null;
+            lock (_hiddenApplicationCacheSync)
+            {
+                DisposeHiddenApplicationIdleTimerUnlocked();
+                slotToDispose = _cachedHiddenApplication;
+                _cachedHiddenApplication = null;
+            }
+
+            DisposeCachedHiddenApplicationSlot(slotToDispose, "shutdown-cleanup");
         }
 
         internal Excel.Workbook OpenVisibleWorkbook(string caseWorkbookPath)
@@ -80,6 +97,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         internal HiddenCaseWorkbookSession OpenHiddenWorkbook(string caseWorkbookPath)
         {
             _logger.Info("Case workbook open hidden requested. path=" + (caseWorkbookPath ?? string.Empty));
+            if (IsHiddenApplicationCacheEnabled())
+            {
+                return OpenHiddenWorkbookWithApplicationCache(caseWorkbookPath);
+            }
+
             if (!IsSharedHiddenExcelEnabled())
             {
                 _logger.Info("Case workbook hidden route selected. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + LegacyHiddenRouteName);
@@ -88,6 +110,141 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             _logger.Info("Case workbook hidden route selected. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName);
             return OpenHiddenWorkbookWithSharedApplication(caseWorkbookPath);
+        }
+
+        private HiddenCaseWorkbookSession OpenHiddenWorkbookWithApplicationCache(string caseWorkbookPath)
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            Excel.Application hiddenApplication = null;
+            Excel.Workbook workbook = null;
+            bool reusedApplication = false;
+            bool bypassBecauseInUse = false;
+            CachedHiddenApplicationSlot expiredSlotToDispose = null;
+
+            lock (_hiddenApplicationCacheSync)
+            {
+                EnsureHiddenApplicationIdleTimerUnlocked();
+                expiredSlotToDispose = CleanupExpiredCachedHiddenApplicationUnlocked("OpenHiddenWorkbook.Acquire");
+
+                if (_cachedHiddenApplication != null)
+                {
+                    if (_cachedHiddenApplication.IsInUse)
+                    {
+                        bypassBecauseInUse = true;
+                    }
+                    else if (!IsCachedHiddenApplicationHealthyUnlocked(_cachedHiddenApplication))
+                    {
+                        _logger.Warn(
+                            "hidden-app-cache unhealthy. reason=acquire-health-check-failed, appHwnd="
+                            + SafeApplicationHwnd(_cachedHiddenApplication.Application));
+                        DisposeCachedHiddenApplicationSlotUnlocked("acquire-unhealthy");
+                    }
+                    else
+                    {
+                        hiddenApplication = _cachedHiddenApplication.Application;
+                        _cachedHiddenApplication.IsInUse = true;
+                        _cachedHiddenApplication.IdleSinceUtc = DateTime.MinValue;
+                        StopHiddenApplicationIdleTimerUnlocked();
+                        reusedApplication = true;
+                    }
+                }
+
+                if (!bypassBecauseInUse && hiddenApplication == null)
+                {
+                    hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, HiddenApplicationCacheRouteName, stopwatch);
+                    _cachedHiddenApplication = new CachedHiddenApplicationSlot(hiddenApplication)
+                    {
+                        IsInUse = true,
+                        IsOwnedByCache = true,
+                        IdleSinceUtc = DateTime.MinValue
+                    };
+                }
+            }
+
+            DisposeCachedHiddenApplicationSlot(expiredSlotToDispose, "OpenHiddenWorkbook.Acquire");
+
+            if (bypassBecauseInUse)
+            {
+                _logger.Info(
+                    "hidden-app-cache bypassed because in-use. path="
+                    + (caseWorkbookPath ?? string.Empty)
+                    + ", route="
+                    + HiddenApplicationCacheBypassInUseRouteName
+                    + ", elapsedMs="
+                    + stopwatch.ElapsedMilliseconds.ToString());
+                return OpenDedicatedHiddenWorkbookSession(caseWorkbookPath, HiddenApplicationCacheBypassInUseRouteName, saveBeforeClose: false);
+            }
+
+            _logger.Info(
+                "hidden-app-cache "
+                + (reusedApplication ? "reused" : "created")
+                + ". path="
+                + (caseWorkbookPath ?? string.Empty)
+                + ", route="
+                + HiddenApplicationCacheRouteName
+                + ", appHwnd="
+                + SafeApplicationHwnd(hiddenApplication)
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
+
+            try
+            {
+                PrepareHiddenApplicationForUse(hiddenApplication);
+                workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
+                HideOpenedWorkbookWindow(workbook);
+                _logger.Info(
+                    "Case workbook hidden Excel session opened. path="
+                    + (caseWorkbookPath ?? string.Empty)
+                    + ", route="
+                    + HiddenApplicationCacheRouteName
+                    + ", appHwnd="
+                    + SafeApplicationHwnd(hiddenApplication)
+                    + ", elapsedMs="
+                    + stopwatch.ElapsedMilliseconds.ToString());
+                return new HiddenCaseWorkbookSession(
+                    hiddenApplication,
+                    workbook,
+                    HiddenApplicationCacheRouteName,
+                    closeAction: () =>
+                    {
+                        Stopwatch closeStopwatch = Stopwatch.StartNew();
+                        _logger.Info(
+                            "Case workbook hidden session close entered. path="
+                            + (caseWorkbookPath ?? string.Empty)
+                            + ", route="
+                            + HiddenApplicationCacheRouteName);
+                        CleanupCachedHiddenSession(
+                            caseWorkbookPath,
+                            HiddenApplicationCacheRouteName,
+                            closeStopwatch,
+                            hiddenApplication,
+                            workbook,
+                            markPoisoned: false);
+                    },
+                    abortAction: () =>
+                    {
+                        CleanupCachedHiddenSession(
+                            caseWorkbookPath,
+                            HiddenApplicationCacheRouteName,
+                            stopwatch,
+                            hiddenApplication,
+                            workbook,
+                            markPoisoned: true);
+                    });
+            }
+            catch
+            {
+                TryCloseWorkbookWithoutSaving(workbook);
+                ReleaseComObject(workbook);
+                CleanupCachedHiddenSession(
+                    caseWorkbookPath,
+                    HiddenApplicationCacheRouteName,
+                    stopwatch,
+                    hiddenApplication,
+                    workbook: null,
+                    markPoisoned: true);
+                throw;
+            }
         }
 
         internal Excel.Workbook OpenHiddenForCaseDisplay(string caseWorkbookPath)
@@ -160,60 +317,29 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private HiddenCaseWorkbookSession OpenHiddenWorkbookWithDedicatedApplication(string caseWorkbookPath)
         {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            Excel.Application hiddenApplication = null;
-            Excel.Workbook workbook = null;
-            try
-            {
-                hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, LegacyHiddenRouteName, stopwatch);
-                workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
-                HideOpenedWorkbookWindow(workbook);
-                _logger.Info(
-                    "Case workbook hidden Excel session opened. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + LegacyHiddenRouteName
-                    + ", appHwnd="
-                    + SafeApplicationHwnd(hiddenApplication)
-                    + ", elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
-                return new HiddenCaseWorkbookSession(
-                    hiddenApplication,
-                    workbook,
-                    LegacyHiddenRouteName,
-                    closeAction: () =>
-                    {
-                        Stopwatch closeStopwatch = Stopwatch.StartNew();
-                        _logger.Info("Case workbook hidden session close entered. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + LegacyHiddenRouteName);
-                        CleanupDedicatedHiddenSession(caseWorkbookPath, LegacyHiddenRouteName, closeStopwatch, hiddenApplication, workbook, saveBeforeClose: false);
-                    },
-                    abortAction: () =>
-                    {
-                        CleanupDedicatedHiddenSession(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
-                    });
-            }
-            catch
-            {
-                CleanupDedicatedHiddenSession(caseWorkbookPath, LegacyHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
-                throw;
-            }
+            return OpenDedicatedHiddenWorkbookSession(caseWorkbookPath, LegacyHiddenRouteName, saveBeforeClose: false);
         }
 
         private HiddenCaseWorkbookSession OpenHiddenWorkbookWithSharedApplication(string caseWorkbookPath)
+        {
+            return OpenDedicatedHiddenWorkbookSession(caseWorkbookPath, SharedHiddenRouteName, saveBeforeClose: true);
+        }
+
+        private HiddenCaseWorkbookSession OpenDedicatedHiddenWorkbookSession(string caseWorkbookPath, string routeName, bool saveBeforeClose)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
             Excel.Application hiddenApplication = null;
             Excel.Workbook workbook = null;
             try
             {
-                hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, SharedHiddenRouteName, stopwatch);
+                hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, routeName, stopwatch);
                 workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
                 HideOpenedWorkbookWindow(workbook);
                 _logger.Info(
                     "Case workbook hidden Excel session opened. path="
                     + (caseWorkbookPath ?? string.Empty)
                     + ", route="
-                    + SharedHiddenRouteName
+                    + routeName
                     + ", appHwnd="
                     + SafeApplicationHwnd(hiddenApplication)
                     + ", elapsedMs="
@@ -221,21 +347,21 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return new HiddenCaseWorkbookSession(
                     hiddenApplication,
                     workbook,
-                    SharedHiddenRouteName,
+                    routeName,
                     closeAction: () =>
                     {
                         Stopwatch closeStopwatch = Stopwatch.StartNew();
-                        _logger.Info("Case workbook hidden session close entered. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName);
-                        CleanupDedicatedHiddenSession(caseWorkbookPath, SharedHiddenRouteName, closeStopwatch, hiddenApplication, workbook, saveBeforeClose: true);
+                        _logger.Info("Case workbook hidden session close entered. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + routeName);
+                        CleanupDedicatedHiddenSession(caseWorkbookPath, routeName, closeStopwatch, hiddenApplication, workbook, saveBeforeClose);
                     },
                     abortAction: () =>
                     {
-                        CleanupDedicatedHiddenSession(caseWorkbookPath, SharedHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
+                        CleanupDedicatedHiddenSession(caseWorkbookPath, routeName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                     });
             }
             catch
             {
-                CleanupDedicatedHiddenSession(caseWorkbookPath, SharedHiddenRouteName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
+                CleanupDedicatedHiddenSession(caseWorkbookPath, routeName, stopwatch, hiddenApplication, workbook, saveBeforeClose: false);
                 throw;
             }
         }
@@ -245,6 +371,24 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             string value = Environment.GetEnvironmentVariable(SharedHiddenExcelEnvironmentVariableName);
             return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsHiddenApplicationCacheEnabled()
+        {
+            string value = Environment.GetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName);
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int ResolveHiddenApplicationCacheIdleSeconds()
+        {
+            string value = Environment.GetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName);
+            if (int.TryParse(value, out int parsed) && parsed > 0)
+            {
+                return parsed;
+            }
+
+            return DefaultHiddenApplicationCacheIdleSeconds;
         }
 
         private void RestoreSharedApplicationState(string caseWorkbookPath, string routeName, Stopwatch stopwatch, bool screenUpdating, bool enableEvents, bool displayAlerts)
@@ -274,16 +418,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
+        private static void PrepareHiddenApplicationForUse(Excel.Application hiddenApplication)
+        {
+            if (hiddenApplication == null)
+            {
+                return;
+            }
+
+            hiddenApplication.Visible = false;
+            hiddenApplication.DisplayAlerts = false;
+            hiddenApplication.ScreenUpdating = false;
+            hiddenApplication.UserControl = false;
+            hiddenApplication.EnableEvents = false;
+        }
+
         private Excel.Application CreateDedicatedHiddenApplication(string caseWorkbookPath, string routeName, Stopwatch stopwatch)
         {
             Excel.Application hiddenApplication = new Excel.Application();
             try
             {
-                hiddenApplication.Visible = false;
-                hiddenApplication.DisplayAlerts = false;
-                hiddenApplication.ScreenUpdating = false;
-                hiddenApplication.UserControl = false;
-                hiddenApplication.EnableEvents = false;
+                PrepareHiddenApplicationForUse(hiddenApplication);
                 _logger.Info(
                     "Case workbook dedicated hidden Excel created. path="
                     + (caseWorkbookPath ?? string.Empty)
@@ -328,6 +482,115 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
+        private void CleanupCachedHiddenSession(string caseWorkbookPath, string routeName, Stopwatch stopwatch, Excel.Application application, Excel.Workbook workbook, bool markPoisoned)
+        {
+            bool closeFailed = false;
+            try
+            {
+                if (workbook != null)
+                {
+                    if (markPoisoned)
+                    {
+                        TryCloseWorkbookWithoutSaving(workbook);
+                    }
+                    else
+                    {
+                        _logger.Info("Case workbook hidden session workbook close starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                        workbook.Close(false, Type.Missing, Type.Missing);
+                        _logger.Info("Case workbook hidden session workbook close completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                closeFailed = true;
+                markPoisoned = true;
+                _logger.Error("CleanupCachedHiddenSession workbook close failed.", ex);
+            }
+            finally
+            {
+                ReleaseComObject(workbook);
+            }
+
+            if (markPoisoned || closeFailed)
+            {
+                MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
+                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                return;
+            }
+
+            if (TryReturnCachedHiddenApplicationToIdle(application, caseWorkbookPath, routeName, stopwatch))
+            {
+                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=True, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                return;
+            }
+
+            MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
+            _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+        }
+
+        private bool TryReturnCachedHiddenApplicationToIdle(Excel.Application application, string caseWorkbookPath, string routeName, Stopwatch stopwatch)
+        {
+            lock (_hiddenApplicationCacheSync)
+            {
+                if (_cachedHiddenApplication == null
+                    || !ReferenceEquals(_cachedHiddenApplication.Application, application)
+                    || !_cachedHiddenApplication.IsOwnedByCache)
+                {
+                    return false;
+                }
+
+                if (!IsHiddenApplicationCacheEnabled())
+                {
+                    _logger.Info("hidden-app-cache disabled before return-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application));
+                    _cachedHiddenApplication.IsPoisoned = true;
+                    return false;
+                }
+
+                try
+                {
+                    PrepareHiddenApplicationForUse(application);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("hidden-app-cache failed to reapply hidden state.", ex);
+                    _cachedHiddenApplication.IsPoisoned = true;
+                    return false;
+                }
+
+                if (!IsCachedHiddenApplicationHealthyUnlocked(_cachedHiddenApplication))
+                {
+                    _cachedHiddenApplication.IsPoisoned = true;
+                    _logger.Warn("hidden-app-cache unhealthy. reason=return-to-idle-health-check-failed, appHwnd=" + SafeApplicationHwnd(application));
+                    return false;
+                }
+
+                _cachedHiddenApplication.IsInUse = false;
+                _cachedHiddenApplication.IdleSinceUtc = DateTime.UtcNow;
+                ScheduleHiddenApplicationIdleTimerUnlocked();
+                _logger.Info("hidden-app-cache returned-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application) + ", idleTimeoutSeconds=" + ResolveHiddenApplicationCacheIdleSeconds().ToString() + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                return true;
+            }
+        }
+
+        private void MarkCachedHiddenApplicationPoisoned(Excel.Application application, string caseWorkbookPath, string routeName, Stopwatch stopwatch)
+        {
+            CachedHiddenApplicationSlot slotToDispose = null;
+            lock (_hiddenApplicationCacheSync)
+            {
+                if (_cachedHiddenApplication != null && ReferenceEquals(_cachedHiddenApplication.Application, application))
+                {
+                    _cachedHiddenApplication.IsPoisoned = true;
+                    _logger.Warn("hidden-app-cache poisoned. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                    slotToDispose = _cachedHiddenApplication;
+                    _cachedHiddenApplication = null;
+                    StopHiddenApplicationIdleTimerUnlocked();
+                }
+            }
+
+            DisposeCachedHiddenApplicationSlot(slotToDispose, "poisoned");
+        }
+
         private void TryCloseWorkbookWithoutSaving(Excel.Workbook workbook)
         {
             if (workbook == null)
@@ -359,6 +622,169 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             catch (Exception ex)
             {
                 _logger.Error("TryQuitApplication failed.", ex);
+            }
+        }
+
+        private void HiddenApplicationIdleTimer_Tick(object sender, EventArgs e)
+        {
+            if (!IsHiddenApplicationCacheEnabled())
+            {
+                CachedHiddenApplicationSlot slotToDispose = null;
+                lock (_hiddenApplicationCacheSync)
+                {
+                    slotToDispose = _cachedHiddenApplication;
+                    _cachedHiddenApplication = null;
+                    DisposeHiddenApplicationIdleTimerUnlocked();
+                }
+
+                DisposeCachedHiddenApplicationSlot(slotToDispose, "feature-flag-disabled");
+                return;
+            }
+
+            CleanupExpiredCachedHiddenApplication("idle-timeout");
+        }
+
+        private void CleanupExpiredCachedHiddenApplication(string reason)
+        {
+            CachedHiddenApplicationSlot slotToDispose = null;
+            lock (_hiddenApplicationCacheSync)
+            {
+                slotToDispose = CleanupExpiredCachedHiddenApplicationUnlocked(reason);
+            }
+
+            DisposeCachedHiddenApplicationSlot(slotToDispose, reason);
+        }
+
+        private CachedHiddenApplicationSlot CleanupExpiredCachedHiddenApplicationUnlocked(string reason)
+        {
+            if (_cachedHiddenApplication == null)
+            {
+                StopHiddenApplicationIdleTimerUnlocked();
+                return null;
+            }
+
+            if (_cachedHiddenApplication.IsInUse)
+            {
+                StopHiddenApplicationIdleTimerUnlocked();
+                return null;
+            }
+
+            if (_cachedHiddenApplication.IsPoisoned)
+            {
+                CachedHiddenApplicationSlot poisonedSlot = _cachedHiddenApplication;
+                _cachedHiddenApplication = null;
+                StopHiddenApplicationIdleTimerUnlocked();
+                return poisonedSlot;
+            }
+
+            DateTime idleSinceUtc = _cachedHiddenApplication.IdleSinceUtc;
+            if (idleSinceUtc == DateTime.MinValue)
+            {
+                idleSinceUtc = DateTime.UtcNow;
+                _cachedHiddenApplication.IdleSinceUtc = idleSinceUtc;
+            }
+
+            if ((DateTime.UtcNow - idleSinceUtc).TotalSeconds < ResolveHiddenApplicationCacheIdleSeconds())
+            {
+                return null;
+            }
+
+            CachedHiddenApplicationSlot expiredSlot = _cachedHiddenApplication;
+            _cachedHiddenApplication = null;
+            StopHiddenApplicationIdleTimerUnlocked();
+            _logger.Info("hidden-app-cache timed-out. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(expiredSlot.Application));
+            return expiredSlot;
+        }
+
+        private void DisposeCachedHiddenApplicationSlot(CachedHiddenApplicationSlot slot, string reason)
+        {
+            if (slot == null)
+            {
+                return;
+            }
+
+            if (!slot.IsOwnedByCache)
+            {
+                _logger.Warn("hidden-app-cache cleanup skipped because slot is not cache-owned. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(slot.Application));
+                return;
+            }
+
+            TryQuitApplication(slot.Application);
+            ReleaseComObject(slot.Application);
+            _logger.Info("hidden-app-cache discarded. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(slot.Application));
+        }
+
+        private void DisposeCachedHiddenApplicationSlotUnlocked(string reason)
+        {
+            CachedHiddenApplicationSlot slot = _cachedHiddenApplication;
+            _cachedHiddenApplication = null;
+            StopHiddenApplicationIdleTimerUnlocked();
+            DisposeCachedHiddenApplicationSlot(slot, reason);
+        }
+
+        private void EnsureHiddenApplicationIdleTimerUnlocked()
+        {
+            if (_hiddenApplicationIdleTimer != null)
+            {
+                return;
+            }
+
+            _hiddenApplicationIdleTimer = new Timer();
+            _hiddenApplicationIdleTimer.Interval = 1000;
+            _hiddenApplicationIdleTimer.Tick += HiddenApplicationIdleTimer_Tick;
+        }
+
+        private void ScheduleHiddenApplicationIdleTimerUnlocked()
+        {
+            EnsureHiddenApplicationIdleTimerUnlocked();
+            _hiddenApplicationIdleTimer.Stop();
+            _hiddenApplicationIdleTimer.Start();
+        }
+
+        private void StopHiddenApplicationIdleTimerUnlocked()
+        {
+            if (_hiddenApplicationIdleTimer == null)
+            {
+                return;
+            }
+
+            _hiddenApplicationIdleTimer.Stop();
+        }
+
+        private void DisposeHiddenApplicationIdleTimerUnlocked()
+        {
+            if (_hiddenApplicationIdleTimer == null)
+            {
+                return;
+            }
+
+            _hiddenApplicationIdleTimer.Stop();
+            _hiddenApplicationIdleTimer.Dispose();
+            _hiddenApplicationIdleTimer = null;
+        }
+
+        private bool IsCachedHiddenApplicationHealthyUnlocked(CachedHiddenApplicationSlot slot)
+        {
+            if (slot == null || slot.Application == null || slot.IsPoisoned)
+            {
+                return false;
+            }
+
+            try
+            {
+                Excel.Application application = slot.Application;
+                return application.Workbooks != null
+                    && application.Workbooks.Count == 0
+                    && application.Ready
+                    && !application.Visible
+                    && !application.DisplayAlerts
+                    && !application.ScreenUpdating
+                    && !application.EnableEvents
+                    && !application.UserControl;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -601,6 +1027,24 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 action();
                 _closed = true;
             }
+        }
+
+        private sealed class CachedHiddenApplicationSlot
+        {
+            internal CachedHiddenApplicationSlot(Excel.Application application)
+            {
+                Application = application;
+            }
+
+            internal Excel.Application Application { get; }
+
+            internal bool IsInUse { get; set; }
+
+            internal bool IsPoisoned { get; set; }
+
+            internal bool IsOwnedByCache { get; set; }
+
+            internal DateTime IdleSinceUtc { get; set; }
         }
     }
 }

@@ -258,7 +258,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
             var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, ExcelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, TransientPaneSuppressionService, _logger);
             var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, TransientPaneSuppressionService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
-            KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCaseOpenPromptService, ExcelInteropService, _logger);
+            KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCaseOpenPromptService, createdCasePresentationWaitService, ExcelInteropService, _logger);
             KernelUserDataReflectionService = new KernelUserDataReflectionService(
                 KernelWorkbookService,
                 ExcelInteropService,

@@ -96,7 +96,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		internal KernelCaseCreationResult OpenCreatedCase (KernelCaseCreationResult result)
+		internal KernelCaseCreationResult OpenCreatedCase (KernelCaseCreationResult result, CreatedCasePresentationWaitService.WaitSession existingWaitSession = null)
 		{
 			if (result == null) {
 				throw new ArgumentNullException ("result");
@@ -109,8 +109,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			Stopwatch stopwatch = Stopwatch.StartNew ();
 			Workbook workbook = null;
-			CreatedCasePresentationWaitService.WaitSession waitSession = _createdCasePresentationWaitService.ShowWaiting (stopwatch);
+			CreatedCasePresentationWaitService.WaitSession waitSession = existingWaitSession ?? _createdCasePresentationWaitService.ShowWaiting (stopwatch);
 			try {
+				if (existingWaitSession != null) {
+					_logger.Info ("Created CASE presentation wait UI reused. elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				}
 				TryOpenCaseFolderBeforeShowingCase (result.CaseFolderPath, result.CaseWorkbookPath);
 				_caseWorkbookOpenStrategy.RegisterKnownCasePath (result.CaseWorkbookPath);
 				_transientPaneSuppressionService.SuppressPath (result.CaseWorkbookPath, "KernelCasePresentationService.OpenCreatedCase");

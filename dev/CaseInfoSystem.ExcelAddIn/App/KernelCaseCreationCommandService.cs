@@ -22,17 +22,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly CreatedCaseOpenPromptService _createdCaseOpenPromptService;
 
+		private readonly CreatedCasePresentationWaitService _createdCasePresentationWaitService;
+
 		private readonly ExcelInteropService _excelInteropService;
 
 		private readonly Logger _logger;
 
-		internal KernelCaseCreationCommandService (KernelWorkbookService kernelWorkbookService, KernelCaseCreationService kernelCaseCreationService, KernelCasePathService kernelCasePathService, KernelCasePresentationService kernelCasePresentationService, CreatedCaseOpenPromptService createdCaseOpenPromptService, ExcelInteropService excelInteropService, Logger logger)
+		internal KernelCaseCreationCommandService (KernelWorkbookService kernelWorkbookService, KernelCaseCreationService kernelCaseCreationService, KernelCasePathService kernelCasePathService, KernelCasePresentationService kernelCasePresentationService, CreatedCaseOpenPromptService createdCaseOpenPromptService, CreatedCasePresentationWaitService createdCasePresentationWaitService, ExcelInteropService excelInteropService, Logger logger)
 		{
 			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
 			_kernelCaseCreationService = kernelCaseCreationService ?? throw new ArgumentNullException ("kernelCaseCreationService");
 			_kernelCasePathService = kernelCasePathService ?? throw new ArgumentNullException ("kernelCasePathService");
 			_kernelCasePresentationService = kernelCasePresentationService ?? throw new ArgumentNullException ("kernelCasePresentationService");
 			_createdCaseOpenPromptService = createdCaseOpenPromptService ?? throw new ArgumentNullException ("createdCaseOpenPromptService");
+			_createdCasePresentationWaitService = createdCasePresentationWaitService ?? throw new ArgumentNullException ("createdCasePresentationWaitService");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
@@ -93,9 +96,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private KernelCaseCreationResult Execute (KernelCaseCreationRequest request)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
+			CreatedCasePresentationWaitService.WaitSession waitSession = null;
+			bool waitSessionTransferred = false;
 			try {
 				ValidateRequest (request);
 				_logger.Info ("Kernel case command validated. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				if (ShouldPromptToOpenCreatedCase (request.Mode)) {
+					waitSession = _createdCasePresentationWaitService.ShowWaiting (stopwatch);
+				}
 				KernelCaseCreationResult kernelCaseCreationResult = _kernelCaseCreationService.CreateCase (request);
 				if (!kernelCaseCreationResult.Success) {
 					return kernelCaseCreationResult;
@@ -106,21 +114,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("Kernel case command completed without open prompt. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 					return kernelCaseCreationResult;
 				}
-				return CompleteInteractiveOpenFlow (kernelCaseCreationResult, stopwatch);
+				waitSessionTransferred = true;
+				KernelCaseCreationResult kernelCaseCreationResult2 = CompleteInteractiveOpenFlow (kernelCaseCreationResult, stopwatch, waitSession);
+				waitSession = null;
+				return kernelCaseCreationResult2;
 			} catch (Exception exception) {
 				_logger.Error ("Kernel case creation failed.", exception);
 				return BuildFailure ("案件作成に失敗しました。");
 			}
+			finally {
+				if (!waitSessionTransferred) {
+					CloseWaitSession (waitSession, restoreOwner: true);
+				}
+			}
 		}
 
-		private KernelCaseCreationResult CompleteInteractiveOpenFlow (KernelCaseCreationResult result, Stopwatch stopwatch)
+		private KernelCaseCreationResult CompleteInteractiveOpenFlow (KernelCaseCreationResult result, Stopwatch stopwatch, CreatedCasePresentationWaitService.WaitSession waitSession)
 		{
 			if (result == null) {
 				throw new ArgumentNullException ("result");
 			}
 			_logger.Info ("Kernel case auto-open selected. mode=" + result.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			try {
-				KernelCaseCreationResult kernelCaseCreationResult = _kernelCasePresentationService.OpenCreatedCase (result);
+				KernelCaseCreationResult kernelCaseCreationResult = _kernelCasePresentationService.OpenCreatedCase (result, waitSession);
 				kernelCaseCreationResult.ShouldCloseKernelHome = true;
 				_logger.Info ("Kernel case presentation complete. mode=" + kernelCaseCreationResult.Mode.ToString () + ", success=" + kernelCaseCreationResult.Success + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return kernelCaseCreationResult;
@@ -202,6 +218,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				UserMessage = (userMessage ?? string.Empty),
 				ShouldCloseKernelHome = false
 			};
+		}
+
+		private static void CloseWaitSession (CreatedCasePresentationWaitService.WaitSession waitSession, bool restoreOwner)
+		{
+			if (waitSession == null) {
+				return;
+			}
+			if (restoreOwner) {
+				waitSession.CloseAndRestoreOwner ();
+			} else {
+				waitSession.CloseForSuccessfulPresentation ();
+			}
+			waitSession.Dispose ();
 		}
 	}
 }

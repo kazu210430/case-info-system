@@ -161,6 +161,11 @@ namespace Microsoft.Office.Interop.Excel
         {
             if (Application != null)
             {
+                if (Windows.Count == 0)
+                {
+                    AttachWindow(new Window { Visible = false });
+                }
+
                 Application.ActiveWorkbook = this;
                 Application.ActiveWindow = Windows.Count > 0 ? Windows[1] : null;
             }
@@ -169,13 +174,29 @@ namespace Microsoft.Office.Interop.Excel
         public Window NewWindow()
         {
             var window = new Window();
-            Windows.Add(window);
+            AttachWindow(window);
             if (Application != null)
             {
                 Application.ActiveWorkbook = this;
                 Application.ActiveWindow = window;
             }
             return window;
+        }
+
+        private void AttachWindow(Window window)
+        {
+            if (window == null)
+            {
+                return;
+            }
+
+            window.Parent = this;
+            if (string.IsNullOrWhiteSpace(window.Caption))
+            {
+                window.Caption = Name;
+            }
+
+            Windows.Add(window);
         }
     }
 
@@ -196,7 +217,17 @@ namespace Microsoft.Office.Interop.Excel
 
         public int Hwnd { get; set; }
 
+        public string Caption { get; set; } = string.Empty;
+
+        public object Parent { get; set; }
+
         public bool Activated { get; private set; }
+
+        public bool Closed { get; private set; }
+
+        public int CloseCallCount { get; private set; }
+
+        public Action CloseBehavior { get; set; }
 
         public bool FreezePanes { get; set; }
 
@@ -213,6 +244,26 @@ namespace Microsoft.Office.Interop.Excel
         public void Activate()
         {
             Activated = true;
+        }
+
+        public void Close()
+        {
+            CloseCallCount++;
+            if (CloseBehavior != null)
+            {
+                CloseBehavior();
+            }
+
+            Closed = true;
+            if (Parent is Workbook workbook)
+            {
+                workbook.Windows.Remove(this);
+                if (workbook.Application != null && ReferenceEquals(workbook.Application.ActiveWindow, this))
+                {
+                    workbook.Application.ActiveWindow = workbook.Windows.Count > 0 ? workbook.Windows[1] : null;
+                    workbook.Application.ActiveWorkbook = workbook.Windows.Count > 0 ? workbook : null;
+                }
+            }
         }
     }
 

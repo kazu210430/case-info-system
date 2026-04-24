@@ -137,6 +137,65 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
+        internal void LogWorkbookWindowSnapshot(Excel.Workbook workbook, string reason, string stage)
+        {
+        }
+
+        internal bool NormalizeWorkbookWindows(Excel.Workbook workbook, string reason, bool ensurePrimaryVisible, bool activatePrimary, bool bringToFront)
+        {
+            if (workbook == null)
+            {
+                return false;
+            }
+
+            Excel.Window primaryWindow = null;
+            if (_excelInteropService != null
+                && string.Equals(_excelInteropService.GetWorkbookFullName(_excelInteropService.GetActiveWorkbook()), workbook.FullName, StringComparison.OrdinalIgnoreCase))
+            {
+                primaryWindow = _excelInteropService.GetActiveWindow();
+            }
+
+            if (primaryWindow == null)
+            {
+                primaryWindow = _excelInteropService == null
+                    ? null
+                    : _excelInteropService.GetFirstVisibleWindow(workbook);
+            }
+
+            if (primaryWindow == null && workbook.Windows.Count > 0)
+            {
+                primaryWindow = workbook.Windows[1];
+            }
+
+            for (int index = workbook.Windows.Count; index >= 1; index--)
+            {
+                Excel.Window window = workbook.Windows[index];
+                if (window == null || ReferenceEquals(window, primaryWindow))
+                {
+                    continue;
+                }
+
+                window.Close();
+            }
+
+            if (primaryWindow == null)
+            {
+                return false;
+            }
+
+            if (ensurePrimaryVisible)
+            {
+                primaryWindow.Visible = true;
+            }
+
+            if (activatePrimary)
+            {
+                primaryWindow.Activate();
+            }
+
+            return true;
+        }
+
         internal bool TryRestoreMainWindow(bool bringToFront) => true;
 
         internal bool TryRestoreWorkbookWindow(Excel.Workbook workbook, bool bringToFront) => true;
@@ -191,11 +250,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     window = _excelInteropService.GetActiveWindow();
                 }
-            }
-
-            if (window == null && allowWindowCreation)
-            {
-                window = workbook.NewWindow();
             }
 
             if (window == null)

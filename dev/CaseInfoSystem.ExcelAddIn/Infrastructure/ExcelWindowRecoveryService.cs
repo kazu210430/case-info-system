@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -80,6 +81,157 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 ensureWindowVisible: false,
                 activateWindow: false,
                 allowWindowCreation: false);
+        }
+
+        internal void LogWorkbookWindowSnapshot(Excel.Workbook workbook, string reason, string stage)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
+            string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
+            _logger.Info(
+                "Workbook window snapshot. stage="
+                + (stage ?? string.Empty)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + (workbookFullName ?? string.Empty)
+                + ", applicationWorkbooks.Count="
+                + GetApplicationWorkbookCount().ToString(CultureInfo.InvariantCulture)
+                + ", applicationWindows.Count="
+                + GetApplicationWindowCount().ToString(CultureInfo.InvariantCulture)
+                + ", workbook.Windows.Count="
+                + GetWorkbookWindowCount(workbook).ToString(CultureInfo.InvariantCulture)
+                + ", activeWorkbook="
+                + SafeWorkbookFullName(_excelInteropService.GetActiveWorkbook())
+                + ", activeWindow="
+                + DescribeWindow(_excelInteropService.GetActiveWindow())
+                + ", workbookWindows="
+                + DescribeWorkbookWindows(workbook)
+                + ", applicationWindows="
+                + DescribeApplicationWindows(workbook, workbookFullName));
+        }
+
+        internal bool NormalizeWorkbookWindows(Excel.Workbook workbook, string reason, bool ensurePrimaryVisible, bool activatePrimary, bool bringToFront)
+        {
+            if (workbook == null)
+            {
+                return false;
+            }
+
+            string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
+            LogWorkbookWindowSnapshot(workbook, reason, "normalize-before");
+
+            Excel.Window primaryWindow = TryGetActiveWindowForWorkbook(workbookFullName);
+            if (primaryWindow == null)
+            {
+                primaryWindow = _excelInteropService.GetFirstVisibleWindow(workbook);
+            }
+
+            if (primaryWindow == null)
+            {
+                primaryWindow = ResolveWindow(workbook, reason + ".Normalize", workbookFullName, allowWindowCreation: false);
+            }
+
+            if (primaryWindow == null)
+            {
+                primaryWindow = TryGetFirstWorkbookWindow(workbook);
+            }
+
+            List<Excel.Window> siblingWindows = GetWorkbookWindowsSnapshot(workbook);
+            if (!ContainsWindow(siblingWindows, primaryWindow) && siblingWindows.Count > 0)
+            {
+                primaryWindow = siblingWindows[0];
+            }
+
+            int closedCount = 0;
+            int concealedCount = 0;
+            foreach (Excel.Window window in siblingWindows)
+            {
+                if (window == null || IsSameWindow(primaryWindow, window))
+                {
+                    continue;
+                }
+
+                if (TryCloseWindow(window))
+                {
+                    closedCount++;
+                    _logger.Info(
+                        "Workbook sibling window closed during normalization. reason="
+                        + (reason ?? string.Empty)
+                        + ", workbook="
+                        + (workbookFullName ?? string.Empty)
+                        + ", window="
+                        + DescribeWindow(window));
+                    continue;
+                }
+
+                if (TryConcealWindow(window))
+                {
+                    concealedCount++;
+                    _logger.Warn(
+                        "Workbook sibling window concealed because close was unavailable. reason="
+                        + (reason ?? string.Empty)
+                        + ", workbook="
+                        + (workbookFullName ?? string.Empty)
+                        + ", window="
+                        + DescribeWindow(window));
+                }
+            }
+
+            bool primaryRecovered = false;
+            if (primaryWindow != null)
+            {
+                if (ensurePrimaryVisible)
+                {
+                    EnsureWindowVisible(primaryWindow, reason + ".Normalize", workbookFullName);
+                }
+
+                EnsureWindowRestored(primaryWindow, reason + ".Normalize", workbookFullName);
+                if (activatePrimary)
+                {
+                    try
+                    {
+                        primaryWindow.Activate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(
+                            nameof(ExcelWindowRecoveryService),
+                            "NormalizeWorkbookWindows primary window activation failed. reason="
+                            + (reason ?? string.Empty)
+                            + ", workbook="
+                            + (workbookFullName ?? string.Empty)
+                            + ", message="
+                            + ex.Message);
+                    }
+                }
+
+                if (bringToFront && (ensurePrimaryVisible || SafeWindowVisibleValue(primaryWindow)))
+                {
+                    PromoteExcelWindow(primaryWindow, reason + ".Normalize", workbookFullName);
+                }
+
+                primaryRecovered = true;
+            }
+
+            LogWorkbookWindowSnapshot(workbook, reason, "normalize-after");
+            _logger.Info(
+                "Workbook window normalization evaluated. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + (workbookFullName ?? string.Empty)
+                + ", primaryWindow="
+                + DescribeWindow(primaryWindow)
+                + ", primaryRecovered="
+                + primaryRecovered.ToString()
+                + ", closedSiblingCount="
+                + closedCount.ToString(CultureInfo.InvariantCulture)
+                + ", concealedSiblingCount="
+                + concealedCount.ToString(CultureInfo.InvariantCulture));
+            return primaryRecovered;
         }
 
         private bool TryRecoverWorkbookWindowInternal(Excel.Workbook workbook, string reason, bool bringToFront, bool ensureWindowVisible, bool activateWindow, bool allowWindowCreation)
@@ -344,71 +496,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return activeWindow;
             }
 
-            if (!allowWindowCreation)
-            {
-                _logger.Warn(
-                    "ResolveWindow could not find an existing workbook window and skipped NewWindow. reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + (workbookFullName ?? string.Empty));
-                return null;
-            }
-
-            return TryRecreateWindow(workbook, reason, workbookFullName);
-        }
-
-        private Excel.Window TryRecreateWindow(Excel.Workbook workbook, string reason, string workbookFullName)
-        {
-            try
-            {
-                workbook.Activate();
-                if (workbook.Windows.Count > 0)
-                {
-                    _logger.Info(
-                        "Workbook window recreated by activation. reason="
-                        + (reason ?? string.Empty)
-                        + ", workbook="
-                        + (workbookFullName ?? string.Empty));
-                    return workbook.Windows[1];
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(
-                    nameof(ExcelWindowRecoveryService),
-                    "Workbook activation did not recreate a window. reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + (workbookFullName ?? string.Empty)
-                    + ", message="
-                    + ex.Message);
-            }
-
-            try
-            {
-                Excel.Window createdWindow = workbook.NewWindow();
-                if (createdWindow != null)
-                {
-                    _logger.Info(
-                        "Workbook window recreated by NewWindow. reason="
-                        + (reason ?? string.Empty)
-                        + ", workbook="
-                        + (workbookFullName ?? string.Empty)
-                        + ", window="
-                        + DescribeWindow(createdWindow));
-                    return createdWindow;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(
-                    "TryRecreateWindow failed. reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + (workbookFullName ?? string.Empty),
-                    ex);
-            }
-
+            _logger.Warn(
+                "ResolveWindow could not find an existing workbook window and NewWindow fallback is disabled. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + (workbookFullName ?? string.Empty)
+                + ", allowWindowCreation="
+                + allowWindowCreation.ToString());
             return null;
         }
 
@@ -723,6 +817,129 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 ReleaseComObject(windowsObject);
             }
+        }
+
+        private static bool IsSameWindow(Excel.Window left, Excel.Window right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return true;
+            }
+
+            if (left == null || right == null)
+            {
+                return false;
+            }
+
+            string leftHwnd = SafeWindowHwnd(left);
+            string rightHwnd = SafeWindowHwnd(right);
+            return !string.IsNullOrWhiteSpace(leftHwnd)
+                && string.Equals(leftHwnd, rightHwnd, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryCloseWindow(Excel.Window window)
+        {
+            if (window == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                window.Close();
+                return true;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                var closeMethod = window.GetType().GetMethod("Close", Type.EmptyTypes);
+                if (closeMethod != null)
+                {
+                    closeMethod.Invoke(window, null);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                dynamic lateBoundWindow = window;
+                lateBoundWindow.Close();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryConcealWindow(Excel.Window window)
+        {
+            if (window == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                window.Visible = false;
+                window.WindowState = Excel.XlWindowState.xlMinimized;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static List<Excel.Window> GetWorkbookWindowsSnapshot(Excel.Workbook workbook)
+        {
+            var windows = new List<Excel.Window>();
+            if (workbook == null)
+            {
+                return windows;
+            }
+
+            try
+            {
+                int count = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                for (int index = 1; index <= count; index++)
+                {
+                    Excel.Window window = workbook.Windows[index];
+                    if (window != null)
+                    {
+                        windows.Add(window);
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return windows;
+        }
+
+        private static bool ContainsWindow(List<Excel.Window> windows, Excel.Window targetWindow)
+        {
+            if (windows == null || targetWindow == null)
+            {
+                return false;
+            }
+
+            foreach (Excel.Window window in windows)
+            {
+                if (IsSameWindow(window, targetWindow))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

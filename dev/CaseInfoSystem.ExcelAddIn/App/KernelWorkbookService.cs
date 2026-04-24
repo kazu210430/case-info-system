@@ -171,13 +171,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            Excel.Workbook workbook = GetOpenKernelWorkbook();
+            TraceKernelWorkbookWindowState("home-display-before", "PrepareForHomeDisplay", workbook);
+            NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.PrepareForHomeDisplay", ensurePrimaryVisible: false, activatePrimary: false, bringToFront: false);
             ApplyHomeDisplayVisibilityCore("PrepareForHomeDisplay");
+            TraceKernelWorkbookWindowState("home-display-during", "PrepareForHomeDisplay", GetOpenKernelWorkbook());
             _isHomeDisplayPrepared = true;
         }
 
         internal void PrepareForHomeDisplayFromSheet()
         {
+            Excel.Workbook workbook = GetOpenKernelWorkbook();
+            TraceKernelWorkbookWindowState("home-display-before", "PrepareForHomeDisplayFromSheet", workbook);
+            NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.PrepareForHomeDisplayFromSheet", ensurePrimaryVisible: false, activatePrimary: false, bringToFront: false);
             ApplyHomeDisplayVisibilityCore("PrepareForHomeDisplayFromSheet");
+            TraceKernelWorkbookWindowState("home-display-during", "PrepareForHomeDisplayFromSheet", GetOpenKernelWorkbook());
             _isHomeDisplayPrepared = true;
         }
 
@@ -554,6 +562,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
+            TraceKernelWorkbookWindowState("home-screen-switch-before", "ShowSheetByCodeName:" + (codeName ?? string.Empty), workbook);
             bool previousEnableEvents = _application.EnableEvents;
             try
             {
@@ -567,6 +576,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 workbook.Activate();
                 worksheet.Activate();
+                TraceKernelWorkbookWindowState("screen-switch-after", "ShowSheetByCodeName:" + (codeName ?? string.Empty), workbook);
                 return true;
             }
             finally
@@ -582,7 +592,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 DismissPreparedHomeDisplayState("ShowSheetByCodeName:" + (codeName ?? string.Empty));
             }
 
+            TraceKernelWorkbookWindowState("home-screen-switch-before", "PrepareWorkbookForSheetNavigation:" + (codeName ?? string.Empty), workbook);
+            NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.PrepareWorkbookForSheetNavigation." + (codeName ?? string.Empty), ensurePrimaryVisible: false, activatePrimary: false, bringToFront: false);
             EnsureWorkbookVisible(workbook);
+            TraceKernelWorkbookWindowState("home-screen-switch-after-ensure", "PrepareWorkbookForSheetNavigation:" + (codeName ?? string.Empty), workbook);
         }
 
         private Excel.Workbook GetOrOpenKernelWorkbook()
@@ -695,6 +708,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
+                TraceKernelWorkbookWindowState("case-close-before", "ConcealKernelWorkbookWindowsForCaseCreationClose", workbook);
                 int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
                 for (int index = 1; index <= windowCount; index++)
                 {
@@ -720,6 +734,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     }
                 }
 
+                TraceKernelWorkbookWindowState("case-close-after", "ConcealKernelWorkbookWindowsForCaseCreationClose", workbook);
                 _logger.Info("ConcealKernelWorkbookWindowsForCaseCreationClose completed. workbook=" + _excelInteropService.GetWorkbookFullName(workbook));
             }
             catch (Exception ex)
@@ -763,6 +778,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void EnsureWorkbookVisible(Excel.Workbook workbook)
         {
+            TraceKernelWorkbookWindowState("ensure-workbook-visible-before", "EnsureWorkbookVisible", workbook);
+            NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.EnsureWorkbookVisible.PreRelease", ensurePrimaryVisible: false, activatePrimary: false, bringToFront: false);
             ReleaseHomeDisplay(true);
             bool shouldAvoidGlobalRestore = ShouldAvoidGlobalExcelWindowRestore();
             if (!shouldAvoidGlobalRestore)
@@ -774,6 +791,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook,
                 "KernelWorkbookService.EnsureWorkbookVisible",
                 bringToFront: !shouldAvoidGlobalRestore);
+            NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.EnsureWorkbookVisible.PostRecover", ensurePrimaryVisible: true, activatePrimary: true, bringToFront: !shouldAvoidGlobalRestore);
+            TraceKernelWorkbookWindowState("ensure-workbook-visible-after", "EnsureWorkbookVisible", workbook);
         }
 
         private void ReleaseHomeDisplay(bool showExcel)
@@ -785,6 +804,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (showExcel)
             {
+                Excel.Workbook workbook = GetOpenKernelWorkbook();
+                TraceKernelWorkbookWindowState("home-release-before", "ReleaseHomeDisplay", workbook);
+                NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.ReleaseHomeDisplay", ensurePrimaryVisible: false, activatePrimary: false, bringToFront: false);
                 bool shouldAvoidGlobalExcelWindowRestore = ShouldAvoidGlobalExcelWindowRestore();
                 bool shouldPromoteKernelWindow = !shouldAvoidGlobalExcelWindowRestore
                     && ShouldPromoteKernelWorkbookOnHomeRelease();
@@ -805,6 +827,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 ShowKernelWorkbookWindows(homeReleaseAction == KernelWorkbookHomeReleaseAction.PromoteAndRestore);
+                TraceKernelWorkbookWindowState("home-release-after", "ReleaseHomeDisplay", GetOpenKernelWorkbook());
             }
 
             _isHomeDisplayPrepared = false;
@@ -1191,23 +1214,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
+                TraceKernelWorkbookWindowState("show-kernel-windows-before", "ShowKernelWorkbookWindows", workbook);
                 _excelWindowRecoveryService.EnsureApplicationVisible("KernelWorkbookService.ShowKernelWorkbookWindows", _excelInteropService.GetWorkbookFullName(workbook));
-                foreach (Excel.Window window in workbook.Windows)
-                {
-                    if (window != null)
-                    {
-                        window.Visible = true;
-                        window.WindowState = Excel.XlWindowState.xlNormal;
-                    }
-                }
+                NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.ShowKernelWorkbookWindows", ensurePrimaryVisible: true, activatePrimary: activateWorkbookWindow, bringToFront: false);
 
                 if (activateWorkbookWindow)
                 {
-                    _excelWindowRecoveryService.TryRecoverWorkbookWindow(
+                    _excelWindowRecoveryService.TryRecoverWorkbookWindowUsingExistingWindows(
                         workbook,
                         "KernelWorkbookService.ShowKernelWorkbookWindows",
                         bringToFront: true);
                 }
+
+                TraceKernelWorkbookWindowState("show-kernel-windows-after", "ShowKernelWorkbookWindows", workbook);
             }
             catch (Exception ex)
             {
@@ -1283,6 +1302,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
+                NormalizeKernelWorkbookWindows(workbook, "KernelWorkbookService.ConcealKernelWorkbookWindowsForHomeDisplay." + (triggerReason ?? string.Empty), ensurePrimaryVisible: false, activatePrimary: false, bringToFront: false);
+                TraceKernelWorkbookWindowState("home-display-conceal-before", "ConcealKernelWorkbookWindowsForHomeDisplay:" + (triggerReason ?? string.Empty), workbook);
                 int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
                 for (int index = 1; index <= windowCount; index++)
                 {
@@ -1306,11 +1327,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         _logger.Error("ConcealKernelWorkbookWindowsForHomeDisplay window conceal failed. index=" + index.ToString(), ex);
                     }
                 }
+
+                TraceKernelWorkbookWindowState("home-display-conceal-after", "ConcealKernelWorkbookWindowsForHomeDisplay:" + (triggerReason ?? string.Empty), workbook);
             }
             catch (Exception ex)
             {
                 _logger.Error("ConcealKernelWorkbookWindowsForHomeDisplay failed.", ex);
             }
+        }
+
+        private void NormalizeKernelWorkbookWindows(Excel.Workbook workbook, string reason, bool ensurePrimaryVisible, bool activatePrimary, bool bringToFront)
+        {
+            if (workbook == null || _excelWindowRecoveryService == null)
+            {
+                return;
+            }
+
+            _excelWindowRecoveryService.NormalizeWorkbookWindows(
+                workbook,
+                reason,
+                ensurePrimaryVisible,
+                activatePrimary,
+                bringToFront);
+        }
+
+        private void TraceKernelWorkbookWindowState(string stage, string reason, Excel.Workbook workbook)
+        {
+            if (workbook == null || _excelWindowRecoveryService == null)
+            {
+                return;
+            }
+
+            _excelWindowRecoveryService.LogWorkbookWindowSnapshot(workbook, reason, stage);
         }
 
         private void SetKernelWindowVisibleFalse(Excel.Workbook workbook, Excel.Window window, int index, string triggerReason)

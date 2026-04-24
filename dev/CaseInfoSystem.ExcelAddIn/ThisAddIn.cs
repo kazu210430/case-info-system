@@ -303,7 +303,11 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private void Application_WorkbookActivate(Excel.Workbook workbook)
         {
-            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () => _workbookLifecycleCoordinator?.OnWorkbookActivate(workbook));
+            EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookActivate), () =>
+            {
+                TraceKernelWorkbookWindowEvent(workbook, "WorkbookActivate");
+                _workbookLifecycleCoordinator?.OnWorkbookActivate(workbook);
+            });
         }
 
         private void Application_WindowActivate(Excel.Workbook workbook, Excel.Window window)
@@ -323,6 +327,7 @@ namespace CaseInfoSystem.ExcelAddIn
                     + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
                     + ", windowHwnd="
                     + SafeWindowHwnd(window));
+                TraceKernelWorkbookWindowEvent(workbook, "WindowActivate");
                 _workbookEventCoordinator.OnWindowActivate(workbook, window);
             });
         }
@@ -450,6 +455,31 @@ namespace CaseInfoSystem.ExcelAddIn
             }
         }
 
+        private void TraceKernelWorkbookWindowEvent(Excel.Workbook workbook, string stage)
+        {
+            if (_excelWindowRecoveryService == null || _kernelWorkbookService == null || workbook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_kernelWorkbookService.IsKernelWorkbook(workbook))
+                {
+                    return;
+                }
+
+                _excelWindowRecoveryService.LogWorkbookWindowSnapshot(
+                    workbook,
+                    "ThisAddIn." + (stage ?? string.Empty),
+                    stage);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Debug(nameof(ThisAddIn), "TraceKernelWorkbookWindowEvent failed. stage=" + (stage ?? string.Empty) + ", message=" + ex.Message);
+            }
+        }
+
         // Excel workbook lifecycle event handler
         private void Application_WorkbookBeforeSave(Excel.Workbook workbook, bool saveAsUi, ref bool cancel)
         {
@@ -474,6 +504,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             void HandleBeforeClose(ref bool innerCancel)
             {
+                TraceKernelWorkbookWindowEvent(workbook, "WorkbookBeforeClose");
                 if (_workbookLifecycleCoordinator != null)
                 {
                     _workbookLifecycleCoordinator.OnWorkbookBeforeClose(workbook, ref innerCancel);
@@ -621,13 +652,16 @@ namespace CaseInfoSystem.ExcelAddIn
             _kernelHomeForm.Invalidate(true);
             _kernelHomeForm.Update();
 
+            TraceRuntimeExecutionObservation("ShowKernelHomePlaceholder");
+            TraceKernelWorkbookWindowEvent(_kernelWorkbookService == null ? null : _kernelWorkbookService.GetOpenKernelWorkbook(), "HOME表示前");
+            _kernelWorkbookService.PrepareForHomeDisplayFromSheet();
+            TraceKernelWorkbookWindowEvent(_kernelWorkbookService == null ? null : _kernelWorkbookService.GetOpenKernelWorkbook(), "HOME表示中");
+
             if (!_kernelHomeForm.Visible)
             {
                 _kernelHomeForm.Show();
             }
 
-            TraceRuntimeExecutionObservation("ShowKernelHomePlaceholder");
-            _kernelWorkbookService.PrepareForHomeDisplayFromSheet();
             _kernelHomeForm.Activate();
             _kernelHomeForm.BringToFront();
         }

@@ -1050,6 +1050,12 @@ namespace CaseInfoSystem.ExcelAddIn
                 && _kernelHomeCasePaneSuppressionCoordinator.ShouldIgnoreTaskPaneRefreshDuringProtection(reason, workbook, window);
         }
 
+        internal bool HasVisibleCasePaneForWorkbookWindow(Excel.Workbook workbook, Excel.Window window)
+        {
+            return _taskPaneManager != null
+                && _taskPaneManager.HasVisibleCasePaneForWorkbookWindow(workbook, window);
+        }
+
         private bool ShouldSuppressCasePaneRefresh(string eventName, Excel.Workbook workbook)
         {
             return _kernelHomeCasePaneSuppressionCoordinator != null

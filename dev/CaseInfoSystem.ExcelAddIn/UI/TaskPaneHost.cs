@@ -29,6 +29,16 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		internal string LastRenderSignature { get; set; }
 
+		internal bool IsVisible {
+			get {
+				try {
+					return _pane != null && _pane.Visible;
+				} catch {
+					return false;
+				}
+			}
+		}
+
 		internal TaskPaneHost (ThisAddIn addIn, Window window, UserControl control, ITaskPaneView view, string windowKey)
 		{
 			_addIn = addIn ?? throw new ArgumentNullException ("addIn");

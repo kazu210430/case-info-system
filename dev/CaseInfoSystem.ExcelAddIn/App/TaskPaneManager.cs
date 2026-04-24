@@ -214,6 +214,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 && _hostsByWindowKey.ContainsKey(windowKey);
         }
 
+        internal bool HasVisibleCasePaneForWorkbookWindow(Excel.Workbook workbook, Excel.Window window)
+        {
+            string windowKey = SafeGetWindowKey(window);
+            if (string.IsNullOrWhiteSpace(windowKey)
+                || !_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                return false;
+            }
+
+            string workbookFullName = workbook == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+            if (string.IsNullOrWhiteSpace(workbookFullName)
+                || !string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return GetHostedWorkbookRole(host) == WorkbookRole.Case && host.IsVisible;
+        }
+
         private void EvaluateDisplayRequestPaneState(
             Excel.Workbook workbook,
             Excel.Window window,

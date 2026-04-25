@@ -33,27 +33,16 @@ namespace CaseInfoSystem.ExcelAddIn
         // 基盤
         private Logger _logger;
         private ExcelInteropService _excelInteropService;
-        private ExcelWindowRecoveryService _excelWindowRecoveryService;
         private WorkbookRoleResolver _workbookRoleResolver;
-        private NavigationService _navigationService;
-        private WorkbookSessionService _workbookSessionService;
-        private TransientPaneSuppressionService _transientPaneSuppressionService;
         private CaseWorkbookOpenStrategy _caseWorkbookOpenStrategy;
 
         // 文書実行
-        private CaseContextFactory _caseContextFactory;
-        private DocumentCommandService _documentCommandService;
-        private DocumentNamePromptService _documentNamePromptService;
         private DocumentExecutionModeService _documentExecutionModeService;
         private WordInteropService _wordInteropService;
 
         // workbook ライフサイクル
         private KernelWorkbookService _kernelWorkbookService;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
-        private CaseWorkbookLifecycleService _caseWorkbookLifecycleService;
-        private AccountingWorkbookLifecycleService _accountingWorkbookLifecycleService;
-        private AccountingSheetControlService _accountingSheetControlService;
-        private WorkbookClipboardPreservationService _workbookClipboardPreservationService;
         private SheetEventCoordinator _sheetEventCoordinator;
         private WorkbookLifecycleCoordinator _workbookLifecycleCoordinator;
 
@@ -164,27 +153,16 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             // 基盤
             _excelInteropService = compositionRoot.ExcelInteropService;
-            _excelWindowRecoveryService = compositionRoot.ExcelWindowRecoveryService;
             _workbookRoleResolver = compositionRoot.WorkbookRoleResolver;
-            _navigationService = compositionRoot.NavigationService;
-            _workbookSessionService = compositionRoot.WorkbookSessionService;
-            _transientPaneSuppressionService = compositionRoot.TransientPaneSuppressionService;
             _caseWorkbookOpenStrategy = compositionRoot.CaseWorkbookOpenStrategy;
 
             // 文書実行
-            _caseContextFactory = compositionRoot.CaseContextFactory;
-            _documentCommandService = compositionRoot.DocumentCommandService;
-            _documentNamePromptService = compositionRoot.DocumentNamePromptService;
             _documentExecutionModeService = compositionRoot.DocumentExecutionModeService;
             _wordInteropService = compositionRoot.WordInteropService;
 
             // workbook ライフサイクル
             _kernelWorkbookService = compositionRoot.KernelWorkbookService;
             _kernelWorkbookLifecycleService = compositionRoot.KernelWorkbookLifecycleService;
-            _caseWorkbookLifecycleService = compositionRoot.CaseWorkbookLifecycleService;
-            _accountingWorkbookLifecycleService = compositionRoot.AccountingWorkbookLifecycleService;
-            _accountingSheetControlService = compositionRoot.AccountingSheetControlService;
-            _workbookClipboardPreservationService = compositionRoot.WorkbookClipboardPreservationService;
             _sheetEventCoordinator = compositionRoot.SheetEventCoordinator;
             _workbookLifecycleCoordinator = compositionRoot.WorkbookLifecycleCoordinator;
 

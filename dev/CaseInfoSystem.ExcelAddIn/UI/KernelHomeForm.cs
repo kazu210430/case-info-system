@@ -711,51 +711,5 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
-		private void lblCustomer_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void lblNewCaseTitleCase_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void lblNewTreeCaseName_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void label4_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void lblExistingTreeCaseName_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void btnOpenCaseList_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void optNameCustDoc_CheckedChanged (object sender, EventArgs e)
-		{
-		}
-
-		private void lblNewCaseTitleSuffix_Click (object sender, EventArgs e)
-		{
-		}
-
-		private void lblExistingCaseTitlePrefix_Click (object sender, EventArgs e)
-		{
-		}
-
-
-        private void grpScreenSwitch_Enter(object sender, EventArgs e)
-        {
-
-        }
-
-        private void lblNewTreeFolderName_Click(object sender, EventArgs e)
-        {
-
-        }
     }
 }

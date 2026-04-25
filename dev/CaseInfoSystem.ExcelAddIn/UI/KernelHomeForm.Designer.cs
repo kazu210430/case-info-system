@@ -238,7 +238,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.optNameCustDoc.TabStop = true;
             this.optNameCustDoc.Text = "顧客名_文書名";
             this.optNameCustDoc.UseVisualStyleBackColor = true;
-            this.optNameCustDoc.CheckedChanged += new System.EventHandler(this.optNameCustDoc_CheckedChanged);
             // 
             // optNameDocCust
             // 
@@ -281,7 +280,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.grpScreenSwitch.TabIndex = 4;
             this.grpScreenSwitch.TabStop = false;
             this.grpScreenSwitch.Text = "画面切替";
-            this.grpScreenSwitch.Enter += new System.EventHandler(this.grpScreenSwitch_Enter);
             // 
             // btnOpenCaseList
             // 
@@ -296,7 +294,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.btnOpenCaseList.TabIndex = 2;
             this.btnOpenCaseList.Text = "案件一覧";
             this.btnOpenCaseList.UseVisualStyleBackColor = false;
-            this.btnOpenCaseList.Click += new System.EventHandler(this.btnOpenCaseList_Click);
             // 
             // btnOpenTemplate
             // 
@@ -352,7 +349,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblCustomer.Size = new System.Drawing.Size(89, 25);
             this.lblCustomer.TabIndex = 5;
             this.lblCustomer.Text = "【顧客名】";
-            this.lblCustomer.Click += new System.EventHandler(this.lblCustomer_Click);
             // 
             // txtCustomer
             // 
@@ -419,7 +415,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewCaseTitleCase.Size = new System.Drawing.Size(123, 25);
             this.lblNewCaseTitleCase.TabIndex = 11;
             this.lblNewCaseTitleCase.Text = "案件情報.xlsx";
-            this.lblNewCaseTitleCase.Click += new System.EventHandler(this.lblNewCaseTitleCase_Click);
             // 
             // lblNewCaseTitleSuffix
             // 
@@ -431,7 +426,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewCaseTitleSuffix.Size = new System.Drawing.Size(66, 25);
             this.lblNewCaseTitleSuffix.TabIndex = 12;
             this.lblNewCaseTitleSuffix.Text = "の作成";
-            this.lblNewCaseTitleSuffix.Click += new System.EventHandler(this.lblNewCaseTitleSuffix_Click);
             // 
             // lblExistingCaseTitlePrefix
             // 
@@ -443,7 +437,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblExistingCaseTitlePrefix.Size = new System.Drawing.Size(128, 25);
             this.lblExistingCaseTitlePrefix.TabIndex = 13;
             this.lblExistingCaseTitlePrefix.Text = "既存の案件 ➡";
-            this.lblExistingCaseTitlePrefix.Click += new System.EventHandler(this.lblExistingCaseTitlePrefix_Click);
             // 
             // lblExistingCaseTitleCase
             // 
@@ -545,7 +538,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblExistingTreeCaseName.Size = new System.Drawing.Size(145, 13);
             this.lblExistingTreeCaseName.TabIndex = 2;
             this.lblExistingTreeCaseName.Text = "案件情報_(例)案件太郎";
-            this.lblExistingTreeCaseName.Click += new System.EventHandler(this.lblExistingTreeCaseName_Click);
             // 
             // lblExistingTreeRootButton
             // 
@@ -600,7 +592,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewTreeFolderName.TabIndex = 2;
             this.lblNewTreeFolderName.Text = "20260331_(例)案件太郎";
             this.lblNewTreeFolderName.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.lblNewTreeFolderName.Click += new System.EventHandler(this.lblNewTreeFolderName_Click);
             // 
             // lblNewTreeCaseName
             // 
@@ -613,7 +604,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewTreeCaseName.Size = new System.Drawing.Size(145, 13);
             this.lblNewTreeCaseName.TabIndex = 4;
             this.lblNewTreeCaseName.Text = "案件情報_(例)案件太郎";
-            this.lblNewTreeCaseName.Click += new System.EventHandler(this.lblNewTreeCaseName_Click);
             // 
             // lblNewTreeDocName
             // 
@@ -649,7 +639,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.label4.Size = new System.Drawing.Size(46, 45);
             this.label4.TabIndex = 12;
             this.label4.Text = "│\r\n├─\r\n│";
-            this.label4.Click += new System.EventHandler(this.label4_Click);
             // 
             // label1
             // 

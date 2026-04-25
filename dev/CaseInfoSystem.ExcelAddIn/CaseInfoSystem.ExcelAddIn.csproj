@@ -283,6 +283,7 @@
     <Compile Include="Infrastructure\CreatedCaseNoticeService.cs" />
     <Compile Include="Infrastructure\CreatedCaseOpenPromptService.cs" />
     <Compile Include="Infrastructure\CreatedCasePresentationWaitService.cs" />
+    <Compile Include="Infrastructure\AccountingSetPresentationWaitService.cs" />
     <Compile Include="Infrastructure\DocumentPresentationWaitService.cs" />
     <Compile Include="Infrastructure\UserErrorService.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotParser.cs" />
@@ -365,6 +366,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\CreatedCasePresentationWaitForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\AccountingSetPresentationWaitForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\DocumentPresentationWaitForm.cs">

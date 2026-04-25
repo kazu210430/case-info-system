@@ -195,6 +195,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var accountingFormHelperService = new AccountingFormHelperService(accountingWorkbookService, accountingInstallmentScheduleCommandService, accountingPaymentHistoryCommandService, accountingSaveAsService, userErrorService, _logger);
             AccountingWorkbookLifecycleService = new AccountingWorkbookLifecycleService(WorkbookRoleResolver, accountingWorkbookService, accountingFormHelperService, accountingPaymentHistoryImportService, _logger);
             var accountingInternalCommandService = new AccountingInternalCommandService(NavigationService, accountingPaymentHistoryImportService, accountingFormHelperService, accountingSaveAsService, _logger);
+            var accountingSetPresentationWaitService = new AccountingSetPresentationWaitService(_logger);
             var accountingSetCreateService = new AccountingSetCreateService(
                 ExcelInteropService,
                 CaseContextFactory,
@@ -204,6 +205,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 accountingWorkbookService,
                 pathCompatibilityService,
                 TransientPaneSuppressionService,
+                accountingSetPresentationWaitService,
                 _logger);
             var accountingSetKernelSyncService = new AccountingSetKernelSyncService(
                 ExcelInteropService,

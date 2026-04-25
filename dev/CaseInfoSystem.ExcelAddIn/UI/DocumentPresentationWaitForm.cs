@@ -1,10 +1,14 @@
 using System.Drawing;
 using System.Windows.Forms;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
 
 namespace CaseInfoSystem.ExcelAddIn.UI
 {
     internal sealed class DocumentPresentationWaitForm : Form
     {
+        private readonly Label _titleLabel;
+        private readonly Label _detailLabel;
+
         internal DocumentPresentationWaitForm()
         {
             Text = "案件情報System";
@@ -19,31 +23,61 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             DoubleBuffered = true;
             ClientSize = new Size(392, 116);
 
-            Label titleLabel = new Label
+            _titleLabel = new Label
             {
                 AutoSize = false,
                 Left = 20,
                 Top = 22,
                 Width = 352,
                 Height = 26,
-                Text = "文書を開く準備をしています",
+                Text = DocumentPresentationWaitService.CreatingStageTitle,
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Label detailLabel = new Label
+            _detailLabel = new Label
             {
                 AutoSize = false,
                 Left = 20,
                 Top = 54,
                 Width = 352,
                 Height = 18,
-                Text = "Word の起動や保存が完了するまで、そのままお待ちください。",
+                Text = DocumentPresentationWaitService.DefaultStageDetail,
                 ForeColor = Color.DimGray,
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Controls.Add(titleLabel);
-            Controls.Add(detailLabel);
+            Controls.Add(_titleLabel);
+            Controls.Add(_detailLabel);
+        }
+
+        internal void SetStage(string title, string detail)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                Invoke((MethodInvoker)delegate
+                {
+                    SetStageCore(title, detail);
+                });
+                return;
+            }
+
+            SetStageCore(title, detail);
+        }
+
+        private void SetStageCore(string title, string detail)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _titleLabel.Text = string.IsNullOrWhiteSpace(title) ? _titleLabel.Text : title;
+            _detailLabel.Text = string.IsNullOrWhiteSpace(detail) ? _detailLabel.Text : detail;
         }
     }
 }

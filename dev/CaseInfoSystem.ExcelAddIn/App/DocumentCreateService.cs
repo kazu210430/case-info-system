@@ -188,6 +188,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 stage = "AcquireWordApplication";
                 SetStatusBar("文書作成：Word準備中...");
+                waitSession?.UpdateStage(DocumentPresentationWaitService.LaunchingWordStageTitle);
                 wordApplication = _wordInteropService.AcquireWordApplication(out createdNewWord);
                 if (wordApplication == null)
                 {
@@ -201,6 +202,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 stage = "CreateDocumentFromTemplate";
                 SetStatusBar("文書作成：テンプレから作成中...");
+                waitSession?.UpdateStage(DocumentPresentationWaitService.LoadingTemplateStageTitle);
                 wordDocument = _wordInteropService.CreateDocumentFromTemplate(wordApplication, templateSpec.TemplatePath);
                 if (wordDocument == null)
                 {
@@ -211,6 +213,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 stage = "ApplyMergeData";
                 SetStatusBar("文書作成：差し込み中...");
+                waitSession?.UpdateStage(DocumentPresentationWaitService.ApplyingMergeDataStageTitle);
                 _documentMergeService.ApplyMergeData(wordDocument, mergeData);
                 _logger.Debug("ExecuteCreateDocument", "MergeApplied elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
                 phaseStopwatch.Restart();
@@ -223,6 +226,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 stage = "SaveDocument";
                 SetStatusBar("文書作成：保存中...");
+                waitSession?.UpdateStage(DocumentPresentationWaitService.SavingDocumentStageTitle);
                 DocumentSaveResult saveResult = _documentSaveService.SaveDocument(wordApplication, wordDocument, outputPath);
                 if (saveResult == null || saveResult.ActiveDocument == null)
                 {
@@ -235,6 +239,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 stage = "ShowDocument";
                 SetStatusBar("文書作成：完了（Word表示）...");
+                waitSession?.UpdateStage(DocumentPresentationWaitService.ShowingScreenStageTitle);
                 _wordInteropService.ShowDocument(wordApplication, wordDocument);
                 if (wordPerformanceState != null)
                 {

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -37,9 +38,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
 
+		private readonly AccountingSetPresentationWaitService _accountingSetPresentationWaitService;
+
 		private readonly Logger _logger;
 
-		internal AccountingSetCreateService (ExcelInteropService excelInteropService, CaseContextFactory caseContextFactory, DocumentOutputService documentOutputService, AccountingSetNamingService accountingSetNamingService, AccountingTemplateResolver accountingTemplateResolver, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, TransientPaneSuppressionService transientPaneSuppressionService, Logger logger)
+		internal AccountingSetCreateService (ExcelInteropService excelInteropService, CaseContextFactory caseContextFactory, DocumentOutputService documentOutputService, AccountingSetNamingService accountingSetNamingService, AccountingTemplateResolver accountingTemplateResolver, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, TransientPaneSuppressionService transientPaneSuppressionService, AccountingSetPresentationWaitService accountingSetPresentationWaitService, Logger logger)
 		{
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_caseContextFactory = caseContextFactory ?? throw new ArgumentNullException ("caseContextFactory");
@@ -49,6 +52,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException ("transientPaneSuppressionService");
+			_accountingSetPresentationWaitService = accountingSetPresentationWaitService ?? throw new ArgumentNullException ("accountingSetPresentationWaitService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
@@ -71,12 +75,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			string text4 = _accountingSetNamingService.BuildCaseOutputPath (caseWorkbook, text3, text, text2);
 			string workbookFullName = _excelInteropService.GetWorkbookFullName (caseWorkbook);
 			_logger.Info ("Accounting set CASE create start. caseWorkbook=" + workbookFullName + ", customer=" + text + ", outputFolder=" + text3 + ", template=" + text2 + ", output=" + text4);
-			File.Copy (text2, text4, overwrite: false);
-			_logger.Debug ("AccountingSetCreateService", "Template copied to output path.");
-			_transientPaneSuppressionService.SuppressPath (text4, "AccountingSetCreateService.Execute");
+			AccountingSetPresentationWaitService.WaitSession waitSession = null;
 			Workbook workbook = null;
 			try {
+				waitSession = _accountingSetPresentationWaitService.ShowWaiting (Stopwatch.StartNew ());
+				waitSession?.UpdateStage (AccountingSetPresentationWaitService.CreatingStageTitle);
+				File.Copy (text2, text4, overwrite: false);
+				_logger.Debug ("AccountingSetCreateService", "Template copied to output path.");
+				_transientPaneSuppressionService.SuppressPath (text4, "AccountingSetCreateService.Execute");
 				workbook = _accountingWorkbookService.OpenInCurrentApplication (text4);
+				waitSession?.UpdateStage (AccountingSetPresentationWaitService.OpeningWorkbookStageTitle);
 				_accountingWorkbookService.SetWorkbookWindowsVisible (workbook, visible: true);
 				AccountingLawyerMappingResult accountingLawyerMappingResult;
 				using (_accountingWorkbookService.BeginInitializationScope ()) {
@@ -95,12 +103,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("Accounting set CASE lawyer source read. sourceKey=" + LawyerKey + ", lines=" + ToSingleLine (text5));
 					accountingLawyerMappingResult = _accountingWorkbookService.ReflectLawyers (workbook, text5);
 				}
+				waitSession?.UpdateStage (AccountingSetPresentationWaitService.ApplyingInitialDataStageTitle);
 				_transientPaneSuppressionService.ReleaseWorkbook (workbook, "AccountingSetCreateService.BeforeActivateInvoiceEntry");
 				_logger.Info ("Accounting set CASE create pane handoff start. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
 				_accountingWorkbookService.ActivateInvoiceEntry (workbook);
 				_logger.Info ("Accounting set CASE create pane handoff activated. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
 				_logger.Info ("Accounting set CASE create pane handoff before wait-ready. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
+				waitSession?.UpdateStage (AccountingSetPresentationWaitService.ShowingInputScreenStageTitle);
 				Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady (workbook, "AccountingSetCreateService.Execute");
+				waitSession?.Close ();
 				_logger.Info ("Accounting set CASE create pane handoff queued. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
 				if (accountingLawyerMappingResult.OverflowCount > 0) {
 					MessageBox.Show ("入力できなかった代理人がいます。", "会計書類セット", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
@@ -125,6 +136,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Warn ("Accounting set CASE create cleanup delete failed: " + ex2.Message);
 				}
 				throw;
+			} finally {
+				waitSession?.Dispose ();
 			}
 		}
 

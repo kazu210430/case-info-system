@@ -364,6 +364,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 {
                     if (visibleCasePaneAlreadyShown)
                     {
+                        NewCaseDefaultTimingLogHelper.LogTaskPaneReadyWaitToRefreshCompleted(
+                            _logger,
+                            SafeWorkbookFullName(targetWorkbook),
+                            targetReason,
+                            refreshed: false,
+                            completion: "visibleCasePaneAlreadyShown");
                         _logger?.Info("TaskPane wait-ready attempt refresh skipped because visible CASE pane is already shown. reason=" + (targetReason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(targetWorkbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(targetWindow));
                         return TaskPaneRefreshAttemptResult.Succeeded();
                     }

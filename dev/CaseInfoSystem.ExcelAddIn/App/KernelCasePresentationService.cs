@@ -116,21 +116,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (existingWaitSession != null) {
 					_logger.Info ("Created CASE presentation wait UI reused. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				}
+				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
+					NewCaseDefaultTimingLogHelper.BeginPresentation (result.CaseWorkbookPath);
+				}
 				TryOpenCaseFolderBeforeShowingCase (result.CaseFolderPath, result.CaseWorkbookPath);
 				_caseWorkbookOpenStrategy.RegisterKnownCasePath (result.CaseWorkbookPath);
 				_transientPaneSuppressionService.SuppressPath (result.CaseWorkbookPath, "KernelCasePresentationService.OpenCreatedCase");
+				waitSession.UpdateStage (CreatedCasePresentationWaitService.PreparingOpenStageTitle);
 				workbook = OpenCreatedCaseWorkbook (result);
 				_logger.Info ("Kernel prompt CASE workbook opened. path=" + result.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				if (workbook == null) {
 					throw new InvalidOperationException ("CASE workbook could not be opened.");
 				}
+				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
+					NewCaseDefaultTimingLogHelper.AttachWorkbookAlias (result.CaseWorkbookPath, _excelInteropService.GetWorkbookFullName (workbook));
+				}
 				result.CreatedWorkbook = workbook;
-				ShowCreatedCase (workbook);
+				ShowCreatedCase (workbook, waitSession);
+				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
+					NewCaseDefaultTimingLogHelper.StartWaitUiCloseToFinalForegroundStable (result.CaseWorkbookPath);
+				}
 				waitSession.CloseForSuccessfulPresentation ();
-				PromoteWorkbookWindowOnce (workbook, "KernelCasePresentationService.OpenCreatedCase.AfterWaitUiClose");
+				if (result.Mode != KernelCaseCreationMode.NewCaseDefault) {
+					PromoteWorkbookWindowOnce (workbook, "KernelCasePresentationService.OpenCreatedCase.AfterWaitUiClose");
+				} else {
+					NewCaseDefaultTimingLogHelper.LogWaitUiCloseToFinalForegroundStableIfPending (_logger, result.CaseWorkbookPath, "presentationCompletedWithoutAdditionalForegroundRecovery");
+				}
 				_logger.Info ("Kernel prompt CASE presentation completed. path=" + result.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return result;
 			} catch {
+				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
+					NewCaseDefaultTimingLogHelper.Clear (result.CaseWorkbookPath);
+				}
 				waitSession.CloseAndRestoreOwner ();
 				_transientPaneSuppressionService.ReleasePath (result.CaseWorkbookPath, "KernelCasePresentationService.OpenCreatedCaseFailure");
 				throw;
@@ -162,35 +179,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger.Info ("CASE folder pre-open confirm skipped. workbookPath=" + (caseWorkbookPath ?? string.Empty) + ", folderPath=" + caseFolderPath + ", timeoutMs=" + CaseFolderPreOpenConfirmTimeoutMs);
 		}
 
-		private void ShowCreatedCase (Workbook workbook)
+		private void ShowCreatedCase (Workbook workbook, CreatedCasePresentationWaitService.WaitSession waitSession)
 		{
 			if (workbook == null) {
 				return;
 			}
 			try {
 				Stopwatch stopwatch = Stopwatch.StartNew ();
+				string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
+				Stopwatch stopwatch2 = Stopwatch.StartNew ();
 				_excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing (workbook, "KernelCasePresentationService.ShowCreatedCase", bringToFront: false);
-				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=InitialRecoveryCompleted, workbook=" + _excelInteropService.GetWorkbookFullName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "tryRecoverWorkbookWindowWithoutShowing", stopwatch2.ElapsedMilliseconds);
+				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=InitialRecoveryCompleted, workbook=" + workbookFullName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("ShowCreatedCase workbook activated. elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				ExecuteDeferredPresentationEnhancements (workbook, stopwatch);
+				ExecuteDeferredPresentationEnhancements (workbook, stopwatch, waitSession);
 			} catch (Exception exception) {
 				_logger.Error ("ShowCreatedCase failed.", exception);
 			}
 		}
 
-		private void ExecuteDeferredPresentationEnhancements (Workbook workbook, Stopwatch stopwatch)
+		private void ExecuteDeferredPresentationEnhancements (Workbook workbook, Stopwatch stopwatch, CreatedCasePresentationWaitService.WaitSession waitSession)
 		{
 			if (workbook == null) {
 				return;
 			}
 			bool flag = false;
-			try {
-				_logger.Info ("ShowCreatedCase deferred presentation started. elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-				_transientPaneSuppressionService.ReleaseWorkbook (workbook, "KernelCasePresentationService.ShowCreatedCase");
-				flag = true;
-				EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
-				Globals.ThisAddIn.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
+				try {
+					_logger.Info ("ShowCreatedCase deferred presentation started. elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+					_transientPaneSuppressionService.ReleaseWorkbook (workbook, "KernelCasePresentationService.ShowCreatedCase");
+					flag = true;
+					Stopwatch stopwatch2 = Stopwatch.StartNew ();
+					waitSession?.UpdateStage (CreatedCasePresentationWaitService.ShowingScreenStageTitle);
+					EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
+					NewCaseDefaultTimingLogHelper.LogDetail (_logger, _excelInteropService.GetWorkbookFullName (workbook), "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeReadyShow", stopwatch2.ElapsedMilliseconds);
+					Globals.ThisAddIn.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("ShowCreatedCase post-release activation suppression prepared. elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				NewCaseDefaultTimingLogHelper.StartTaskPaneReadyWait (_excelInteropService.GetWorkbookFullName (workbook));
 				Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady (workbook, "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=ReadyShowRequested, workbook=" + _excelInteropService.GetWorkbookFullName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("ShowCreatedCase task pane ready-show requested. elapsedMs=" + stopwatch.ElapsedMilliseconds);
@@ -222,11 +246,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
 			try {
+				Stopwatch stopwatch2 = Stopwatch.StartNew ();
 				Window window = _excelInteropService.GetFirstVisibleWindow (workbook);
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.GetFirstVisibleWindow", stopwatch2.ElapsedMilliseconds);
 				if (window == null) {
+					stopwatch2 = Stopwatch.StartNew ();
 					int count = workbook.Windows.Count;
+					NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WorkbookWindowsCount", stopwatch2.ElapsedMilliseconds, "count=" + count);
 					if (count > 0) {
+						stopwatch2 = Stopwatch.StartNew ();
 						window = workbook.Windows [1];
+						NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.ResolveWorkbookWindowByIndex", stopwatch2.ElapsedMilliseconds, "index=1");
 					}
 				}
 				if (window == null) {
@@ -235,18 +265,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				bool isVisible;
 				try {
+					stopwatch2 = Stopwatch.StartNew ();
 					isVisible = window.Visible;
+					NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowVisibleGet", stopwatch2.ElapsedMilliseconds, "visible=" + isVisible);
 				} catch (Exception exception) {
 					_logger.Error ("ShowCreatedCase workbook window visibility ensure failed while reading Window.Visible. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds), exception);
 					return;
 				}
 				if (isVisible) {
+					NewCaseDefaultTimingLogHelper.LogHiddenOpenToWindowVisible (_logger, workbookFullName, "alreadyVisible");
 					_logger.Info ("ShowCreatedCase workbook window visibility ensure skipped because workbook window is already visible. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 					return;
 				}
-				_logger.Info ("ShowCreatedCase workbook window visibility ensure start. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				stopwatch2 = Stopwatch.StartNew ();
+				int hwnd = window.Hwnd;
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowHwndGetBeforeVisibleSet", stopwatch2.ElapsedMilliseconds, "windowHwnd=" + hwnd);
+				_logger.Info ("ShowCreatedCase workbook window visibility ensure start. workbook=" + workbookFullName + ", windowHwnd=" + hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				stopwatch2 = Stopwatch.StartNew ();
 				window.Visible = true;
-				_logger.Info ("ShowCreatedCase workbook window made visible before ready-show. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowVisibleSetTrue", stopwatch2.ElapsedMilliseconds);
+				stopwatch2 = Stopwatch.StartNew ();
+				bool flag = window.Visible;
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowVisibleGetAfterSet", stopwatch2.ElapsedMilliseconds, "visible=" + flag);
+				NewCaseDefaultTimingLogHelper.LogHiddenOpenToWindowVisible (_logger, workbookFullName, "madeVisible");
+				stopwatch2 = Stopwatch.StartNew ();
+				int hwnd2 = window.Hwnd;
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowHwndGetAfterVisibleSet", stopwatch2.ElapsedMilliseconds, "windowHwnd=" + hwnd2);
+				_logger.Info ("ShowCreatedCase workbook window made visible before ready-show. workbook=" + workbookFullName + ", windowHwnd=" + hwnd2 + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 			} catch (Exception exception2) {
 				_logger.Error ("ShowCreatedCase workbook window visibility ensure failed. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds), exception2);
 			}
@@ -337,6 +382,225 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				SetWindowPos (hwnd, HwndNoTopMost, 0, 0, 0, 0, 67u);
 				SetForegroundWindow (hwnd);
 			}
+		}
+	}
+
+	internal static class NewCaseDefaultTimingLogHelper
+	{
+		internal const string PostReleaseReason = "KernelCasePresentationService.ShowCreatedCase.PostRelease";
+
+		private static readonly object SyncRoot = new object ();
+
+		private static readonly Dictionary<string, Session> Sessions = new Dictionary<string, Session> (StringComparer.OrdinalIgnoreCase);
+
+		private sealed class Session
+		{
+			internal readonly HashSet<string> Keys = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
+
+			internal Stopwatch HiddenOpenToWindowVisibleStopwatch;
+
+			internal Stopwatch TaskPaneReadyWaitToRefreshCompletedStopwatch;
+
+			internal Stopwatch WaitUiCloseToFinalForegroundStableStopwatch;
+
+			internal bool HiddenOpenToWindowVisibleLogged;
+
+			internal bool TaskPaneReadyWaitToRefreshCompletedLogged;
+
+			internal bool WaitUiCloseToFinalForegroundStableLogged;
+		}
+
+		internal static void BeginCaseCreation (string workbookPath)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value)) {
+					value = new Session ();
+				}
+				RegisterKey (value, text);
+			}
+		}
+
+		internal static void BeginPresentation (string workbookPath)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value)) {
+					value = new Session ();
+				}
+				RegisterKey (value, text);
+				if (value.HiddenOpenToWindowVisibleStopwatch == null) {
+					value.HiddenOpenToWindowVisibleStopwatch = Stopwatch.StartNew ();
+				}
+			}
+		}
+
+		internal static void AttachWorkbookAlias (string existingWorkbookPath, string aliasWorkbookPath)
+		{
+			string text = NormalizeKey (existingWorkbookPath);
+			string text2 = NormalizeKey (aliasWorkbookPath);
+			if (string.IsNullOrWhiteSpace (text) || string.IsNullOrWhiteSpace (text2) || string.Equals (text, text2, StringComparison.OrdinalIgnoreCase)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value)) {
+					return;
+				}
+				RegisterKey (value, text2);
+			}
+		}
+
+		internal static void StartTaskPaneReadyWait (string workbookPath)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value) || value.TaskPaneReadyWaitToRefreshCompletedStopwatch != null) {
+					return;
+				}
+				value.TaskPaneReadyWaitToRefreshCompletedStopwatch = Stopwatch.StartNew ();
+			}
+		}
+
+		internal static void StartWaitUiCloseToFinalForegroundStable (string workbookPath)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value) || value.WaitUiCloseToFinalForegroundStableStopwatch != null) {
+					return;
+				}
+				value.WaitUiCloseToFinalForegroundStableStopwatch = Stopwatch.StartNew ();
+			}
+		}
+
+		internal static void LogHiddenOpenToWindowVisible (Logger logger, string workbookPath, string outcome)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (logger == null || string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			long elapsedMilliseconds;
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value) || value.HiddenOpenToWindowVisibleLogged || value.HiddenOpenToWindowVisibleStopwatch == null) {
+					return;
+				}
+				value.HiddenOpenToWindowVisibleLogged = true;
+				elapsedMilliseconds = value.HiddenOpenToWindowVisibleStopwatch.ElapsedMilliseconds;
+			}
+			logger.Info ("NewCaseDefault timing. segment=hiddenOpenToWindowVisible, caseWorkbookPath=" + text + ", outcome=" + (outcome ?? string.Empty) + ", elapsedMs=" + elapsedMilliseconds);
+		}
+
+		internal static void LogDetail (Logger logger, string workbookPath, string segment, string phase, long elapsedMilliseconds, string details = "")
+		{
+			string text = NormalizeKey (workbookPath);
+			if (logger == null || string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.ContainsKey (text)) {
+					return;
+				}
+			}
+			string text2 = string.IsNullOrWhiteSpace (details) ? string.Empty : ", " + details.Trim ();
+			logger.Info ("NewCaseDefault timing detail. segment=" + (segment ?? string.Empty) + ", phase=" + (phase ?? string.Empty) + ", caseWorkbookPath=" + text + text2 + ", elapsedMs=" + Math.Max (0L, elapsedMilliseconds));
+		}
+
+		internal static void LogTaskPaneReadyWaitToRefreshCompleted (Logger logger, string workbookPath, string reason, bool refreshed, string completion)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (logger == null || string.IsNullOrWhiteSpace (text) || !string.Equals (reason, PostReleaseReason, StringComparison.Ordinal)) {
+				return;
+			}
+			long elapsedMilliseconds;
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value) || value.TaskPaneReadyWaitToRefreshCompletedLogged || value.TaskPaneReadyWaitToRefreshCompletedStopwatch == null) {
+					return;
+				}
+				value.TaskPaneReadyWaitToRefreshCompletedLogged = true;
+				elapsedMilliseconds = value.TaskPaneReadyWaitToRefreshCompletedStopwatch.ElapsedMilliseconds;
+			}
+			logger.Info ("NewCaseDefault timing. segment=taskPaneReadyWaitToRefreshCompleted, caseWorkbookPath=" + text + ", completion=" + (completion ?? string.Empty) + ", refreshed=" + refreshed + ", elapsedMs=" + elapsedMilliseconds);
+		}
+
+		internal static void LogWaitUiCloseToFinalForegroundStable (Logger logger, string workbookPath, string reason, bool recovered)
+		{
+			if (!string.Equals (reason, PostReleaseReason, StringComparison.Ordinal)) {
+				return;
+			}
+			LogWaitUiCloseToFinalForegroundStableCore (logger, workbookPath, recovered, "postReleaseForegroundRecovery");
+		}
+
+		internal static void LogWaitUiCloseToFinalForegroundStableIfPending (Logger logger, string workbookPath, string outcome)
+		{
+			LogWaitUiCloseToFinalForegroundStableCore (logger, workbookPath, recovered: false, outcome ?? string.Empty);
+		}
+
+		private static void LogWaitUiCloseToFinalForegroundStableCore (Logger logger, string workbookPath, bool recovered, string outcome)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (logger == null || string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			long elapsedMilliseconds;
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value) || value.WaitUiCloseToFinalForegroundStableLogged || value.WaitUiCloseToFinalForegroundStableStopwatch == null) {
+					return;
+				}
+				value.WaitUiCloseToFinalForegroundStableLogged = true;
+				elapsedMilliseconds = value.WaitUiCloseToFinalForegroundStableStopwatch.ElapsedMilliseconds;
+				RemoveSession (value);
+			}
+			logger.Info ("NewCaseDefault timing. segment=waitUiCloseToFinalForegroundStable, caseWorkbookPath=" + text + ", outcome=" + (outcome ?? string.Empty) + ", recovered=" + recovered + ", elapsedMs=" + elapsedMilliseconds);
+		}
+
+		internal static void Clear (string workbookPath)
+		{
+			string text = NormalizeKey (workbookPath);
+			if (string.IsNullOrWhiteSpace (text)) {
+				return;
+			}
+			lock (SyncRoot) {
+				if (!Sessions.TryGetValue (text, out Session value)) {
+					return;
+				}
+				RemoveSession (value);
+			}
+		}
+
+		private static string NormalizeKey (string workbookPath)
+		{
+			return (workbookPath ?? string.Empty).Trim ();
+		}
+
+		private static void RegisterKey (Session session, string key)
+		{
+			if (session == null || string.IsNullOrWhiteSpace (key)) {
+				return;
+			}
+			session.Keys.Add (key);
+			Sessions [key] = session;
+		}
+
+		private static void RemoveSession (Session session)
+		{
+			if (session == null) {
+				return;
+			}
+			foreach (string key in session.Keys) {
+				Sessions.Remove (key);
+			}
+			session.Keys.Clear ();
 		}
 	}
 }

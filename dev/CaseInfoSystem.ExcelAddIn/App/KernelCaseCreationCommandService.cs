@@ -97,16 +97,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
 			CreatedCasePresentationWaitService.WaitSession waitSession = null;
+			long waitUiShownElapsedMs = -1L;
 			bool waitSessionTransferred = false;
 			try {
 				ValidateRequest (request);
 				_logger.Info ("Kernel case command validated. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				if (ShouldPromptToOpenCreatedCase (request.Mode)) {
 					waitSession = _createdCasePresentationWaitService.ShowWaiting (stopwatch);
+					waitSession.UpdateStage (CreatedCasePresentationWaitService.CreatingStageTitle);
+					if (request.Mode == KernelCaseCreationMode.NewCaseDefault) {
+						waitUiShownElapsedMs = stopwatch.ElapsedMilliseconds;
+					}
 				}
 				KernelCaseCreationResult kernelCaseCreationResult = _kernelCaseCreationService.CreateCase (request);
 				if (!kernelCaseCreationResult.Success) {
 					return kernelCaseCreationResult;
+				}
+				if (request.Mode == KernelCaseCreationMode.NewCaseDefault && waitUiShownElapsedMs >= 0L) {
+					_logger.Info ("NewCaseDefault timing. segment=waitUiShownToCaseCreated, caseWorkbookPath=" + (kernelCaseCreationResult.CaseWorkbookPath ?? string.Empty) + ", elapsedMs=" + Math.Max (0L, stopwatch.ElapsedMilliseconds - waitUiShownElapsedMs));
 				}
 				if (!ShouldPromptToOpenCreatedCase (kernelCaseCreationResult.Mode)) {
 					PresentCaseFolderBestEffort (kernelCaseCreationResult, "KernelCaseCreationCommandService.Execute.NoPrompt");
@@ -152,6 +160,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (!ShouldPresentCaseFolder (result)) {
 				return;
 			}
+			if (!ShouldStartCaseFolderEarlyOpen (result.Mode)) {
+				_logger.Info ("Kernel case early folder open suppressed. mode=" + result.Mode.ToString () + ", folderPath=" + result.CaseFolderPath + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				return;
+			}
 			_kernelCasePresentationService.OpenCaseFolder (result.CaseFolderPath, "KernelCaseCreationCommandService.Execute.EarlyPreOpen");
 			_logger.Info ("Kernel case early folder open requested. mode=" + result.Mode.ToString () + ", folderPath=" + result.CaseFolderPath + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 		}
@@ -159,6 +171,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private static bool ShouldPromptToOpenCreatedCase (KernelCaseCreationMode mode)
 		{
 			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
+		}
+
+		private static bool ShouldStartCaseFolderEarlyOpen (KernelCaseCreationMode mode)
+		{
+			return false;
 		}
 
 		private void PresentCaseFolderBestEffort (KernelCaseCreationResult result, string reason)

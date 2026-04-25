@@ -13,6 +13,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$RuntimeAddInDir = [System.IO.Path]::GetFullPath($RuntimeAddInDir)
+if ($RuntimeAddInDir -match '(?i)(?:^|[\\/])\.codex-temp(?:[\\/]|$)') {
+    throw "Invalid runtime add-in directory (.codex-temp detected). Aborting because this is an incorrect execution environment and would risk VSTO misregistration: $RuntimeAddInDir"
+}
+
 function Get-ManifestVersionPair {
     param(
         [Parameter(Mandatory = $true)]

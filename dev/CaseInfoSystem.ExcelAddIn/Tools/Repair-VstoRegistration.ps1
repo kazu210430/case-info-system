@@ -5,6 +5,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$RuntimeManifestPath = [System.IO.Path]::GetFullPath($RuntimeManifestPath)
+$resolvedRuntimeAddInDir = Split-Path -Parent $RuntimeManifestPath
+if ($resolvedRuntimeAddInDir -match '(?i)(?:^|[\\/])\.codex-temp(?:[\\/]|$)') {
+    throw "Invalid runtime add-in directory (.codex-temp detected). Aborting because this is an incorrect execution environment and would risk VSTO misregistration: $resolvedRuntimeAddInDir"
+}
+
 function Convert-ToFileUri {
     param(
         [Parameter(Mandatory = $true)]

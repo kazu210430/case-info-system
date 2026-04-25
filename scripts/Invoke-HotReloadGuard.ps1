@@ -411,7 +411,10 @@ function Invoke-VerifyMode {
 }
 
 $repoRoot = Get-RepositoryRoot
-$runtimeRoot = Get-RuntimeRoot
+$runtimeRoot = [System.IO.Path]::GetFullPath((Get-RuntimeRoot))
+if ($runtimeRoot -match '(?i)(?:^|[\\/])\.codex-temp(?:[\\/]|$)') {
+    throw "Invalid runtime root (.codex-temp detected). Aborting because this is an incorrect execution environment and would risk VSTO misregistration: $runtimeRoot"
+}
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
     $BackupRoot = Join-Path $repoRoot 'build\hot-reload-backups'
 }

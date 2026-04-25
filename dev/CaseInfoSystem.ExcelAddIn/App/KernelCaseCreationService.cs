@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
@@ -9,6 +10,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
 	internal sealed class KernelCaseCreationService
 	{
+		private const string CaseHomeSheetCodeName = "shHOME";
+
+		private const string CaseHomeSheetName = "\u30db\u30fc\u30e0";
+
 		private readonly KernelWorkbookService _kernelWorkbookService;
 
 		private readonly KernelCasePathService _kernelCasePathService;
@@ -209,6 +214,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						}
 						_logger.Info ("Kernel saved CASE hidden initialized. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 					}
+					if (plan.Mode == KernelCaseCreationMode.CreateCaseBatch) {
+						NormalizeBatchWorkbookWindowStateBeforeSave (workbook, plan, stopwatch);
+					}
 					elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
 					workbook.Save ();
 					if (plan.Mode == KernelCaseCreationMode.NewCaseDefault) {
@@ -241,6 +249,78 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					}
 				}
 				throw;
+			}
+		}
+
+		private void NormalizeBatchWorkbookWindowStateBeforeSave (Workbook workbook, KernelCaseCreationPlan plan, Stopwatch stopwatch)
+		{
+			Window window = null;
+			Worksheet worksheet = null;
+			int num = SafeWorkbookWindowCount (workbook);
+			try {
+				window = ResolveOrCreateBatchWorkbookWindow (workbook);
+				if (window == null) {
+					throw new InvalidOperationException ("Batch CASE workbook window could not be resolved before save.");
+				}
+				worksheet = ResolveBatchDefaultDisplayWorksheet (workbook);
+				if (worksheet != null) {
+					worksheet.Activate ();
+				} else {
+					_logger.Info ("Kernel batch CASE workbook default worksheet could not be resolved before save. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				}
+				if (window.WindowState == XlWindowState.xlMinimized) {
+					window.WindowState = XlWindowState.xlNormal;
+				}
+				_logger.Info ("Kernel batch CASE workbook window normalized before save. path=" + plan.CaseWorkbookPath + ", initialWindowCount=" + num + ", finalWindowCount=" + SafeWorkbookWindowCount (workbook) + ", windowVisible=" + SafeWindowVisible (window) + ", windowState=" + SafeWindowState (window) + ", activeSheet=" + SafeWorksheetName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+			} catch (Exception exception) {
+				_logger.Error ("Kernel batch CASE workbook window normalization failed. path=" + ((plan == null) ? string.Empty : (plan.CaseWorkbookPath ?? string.Empty)), exception);
+				throw;
+			} finally {
+				ReleaseComObject (worksheet);
+				ReleaseComObject (window);
+			}
+		}
+
+		private Window ResolveOrCreateBatchWorkbookWindow (Workbook workbook)
+		{
+			if (workbook == null) {
+				return null;
+			}
+			if (SafeWorkbookWindowCount (workbook) > 0) {
+				return workbook.Windows [1];
+			}
+			workbook.Activate ();
+			if (SafeWorkbookWindowCount (workbook) > 0) {
+				return workbook.Windows [1];
+			}
+			return workbook.NewWindow ();
+		}
+
+		private Worksheet ResolveBatchDefaultDisplayWorksheet (Workbook workbook)
+		{
+			if (workbook == null) {
+				return null;
+			}
+			Worksheet worksheet = _excelInteropService.FindWorksheetByCodeName (workbook, CaseHomeSheetCodeName);
+			if (worksheet != null) {
+				return worksheet;
+			}
+			try {
+				worksheet = workbook.Worksheets [CaseHomeSheetName] as Worksheet;
+			} catch {
+				worksheet = null;
+			}
+			if (worksheet != null) {
+				return worksheet;
+			}
+			worksheet = workbook.ActiveSheet as Worksheet;
+			if (worksheet != null) {
+				return worksheet;
+			}
+			try {
+				return workbook.Worksheets [1] as Worksheet;
+			} catch {
+				return null;
 			}
 		}
 
@@ -293,6 +373,56 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					throw new IOException ("Initialized CASE workbook could not be moved to final path.");
 				}
 				_logger.Info ("Kernel case local working copy finalized. reason=" + reason + ", finalPath=" + finalCaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+			}
+		}
+
+		private static int SafeWorkbookWindowCount (Workbook workbook)
+		{
+			try {
+				return (workbook == null || workbook.Windows == null) ? 0 : workbook.Windows.Count;
+			} catch {
+				return 0;
+			}
+		}
+
+		private static string SafeWindowVisible (Window window)
+		{
+			try {
+				return (window != null && window.Visible) ? "true" : "false";
+			} catch {
+				return "unknown";
+			}
+		}
+
+		private static string SafeWindowState (Window window)
+		{
+			try {
+				return (window == null) ? string.Empty : window.WindowState.ToString ();
+			} catch {
+				return string.Empty;
+			}
+		}
+
+		private static string SafeWorksheetName (Workbook workbook)
+		{
+			Worksheet worksheet = null;
+			try {
+				worksheet = ((workbook == null) ? null : (workbook.ActiveSheet as Worksheet));
+				return (worksheet == null) ? string.Empty : (worksheet.CodeName ?? worksheet.Name ?? string.Empty);
+			} catch {
+				return string.Empty;
+			} finally {
+				ReleaseComObject (worksheet);
+			}
+		}
+
+		private static void ReleaseComObject (object comObject)
+		{
+			try {
+				if (comObject != null && Marshal.IsComObject (comObject)) {
+					Marshal.ReleaseComObject (comObject);
+				}
+			} catch {
 			}
 		}
 

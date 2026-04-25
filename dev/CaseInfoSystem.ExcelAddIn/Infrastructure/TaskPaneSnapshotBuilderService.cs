@@ -432,13 +432,28 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (workbook == null) {
 				return;
 			}
+			Windows windows = null;
 			try {
-				foreach (Window window in workbook.Windows) {
-					if (window != null) {
-						window.Visible = false;
+				windows = workbook.Windows;
+				int windowCount = (windows == null) ? 0 : windows.Count;
+				for (int index = 1; index <= windowCount; index++) {
+					Window window = null;
+					try {
+						window = windows [index];
+						if (window != null) {
+							window.Visible = false;
+						}
+					} finally {
+						if (window != null && Marshal.IsComObject (window)) {
+							Marshal.ReleaseComObject (window);
+						}
 					}
 				}
 			} catch {
+			} finally {
+				if (windows != null && Marshal.IsComObject (windows)) {
+					Marshal.ReleaseComObject (windows);
+				}
 			}
 		}
 

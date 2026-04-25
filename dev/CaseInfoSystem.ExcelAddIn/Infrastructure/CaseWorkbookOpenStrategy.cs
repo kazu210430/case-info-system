@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using CaseInfoSystem.ExcelAddIn.App;
 using Excel = Microsoft.Office.Interop.Excel;
 
 
@@ -275,18 +276,24 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _application.ScreenUpdating = false;
                 _application.EnableEvents = false;
                 _application.DisplayAlerts = false;
-                _logger.Info(
-                    "Case workbook hidden-for-display Excel state applied. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + CreatedCaseDisplayHiddenRouteName
-                    + ", screenUpdating=false, enableEvents=false, displayAlerts=false, elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
-                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
-                _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
-                HideOpenedWorkbookWindow(workbook);
-                RestorePreviousWindow(previousActiveWindow);
-                _logger.Info(
+	                _logger.Info(
+	                    "Case workbook hidden-for-display Excel state applied. path="
+	                    + (caseWorkbookPath ?? string.Empty)
+	                    + ", route="
+	                    + CreatedCaseDisplayHiddenRouteName
+	                    + ", screenUpdating=false, enableEvents=false, displayAlerts=false, elapsedMs="
+	                    + stopwatch.ElapsedMilliseconds.ToString());
+	                Stopwatch stopwatch2 = Stopwatch.StartNew();
+	                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "workbooksOpen", stopwatch2.ElapsedMilliseconds, "route=" + CreatedCaseDisplayHiddenRouteName);
+	                _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
+	                stopwatch2 = Stopwatch.StartNew();
+	                HideOpenedWorkbookWindow(workbook);
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "hideOpenedWorkbookWindow", stopwatch2.ElapsedMilliseconds, "route=" + CreatedCaseDisplayHiddenRouteName);
+	                stopwatch2 = Stopwatch.StartNew();
+	                RestorePreviousWindow(previousActiveWindow);
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "restorePreviousWindow", stopwatch2.ElapsedMilliseconds, "route=" + CreatedCaseDisplayHiddenRouteName);
+	                _logger.Info(
                     "Case workbook hidden-for-display open completed. path="
                     + (caseWorkbookPath ?? string.Empty)
                     + ", route="
@@ -455,11 +462,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private void CleanupDedicatedHiddenSession(string caseWorkbookPath, string routeName, Stopwatch stopwatch, Excel.Application application, Excel.Workbook workbook, bool saveBeforeClose)
-        {
-            try
-            {
-                if (saveBeforeClose && workbook != null)
+	        private void CleanupDedicatedHiddenSession(string caseWorkbookPath, string routeName, Stopwatch stopwatch, Excel.Application application, Excel.Workbook workbook, bool saveBeforeClose)
+	        {
+	            Stopwatch stopwatch2 = Stopwatch.StartNew();
+	            try
+	            {
+	                if (saveBeforeClose && workbook != null)
                 {
                     _logger.Info("Case workbook hidden session inner save starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
                     workbook.Save();
@@ -473,20 +481,24 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     _logger.Info("Case workbook hidden session workbook close completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
                 }
             }
-            finally
-            {
-                TryQuitApplication(application);
-                ReleaseComObject(workbook);
-                ReleaseComObject(application);
-                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
-            }
-        }
+	            finally
+	            {
+	                TryQuitApplication(application);
+	                Stopwatch stopwatch3 = Stopwatch.StartNew();
+	                ReleaseComObject(workbook);
+	                ReleaseComObject(application);
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "comRelease", stopwatch3.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty));
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty));
+	                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+	            }
+	        }
 
-        private void CleanupCachedHiddenSession(string caseWorkbookPath, string routeName, Stopwatch stopwatch, Excel.Application application, Excel.Workbook workbook, bool markPoisoned)
-        {
-            bool closeFailed = false;
-            try
-            {
+	        private void CleanupCachedHiddenSession(string caseWorkbookPath, string routeName, Stopwatch stopwatch, Excel.Application application, Excel.Workbook workbook, bool markPoisoned)
+	        {
+	            Stopwatch stopwatch2 = Stopwatch.StartNew();
+	            bool closeFailed = false;
+	            try
+	            {
                 if (workbook != null)
                 {
                     if (markPoisoned)
@@ -506,28 +518,33 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 closeFailed = true;
                 markPoisoned = true;
                 _logger.Error("CleanupCachedHiddenSession workbook close failed.", ex);
-            }
-            finally
-            {
-                ReleaseComObject(workbook);
-            }
+	            }
+	            finally
+	            {
+	                Stopwatch stopwatch3 = Stopwatch.StartNew();
+	                ReleaseComObject(workbook);
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "comRelease", stopwatch3.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty));
+	            }
 
-            if (markPoisoned || closeFailed)
-            {
-                MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
-                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
-                return;
-            }
+	            if (markPoisoned || closeFailed)
+	            {
+	                MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty) + ", cached=False");
+	                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+	                return;
+	            }
 
-            if (TryReturnCachedHiddenApplicationToIdle(application, caseWorkbookPath, routeName, stopwatch))
-            {
-                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=True, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
-                return;
-            }
+	            if (TryReturnCachedHiddenApplicationToIdle(application, caseWorkbookPath, routeName, stopwatch))
+	            {
+	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty) + ", cached=True");
+	                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=True, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+	                return;
+	            }
 
-            MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
-            _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
-        }
+	            MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
+	            NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty) + ", cached=False");
+	            _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+	        }
 
         private bool TryReturnCachedHiddenApplicationToIdle(Excel.Application application, string caseWorkbookPath, string routeName, Stopwatch stopwatch)
         {

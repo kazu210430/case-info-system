@@ -4,13 +4,13 @@ using CaseInfoSystem.ExcelAddIn.Infrastructure;
 
 namespace CaseInfoSystem.ExcelAddIn.UI
 {
-	internal sealed class CreatedCasePresentationWaitForm : Form
+	internal sealed class AccountingSetPresentationWaitForm : Form
 	{
 		private readonly Label _titleLabel;
 
 		private readonly Label _detailLabel;
 
-		internal CreatedCasePresentationWaitForm ()
+		internal AccountingSetPresentationWaitForm ()
 		{
 			Text = "案件情報System";
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
@@ -22,26 +22,29 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			MaximizeBox = false;
 			MinimizeBox = false;
 			DoubleBuffered = true;
-			ClientSize = new Size (360, 116);
+			ClientSize = new Size (392, 116);
+
 			_titleLabel = new Label {
 				AutoSize = false,
 				Left = 20,
 				Top = 22,
-				Width = 320,
+				Width = 352,
 				Height = 26,
-				Text = CreatedCasePresentationWaitService.CreatingStageTitle,
+				Text = AccountingSetPresentationWaitService.CreatingStageTitle,
 				TextAlign = ContentAlignment.MiddleLeft
 			};
+
 			_detailLabel = new Label {
 				AutoSize = false,
 				Left = 20,
 				Top = 54,
-				Width = 320,
+				Width = 352,
 				Height = 18,
-				Text = CreatedCasePresentationWaitService.DefaultStageDetail,
+				Text = AccountingSetPresentationWaitService.DefaultStageDetail,
 				ForeColor = Color.DimGray,
 				TextAlign = ContentAlignment.MiddleLeft
 			};
+
 			Controls.Add (_titleLabel);
 			Controls.Add (_detailLabel);
 		}
@@ -51,12 +54,14 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			if (IsDisposed) {
 				return;
 			}
+
 			if (InvokeRequired) {
 				Invoke ((MethodInvoker)delegate {
 					SetStageCore (title, detail);
 				});
 				return;
 			}
+
 			SetStageCore (title, detail);
 		}
 
@@ -65,6 +70,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			if (IsDisposed) {
 				return;
 			}
+
 			_titleLabel.Text = string.IsNullOrWhiteSpace (title) ? _titleLabel.Text : title;
 			_detailLabel.Text = string.IsNullOrWhiteSpace (detail) ? _detailLabel.Text : detail;
 		}

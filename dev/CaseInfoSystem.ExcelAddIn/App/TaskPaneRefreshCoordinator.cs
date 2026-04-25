@@ -252,6 +252,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private bool TryRefreshPaneAndScheduleWarmup(WorkbookContext context, string reason, Stopwatch stopwatch)
         {
             bool refreshed = _taskPaneManager.RefreshPane(context, reason);
+            NewCaseDefaultTimingLogHelper.LogTaskPaneReadyWaitToRefreshCompleted(
+                _logger,
+                context == null ? string.Empty : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
+                reason,
+                refreshed,
+                "refreshAttemptCompleted");
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshCoordinator action=refresh-pane-complete reason="
@@ -284,9 +290,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
 
+            Stopwatch stopwatch2 = Stopwatch.StartNew();
             bool recovered = workbook != null
                 ? _excelWindowRecoveryService.TryRecoverWorkbookWindow(workbook, "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true)
                 : _excelWindowRecoveryService.TryRecoverActiveWorkbookWindow("TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true);
+            NewCaseDefaultTimingLogHelper.LogDetail(
+                _logger,
+                context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
+                "waitUiCloseToFinalForegroundStable",
+                "tryRecoverWorkbookWindow",
+                stopwatch2.ElapsedMilliseconds,
+                "reason=" + (reason ?? string.Empty));
 
             _logger?.Info(
                 KernelFlickerTracePrefix
@@ -308,6 +322,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     protectedWindow,
                     "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty));
             }
+
+            NewCaseDefaultTimingLogHelper.LogWaitUiCloseToFinalForegroundStable(
+                _logger,
+                context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
+                reason,
+                recovered);
         }
 
         private static string FormatContextDescriptor(WorkbookContext context)

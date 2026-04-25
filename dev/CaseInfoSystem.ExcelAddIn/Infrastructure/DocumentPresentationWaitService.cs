@@ -7,6 +7,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
     internal sealed class DocumentPresentationWaitService
     {
+        internal const string CreatingStageTitle = "文書を作成しています";
+        internal const string LaunchingWordStageTitle = "Wordを起動しています";
+        internal const string LoadingTemplateStageTitle = "テンプレートを読み込んでいます";
+        internal const string ApplyingMergeDataStageTitle = "文書へ差し込んでいます";
+        internal const string SavingDocumentStageTitle = "文書を保存しています";
+        internal const string ShowingScreenStageTitle = "画面を表示しています";
+        internal const string DefaultStageDetail = "Word の起動や処理が完了するまで、そのままでお待ちください。";
+
         private readonly Logger _logger;
 
         internal DocumentPresentationWaitService(Logger logger)
@@ -49,6 +57,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     Close();
                     _logger.Warn("Document presentation wait UI failed to show. message=" + exception.Message);
+                }
+            }
+
+            internal void UpdateStage(string title, string detail = null)
+            {
+                if (_isClosed || _waitForm == null || _waitForm.IsDisposed)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _waitForm.SetStage(title, string.IsNullOrWhiteSpace(detail) ? DefaultStageDetail : detail);
+                    _waitForm.Update();
+                    _waitForm.Refresh();
+                    Application.DoEvents();
+                }
+                catch (Exception exception)
+                {
+                    _logger.Warn("Document presentation wait UI stage update failed. title=" + (title ?? string.Empty) + ", message=" + exception.Message);
                 }
             }
 

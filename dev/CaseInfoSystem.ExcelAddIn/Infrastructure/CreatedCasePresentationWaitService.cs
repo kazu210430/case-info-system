@@ -7,6 +7,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
 	internal sealed class CreatedCasePresentationWaitService
 	{
+		internal const string CreatingStageTitle = "案件情報.xlsxを作成しています";
+
+		internal const string PreparingOpenStageTitle = "案件情報.xlsxを開く準備をしています";
+
+		internal const string ShowingScreenStageTitle = "案件情報.xlsxの画面を表示しています";
+
+		internal const string BatchOpeningFolderStageTitle = "保存先フォルダを開いています";
+
+		internal const string BatchReturningHomeStageTitle = "HOME画面に戻ります。作成を続けてください。";
+
+		internal const string DefaultStageDetail = "画面が切り替わるまでそのままでお待ちください。";
+
 		private readonly Logger _logger;
 
 		internal CreatedCasePresentationWaitService (Logger logger)
@@ -59,6 +71,21 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			internal void CloseForSuccessfulPresentation ()
 			{
 				CloseCore (restoreOwner: false);
+			}
+
+			internal void UpdateStage (string title, string detail = null)
+			{
+				if (_isClosed || _waitForm == null || _waitForm.IsDisposed) {
+					return;
+				}
+				try {
+					_waitForm.SetStage (title, string.IsNullOrWhiteSpace (detail) ? DefaultStageDetail : detail);
+					_waitForm.Update ();
+					_waitForm.Refresh ();
+					System.Windows.Forms.Application.DoEvents ();
+				} catch (Exception exception) {
+					_logger.Warn ("Created CASE presentation wait UI stage update failed. title=" + (title ?? string.Empty) + ", message=" + exception.Message);
+				}
 			}
 
 			internal void CloseAndRestoreOwner ()

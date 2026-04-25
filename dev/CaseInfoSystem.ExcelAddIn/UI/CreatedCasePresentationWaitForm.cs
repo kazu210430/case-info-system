@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
 
 namespace CaseInfoSystem.ExcelAddIn.UI
 {
@@ -28,7 +29,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Top = 22,
 				Width = 320,
 				Height = 26,
-				Text = "案件情報.xlsxを作成しています",
+				Text = CreatedCasePresentationWaitService.CreatingStageTitle,
 				TextAlign = ContentAlignment.MiddleLeft
 			};
 			_detailLabel = new Label {
@@ -37,7 +38,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Top = 54,
 				Width = 320,
 				Height = 18,
-				Text = "画面が切り替わるまでそのままでお待ちください。",
+				Text = CreatedCasePresentationWaitService.DefaultStageDetail,
 				ForeColor = Color.DimGray,
 				TextAlign = ContentAlignment.MiddleLeft
 			};

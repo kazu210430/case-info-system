@@ -102,7 +102,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			try {
 				ValidateRequest (request);
 				_logger.Info ("Kernel case command validated. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				if (ShouldPromptToOpenCreatedCase (request.Mode)) {
+				if (ShouldShowCreatedCaseWaitUi (request.Mode)) {
 					waitSession = _createdCasePresentationWaitService.ShowWaiting (stopwatch);
 					waitSession.UpdateStage (CreatedCasePresentationWaitService.CreatingStageTitle);
 					if (request.Mode == KernelCaseCreationMode.NewCaseDefault) {
@@ -117,8 +117,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("NewCaseDefault timing. segment=waitUiShownToCaseCreated, caseWorkbookPath=" + (kernelCaseCreationResult.CaseWorkbookPath ?? string.Empty) + ", elapsedMs=" + Math.Max (0L, stopwatch.ElapsedMilliseconds - waitUiShownElapsedMs));
 				}
 				if (!ShouldPromptToOpenCreatedCase (kernelCaseCreationResult.Mode)) {
+					if (kernelCaseCreationResult.Mode == KernelCaseCreationMode.CreateCaseBatch) {
+						waitSession?.UpdateStage (CreatedCasePresentationWaitService.BatchOpeningFolderStageTitle);
+					}
 					PresentCaseFolderBestEffort (kernelCaseCreationResult, "KernelCaseCreationCommandService.Execute.NoPrompt");
+					if (kernelCaseCreationResult.Mode == KernelCaseCreationMode.CreateCaseBatch) {
+						_logger.Info ("NewCaseDefault timing detail. segment=batchStage, phase=stage3Update, mode=CreateCaseBatch, method=Execute, threadId=" + Environment.CurrentManagedThreadId + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+						waitSession?.UpdateStage (CreatedCasePresentationWaitService.BatchReturningHomeStageTitle);
+					}
 					kernelCaseCreationResult.ShouldCloseKernelHome = false;
+					if (kernelCaseCreationResult.Mode == KernelCaseCreationMode.CreateCaseBatch) {
+						CloseWaitSession (waitSession, restoreOwner: true);
+						waitSession = null;
+					}
 					_logger.Info ("Kernel case command completed without open prompt. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 					return kernelCaseCreationResult;
 				}
@@ -171,6 +182,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private static bool ShouldPromptToOpenCreatedCase (KernelCaseCreationMode mode)
 		{
 			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
+		}
+
+		private static bool ShouldShowCreatedCaseWaitUi (KernelCaseCreationMode mode)
+		{
+			return ShouldPromptToOpenCreatedCase (mode) || mode == KernelCaseCreationMode.CreateCaseBatch;
 		}
 
 		private static bool ShouldStartCaseFolderEarlyOpen (KernelCaseCreationMode mode)

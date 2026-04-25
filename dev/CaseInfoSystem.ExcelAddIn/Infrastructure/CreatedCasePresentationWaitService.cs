@@ -13,6 +13,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal const string ShowingScreenStageTitle = "案件情報.xlsxの画面を表示しています";
 
+		internal const string BatchOpeningFolderStageTitle = "保存先フォルダを開いています";
+
+		internal const string BatchReturningHomeStageTitle = "HOME画面に戻ります。作成を続けてください。";
+
 		internal const string DefaultStageDetail = "画面が切り替わるまでそのままでお待ちください。";
 
 		private readonly Logger _logger;

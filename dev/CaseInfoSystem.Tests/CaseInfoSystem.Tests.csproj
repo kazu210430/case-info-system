@@ -44,6 +44,7 @@
     <Compile Include="Fakes\OfficeInteropShims.cs" />
     <Compile Include="Fakes\OrchestrationDependencyPlaceholders.cs" />
     <Compile Include="Fakes\OrchestrationTestSupport.cs" />
+    <Compile Include="Fakes\NewCaseDefaultTimingLogHelper.cs" />
     <Compile Include="CaseWorkbookLifecycleServicePolicyTests.cs" />
     <Compile Include="DocumentCommandActionRoutePolicyTests.cs" />
     <Compile Include="DocumentCommandExecutionDecisionPolicyTests.cs" />

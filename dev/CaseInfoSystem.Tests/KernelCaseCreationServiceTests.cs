@@ -162,6 +162,14 @@ namespace CaseInfoSystem.Tests
                 Path = tempRoot,
                 Application = hiddenApplication
             };
+            Excel.Worksheet homeWorksheet = new Excel.Worksheet
+            {
+                CodeName = "shHOME",
+                Name = "\u30db\u30fc\u30e0",
+                Parent = hiddenWorkbook
+            };
+            hiddenWorkbook.Worksheets.Add(homeWorksheet);
+            hiddenWorkbook.ActiveSheet = homeWorksheet;
             hiddenApplication.Workbooks.Add(hiddenWorkbook);
 
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
@@ -433,6 +441,9 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(new[] { caseWorkbookPath }, initializedPaths);
                 Assert.Equal(1, hiddenWorkbook.SaveCallCount);
                 Assert.Equal(1, hiddenWorkbook.CloseCallCount);
+                Assert.Equal(1, hiddenWorkbook.Windows.Count);
+                Assert.True(hiddenWorkbook.Windows[1].Visible);
+                Assert.True(hiddenWorkbook.Windows[1].Activated);
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.True(kernelWorkbook.Application.DisplayAlerts);
                 Assert.Contains(logs, message => message.IndexOf("hidden session opened", StringComparison.OrdinalIgnoreCase) >= 0);

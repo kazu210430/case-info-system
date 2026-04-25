@@ -15,6 +15,8 @@ Thumbs.db
 # .NET build outputs
 [Bb]in/
 [Oo]bj/
+*.pdb
+*.cache
 
 # Test output
 [Tt]estResults/
@@ -28,7 +30,11 @@ build/hot-reload-backups/
 # Intentionally not ignored here:
 # - dev/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx
 # - dev/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn_TemporaryKey.pfx
-# - dev/Deploy/**
+# - dev/CaseInfoSystem.ExcelAddIn/Config/DocumentExecution*.txt
+
+# Generated deploy package outputs
+/dev/Deploy/DebugPackage/
+/dev/Deploy/Package/
 
 /build/
 /.github/build/*

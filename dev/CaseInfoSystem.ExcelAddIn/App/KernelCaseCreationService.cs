@@ -268,6 +268,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				} else {
 					_logger.Info ("Kernel batch CASE workbook default worksheet could not be resolved before save. path=" + plan.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				}
+				window.Visible = true;
 				if (window.WindowState == XlWindowState.xlMinimized) {
 					window.WindowState = XlWindowState.xlNormal;
 				}

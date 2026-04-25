@@ -256,11 +256,10 @@ namespace CaseInfoSystem.ExcelAddIn
             var caseWorkbookInitializer = new CaseWorkbookInitializer(ExcelInteropService, caseTemplateSnapshotService, caseListFieldDefinitionRepository);
             var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy(_application, WorkbookRoleResolver, _logger);
             CaseWorkbookOpenStrategy = caseWorkbookOpenStrategy;
-            var createdCaseOpenPromptService = new CreatedCaseOpenPromptService(_logger);
             var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
             var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, ExcelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, TransientPaneSuppressionService, _logger);
             var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, TransientPaneSuppressionService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
-            KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCaseOpenPromptService, createdCasePresentationWaitService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
+            KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCasePresentationWaitService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelUserDataReflectionService = new KernelUserDataReflectionService(
                 KernelWorkbookService,
                 ExcelInteropService,

@@ -176,8 +176,8 @@ namespace CaseInfoSystem.ExcelAddIn
             KernelWorkbookService = kernelWorkbookCoreComposition.KernelWorkbookService;
             KernelWorkbookLifecycleService = kernelWorkbookCoreComposition.KernelWorkbookLifecycleService;
             var userErrorService = new UserErrorService(_logger);
-            CaseWorkbookLifecycleService = new CaseWorkbookLifecycleService(WorkbookRoleResolver, _application, ExcelInteropService, pathCompatibilityService, TransientPaneSuppressionService, _logger);
             var folderWindowService = new FolderWindowService(pathCompatibilityService, _logger);
+            CaseWorkbookLifecycleService = new CaseWorkbookLifecycleService(WorkbookRoleResolver, _application, ExcelInteropService, pathCompatibilityService, TransientPaneSuppressionService, folderWindowService, _logger);
             var kernelCasePathService = new KernelCasePathService(pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(ExcelInteropService, _logger);
             var masterTemplateCatalogService = new MasterTemplateCatalogService(_application, ExcelInteropService, pathCompatibilityService, _logger);
@@ -260,7 +260,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
             var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, ExcelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, TransientPaneSuppressionService, _logger);
             var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, TransientPaneSuppressionService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
-            KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCaseOpenPromptService, createdCasePresentationWaitService, ExcelInteropService, _logger);
+            KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCaseOpenPromptService, createdCasePresentationWaitService, CaseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelUserDataReflectionService = new KernelUserDataReflectionService(
                 KernelWorkbookService,
                 ExcelInteropService,

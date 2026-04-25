@@ -28,6 +28,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const int PostCloseRetryCount = 20;
         private const int PostCloseRetryIntervalMs = 500;
         private const uint GuiCaretBlinking = 0x00000001;
+        private const string CreatedCaseFolderOfferPromptTitle = "案件情報System (CASE)";
+        private const string CreatedCaseFolderOfferPromptMessage = "保存しました\r\n保存先フォルダを開きますか？";
+        private const string CreatedCaseFolderOfferOpenReason = "CaseWorkbookLifecycleService.PostCloseCreatedCaseFolderOffer";
         private static readonly XNamespace CustomPropertiesNamespace = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
 
         private readonly WorkbookRoleResolver _workbookRoleResolver;
@@ -35,9 +38,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
         private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
+        private readonly FolderWindowService _folderWindowService;
         private readonly Logger _logger;
         private readonly HashSet<string> _initializedWorkbookKeys;
         private readonly HashSet<string> _sessionDirtyWorkbookKeys;
+        private readonly HashSet<string> _createdCaseFolderOfferPendingWorkbookKeys;
         private readonly Dictionary<string, int> _managedCloseCounts;
         private readonly Queue<PostCloseFollowUpRequest> _pendingPostCloseQueue;
         private readonly CaseWorkbookLifecycleServiceTestHooks _testHooks;
@@ -83,6 +88,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
             TransientPaneSuppressionService transientPaneSuppressionService,
+            FolderWindowService folderWindowService,
             Logger logger)
         {
             _workbookRoleResolver = workbookRoleResolver ?? throw new ArgumentNullException(nameof(workbookRoleResolver));
@@ -90,9 +96,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
             _transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException(nameof(transientPaneSuppressionService));
+            _folderWindowService = folderWindowService ?? throw new ArgumentNullException(nameof(folderWindowService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _initializedWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _sessionDirtyWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _createdCaseFolderOfferPendingWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
             _testHooks = null;
@@ -105,9 +113,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _excelInteropService = null;
             _pathCompatibilityService = null;
             _transientPaneSuppressionService = null;
+            _folderWindowService = null;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _initializedWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _sessionDirtyWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _createdCaseFolderOfferPendingWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
             _testHooks = testHooks;
@@ -211,6 +221,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         return true;
                     }
 
+                    PromptToOpenCreatedCaseFolderIfNeeded(workbookKey, folderPath);
                     ScheduleManagedSessionCloseCore(workbookKey, folderPath, answer == DialogResult.Yes);
                     return true;
                 }
@@ -221,6 +232,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", macroEnabled="
                     + IsMacroEnabledWorkbook(workbook).ToString());
 
+                PromptToOpenCreatedCaseFolderIfNeeded(workbookKey, folderPath);
                 SchedulePostCloseFollowUpCore(workbookKey, folderPath);
                 _logger.Info("Case workbook post-close follow-up posted. workbook=" + workbookKey);
                 return false;
@@ -268,8 +280,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             _initializedWorkbookKeys.Remove(workbookKey);
             _sessionDirtyWorkbookKeys.Remove(workbookKey);
+            _createdCaseFolderOfferPendingWorkbookKeys.Remove(workbookKey);
             _managedCloseCounts.Remove(workbookKey);
             _workbookRoleResolver.RemoveKnownWorkbook(workbook);
+        }
+
+        internal void MarkCreatedCaseFolderOfferPending(Excel.Workbook workbook)
+        {
+            string workbookKey = GetWorkbookKey(workbook);
+            if (string.IsNullOrWhiteSpace(workbookKey))
+            {
+                return;
+            }
+
+            _createdCaseFolderOfferPendingWorkbookKeys.Add(workbookKey);
+            _logger.Info("Created CASE folder offer pending marked. workbook=" + workbookKey);
         }
 
         // メソッド: CASE/Base ブックの編集発生を記録する。
@@ -810,6 +835,97 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return folderPath;
         }
 
+        private bool DirectoryExistsSafe(string folderPath)
+        {
+            if (_testHooks != null && _testHooks.DirectoryExistsSafe != null)
+            {
+                return _testHooks.DirectoryExistsSafe(folderPath);
+            }
+
+            return _pathCompatibilityService != null
+                ? _pathCompatibilityService.DirectoryExistsSafe(folderPath)
+                : System.IO.Directory.Exists(folderPath);
+        }
+
+        private void PromptToOpenCreatedCaseFolderIfNeeded(string workbookKey, string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(workbookKey))
+            {
+                return;
+            }
+
+            bool wasPending = _createdCaseFolderOfferPendingWorkbookKeys.Remove(workbookKey);
+            if (!wasPending)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(folderPath) || !DirectoryExistsSafe(folderPath))
+            {
+                _logger.Info("Created CASE folder offer pending cleared without scheduling because folder was unavailable. workbook=" + workbookKey + ", folderPath=" + (folderPath ?? string.Empty));
+                return;
+            }
+
+            _logger.Info("Created CASE folder offer pending will be prompted during before-close handling. workbook=" + workbookKey + ", folderPath=" + folderPath);
+            TryPromptToOpenCreatedCaseFolder(folderPath);
+        }
+
+        private void TryPromptToOpenCreatedCaseFolder(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath))
+            {
+                return;
+            }
+
+            if (!DirectoryExistsSafe(folderPath))
+            {
+                _logger.Info("Created CASE folder offer prompt skipped because folder does not exist. folderPath=" + folderPath);
+                return;
+            }
+
+            try
+            {
+                DialogResult answer = ShowCreatedCaseFolderOfferPromptCore(folderPath);
+                if (answer != DialogResult.Yes)
+                {
+                    _logger.Info("Created CASE folder offer prompt dismissed without opening folder. folderPath=" + folderPath + ", answer=" + answer.ToString());
+                    return;
+                }
+
+                OpenCreatedCaseFolderCore(folderPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Created CASE folder offer prompt failed.", ex);
+            }
+        }
+
+        private DialogResult ShowCreatedCaseFolderOfferPromptCore(string folderPath)
+        {
+            if (_testHooks != null && _testHooks.ShowCreatedCaseFolderOfferPrompt != null)
+            {
+                return _testHooks.ShowCreatedCaseFolderOfferPrompt(folderPath);
+            }
+
+            return MessageBox.Show(
+                CreatedCaseFolderOfferPromptMessage,
+                CreatedCaseFolderOfferPromptTitle,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+        }
+
+        private void OpenCreatedCaseFolderCore(string folderPath)
+        {
+            if (_testHooks != null && _testHooks.OpenCreatedCaseFolder != null)
+            {
+                _testHooks.OpenCreatedCaseFolder(folderPath, CreatedCaseFolderOfferOpenReason);
+                return;
+            }
+
+            _folderWindowService?.OpenFolder(folderPath, CreatedCaseFolderOfferOpenReason);
+        }
+
         private Excel.Workbook FindOpenWorkbook(string workbookKey)
         {
             if (string.IsNullOrWhiteSpace(workbookKey))
@@ -974,7 +1090,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal Func<Excel.Workbook, string> ResolveContainingFolder { get; set; }
 
+            internal Func<string, bool> DirectoryExistsSafe { get; set; }
+
             internal Func<Excel.Workbook, DialogResult> ShowClosePrompt { get; set; }
+
+            internal Func<string, DialogResult> ShowCreatedCaseFolderOfferPrompt { get; set; }
+
+            internal Action<string, string> OpenCreatedCaseFolder { get; set; }
 
             internal Action<string, string, bool> ScheduleManagedSessionClose { get; set; }
 

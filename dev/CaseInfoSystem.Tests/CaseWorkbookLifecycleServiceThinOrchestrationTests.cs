@@ -359,5 +359,134 @@ namespace CaseInfoSystem.Tests
                 },
                 callLog);
         }
+
+        [Fact]
+        public void HandleWorkbookBeforeClose_WhenCreatedCaseFolderOfferIsPending_PromptsBeforeSchedulingManagedClose()
+        {
+            var callLog = new List<string>();
+            bool cancel = false;
+            Excel.Workbook workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\case-1.xlsx",
+                Name = "case-1.xlsx",
+                Path = @"C:\cases"
+            };
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsManagedClose = _ => false,
+                    IsSuppressed = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    DirectoryExistsSafe = _ => true,
+                    ShowClosePrompt = _ => DialogResult.Yes,
+                    ShowCreatedCaseFolderOfferPrompt = folder =>
+                    {
+                        callLog.Add("folder-prompt");
+                        return DialogResult.Yes;
+                    },
+                    OpenCreatedCaseFolder = (folder, reason) => callLog.Add("folder-open"),
+                    ScheduleManagedSessionClose = (key, folder, saveChanges) =>
+                    {
+                        callLog.Add("schedule:" + saveChanges.ToString());
+                    },
+                    SchedulePostCloseFollowUp = (key, folder) => callLog.Add("post-close")
+                });
+
+            service.MarkCreatedCaseFolderOfferPending(workbook);
+            service.HandleSheetChanged(workbook);
+            bool handled = service.HandleWorkbookBeforeClose(workbook, ref cancel);
+
+            Assert.True(handled);
+            Assert.True(cancel);
+            Assert.Equal(new[] { "folder-prompt", "folder-open", "schedule:True" }, callLog);
+        }
+
+        [Fact]
+        public void HandleWorkbookBeforeClose_WhenCreatedCaseFolderOfferIsPendingOnCleanClose_PromptsBeforeSchedulingPostClose()
+        {
+            var callLog = new List<string>();
+            bool cancel = false;
+            Excel.Workbook workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\case-1.xlsx",
+                Name = "case-1.xlsx",
+                Path = @"C:\cases"
+            };
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsManagedClose = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    DirectoryExistsSafe = _ => true,
+                    ShowCreatedCaseFolderOfferPrompt = folder =>
+                    {
+                        callLog.Add("folder-prompt");
+                        return DialogResult.No;
+                    },
+                    OpenCreatedCaseFolder = (folder, reason) => callLog.Add("folder-open"),
+                    ScheduleManagedSessionClose = (key, folder, saveChanges) => callLog.Add("managed"),
+                    SchedulePostCloseFollowUp = (key, folder) =>
+                    {
+                        callLog.Add("post-close");
+                    }
+                });
+
+            service.MarkCreatedCaseFolderOfferPending(workbook);
+            bool handled = service.HandleWorkbookBeforeClose(workbook, ref cancel);
+
+            Assert.False(handled);
+            Assert.False(cancel);
+            Assert.Equal(new[] { "folder-prompt", "post-close" }, callLog);
+        }
+
+        [Fact]
+        public void HandleWorkbookBeforeClose_WhenCreatedCaseFolderOfferPromptWasAlreadyShown_DoesNotPromptTwice()
+        {
+            var callLog = new List<string>();
+            Excel.Workbook workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\case-1.xlsx",
+                Name = "case-1.xlsx",
+                Path = @"C:\cases"
+            };
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-1",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsManagedClose = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    DirectoryExistsSafe = _ => true,
+                    ShowCreatedCaseFolderOfferPrompt = folder =>
+                    {
+                        callLog.Add("folder-prompt");
+                        return DialogResult.No;
+                    },
+                    SchedulePostCloseFollowUp = (key, folder) => callLog.Add("post-close")
+                });
+
+            service.MarkCreatedCaseFolderOfferPending(workbook);
+
+            bool firstCancel = false;
+            bool secondCancel = false;
+            service.HandleWorkbookBeforeClose(workbook, ref firstCancel);
+            service.HandleWorkbookBeforeClose(workbook, ref secondCancel);
+
+            Assert.Equal(
+                new[]
+                {
+                    "folder-prompt",
+                    "post-close",
+                    "post-close"
+                },
+                callLog);
+        }
     }
 }

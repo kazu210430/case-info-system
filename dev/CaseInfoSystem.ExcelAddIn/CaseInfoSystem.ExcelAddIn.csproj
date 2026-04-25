@@ -11,6 +11,7 @@
     <AssemblyName>CaseInfoSystem.ExcelAddIn</AssemblyName>
     <LoadBehavior>3</LoadBehavior>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <RuntimeIdentifiers>win</RuntimeIdentifiers>
     <DefineConstants>VSTO40</DefineConstants>
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <BootstrapperComponentsLocation>HomeSite</BootstrapperComponentsLocation>
@@ -97,9 +98,45 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Office.Interop.Excel" />
+    <PackageReference Include="Microsoft.Office.Interop.Excel" GeneratePathProperty="true" />
     <PackageReference Include="stdole" />
-    <PackageReference Include="CaseInfoSystem.VstoBuildAssets" PrivateAssets="all" />
+    <PackageReference Include="CaseInfoSystem.VstoBuildAssets" PrivateAssets="all" GeneratePathProperty="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Office.Core">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Office.dll</HintPath>
+      <Private>False</Private>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.v4.0.Framework">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Microsoft.Office.Tools.v4.0.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Tools.Applications.Runtime">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Microsoft.VisualStudio.Tools.Applications.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Microsoft.Office.Tools.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Common">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Microsoft.Office.Tools.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Common.v4.0.Utilities">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Microsoft.Office.Tools.Common.v4.0.Utilities.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Tools.Excel">
+      <HintPath>$(PkgCaseInfoSystem_VstoBuildAssets)\lib\net48\Microsoft.Office.Tools.Excel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Office.Interop.Excel">
+      <HintPath>$(PkgMicrosoft_Office_Interop_Excel)\lib\net20\Microsoft.Office.Interop.Excel.dll</HintPath>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Reference Update="Microsoft.Office.Interop.Excel">
@@ -111,6 +148,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="App.config" />
     <Content Include="Config\DocumentExecutionMode.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>DocumentExecutionMode.txt</TargetPath>

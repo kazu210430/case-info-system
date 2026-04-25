@@ -969,19 +969,41 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return;
             }
 
+            Excel.Windows windows = null;
             try
             {
-                foreach (Excel.Window window in workbook.Windows)
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
+                for (int index = 1; index <= windowCount; index++)
                 {
-                    if (window != null)
+                    Excel.Window window = null;
+                    try
                     {
-                        window.Visible = false;
+                        window = windows[index];
+                        if (window != null)
+                        {
+                            window.Visible = false;
+                        }
+                    }
+                    finally
+                    {
+                        if (window != null && Marshal.IsComObject(window))
+                        {
+                            Marshal.ReleaseComObject(window);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error("HideOpenedWorkbookWindow failed.", ex);
+            }
+            finally
+            {
+                if (windows != null && Marshal.IsComObject(windows))
+                {
+                    Marshal.ReleaseComObject(windows);
+                }
             }
         }
 

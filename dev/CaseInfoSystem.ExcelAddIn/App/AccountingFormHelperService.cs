@@ -478,13 +478,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (workbook == null || string.IsNullOrWhiteSpace (sheetCodeName)) {
 				return null;
 			}
-			foreach (Worksheet worksheet in workbook.Worksheets) {
-				if (worksheet != null && string.Equals (worksheet.CodeName, sheetCodeName, StringComparison.OrdinalIgnoreCase)) {
-					return worksheet;
+			Sheets worksheets = null;
+			try {
+				worksheets = workbook.Worksheets;
+				int worksheetCount = (worksheets == null) ? 0 : worksheets.Count;
+				for (int index = 1; index <= worksheetCount; index++) {
+					Worksheet worksheet = null;
+					bool isMatch = false;
+					try {
+						worksheet = worksheets [index] as Worksheet;
+						isMatch = worksheet != null && string.Equals (worksheet.CodeName, sheetCodeName, StringComparison.OrdinalIgnoreCase);
+						if (isMatch) {
+							return worksheet;
+						}
+					} finally {
+						if (!isMatch) {
+							ReleaseComObject (worksheet);
+						}
+					}
 				}
-				ReleaseComObject (worksheet);
+				return null;
+			} finally {
+				ReleaseComObject (worksheets);
 			}
-			return null;
 		}
 
 		private void ApplyReverseGoalSeek (Workbook workbook, string activeSheetCodeName, AccountingReverseGoalSeekRequest request)

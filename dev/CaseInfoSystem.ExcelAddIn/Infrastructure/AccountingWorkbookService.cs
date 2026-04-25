@@ -86,14 +86,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (workbook == null) {
 				return;
 			}
-			foreach (Window window in workbook.Windows) {
-				try {
-					if (window != null) {
-						window.Visible = visible;
+			Windows windows = null;
+			try {
+				windows = workbook.Windows;
+				int windowCount = (windows == null) ? 0 : windows.Count;
+				for (int index = 1; index <= windowCount; index++) {
+					Window window = null;
+					try {
+						window = windows [index];
+						if (window != null) {
+							window.Visible = visible;
+						}
+					} finally {
+						ReleaseComObject (window);
 					}
-				} finally {
-					ReleaseComObject (window);
 				}
+			} finally {
+				ReleaseComObject (windows);
 			}
 			Workbook activeWorkbook = _application.ActiveWorkbook;
 			_logger.Info ("Accounting workbook windows visibility updated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", visible=" + visible + ", activeWorkbook=" + (activeWorkbook == null ? string.Empty : (activeWorkbook.FullName ?? activeWorkbook.Name ?? string.Empty)));

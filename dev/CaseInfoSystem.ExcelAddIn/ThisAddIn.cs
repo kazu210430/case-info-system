@@ -49,7 +49,6 @@ namespace CaseInfoSystem.ExcelAddIn
         // Kernel 操作
         private KernelCaseCreationCommandService _kernelCaseCreationCommandService;
         private KernelUserDataReflectionService _kernelUserDataReflectionService;
-        private KernelCommandService _kernelCommandService;
         private WorkbookRibbonCommandService _workbookRibbonCommandService;
         private WorkbookCaseTaskPaneRefreshCommandService _workbookCaseTaskPaneRefreshCommandService;
         private WorkbookResetCommandService _workbookResetCommandService;
@@ -169,7 +168,6 @@ namespace CaseInfoSystem.ExcelAddIn
             // Kernel 操作
             _kernelCaseCreationCommandService = compositionRoot.KernelCaseCreationCommandService;
             _kernelUserDataReflectionService = compositionRoot.KernelUserDataReflectionService;
-            _kernelCommandService = compositionRoot.KernelCommandService;
             _workbookRibbonCommandService = compositionRoot.WorkbookRibbonCommandService;
             _workbookCaseTaskPaneRefreshCommandService = compositionRoot.WorkbookCaseTaskPaneRefreshCommandService;
             _workbookResetCommandService = compositionRoot.WorkbookResetCommandService;

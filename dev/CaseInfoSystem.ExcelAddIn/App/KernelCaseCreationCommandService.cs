@@ -136,7 +136,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("Kernel case command completed without open prompt. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 					return kernelCaseCreationResult;
 				}
-				TryStartCaseFolderEarlyOpen (kernelCaseCreationResult, stopwatch);
 				waitSessionTransferred = true;
 				KernelCaseCreationResult kernelCaseCreationResult2 = CompleteInteractiveOpenFlow (kernelCaseCreationResult, stopwatch, waitSession);
 				waitSession = null;
@@ -172,19 +171,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void TryStartCaseFolderEarlyOpen (KernelCaseCreationResult result, Stopwatch stopwatch)
-		{
-			if (!ShouldPresentCaseFolder (result)) {
-				return;
-			}
-			if (!ShouldStartCaseFolderEarlyOpen (result.Mode)) {
-				_logger.Info ("Kernel case early folder open suppressed. mode=" + result.Mode.ToString () + ", folderPath=" + result.CaseFolderPath + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-				return;
-			}
-			_kernelCasePresentationService.OpenCaseFolder (result.CaseFolderPath, "KernelCaseCreationCommandService.Execute.EarlyPreOpen");
-			_logger.Info ("Kernel case early folder open requested. mode=" + result.Mode.ToString () + ", folderPath=" + result.CaseFolderPath + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-		}
-
 		private static bool ShouldPromptToOpenCreatedCase (KernelCaseCreationMode mode)
 		{
 			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
@@ -200,31 +186,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return ShouldPromptToOpenCreatedCase (mode) || mode == KernelCaseCreationMode.CreateCaseBatch;
 		}
 
-		private static bool ShouldStartCaseFolderEarlyOpen (KernelCaseCreationMode mode)
-		{
-			return false;
-		}
-
 		private void PresentCaseFolderBestEffort (KernelCaseCreationResult result, string reason)
 		{
 			if (!ShouldPresentCaseFolder (result)) {
 				return;
 			}
-			if (ShouldWaitForCaseFolderPresentation (result.Mode)) {
-				_kernelCasePresentationService.OpenCaseFolderAndWait (result.CaseFolderPath, reason);
-				return;
-			}
-			_kernelCasePresentationService.OpenCaseFolder (result.CaseFolderPath, reason);
+			_kernelCasePresentationService.OpenCaseFolderAndWait (result.CaseFolderPath, reason);
 		}
 
 		private static bool ShouldPresentCaseFolder (KernelCaseCreationResult result)
 		{
 			return result != null && result.Success && !string.IsNullOrWhiteSpace (result.CaseFolderPath);
-		}
-
-		private static bool ShouldWaitForCaseFolderPresentation (KernelCaseCreationMode mode)
-		{
-			return mode == KernelCaseCreationMode.CreateCaseBatch;
 		}
 
 		private static void ValidateRequest (KernelCaseCreationRequest request)

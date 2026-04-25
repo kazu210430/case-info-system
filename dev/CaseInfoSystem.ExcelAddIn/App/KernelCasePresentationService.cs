@@ -28,8 +28,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string InitialCursorFieldKey = "顧客_よみ";
 
-		private const int CaseFolderPreOpenConfirmTimeoutMs = 300;
-
 		private readonly Application _application;
 
 		private readonly CaseWorkbookOpenStrategy _caseWorkbookOpenStrategy;
@@ -73,18 +71,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal void OpenCaseFolder (string caseFolderPath, string reason)
-		{
-			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
-				return;
-			}
-			try {
-				_folderWindowService.OpenFolder (caseFolderPath, reason ?? "KernelCasePresentationService.OpenCaseFolder");
-			} catch (Exception exception) {
-				_logger.Error ("OpenCaseFolder failed.", exception);
-			}
-		}
-
 		internal void OpenCaseFolderAndWait (string caseFolderPath, string reason)
 		{
 			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
@@ -119,7 +105,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
 					NewCaseDefaultTimingLogHelper.BeginPresentation (result.CaseWorkbookPath);
 				}
-				TryOpenCaseFolderBeforeShowingCase (result.CaseFolderPath, result.CaseWorkbookPath);
 				_caseWorkbookOpenStrategy.RegisterKnownCasePath (result.CaseWorkbookPath);
 				_transientPaneSuppressionService.SuppressPath (result.CaseWorkbookPath, "KernelCasePresentationService.OpenCreatedCase");
 				waitSession.UpdateStage (CreatedCasePresentationWaitService.PreparingOpenStageTitle);
@@ -169,14 +154,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private static bool ShouldUseHiddenOpenForCreatedCase (KernelCaseCreationMode mode)
 		{
 			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
-		}
-
-		private void TryOpenCaseFolderBeforeShowingCase (string caseFolderPath, string caseWorkbookPath)
-		{
-			if (string.IsNullOrWhiteSpace (caseFolderPath)) {
-				return;
-			}
-			_logger.Info ("CASE folder pre-open confirm skipped. workbookPath=" + (caseWorkbookPath ?? string.Empty) + ", folderPath=" + caseFolderPath + ", timeoutMs=" + CaseFolderPreOpenConfirmTimeoutMs);
 		}
 
 		private void ShowCreatedCase (Workbook workbook, CreatedCasePresentationWaitService.WaitSession waitSession)

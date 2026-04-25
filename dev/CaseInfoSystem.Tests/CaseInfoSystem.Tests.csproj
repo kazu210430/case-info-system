@@ -35,7 +35,6 @@
     <Compile Include="DocumentSaveServiceTests.cs" />
     <Compile Include="DocumentMergeServiceTests.cs" />
     <Compile Include="KernelCaseCreationServiceTests.cs" />
-    <Compile Include="FolderWindowServiceTests.cs" />
     <Compile Include="PathCompatibilityServiceTests.cs" />
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />

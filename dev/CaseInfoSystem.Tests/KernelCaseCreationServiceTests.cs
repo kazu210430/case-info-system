@@ -443,7 +443,6 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, hiddenWorkbook.CloseCallCount);
                 Assert.Equal(1, hiddenWorkbook.Windows.Count);
                 Assert.True(hiddenWorkbook.Windows[1].Visible);
-                Assert.True(hiddenWorkbook.Windows[1].Activated);
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.True(kernelWorkbook.Application.DisplayAlerts);
                 Assert.Contains(logs, message => message.IndexOf("hidden session opened", StringComparison.OrdinalIgnoreCase) >= 0);

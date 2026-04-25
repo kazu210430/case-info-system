@@ -245,8 +245,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (window.WindowState == XlWindowState.xlMinimized) {
 					window.WindowState = XlWindowState.xlNormal;
 				}
-				workbook.Activate ();
-				window.Activate ();
 				_logger.Info ("Kernel batch CASE workbook window normalized before save. path=" + plan.CaseWorkbookPath + ", initialWindowCount=" + num + ", finalWindowCount=" + SafeWorkbookWindowCount (workbook) + ", windowVisible=" + SafeWindowVisible (window) + ", windowState=" + SafeWindowState (window) + ", activeSheet=" + SafeWorksheetName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			} catch (Exception exception) {
 				_logger.Error ("Kernel batch CASE workbook window normalization failed. path=" + ((plan == null) ? string.Empty : (plan.CaseWorkbookPath ?? string.Empty)), exception);

@@ -589,10 +589,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var windowActivatePaneHandlingService = new WindowActivatePaneHandlingService(
                 _handleExternalWorkbookDetected,
                 _shouldSuppressCasePaneRefresh,
-                taskPaneManager,
-                _refreshTaskPane,
-                excelInteropService,
-                _logger);
+                _refreshTaskPane);
             var taskPaneRefreshCoordinator = new TaskPaneRefreshCoordinator(
                 workbookSessionService,
                 taskPaneManager,

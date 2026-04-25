@@ -157,7 +157,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // grpDateRule
             // 
-            this.grpDateRule.BackColor = System.Drawing.SystemColors.Menu;
+            this.grpDateRule.BackColor = System.Drawing.Color.WhiteSmoke;
             this.grpDateRule.Controls.Add(this.optDateNone);
             this.grpDateRule.Controls.Add(this.optDateYY);
             this.grpDateRule.Controls.Add(this.optDateYYYY);
@@ -212,7 +212,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // grpNameRule
             // 
-            this.grpNameRule.BackColor = System.Drawing.SystemColors.Menu;
+            this.grpNameRule.BackColor = System.Drawing.Color.WhiteSmoke;
             this.grpNameRule.Controls.Add(this.optNameCustDoc);
             this.grpNameRule.Controls.Add(this.optNameDocCust);
             this.grpNameRule.Controls.Add(this.optNameDoc);
@@ -268,7 +268,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // grpScreenSwitch
             // 
-            this.grpScreenSwitch.BackColor = System.Drawing.SystemColors.Menu;
+            this.grpScreenSwitch.BackColor = System.Drawing.Color.WhiteSmoke;
             this.grpScreenSwitch.Controls.Add(this.btnOpenCaseList);
             this.grpScreenSwitch.Controls.Add(this.btnOpenTemplate);
             this.grpScreenSwitch.Controls.Add(this.btnOpenUserData);
@@ -277,7 +277,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.grpScreenSwitch.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.grpScreenSwitch.Name = "grpScreenSwitch";
             this.grpScreenSwitch.Padding = new System.Windows.Forms.Padding(5, 4, 5, 4);
-            this.grpScreenSwitch.Size = new System.Drawing.Size(163, 167);
+            this.grpScreenSwitch.Size = new System.Drawing.Size(163, 170);
             this.grpScreenSwitch.TabIndex = 4;
             this.grpScreenSwitch.TabStop = false;
             this.grpScreenSwitch.Text = "画面切替";
@@ -285,7 +285,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnOpenCaseList
             // 
-            this.btnOpenCaseList.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.btnOpenCaseList.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(242)))), ((int)(((byte)(235)))));
             this.btnOpenCaseList.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
             this.btnOpenCaseList.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOpenCaseList.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
@@ -300,7 +300,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnOpenTemplate
             // 
-            this.btnOpenTemplate.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.btnOpenTemplate.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(242)))), ((int)(((byte)(235)))));
             this.btnOpenTemplate.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
             this.btnOpenTemplate.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOpenTemplate.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
@@ -314,7 +314,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnOpenUserData
             // 
-            this.btnOpenUserData.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.btnOpenUserData.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(242)))), ((int)(((byte)(235)))));
             this.btnOpenUserData.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
             this.btnOpenUserData.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOpenUserData.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
@@ -470,7 +470,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnCreateCaseSingle
             // 
-            this.btnCreateCaseSingle.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.btnCreateCaseSingle.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(242)))), ((int)(((byte)(235)))));
             this.btnCreateCaseSingle.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
             this.btnCreateCaseSingle.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCreateCaseSingle.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
@@ -484,7 +484,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnCreateCaseBatch
             // 
-            this.btnCreateCaseBatch.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.btnCreateCaseBatch.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(242)))), ((int)(((byte)(235)))));
             this.btnCreateCaseBatch.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
             this.btnCreateCaseBatch.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCreateCaseBatch.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
@@ -498,7 +498,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // pnlExistingCaseTree
             // 
-            this.pnlExistingCaseTree.BackColor = System.Drawing.SystemColors.Menu;
+            this.pnlExistingCaseTree.BackColor = System.Drawing.Color.WhiteSmoke;
             this.pnlExistingCaseTree.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.pnlExistingCaseTree.Controls.Add(this.label2);
             this.pnlExistingCaseTree.Controls.Add(this.lblExistingTreeDocName);
@@ -573,7 +573,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnNewTreeRootButton
             // 
-            this.btnNewTreeRootButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
+            this.btnNewTreeRootButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(242)))), ((int)(((byte)(235)))));
             this.btnNewTreeRootButton.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnNewTreeRootButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
             this.btnNewTreeRootButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -664,7 +664,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // pnlNewCaseTree
             // 
-            this.pnlNewCaseTree.BackColor = System.Drawing.SystemColors.Menu;
+            this.pnlNewCaseTree.BackColor = System.Drawing.Color.WhiteSmoke;
             this.pnlNewCaseTree.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.pnlNewCaseTree.Controls.Add(this.label5);
             this.pnlNewCaseTree.Controls.Add(this.label1);
@@ -697,7 +697,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
-            this.BackColor = System.Drawing.SystemColors.Menu;
+            this.BackColor = System.Drawing.Color.WhiteSmoke;
             this.ClientSize = new System.Drawing.Size(731, 769);
             this.Controls.Add(this.pnlExistingCaseTree);
             this.Controls.Add(this.btnCreateCaseBatch);

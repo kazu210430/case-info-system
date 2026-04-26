@@ -193,7 +193,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 accountingSetKernelSyncService,
                 _logger);
             var caseListRegistrationService = new CaseListRegistrationService(
-                _application,
                 ExcelInteropService,
                 kernelWorkbookResolverService,
                 caseDataSnapshotFactory,

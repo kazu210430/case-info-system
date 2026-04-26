@@ -25,8 +25,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string TaskPaneSnapshotCacheCountPropName = "TASKPANE_SNAPSHOT_CACHE_COUNT";
 
-		private readonly Application _application;
-
 		private readonly ExcelInteropService _excelInteropService;
 
 		private readonly KernelWorkbookResolverService _kernelWorkbookResolverService;
@@ -43,9 +41,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly Logger _logger;
 
-		internal CaseListRegistrationService (Application application, ExcelInteropService excelInteropService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseDataSnapshotFactory caseDataSnapshotFactory, CaseListFieldDefinitionRepository fieldDefinitionRepository, CaseListHeaderRepository headerRepository, CaseListMappingRepository mappingRepository, AccountingWorkbookService accountingWorkbookService, Logger logger)
+		internal CaseListRegistrationService (ExcelInteropService excelInteropService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseDataSnapshotFactory caseDataSnapshotFactory, CaseListFieldDefinitionRepository fieldDefinitionRepository, CaseListHeaderRepository headerRepository, CaseListMappingRepository mappingRepository, AccountingWorkbookService accountingWorkbookService, Logger logger)
 		{
-			_application = application ?? throw new ArgumentNullException ("application");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_kernelWorkbookResolverService = kernelWorkbookResolverService ?? throw new ArgumentNullException ("kernelWorkbookResolverService");
 			_caseDataSnapshotFactory = caseDataSnapshotFactory ?? throw new ArgumentNullException ("caseDataSnapshotFactory");

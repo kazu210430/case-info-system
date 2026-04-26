@@ -61,7 +61,9 @@
     <Compile Include="TaskPanePostActionRefreshPolicyTests.cs" />
     <Compile Include="TransientPaneSuppressionServiceTests.cs" />
     <Compile Include="WorkbookSessionServiceTests.cs" />
+    <Compile Include="AccountingNumericCellReaderTests.cs" />
     <!-- TaskPaneManager policies -->
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationPolicy.cs" Link="Source\App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostPreparationPolicy.cs" Link="Source\App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostReusePolicy.cs" Link="Source\App\TaskPaneHostReusePolicy.cs" />

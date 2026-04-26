@@ -167,6 +167,7 @@
     </Content>
     <Compile Include="App\AccountingFormHelperService.cs" />
     <Compile Include="App\AccountingInstallmentScheduleCommandService.cs" />
+    <Compile Include="App\AccountingNumericCellReader.cs" />
     <Compile Include="App\AccountingInternalCommandService.cs" />
     <Compile Include="App\AccountingPaymentHistoryCommandService.cs" />
     <Compile Include="App\AccountingPaymentHistoryImportService.cs" />

@@ -109,17 +109,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new ArgumentNullException ("workbook");
 			}
 			SyncPaymentHistoryHeaderFromInvoice (workbook);
-			double num = ReadDoubleSafe (workbook, "請求書", "F23");
-			double num2 = ReadDoubleSafe (workbook, "請求書", "F25");
+			const string text = "AccountingPaymentHistory.LoadFormState";
+			List<string> list = new List<string> ();
+			double num = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F23", "請求額小計", text, list);
+			double num2 = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F25", "実費等総額", text, list);
+			double num3 = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F29", "お預かり金額", text, list);
 			bool flag = ReadBooleanSafe (workbook, "請求書", "Y24");
-			return new AccountingPaymentHistoryFormState {
+			AccountingPaymentHistoryFormState accountingPaymentHistoryFormState = new AccountingPaymentHistoryFormState {
 				BillingAmountText = FormatAmount (num + num2),
 				ExpenseAmountText = FormatAmount (num2),
 				WithholdingText = (flag ? "する" : "しない"),
-				DepositAmountText = FormatAmount (ReadDoubleSafe (workbook, "請求書", "F29")),
+				DepositAmountText = FormatAmount (num3),
 				ReceiptDateText = ReadFormattedDateFromNamedRangeSafe (workbook, "お支払い履歴", "領収日"),
-				ReceiptAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, "お支払い履歴", "分割金")
+				ReceiptAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, "お支払い履歴", "分割金"),
+				HasNumericReadError = list.Count > 0,
+				NumericReadErrorMessage = string.Join (Environment.NewLine, list)
 			};
+			if (list.Count > 0) {
+				ShowLoadFormStateNumericReadWarning (accountingPaymentHistoryFormState.NumericReadErrorMessage);
+			}
+			return accountingPaymentHistoryFormState;
 		}
 
 		internal AccountingPaymentHistoryFormState ApplyIssueDate (Workbook workbook)
@@ -211,12 +220,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				int num = lastOccupiedHistoryRow + 1;
 				ApplyExpenseAmount (workbook, num, receiptAmount);
 				ExecuteReceiptGoalSeek (workbook, num, receiptAmount);
-				while (ReadDoubleSafe (workbook, "お支払い履歴", "I" + num.ToString (CultureInfo.InvariantCulture)) > receiptAmount) {
+				double num2 = ReadRequiredDouble (workbook, "お支払い履歴", "I" + num.ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.OutputFutureBalance");
+				while (num2 > receiptAmount) {
 					num++;
 					ApplyExpenseAmount (workbook, num, receiptAmount);
 					ExecuteReceiptGoalSeek (workbook, num, receiptAmount);
+					num2 = ReadRequiredDouble (workbook, "お支払い履歴", "I" + num.ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.OutputFutureBalance");
 				}
-				double num2 = ReadDoubleSafe (workbook, "お支払い履歴", "I" + num.ToString (CultureInfo.InvariantCulture));
 				if (num2 < 0.0) {
 					CorrectRow (workbook, num);
 					ClearRowsFrom (workbook, num + 1);
@@ -335,7 +345,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return false;
 			}
 			int lastOccupiedHistoryRow = GetLastOccupiedHistoryRow (workbook, GetEditableStartRow (workbook));
-			double num = ReadDoubleSafe (workbook, "お支払い履歴", "I" + lastOccupiedHistoryRow.ToString (CultureInfo.InvariantCulture));
+			double num = ReadRequiredDouble (workbook, "お支払い履歴", "I" + lastOccupiedHistoryRow.ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.OutputFutureBalance");
 			double num2 = num / Math.Max (1.0, receiptAmount);
 			double num3 = 60 - (lastOccupiedHistoryRow - 12) + 1;
 			if (num2 > num3) {
@@ -360,7 +370,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "A13", 0);
 			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "B13", "(充当済み)");
 			_accountingWorkbookService.SetHorizontalAlignmentCenter (workbook, "お支払い履歴", "B13");
-			double num = ReadDoubleSafe (workbook, "お支払い履歴", "J12");
+			double num = ReadRequiredDouble (workbook, "お支払い履歴", "J12", "実費残高", "AccountingPaymentHistory.AddHistoryEntry");
 			double num2 = ((depositAmount >= num) ? num : depositAmount);
 			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "H13", num2);
 			_accountingWorkbookService.ExecuteGoalSeek (workbook, "お支払い履歴", "C13", "D13", depositAmount);
@@ -375,7 +385,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void ApplyExpenseAmount (Workbook workbook, int rowIndex, double targetAmount)
 		{
-			double num = ReadDoubleSafe (workbook, "お支払い履歴", "J" + (rowIndex - 1).ToString (CultureInfo.InvariantCulture));
+			double num = ReadRequiredDouble (workbook, "お支払い履歴", "J" + (rowIndex - 1).ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingPaymentHistory.ApplyExpenseAmount");
 			double num2 = ((targetAmount >= num) ? num : targetAmount);
 			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "H" + rowIndex.ToString (CultureInfo.InvariantCulture), num2);
 		}
@@ -390,8 +400,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private void CorrectRow (Workbook workbook, int rowIndex)
 		{
 			string text = rowIndex.ToString (CultureInfo.InvariantCulture);
-			double num = ReadDoubleSafe (workbook, "お支払い履歴", "I" + (rowIndex - 1).ToString (CultureInfo.InvariantCulture));
-			double num2 = ReadDoubleSafe (workbook, "お支払い履歴", "H" + text);
+			double num = ReadRequiredDouble (workbook, "お支払い履歴", "I" + (rowIndex - 1).ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.CorrectRow");
+			double num2 = ReadRequiredDouble (workbook, "お支払い履歴", "H" + text, "実費等", "AccountingPaymentHistory.CorrectRow");
 			_accountingWorkbookService.ExecuteGoalSeek (workbook, "お支払い履歴", "F" + text, "D" + text, num - num2);
 			_accountingWorkbookService.RoundDownCell (workbook, "お支払い履歴", "D" + text, 0);
 		}
@@ -515,7 +525,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static string FormatAmount (double amount)
 		{
-			return (amount == 0.0) ? string.Empty : amount.ToString ("#,##0", CultureInfo.InvariantCulture);
+			return amount.ToString ("#,##0", CultureInfo.InvariantCulture);
 		}
 
 		private static double ParseAmount (string text)
@@ -556,14 +566,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private double ReadDoubleSafe (Workbook workbook, string sheetName, string address)
+		private double ReadRequiredDouble (Workbook workbook, string sheetName, string address, string itemName, string procedureName)
+		{
+			return ReadNumericCellCore (workbook, sheetName, address, itemName, procedureName, allowBlankAsZero: false);
+		}
+
+		private double ReadDoubleAllowBlankAsZero (Workbook workbook, string sheetName, string address, string itemName, string procedureName)
+		{
+			return ReadNumericCellCore (workbook, sheetName, address, itemName, procedureName, allowBlankAsZero: true);
+		}
+
+		private double ReadLoadFormStateDoubleAllowBlankAsZero (Workbook workbook, string sheetName, string address, string itemName, string procedureName, List<string> warnings)
 		{
 			try {
-				object obj = _accountingWorkbookService.ReadCellValue (workbook, sheetName, address);
-				return (obj == null) ? 0.0 : Convert.ToDouble (obj, CultureInfo.InvariantCulture);
-			} catch {
+				return ReadDoubleAllowBlankAsZero (workbook, sheetName, address, itemName, procedureName);
+			} catch (InvalidOperationException exception) {
+				if (warnings != null) {
+					warnings.Add (exception.Message);
+				}
 				return 0.0;
 			}
+		}
+
+		private double ReadNumericCellCore (Workbook workbook, string sheetName, string address, string itemName, string procedureName, bool allowBlankAsZero)
+		{
+			object cellValue = _accountingWorkbookService.ReadCellValue (workbook, sheetName, address);
+			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, sheetName, address);
+			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out var value, out var isBlank)) {
+				return value;
+			}
+			if (allowBlankAsZero && isBlank) {
+				return 0.0;
+			}
+			InvalidOperationException ex = AccountingNumericCellReader.CreateReadFailureException (sheetName, address, itemName, procedureName, displayText, allowBlankAsZero);
+			string text = Convert.ToString (cellValue, CultureInfo.InvariantCulture) ?? string.Empty;
+			_logger.Error ("Accounting numeric cell read failed. sheet=" + sheetName + ", address=" + address + ", item=" + itemName + ", procedure=" + procedureName + ", displayText=" + (string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ()) + ", cellValue=" + text, ex);
+			throw ex;
 		}
 
 		private bool ReadBooleanSafe (Workbook workbook, string sheetName, string address)
@@ -585,6 +623,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			string a = _accountingWorkbookService.ReadText (workbook, "お支払い履歴", "B13");
 			return string.Equals (a, "(充当済み)", StringComparison.OrdinalIgnoreCase) ? 14 : 13;
+		}
+
+		private void ShowLoadFormStateNumericReadWarning (string warningMessage)
+		{
+			if (string.IsNullOrWhiteSpace (warningMessage)) {
+				return;
+			}
+			_logger.Warn ("AccountingPaymentHistory.LoadFormState numeric read warning. " + warningMessage.Replace (Environment.NewLine, " | "));
+			MessageBox.Show ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 		}
 
 		private static void ShowInformationMessage (string message)

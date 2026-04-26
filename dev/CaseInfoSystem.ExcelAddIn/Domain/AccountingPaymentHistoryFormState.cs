@@ -14,5 +14,9 @@
         internal string ReceiptDateText { get; set; }
 
         internal string ReceiptAmountText { get; set; }
+
+        internal bool HasNumericReadError { get; set; }
+
+        internal string NumericReadErrorMessage { get; set; }
     }
 }

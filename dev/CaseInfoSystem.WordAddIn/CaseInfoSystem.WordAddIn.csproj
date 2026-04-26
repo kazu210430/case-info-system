@@ -132,6 +132,9 @@
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Infrastructure\WordAddInStartupLogWriter.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Services\ContentControlBatchReplaceService.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -180,6 +183,7 @@
     <ItemGroup>
       <DeployPackageExistingFiles Include="$(UnifiedDeployPackageDir)\*.*" />
       <DeployPackageFiles Include="$(TargetDir)\*.dll" />
+      <DeployPackageFiles Include="$(TargetDir)\*.config" />
       <DeployPackageFiles Include="$(TargetDir)\*.manifest" />
       <DeployPackageFiles Include="$(TargetDir)\*.vsto" />
       <DeployPackageFiles Remove="$(TargetDir)\*.pdb" />
@@ -192,6 +196,7 @@
     <ItemGroup>
       <DebugDeployPackageExistingFiles Include="$(DebugDeployPackageDir)\*.*" />
       <DebugDeployPackageFiles Include="$(TargetDir)\*.dll" />
+      <DebugDeployPackageFiles Include="$(TargetDir)\*.config" />
       <DebugDeployPackageFiles Include="$(TargetDir)\*.manifest" />
       <DebugDeployPackageFiles Include="$(TargetDir)\*.vsto" />
     </ItemGroup>

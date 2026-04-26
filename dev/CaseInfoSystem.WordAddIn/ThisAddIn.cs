@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows.Forms;
+using CaseInfoSystem.WordAddIn.Infrastructure;
 using CaseInfoSystem.WordAddIn.Services;
 using CaseInfoSystem.WordAddIn.UI;
 using Office = Microsoft.Office.Core;
@@ -17,18 +18,56 @@ namespace CaseInfoSystem.WordAddIn
 
         private void ThisAddIn_Startup(object sender, EventArgs e)
         {
-            _contentControlBatchReplaceService = new ContentControlBatchReplaceService();
-            ((Word.ApplicationEvents4_Event)Application).DocumentOpen += Application_DocumentOpen;
-            ((Word.ApplicationEvents4_Event)Application).NewDocument += Application_NewDocument;
-            ((Word.ApplicationEvents4_Event)Application).WindowActivate += Application_WindowActivate;
-            ApplyStylesPaneVisibility(Application == null ? null : Application.ActiveDocument);
+            WordAddInStartupLogWriter.Write("WordAddin startup begin");
+
+            try
+            {
+                ExecuteStartupStep("service composition", delegate
+                {
+                    _contentControlBatchReplaceService = new ContentControlBatchReplaceService();
+                });
+
+                ExecuteStartupStep("event subscribe", delegate
+                {
+                    Word.ApplicationEvents4_Event applicationEvents = (Word.ApplicationEvents4_Event)Application;
+                    applicationEvents.DocumentOpen += Application_DocumentOpen;
+                    applicationEvents.NewDocument += Application_NewDocument;
+                    applicationEvents.WindowActivate += Application_WindowActivate;
+                });
+
+                ExecuteStartupStep("taskpane or pane initialization", delegate
+                {
+                    // ActiveDocument is not guaranteed to exist during startup.
+                    // Document-specific pane state is refreshed by the existing document lifecycle events.
+                    ApplyStylesPaneVisibility(null, true, "taskpane or pane initialization");
+                });
+
+                WordAddInStartupLogWriter.Write("WordAddin startup end");
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException("WordAddin startup failure", ex);
+                throw;
+            }
         }
 
         private void ThisAddIn_Shutdown(object sender, EventArgs e)
         {
-            ((Word.ApplicationEvents4_Event)Application).DocumentOpen -= Application_DocumentOpen;
-            ((Word.ApplicationEvents4_Event)Application).NewDocument -= Application_NewDocument;
-            ((Word.ApplicationEvents4_Event)Application).WindowActivate -= Application_WindowActivate;
+            WordAddInStartupLogWriter.Write("WordAddin shutdown begin");
+
+            try
+            {
+                Word.ApplicationEvents4_Event applicationEvents = (Word.ApplicationEvents4_Event)Application;
+                applicationEvents.DocumentOpen -= Application_DocumentOpen;
+                applicationEvents.NewDocument -= Application_NewDocument;
+                applicationEvents.WindowActivate -= Application_WindowActivate;
+                WordAddInStartupLogWriter.Write("WordAddin shutdown end");
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException("WordAddin shutdown failure", ex);
+                throw;
+            }
         }
 
         private void Application_DocumentOpen(Word.Document document)
@@ -63,8 +102,18 @@ namespace CaseInfoSystem.WordAddIn
 
         private void ApplyStylesPaneVisibility(Word.Document document)
         {
+            ApplyStylesPaneVisibility(document, false, null);
+        }
+
+        private void ApplyStylesPaneVisibility(Word.Document document, bool throwOnFailure, string diagnosticStepName)
+        {
             if (Application == null)
             {
+                if (!string.IsNullOrWhiteSpace(diagnosticStepName))
+                {
+                    WordAddInStartupLogWriter.Write(diagnosticStepName + " skipped because Application is null");
+                }
+
                 return;
             }
 
@@ -72,8 +121,17 @@ namespace CaseInfoSystem.WordAddIn
             {
                 Application.TaskPanes[Word.WdTaskPanes.wdTaskPaneFormatting].Visible = IsStylePaneEnabled(document);
             }
-            catch
+            catch (Exception ex)
             {
+                if (!string.IsNullOrWhiteSpace(diagnosticStepName))
+                {
+                    WordAddInStartupLogWriter.WriteException(diagnosticStepName + " failure", ex);
+                }
+
+                if (throwOnFailure)
+                {
+                    throw;
+                }
             }
 
             UpdateRibbonToggleState(document);
@@ -82,7 +140,7 @@ namespace CaseInfoSystem.WordAddIn
         internal void RegisterRibbon(WordApplicationRibbon ribbon)
         {
             _wordApplicationRibbon = ribbon;
-            UpdateRibbonToggleState(Application == null ? null : Application.ActiveDocument);
+            UpdateRibbonToggleState(TryGetActiveDocument("RegisterRibbon initial state"));
         }
 
         private void UpdateRibbonToggleState(Word.Document document)
@@ -202,12 +260,24 @@ namespace CaseInfoSystem.WordAddIn
 
         protected override RibbonExtensibility CreateRibbonExtensibilityObject()
         {
-            _wordApplicationRibbon = new WordApplicationRibbon();
+            WordAddInStartupLogWriter.Write("CreateRibbonExtensibilityObject begin");
 
-            return Globals.Factory.GetRibbonFactory().CreateRibbonManager(new Microsoft.Office.Tools.Ribbon.IRibbonExtension[]
+            try
             {
-                _wordApplicationRibbon
-            });
+                _wordApplicationRibbon = new WordApplicationRibbon();
+                RibbonExtensibility ribbonManager = Globals.Factory.GetRibbonFactory().CreateRibbonManager(new Microsoft.Office.Tools.Ribbon.IRibbonExtension[]
+                {
+                    _wordApplicationRibbon
+                });
+
+                WordAddInStartupLogWriter.Write("CreateRibbonExtensibilityObject success");
+                return ribbonManager;
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException("CreateRibbonExtensibilityObject failure", ex);
+                throw;
+            }
         }
 
         private IntPtr ResolveWordWindowHandle()
@@ -227,10 +297,55 @@ namespace CaseInfoSystem.WordAddIn
             return IntPtr.Zero;
         }
 
+        private Word.Document TryGetActiveDocument(string diagnosticContext)
+        {
+            if (Application == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return Application.ActiveDocument;
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException(diagnosticContext + " active document unavailable", ex);
+                return null;
+            }
+        }
+
         private void InternalStartup()
         {
-            Startup += ThisAddIn_Startup;
-            Shutdown += ThisAddIn_Shutdown;
+            WordAddInStartupLogWriter.Write("InternalStartup begin");
+
+            try
+            {
+                Startup += ThisAddIn_Startup;
+                Shutdown += ThisAddIn_Shutdown;
+                WordAddInStartupLogWriter.Write("InternalStartup success");
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException("InternalStartup failure", ex);
+                throw;
+            }
+        }
+
+        private static void ExecuteStartupStep(string stepName, Action action)
+        {
+            WordAddInStartupLogWriter.Write(stepName + " begin");
+
+            try
+            {
+                action();
+                WordAddInStartupLogWriter.Write(stepName + " success");
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException(stepName + " failure", ex);
+                throw;
+            }
         }
     }
 }

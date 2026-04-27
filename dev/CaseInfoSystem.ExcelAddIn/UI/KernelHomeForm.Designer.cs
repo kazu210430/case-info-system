@@ -364,15 +364,15 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // btnCreate
             // 
-            this.btnCreate.BackColor = System.Drawing.Color.RoyalBlue;
+            this.btnCreate.BackColor = System.Drawing.Color.PowderBlue;
             this.btnCreate.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
             this.btnCreate.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnCreate.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnCreate.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnCreate.FlatAppearance.MouseDownBackColor = System.Drawing.Color.DeepSkyBlue;
             this.btnCreate.FlatAppearance.MouseOverBackColor = System.Drawing.Color.DeepSkyBlue;
             this.btnCreate.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnCreate.Font = new System.Drawing.Font("Yu Gothic UI Semibold", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.btnCreate.ForeColor = System.Drawing.Color.White;
+            this.btnCreate.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.btnCreate.ForeColor = System.Drawing.Color.Black;
             this.btnCreate.Location = new System.Drawing.Point(543, 271);
             this.btnCreate.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.btnCreate.Name = "btnCreate";

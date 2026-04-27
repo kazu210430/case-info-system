@@ -62,8 +62,13 @@
     <Compile Include="TransientPaneSuppressionServiceTests.cs" />
     <Compile Include="WorkbookSessionServiceTests.cs" />
     <Compile Include="AccountingNumericCellReaderTests.cs" />
+    <Compile Include="AccountingSetCreateServiceTests.cs" />
+    <Compile Include="AccountingSetKernelSyncServiceTests.cs" />
+    <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetKernelSyncService.cs" Link="Source\App\AccountingSetKernelSyncService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationPolicy.cs" Link="Source\App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostPreparationPolicy.cs" Link="Source\App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostReusePolicy.cs" Link="Source\App\TaskPaneHostReusePolicy.cs" />
@@ -135,6 +140,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationControl.cs" Link="Source\UI\AccountingNavigationControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocTaskPaneControl.cs" Link="Source\UI\DocTaskPaneControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocumentButtonsControl.cs" Link="Source\UI\DocumentButtonsControl.cs" />
+    <Compile Include="..\CaseInfoSystem.WordAddIn\Services\ContentControlBatchReplaceService.cs" Link="Source\Word\Services\ContentControlBatchReplaceService.cs" />
     <Compile Include="Fakes\TestDoubles.cs" />
+    <Compile Include="Fakes\WordInteropShims.cs" />
   </ItemGroup>
 </Project>

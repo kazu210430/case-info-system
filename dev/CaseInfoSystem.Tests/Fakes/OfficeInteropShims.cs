@@ -107,6 +107,26 @@ namespace Microsoft.Office.Interop.Excel
             Add(workbook);
             return workbook;
         }
+
+        public Workbook Open(
+            string filename,
+            object UpdateLinks,
+            bool ReadOnly,
+            object Format,
+            object Password,
+            object WriteResPassword,
+            object IgnoreReadOnlyRecommended,
+            object Origin,
+            object Delimiter,
+            object Editable,
+            object Notify,
+            object Converter,
+            object AddToMru,
+            object Local,
+            object CorruptLoad)
+        {
+            return Open(filename, UpdateLinks, ReadOnly);
+        }
     }
 
     public class Workbook
@@ -224,6 +244,8 @@ namespace Microsoft.Office.Interop.Excel
 
         public object Parent { get; set; }
 
+        public WorksheetCellCollection Cells { get; } = new WorksheetCellCollection();
+
         public void Activate()
         {
         }
@@ -237,17 +259,74 @@ namespace Microsoft.Office.Interop.Excel
             set => base[index - 1] = value;
         }
 
-        public Worksheet this[string name] => this.FirstOrDefault();
+        public Worksheet this[string name] => this.FirstOrDefault(worksheet => string.Equals(worksheet?.Name, name, StringComparison.OrdinalIgnoreCase));
     }
 
     public class Range
     {
         public object Value2 { get; set; }
+
+        public int Start { get; set; }
+
+        public int End { get; set; }
+
+        public string Text
+        {
+            get => Convert.ToString(Value2) ?? string.Empty;
+            set => Value2 = value;
+        }
+    }
+
+    public sealed class WorksheetCellCollection
+    {
+        private readonly Dictionary<string, Range> _cells = new Dictionary<string, Range>(StringComparer.OrdinalIgnoreCase);
+
+        private readonly HashSet<string> _throwKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public Range this[object row, object column]
+        {
+            get
+            {
+                string key = BuildKey(row, column);
+                if (_throwKeys.Contains(key))
+                {
+                    throw new InvalidOperationException("Configured cell access failure.");
+                }
+
+                if (!_cells.TryGetValue(key, out Range range))
+                {
+                    range = new Range();
+                    _cells[key] = range;
+                }
+
+                return range;
+            }
+        }
+
+        public void SetValue(object row, object column, object value)
+        {
+            this[row, column].Value2 = value;
+        }
+
+        public void ThrowOnAccess(object row, object column)
+        {
+            _throwKeys.Add(BuildKey(row, column));
+        }
+
+        private static string BuildKey(object row, object column)
+        {
+            return string.Concat(Convert.ToString(row) ?? string.Empty, "|", Convert.ToString(column) ?? string.Empty);
+        }
     }
 }
 
 namespace CaseInfoSystem.ExcelAddIn
 {
+    internal static class Globals
+    {
+        internal static ThisAddIn ThisAddIn { get; set; } = new ThisAddIn();
+    }
+
     internal sealed class ThisAddIn
     {
         internal Action<Action> RunWithScreenUpdatingSuspendedHandler { get; set; }
@@ -259,6 +338,8 @@ namespace CaseInfoSystem.ExcelAddIn
         internal Action<CaseInfoSystem.ExcelAddIn.App.TaskPaneDisplayRequest, Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window> RequestTaskPaneDisplayForTargetWindowHandler { get; set; }
 
         internal Func<string, string, bool> ShowKernelSheetAndRefreshPaneHandler { get; set; }
+
+        internal Action<Microsoft.Office.Interop.Excel.Workbook, string> ShowWorkbookTaskPaneWhenReadyHandler { get; set; }
 
         internal Microsoft.Office.Tools.CustomTaskPane CreateTaskPane(Microsoft.Office.Interop.Excel.Window window, UserControl control)
         {
@@ -307,6 +388,11 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             return ShowKernelSheetAndRefreshPaneHandler == null
                 || ShowKernelSheetAndRefreshPaneHandler(kernelTransitionSheetCodeName, kernelTransitionReason);
+        }
+
+        internal void ShowWorkbookTaskPaneWhenReady(Microsoft.Office.Interop.Excel.Workbook workbook, string reason)
+        {
+            ShowWorkbookTaskPaneWhenReadyHandler?.Invoke(workbook, reason);
         }
 
         private sealed class NoOpDisposable : IDisposable

@@ -25,9 +25,9 @@ Thumbs.db
 # Local hot-reload safety snapshots
 build/hot-reload-backups/
 
-# Intentionally not ignored here:
-# - dev/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn_TemporaryKey.pfx
-# - dev/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn_TemporaryKey.pfx
+# Local VSTO temporary signing certificates (development-only, keep untracked)
+/dev/CaseInfoSystem.ExcelAddIn/*_TemporaryKey.pfx
+/dev/CaseInfoSystem.WordAddIn/*_TemporaryKey.pfx
 # - dev/Deploy/**
 
 /build/

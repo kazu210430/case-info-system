@@ -121,3 +121,46 @@ ZIP 展開と起動だけを担当します。
 - ログ出力
 
 ただし、この文書ではまだスクリプト作成や build 連携の実装には入りません。
+
+## 13. 配布モードと署名方針
+
+### A. 配布モード
+
+案件情報System の配布は、当面次の 2 モードに分けて扱います。
+
+#### Internal（所内配布・モニター配布）
+
+- 所内の特定少数への検証・モニター配布を目的とします
+- 現時点の配布スクリプトは Internal 配布を主対象とします
+- ただし VSTO Release package 生成には署名が必要です
+- 署名なし Release package は原則採用しません
+- 暫定署名または所内専用コード署名証明書を使う方針とします
+- `TemporaryKey.pfx` は Release 署名に使いません
+
+#### Public（社外配布・不特定多数配布）
+
+- 社外ユーザーへの正式配布を目的とします
+- 正式な外部コード署名証明書を前提とします
+- 証明書、配布方式、更新方式、必要に応じて MSI / Bootstrapper などを別フェーズで設計します
+- Internal 配布とは混同しません
+
+### B. 証明書管理方針
+
+- `.pfx` は Git 管理しません
+- `.pfx` は repo 外に保管します
+- 証明書パスや thumbprint は build / package 実行時に外部から渡します
+- パスワードは docs、script、csproj、commit に含めません
+- 署名用証明書は Excel Add-in / Word Add-in の Release package 生成時に使います
+
+### C. 現時点の blocker
+
+- 配布スクリプトは `feature/build-distribution-package-script` に実装済みです
+- ただし `dev\Deploy\Package\CaseInfoSystem.WordAddIn` は未生成です
+- 現行仕様では Word Add-in の Release package 生成に署名が必要です
+- Internal 用署名証明書の運用が決まるまで、配布スクリプトの本番実行と `main` merge は保留します
+
+### D. build / package の扱い
+
+- `.\build.ps1 -Mode Compile` は compile-only であり、Release package 生成の代替ではありません
+- Release package 生成では署名前提の MSBuild 経路を使います
+- `SignManifests=false` による Release package は原則採用しません

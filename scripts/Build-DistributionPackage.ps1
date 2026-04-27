@@ -244,6 +244,7 @@ try {
     Copy-Item -LiteralPath $releaseLauncherExe -Destination (Join-Path $distributionRoot '案件情報System.exe') -Force
     $distributionAddins = Join-Path $distributionRoot 'Addins'
     New-Item -ItemType Directory -Path $distributionAddins -Force | Out-Null
+    # Excel Add-in は現状 .config を持たないが、将来追加されてもこのコピーで拾われる前提
     Copy-DirectoryContents -SourcePath $releaseExcelAddIn -DestinationPath (Join-Path $distributionAddins 'CaseInfoSystem.ExcelAddIn')
     Copy-DirectoryContents -SourcePath $releaseWordAddIn -DestinationPath (Join-Path $distributionAddins 'CaseInfoSystem.WordAddIn')
 
@@ -260,6 +261,7 @@ try {
     Invoke-NormalizeDistributionWorkbookDocProps -NormalizeScriptPath $normalizeScript -KernelWorkbookPath $distributionKernel -BaseWorkbookPath $distributionBase
 
     Write-Step 'Recreating distribution ZIP'
+    Assert-DirectoryExists -Path $distributionRoot -Label 'Distribution folder before ZIP'
     New-ZipFromDirectoryWithRootName -SourceDirectory $distributionRoot -ZipPath $zipPath -RootEntryName '案件情報System'
 
     Write-Step 'Completed'

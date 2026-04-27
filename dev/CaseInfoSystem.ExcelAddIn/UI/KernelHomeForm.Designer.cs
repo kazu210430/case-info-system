@@ -284,7 +284,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // btnOpenCaseList
             // 
             this.btnOpenCaseList.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
-            this.btnOpenCaseList.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnOpenCaseList.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnOpenCaseList.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOpenCaseList.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnOpenCaseList.Location = new System.Drawing.Point(21, 121);
@@ -298,7 +298,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // btnOpenTemplate
             // 
             this.btnOpenTemplate.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
-            this.btnOpenTemplate.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnOpenTemplate.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnOpenTemplate.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOpenTemplate.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnOpenTemplate.Location = new System.Drawing.Point(21, 72);
@@ -312,7 +312,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // btnOpenUserData
             // 
             this.btnOpenUserData.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
-            this.btnOpenUserData.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnOpenUserData.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnOpenUserData.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOpenUserData.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnOpenUserData.Location = new System.Drawing.Point(21, 26);
@@ -464,7 +464,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // btnCreateCaseSingle
             // 
             this.btnCreateCaseSingle.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
-            this.btnCreateCaseSingle.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnCreateCaseSingle.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnCreateCaseSingle.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCreateCaseSingle.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnCreateCaseSingle.Location = new System.Drawing.Point(411, 525);
@@ -478,7 +478,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // btnCreateCaseBatch
             // 
             this.btnCreateCaseBatch.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
-            this.btnCreateCaseBatch.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnCreateCaseBatch.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnCreateCaseBatch.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCreateCaseBatch.Font = new System.Drawing.Font("Yu Gothic UI", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnCreateCaseBatch.Location = new System.Drawing.Point(543, 525);
@@ -567,7 +567,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             this.btnNewTreeRootButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(252)))), ((int)(((byte)(245)))));
             this.btnNewTreeRootButton.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnNewTreeRootButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.btnNewTreeRootButton.FlatAppearance.BorderColor = System.Drawing.Color.DeepSkyBlue;
             this.btnNewTreeRootButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnNewTreeRootButton.Font = new System.Drawing.Font("BIZ UDPゴシック", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.btnNewTreeRootButton.ForeColor = System.Drawing.Color.Black;

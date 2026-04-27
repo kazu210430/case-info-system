@@ -26,6 +26,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal Func<IEnumerable<Excel.Workbook>> OnGetOpenWorkbooks { get; set; }
 
+        internal Func<Excel.Workbook, string, Excel.Worksheet> OnFindWorksheetByCodeName { get; set; }
+
+        internal Func<string, Excel.Workbook> OnFindOpenWorkbook { get; set; }
+
         internal Excel.Workbook GetActiveWorkbook() => _application?.ActiveWorkbook;
 
         internal Excel.Window GetActiveWindow()
@@ -77,6 +81,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal Excel.Worksheet FindWorksheetByCodeName(Excel.Workbook workbook, string sheetCodeName)
         {
+            if (OnFindWorksheetByCodeName != null)
+            {
+                return OnFindWorksheetByCodeName(workbook, sheetCodeName);
+            }
+
             return workbook?.Worksheets.FirstOrDefault(worksheet => string.Equals(worksheet?.CodeName, sheetCodeName, StringComparison.OrdinalIgnoreCase));
         }
 
@@ -85,7 +94,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return OnTryNormalizeCaseListRowHeight == null || OnTryNormalizeCaseListRowHeight(context);
         }
 
-        internal Excel.Workbook FindOpenWorkbook(string workbookPath) => null;
+        internal Excel.Workbook FindOpenWorkbook(string workbookPath)
+        {
+            return OnFindOpenWorkbook == null ? null : OnFindOpenWorkbook(workbookPath);
+        }
 
         internal IEnumerable<Excel.Workbook> GetOpenWorkbooks()
         {
@@ -432,9 +444,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
     {
         internal Func<Excel.Workbook, CaseInfoSystem.ExcelAddIn.Domain.CaseContext> OnCreateForCaseListRegistration { get; set; }
 
+        internal Func<Excel.Workbook, CaseInfoSystem.ExcelAddIn.Domain.CaseContext> OnCreateForDocumentCreate { get; set; }
+
         internal CaseInfoSystem.ExcelAddIn.Domain.CaseContext CreateForCaseListRegistration(Excel.Workbook caseWorkbook)
         {
             return OnCreateForCaseListRegistration == null ? null : OnCreateForCaseListRegistration(caseWorkbook);
+        }
+
+        internal CaseInfoSystem.ExcelAddIn.Domain.CaseContext CreateForDocumentCreate(Excel.Workbook caseWorkbook)
+        {
+            return OnCreateForDocumentCreate == null ? null : OnCreateForDocumentCreate(caseWorkbook);
         }
     }
 
@@ -508,12 +527,159 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class DocumentOutputService
     {
+        internal Func<Excel.Workbook, string> OnResolveWorkbookFolder { get; set; }
+
+        internal Func<Excel.Workbook, string, string, string> OnBuildOutputFileName { get; set; }
+
         internal DocumentOutputService(CaseInfoSystem.ExcelAddIn.Infrastructure.ExcelInteropService excelInteropService, CaseInfoSystem.ExcelAddIn.Infrastructure.PathCompatibilityService pathCompatibilityService, CaseInfoSystem.ExcelAddIn.Infrastructure.Logger logger)
         {
         }
 
         internal string PrepareSavePath(string rawFullPath) => rawFullPath ?? string.Empty;
+
+        internal string ResolveWorkbookFolder(Excel.Workbook workbook)
+        {
+            return OnResolveWorkbookFolder == null ? string.Empty : OnResolveWorkbookFolder(workbook) ?? string.Empty;
+        }
+
+        internal string BuildOutputFileName(Excel.Workbook workbook, string documentName, string customerName)
+        {
+            return OnBuildOutputFileName == null ? string.Empty : OnBuildOutputFileName(workbook, documentName, customerName) ?? string.Empty;
+        }
     }
+
+    internal sealed class AccountingSetNamingService
+    {
+        internal Func<Excel.Workbook, string, string, string, string> OnBuildCaseOutputPath { get; set; }
+
+        internal string BuildCaseOutputPath(Excel.Workbook workbook, string outputFolderPath, string customerName, string templatePath)
+        {
+            return OnBuildCaseOutputPath == null
+                ? string.Empty
+                : OnBuildCaseOutputPath(workbook, outputFolderPath, customerName, templatePath) ?? string.Empty;
+        }
+    }
+
+    internal sealed class AccountingTemplateResolver
+    {
+        internal Func<Excel.Workbook, string> OnResolveTemplatePath { get; set; }
+
+        internal string ResolveTemplatePath(Excel.Workbook workbook)
+        {
+            return OnResolveTemplatePath == null ? string.Empty : OnResolveTemplatePath(workbook) ?? string.Empty;
+        }
+    }
+
+    internal sealed class AccountingWorkbookService
+    {
+        internal Func<string, Excel.Workbook> OnOpenInCurrentApplication { get; set; }
+
+        internal Action<Excel.Workbook, bool> OnSetWorkbookWindowsVisible { get; set; }
+
+        internal Func<IDisposable> OnBeginInitializationScope { get; set; }
+
+        internal Action<Excel.Workbook, IEnumerable<string>, string, string> OnWriteSameValueToSheets { get; set; }
+
+        internal Action<Excel.Workbook, string, string, string> OnWriteCell { get; set; }
+
+        internal Func<Excel.Workbook, string, AccountingLawyerMappingResult> OnReflectLawyers { get; set; }
+
+        internal Action<Excel.Workbook> OnActivateInvoiceEntry { get; set; }
+
+        internal Excel.Workbook OpenInCurrentApplication(string workbookPath)
+        {
+            return OnOpenInCurrentApplication == null ? null : OnOpenInCurrentApplication(workbookPath);
+        }
+
+        internal void SetWorkbookWindowsVisible(Excel.Workbook workbook, bool visible)
+        {
+            OnSetWorkbookWindowsVisible?.Invoke(workbook, visible);
+        }
+
+        internal IDisposable BeginInitializationScope()
+        {
+            return OnBeginInitializationScope == null ? new NoOpDisposable() : OnBeginInitializationScope() ?? new NoOpDisposable();
+        }
+
+        internal void WriteSameValueToSheets(Excel.Workbook workbook, IEnumerable<string> sheetNames, string address, string valueText)
+        {
+            OnWriteSameValueToSheets?.Invoke(workbook, sheetNames, address, valueText);
+        }
+
+        internal void WriteCell(Excel.Workbook workbook, string sheetName, string address, string valueText)
+        {
+            OnWriteCell?.Invoke(workbook, sheetName, address, valueText);
+        }
+
+        internal AccountingLawyerMappingResult ReflectLawyers(Excel.Workbook workbook, string lawyerLinesText)
+        {
+            return OnReflectLawyers == null ? new AccountingLawyerMappingResult() : OnReflectLawyers(workbook, lawyerLinesText);
+        }
+
+        internal void ActivateInvoiceEntry(Excel.Workbook workbook)
+        {
+            OnActivateInvoiceEntry?.Invoke(workbook);
+        }
+
+        private sealed class NoOpDisposable : IDisposable
+        {
+            public void Dispose()
+            {
+            }
+        }
+    }
+
+    internal sealed class AccountingLawyerMappingResult
+    {
+        internal int AssignedCount { get; set; }
+
+        internal int MissingMatchCount { get; set; }
+
+        internal int OverflowCount { get; set; }
+    }
+
+    internal sealed class AccountingSetPresentationWaitService
+    {
+        internal const string CreatingStageTitle = "Creating";
+
+        internal const string OpeningWorkbookStageTitle = "Opening";
+
+        internal const string ApplyingInitialDataStageTitle = "Applying";
+
+        internal const string ShowingInputScreenStageTitle = "Showing";
+
+        internal Func<System.Diagnostics.Stopwatch, WaitSession> OnShowWaiting { get; set; }
+
+        internal WaitSession ShowWaiting(System.Diagnostics.Stopwatch commandStopwatch)
+        {
+            return OnShowWaiting == null ? new WaitSession() : OnShowWaiting(commandStopwatch) ?? new WaitSession();
+        }
+
+        internal sealed class WaitSession : IDisposable
+        {
+            internal readonly List<string> Stages = new List<string>();
+
+            internal Action OnClose { get; set; }
+
+            internal Action OnDispose { get; set; }
+
+            internal void UpdateStage(string title, string detail = null)
+            {
+                Stages.Add(title ?? string.Empty);
+            }
+
+            internal void Close()
+            {
+                OnClose?.Invoke();
+            }
+
+            public void Dispose()
+            {
+                OnDispose?.Invoke();
+            }
+        }
+    }
+
 }
 
 namespace CaseInfoSystem.ExcelAddIn.Domain
@@ -560,7 +726,21 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
 
     internal sealed class CaseContext
     {
+        internal Excel.Workbook CaseWorkbook { get; set; }
+
         internal Excel.Workbook KernelWorkbook { get; set; }
+
+        internal IReadOnlyDictionary<string, string> CaseValues { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        internal string CustomerName { get; set; } = string.Empty;
+
+        internal string WorkbookName { get; set; } = string.Empty;
+
+        internal string WorkbookPath { get; set; } = string.Empty;
+
+        internal string HomeSheetName { get; set; } = string.Empty;
+
+        internal string SystemRoot { get; set; } = string.Empty;
     }
 }
 

@@ -56,8 +56,6 @@ namespace CaseInfoSystem.Tests
                 Path = caseFolderPath,
                 Application = hiddenApplication
             };
-            hiddenApplication.Workbooks.Add(hiddenWorkbook);
-
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -72,14 +70,7 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
-            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
-            {
-                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
-                {
-                    hiddenWorkbook.Close(false, null, null);
-                    hiddenApplication.Quit();
-                })
-            };
+            var caseWorkbookOpenStrategy = CreateCaseWorkbookOpenStrategy(hiddenApplication, hiddenWorkbook, logs);
 
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
@@ -170,8 +161,6 @@ namespace CaseInfoSystem.Tests
             };
             hiddenWorkbook.Worksheets.Add(homeWorksheet);
             hiddenWorkbook.ActiveSheet = homeWorksheet;
-            hiddenApplication.Workbooks.Add(hiddenWorkbook);
-
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -186,14 +175,7 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
-            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
-            {
-                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
-                {
-                    hiddenWorkbook.Close(false, null, null);
-                    hiddenApplication.Quit();
-                })
-            };
+            var caseWorkbookOpenStrategy = CreateCaseWorkbookOpenStrategy(hiddenApplication, hiddenWorkbook, logs);
 
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
@@ -275,8 +257,6 @@ namespace CaseInfoSystem.Tests
                 Path = tempRoot,
                 Application = hiddenApplication
             };
-            hiddenApplication.Workbooks.Add(hiddenWorkbook);
-
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -291,14 +271,7 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
-            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
-            {
-                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
-                {
-                    hiddenWorkbook.Close(false, null, null);
-                    hiddenApplication.Quit();
-                })
-            };
+            var caseWorkbookOpenStrategy = CreateCaseWorkbookOpenStrategy(hiddenApplication, hiddenWorkbook, logs);
 
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
@@ -399,8 +372,6 @@ namespace CaseInfoSystem.Tests
             hiddenWorkbook.Worksheets.Add(homeWorksheet);
             hiddenWorkbook.ActiveSheet = homeWorksheet;
             hiddenWorkbook.Windows.Add(hiddenWindow);
-            hiddenApplication.Workbooks.Add(hiddenWorkbook);
-
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -415,14 +386,7 @@ namespace CaseInfoSystem.Tests
                         : (workbook.FullName ?? workbook.Name ?? string.Empty)
                 });
 
-            var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy
-            {
-                OnOpenHiddenWorkbook = _ => new CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession(hiddenApplication, hiddenWorkbook, "test-hidden", closeAction: () =>
-                {
-                    hiddenWorkbook.Close(false, null, null);
-                    hiddenApplication.Quit();
-                })
-            };
+            var caseWorkbookOpenStrategy = CreateCaseWorkbookOpenStrategy(hiddenApplication, hiddenWorkbook, logs);
 
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
@@ -470,6 +434,24 @@ namespace CaseInfoSystem.Tests
                     Directory.Delete(tempRoot, recursive: true);
                 }
             }
+        }
+
+        private static CaseWorkbookOpenStrategy CreateCaseWorkbookOpenStrategy(Excel.Application hiddenApplication, Excel.Workbook hiddenWorkbook, List<string> logs)
+        {
+            hiddenApplication.Workbooks.OpenBehavior = (filename, _, _) =>
+            {
+                hiddenWorkbook.FullName = filename ?? string.Empty;
+                hiddenWorkbook.Name = Path.GetFileName(filename ?? string.Empty);
+                hiddenWorkbook.Path = Path.GetDirectoryName(filename ?? string.Empty) ?? string.Empty;
+                hiddenWorkbook.Application = hiddenApplication;
+                return hiddenWorkbook;
+            };
+
+            return new CaseWorkbookOpenStrategy(
+                new Excel.Application(),
+                new WorkbookRoleResolver(),
+                OrchestrationTestSupport.CreateLogger(logs),
+                hiddenApplicationFactory: () => hiddenApplication);
         }
     }
 }

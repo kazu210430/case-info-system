@@ -23,15 +23,24 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private readonly Excel.Application _application;
         private readonly WorkbookRoleResolver _workbookRoleResolver;
         private readonly Logger _logger;
+        private readonly Func<Excel.Application> _hiddenApplicationFactory;
+        private readonly Action<object> _releaseComObject;
         private readonly object _hiddenApplicationCacheSync = new object();
         private CachedHiddenApplicationSlot _cachedHiddenApplication;
         private Timer _hiddenApplicationIdleTimer;
 
-        internal CaseWorkbookOpenStrategy(Excel.Application application, WorkbookRoleResolver workbookRoleResolver, Logger logger)
+        internal CaseWorkbookOpenStrategy(
+            Excel.Application application,
+            WorkbookRoleResolver workbookRoleResolver,
+            Logger logger,
+            Func<Excel.Application> hiddenApplicationFactory = null,
+            Action<object> releaseComObject = null)
         {
             _application = application ?? throw new ArgumentNullException(nameof(application));
             _workbookRoleResolver = workbookRoleResolver ?? throw new ArgumentNullException(nameof(workbookRoleResolver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _hiddenApplicationFactory = hiddenApplicationFactory ?? (() => new Excel.Application());
+            _releaseComObject = releaseComObject;
         }
 
         internal void RegisterKnownCasePath(string caseWorkbookPath)
@@ -441,7 +450,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private Excel.Application CreateDedicatedHiddenApplication(string caseWorkbookPath, string routeName, Stopwatch stopwatch)
         {
-            Excel.Application hiddenApplication = new Excel.Application();
+            Excel.Application hiddenApplication = _hiddenApplicationFactory();
             try
             {
                 PrepareHiddenApplicationForUse(hiddenApplication);
@@ -810,6 +819,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             if (comObject == null)
             {
                 return;
+            }
+
+            if (_releaseComObject != null)
+            {
+                try
+                {
+                    _releaseComObject(comObject);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("ReleaseComObject hook failed.", ex);
+                }
             }
 
             try

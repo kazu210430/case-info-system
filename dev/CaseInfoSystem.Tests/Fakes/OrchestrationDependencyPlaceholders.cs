@@ -121,6 +121,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
         }
 
+        internal void RegisterKnownCasePath(string path)
+        {
+        }
+
         internal void RemoveKnownWorkbook(Excel.Workbook workbook)
         {
         }
@@ -194,63 +198,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         internal void ShowUserError(string context, Exception ex)
         {
-        }
-    }
-
-    internal sealed class CaseWorkbookOpenStrategy
-    {
-        internal Func<string, HiddenCaseWorkbookSession> OnOpenHiddenWorkbook { get; set; }
-
-        internal HiddenCaseWorkbookSession OpenHiddenWorkbook(string caseWorkbookPath)
-        {
-            return OnOpenHiddenWorkbook == null
-                ? new HiddenCaseWorkbookSession(new Excel.Application(), new Excel.Workbook { FullName = caseWorkbookPath ?? string.Empty }, "legacy-isolated")
-                : OnOpenHiddenWorkbook(caseWorkbookPath);
-        }
-
-        internal sealed class HiddenCaseWorkbookSession
-        {
-            private readonly Action _closeAction;
-            private bool _closed;
-
-            internal HiddenCaseWorkbookSession(Excel.Application application, Excel.Workbook workbook, string routeName = "legacy-isolated", Action closeAction = null)
-            {
-                Application = application;
-                Workbook = workbook;
-                RouteName = routeName ?? string.Empty;
-                _closeAction = closeAction ?? (() =>
-                {
-                    Workbook.Close(false, null, null);
-                    Application.Quit();
-                });
-            }
-
-            internal Excel.Application Application { get; }
-
-            internal Excel.Workbook Workbook { get; }
-
-            internal string RouteName { get; }
-
-            internal void Close()
-            {
-                ExecuteClose();
-            }
-
-            internal void Abort()
-            {
-                ExecuteClose();
-            }
-
-            private void ExecuteClose()
-            {
-                if (_closed)
-                {
-                    return;
-                }
-
-                _closeAction();
-                _closed = true;
-            }
         }
     }
 

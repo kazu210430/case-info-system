@@ -67,11 +67,17 @@ namespace Microsoft.Office.Interop.Excel
 
     public class Application
     {
+        public static List<Application> CreatedApplications { get; } = new List<Application>();
+
         public bool DisplayAlerts { get; set; }
 
         public bool EnableEvents { get; set; }
 
         public bool ScreenUpdating { get; set; } = true;
+
+        public bool Ready { get; set; } = true;
+
+        public bool UserControl { get; set; }
 
         public bool Visible { get; set; }
 
@@ -81,29 +87,78 @@ namespace Microsoft.Office.Interop.Excel
 
         public Window ActiveWindow { get; set; }
 
-        public Workbooks Workbooks { get; } = new Workbooks();
+        public Workbooks Workbooks { get; }
 
         public int QuitCallCount { get; private set; }
 
         public Action QuitBehavior { get; set; }
+
+        public Application()
+        {
+            Workbooks = new Workbooks(this);
+            CreatedApplications.Add(this);
+        }
 
         public void Quit()
         {
             QuitCallCount++;
             QuitBehavior?.Invoke();
         }
+
+        public static void ResetCreatedApplications()
+        {
+            CreatedApplications.Clear();
+        }
     }
 
     public class Workbooks : List<Workbook>
     {
+        public Workbooks()
+        {
+        }
+
+        public Workbooks(Application owner)
+        {
+            Owner = owner;
+        }
+
+        public Application Owner { get; set; }
+
+        public Func<string, object, bool, Workbook> OpenBehavior { get; set; }
+
+        public new void Add(Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
+            workbook.Application = Owner;
+            if (workbook.Windows.Count == 0)
+            {
+                workbook.Windows.Add(new Window());
+            }
+
+            if (!base.Contains(workbook))
+            {
+                base.Add(workbook);
+            }
+        }
+
         public Workbook Open(string filename, object UpdateLinks = null, bool ReadOnly = false)
         {
-            var workbook = new Workbook
-            {
-                FullName = filename ?? string.Empty,
-                Name = Path.GetFileName(filename ?? string.Empty),
-                Path = Path.GetDirectoryName(filename ?? string.Empty) ?? string.Empty
-            };
+            var workbook = OpenBehavior != null
+                ? OpenBehavior(filename, UpdateLinks, ReadOnly)
+                : new Workbook
+                {
+                    FullName = filename ?? string.Empty,
+                    Name = Path.GetFileName(filename ?? string.Empty),
+                    Path = Path.GetDirectoryName(filename ?? string.Empty) ?? string.Empty
+                };
+            workbook.FullName = filename ?? workbook.FullName ?? string.Empty;
+            workbook.Name = string.IsNullOrWhiteSpace(workbook.Name) ? Path.GetFileName(filename ?? string.Empty) : workbook.Name;
+            workbook.Path = string.IsNullOrWhiteSpace(workbook.Path) ? (Path.GetDirectoryName(filename ?? string.Empty) ?? string.Empty) : workbook.Path;
+            workbook.Application = Owner;
             Add(workbook);
             return workbook;
         }
@@ -143,7 +198,7 @@ namespace Microsoft.Office.Interop.Excel
 
         public XlFileFormat FileFormat { get; set; }
 
-        public WorkbookWindows Windows { get; } = new WorkbookWindows();
+        public Windows Windows { get; } = new Windows();
 
         public Worksheet ActiveSheet { get; set; }
 
@@ -175,6 +230,12 @@ namespace Microsoft.Office.Interop.Excel
         {
             CloseCallCount++;
             CloseBehavior?.Invoke();
+            Application?.Workbooks?.Remove(this);
+            if (Application?.ActiveWorkbook == this)
+            {
+                Application.ActiveWorkbook = null;
+                Application.ActiveWindow = null;
+            }
         }
 
         public void Activate()
@@ -210,8 +271,14 @@ namespace Microsoft.Office.Interop.Excel
         }
     }
 
+    public class Windows : WorkbookWindows
+    {
+    }
+
     public class Window
     {
+        public string Caption { get; set; } = string.Empty;
+
         public bool Visible { get; set; } = true;
 
         public int Hwnd { get; set; }

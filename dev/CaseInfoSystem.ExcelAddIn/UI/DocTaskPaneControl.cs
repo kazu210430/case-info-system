@@ -34,7 +34,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 Rectangle rect = new Rectangle(0, 0, base.Width - 1, base.Height - 1);
                 Color fillColor = IsSelected ? GetSelectedFillColor(BaseBackColor) : (_isHovering ? GetHoverFillColor(BaseBackColor) : BaseBackColor);
-                Color borderColor = IsSelected ? Color.FromArgb(90, 110, 140) : (_isHovering ? HoverButtonBorderColor : DefaultButtonBorderColor);
+                Color borderColor = IsSelected ? Color.DeepSkyBlue : (_isHovering ? HoverButtonBorderColor : DefaultButtonBorderColor);
                 int borderWidth = IsSelected ? 2 : 1;
                 using (GraphicsPath path = CreateStaticLeftRoundedPath(rect, 12))
                 using (SolidBrush brush = new SolidBrush(fillColor))
@@ -161,8 +161,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         private static readonly Color PaneBackColor = Color.FromArgb(242, 242, 242);
         private static readonly Color DefaultDocumentButtonColor = ColorTranslator.FromHtml("#FFFCF5");
         private static readonly Color DefaultHoverButtonColor = ColorTranslator.FromHtml("#FFF6E8");
-        private static readonly Color DefaultButtonBorderColor = Color.FromArgb(184, 184, 184);
-        private static readonly Color HoverButtonBorderColor = Color.FromArgb(143, 143, 143);
+        private static readonly Color DefaultButtonBorderColor = Color.DeepSkyBlue;
+        private static readonly Color HoverButtonBorderColor = Color.DeepSkyBlue;
         private static readonly Color NoticeBackColor = PaneBackColor;
         private static readonly Color NoticeForeColor = Color.FromArgb(120, 120, 120);
 

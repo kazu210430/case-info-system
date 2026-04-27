@@ -17,9 +17,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private static readonly Color PressedButtonColor = ColorTranslator.FromHtml ("#FFF1DA");
 
-		private static readonly Color DefaultBorderColor = Color.FromArgb (184, 184, 184);
+		private static readonly Color DefaultBorderColor = Color.DeepSkyBlue;
 
-		private static readonly Color HoverBorderColor = Color.FromArgb (143, 143, 143);
+		private static readonly Color HoverBorderColor = Color.DeepSkyBlue;
 
 		private const int PreferredPaneWidth = 292;
 

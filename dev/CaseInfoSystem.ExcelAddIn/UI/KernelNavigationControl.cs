@@ -112,11 +112,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private static readonly Color CurrentDisplayButtonColor = Color.FromArgb (245, 245, 245);
 
-		private static readonly Color DefaultBorderColor = Color.FromArgb (184, 184, 184);
+		private static readonly Color DefaultBorderColor = Color.DeepSkyBlue;
 
-		private static readonly Color HoverBorderColor = Color.FromArgb (143, 143, 143);
+		private static readonly Color HoverBorderColor = Color.DeepSkyBlue;
 
-		private static readonly Color CurrentDisplayBorderColor = Color.FromArgb (190, 190, 190);
+		private static readonly Color CurrentDisplayBorderColor = Color.DeepSkyBlue;
 
 		private readonly FlowLayoutPanel _rootPanel;
 

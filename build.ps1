@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Test', 'Compile', 'DeployDebugAddIn', 'Help')]
+    [ValidateSet('Test', 'Compile', 'DeployDebugAddIn', 'DeployReleaseAddIn', 'Help')]
     [string]$Mode = 'Help',
 
     [ValidateSet('ExcelAddIn', 'WordAddIn', 'All')]
@@ -8,6 +8,12 @@ param(
     [string]$Configuration,
 
     [string]$MsBuildPath,
+
+    [string]$ReleaseCertificateKeyFile,
+
+    [string]$ReleaseCertificateThumbprint,
+
+    [string]$ManifestCertificatePassword,
 
     [switch]$NoBuild,
 
@@ -33,7 +39,7 @@ function Invoke-ExternalCommand {
 
 function Show-Help {
     Write-Host 'Usage:'
-    Write-Host '  .\build.ps1 -Mode <Test|Compile|DeployDebugAddIn|Help>'
+    Write-Host '  .\build.ps1 -Mode <Test|Compile|DeployDebugAddIn|DeployReleaseAddIn|Help>'
     Write-Host ''
     Write-Host 'Available modes:'
     Write-Host '  Test'
@@ -42,6 +48,8 @@ function Show-Help {
     Write-Host '    CI-equivalent safe build check. This is compile-only and does not deploy add-ins to the runtime Addins directory.'
     Write-Host '  DeployDebugAddIn'
     Write-Host '    Wraps scripts\Invoke-DeployDebugAddIns.ps1 and reflects Debug add-ins into the runtime Addins directory.'
+    Write-Host '  DeployReleaseAddIn'
+    Write-Host '    Wraps scripts\Invoke-DeployReleaseAddIns.ps1 and builds signed Release VSTO packages from dev\*.csproj only.'
     Write-Host '  Help'
     Write-Host '    Shows this help without running build, test, or deploy work.'
     Write-Host ''
@@ -50,6 +58,7 @@ function Show-Help {
     Write-Host '  .\build.ps1 -Mode Test'
     Write-Host '  .\build.ps1 -Mode Compile'
     Write-Host '  .\build.ps1 -Mode DeployDebugAddIn'
+    Write-Host '  .\build.ps1 -Mode DeployReleaseAddIn -Project All -ReleaseCertificateKeyFile C:\certs\CaseInfoSystem.InternalRelease.pfx -ReleaseCertificateThumbprint <thumbprint>'
 }
 
 try {
@@ -120,6 +129,37 @@ try {
 
             if (-not [string]::IsNullOrWhiteSpace($MsBuildPath)) {
                 $arguments += @('-MsBuildPath', $MsBuildPath)
+            }
+
+            Invoke-ExternalCommand -FilePath 'powershell.exe' -Arguments $arguments
+        }
+
+        'DeployReleaseAddIn' {
+            $deployScriptPath = Join-Path $repoRoot 'scripts\Invoke-DeployReleaseAddIns.ps1'
+            if (-not (Test-Path -LiteralPath $deployScriptPath)) {
+                throw "Release deploy script was not found: $deployScriptPath"
+            }
+
+            $arguments = @(
+                '-ExecutionPolicy', 'Bypass',
+                '-File', $deployScriptPath,
+                '-Project', $Project
+            )
+
+            if (-not [string]::IsNullOrWhiteSpace($MsBuildPath)) {
+                $arguments += @('-MsBuildPath', $MsBuildPath)
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($ReleaseCertificateKeyFile)) {
+                $arguments += @('-ReleaseCertificateKeyFile', $ReleaseCertificateKeyFile)
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($ReleaseCertificateThumbprint)) {
+                $arguments += @('-ReleaseCertificateThumbprint', $ReleaseCertificateThumbprint)
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($ManifestCertificatePassword)) {
+                $arguments += @('-ManifestCertificatePassword', $ManifestCertificatePassword)
             }
 
             Invoke-ExternalCommand -FilePath 'powershell.exe' -Arguments $arguments

@@ -33,12 +33,19 @@
   <PropertyGroup>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <ProjectToolsDir>$(MSBuildProjectDirectory)\Tools</ProjectToolsDir>
-    <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == '' and Exists('$(MSBuildProjectDirectory)\CaseInfoSystem.WordAddIn_TemporaryKey.pfx')">$(MSBuildProjectDirectory)\CaseInfoSystem.WordAddIn_TemporaryKey.pfx</AddInManifestKeyFile>
+    <TemporaryAddInManifestKeyFile Condition="Exists('$(MSBuildProjectDirectory)\CaseInfoSystem.WordAddIn_TemporaryKey.pfx')">$(MSBuildProjectDirectory)\CaseInfoSystem.WordAddIn_TemporaryKey.pfx</TemporaryAddInManifestKeyFile>
+    <TemporaryManifestCertificateThumbprint>6B9D20C90791706E34767379DA43A92579582E8B</TemporaryManifestCertificateThumbprint>
+    <AddInManifestKeyFile Condition="'$(Configuration)' == 'Release' and '$(AddInManifestKeyFile)' == '' and '$(ReleaseCertificateKeyFile)' != ''">$(ReleaseCertificateKeyFile)</AddInManifestKeyFile>
+    <AddInManifestKeyFile Condition="'$(Configuration)' != 'Release' and '$(AddInManifestKeyFile)' == '' and '$(TemporaryAddInManifestKeyFile)' != ''">$(TemporaryAddInManifestKeyFile)</AddInManifestKeyFile>
     <AddInManifestKeyFile Condition="'$(AddInManifestKeyFile)' == ''">
     </AddInManifestKeyFile>
+    <ManifestKeyFile Condition="'$(Configuration)' == 'Release' and '$(ManifestKeyFile)' == '' and '$(ReleaseCertificateKeyFile)' != ''">$(ReleaseCertificateKeyFile)</ManifestKeyFile>
     <ManifestKeyFile Condition="'$(ManifestKeyFile)' == ''">$(AddInManifestKeyFile)</ManifestKeyFile>
-    <ManifestCertificateThumbprint Condition="'$(ManifestCertificateThumbprint)' == '' and '$(AddInManifestKeyFile)' != ''">6B9D20C90791706E34767379DA43A92579582E8B</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint Condition="'$(Configuration)' == 'Release' and '$(ManifestCertificateThumbprint)' == '' and '$(ReleaseCertificateThumbprint)' != ''">$(ReleaseCertificateThumbprint)</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint Condition="'$(Configuration)' != 'Release' and '$(ManifestCertificateThumbprint)' == '' and '$(AddInManifestKeyFile)' == '$(TemporaryAddInManifestKeyFile)'">$(TemporaryManifestCertificateThumbprint)</ManifestCertificateThumbprint>
     <CertificateThumbprint Condition="'$(CertificateThumbprint)' == '' and '$(ManifestCertificateThumbprint)' != ''">$(ManifestCertificateThumbprint)</CertificateThumbprint>
+    <NormalizedManifestKeyFile Condition="'$(ManifestKeyFile)' != ''">$([System.IO.Path]::GetFullPath('$(ManifestKeyFile)'))</NormalizedManifestKeyFile>
+    <NormalizedTemporaryAddInManifestKeyFile Condition="'$(TemporaryAddInManifestKeyFile)' != ''">$([System.IO.Path]::GetFullPath('$(TemporaryAddInManifestKeyFile)'))</NormalizedTemporaryAddInManifestKeyFile>
     <UnifiedDeployPackageDir Condition="'$(UnifiedDeployPackageDir)' == ''">$(MSBuildProjectDirectory)\..\Deploy\Package\CaseInfoSystem.WordAddIn</UnifiedDeployPackageDir>
     <RuntimeAddInDir Condition="'$(RuntimeAddInDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\Addins\CaseInfoSystem.WordAddIn</RuntimeAddInDir>
     <RuntimeAddInDirFull>$([System.IO.Path]::GetFullPath('$(RuntimeAddInDir)'))</RuntimeAddInDirFull>
@@ -169,12 +176,18 @@
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and Exists('C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(VSToolsTargetsRelativePath)')">C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests Condition="'$(MSBuildRuntimeType)' != 'Core' or '$(BuildingInsideVisualStudio)' == 'true'">true</SignManifests>
+    <SignManifests Condition="('$(MSBuildRuntimeType)' != 'Core' or '$(BuildingInsideVisualStudio)' == 'true') and '$(ManifestKeyFile)' != ''">true</SignManifests>
   </PropertyGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(VSToolsPath)\$(VSToolsTargetsRelativePath)" Condition="'$(VSToolsPath)' != '' and Exists('$(VSToolsPath)\$(VSToolsTargetsRelativePath)') and '$(EnableVstoPackaging)' == 'true'" />
   <Target Name="BlockCoreBuildWithoutVstoPackaging" BeforeTargets="Build" Condition="'$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true' and '$(EnableVstoPackaging)' != 'true' and '$(AllowCoreBuildWithoutVstoPackaging)' != 'true' and Exists('$(RuntimeAddInDirFull)')">
     <Error Text="This project requires VSTO packaging and cannot be built with plain 'dotnet build'.&#x0D;&#x0A;&#x0D;&#x0A;Use one of the following instead:&#x0D;&#x0A;&#x0D;&#x0A;  .\build.ps1 -Mode Test&#x0D;&#x0A;  .\build.ps1 -Mode Compile&#x0D;&#x0A;  .\build.ps1 -Mode DeployDebugAddIn&#x0D;&#x0A;&#x0D;&#x0A;Compile is a CI-equivalent compile-only check. It does not deploy the add-in to the runtime Addins directory." />
+  </Target>
+  <Target Name="ValidateReleaseSigningConfiguration" BeforeTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'">
+    <Error Condition="'$(ManifestKeyFile)' == ''" Text="Release build requires a distribution signing certificate. Set ReleaseCertificateKeyFile or ManifestKeyFile to a repository-external .pfx file. TemporaryKey.pfx must not be used for Release signing." />
+    <Error Condition="'$(ManifestKeyFile)' != '' and !Exists('$(ManifestKeyFile)')" Text="Release build requires a distribution signing certificate file that exists outside the repository. The configured file was not found: $(ManifestKeyFile)" />
+    <Error Condition="'$(NormalizedManifestKeyFile)' != '' and ('$(NormalizedManifestKeyFile)' == '$(NormalizedTemporaryAddInManifestKeyFile)' or $([System.Text.RegularExpressions.Regex]::IsMatch('$(NormalizedManifestKeyFile)', '(?i)_TemporaryKey\\.pfx$')))" Text="Release build requires a distribution signing certificate. TemporaryKey.pfx must not be used for Release signing." />
+    <Error Condition="'$(SignManifests)' != 'true'" Text="Release build requires manifest signing to stay enabled. Provide a distribution signing certificate and do not use SignManifests=false for Release packaging." />
   </Target>
   <Target Name="HotReloadBackup" BeforeTargets="Build" Condition="'$(BuildingInsideVisualStudio)' == 'true' and '$(Configuration)' != 'Release' and '$(SolutionDir)' != '' and Exists('$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1')">
     <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1&quot; -Mode Backup -Project WordAddIn -Configuration $(Configuration)" />

@@ -39,6 +39,15 @@
 
 ソース上のプロジェクト設定でも、既定の出力先としてこの配置が参照されています。
 
+## VSTO署名運用
+
+- `*_TemporaryKey.pfx` は開発用の一時証明書として扱います。
+- 一時証明書はリポジトリ管理しません。各開発者のローカル環境でのみ保持します。
+- Release 配布物の署名には、リポジトリ外で管理される配布用証明書が必要です。
+- Release build は `ReleaseCertificateKeyFile` または `ManifestKeyFile` で外部の `.pfx` を明示しないと失敗します。
+- `*_TemporaryKey.pfx` を Release 署名へ流用した場合も build は失敗します。
+- Debug build の成功と、Release 配布署名の成功は別扱いです。`docs/ci-tests.md` の compile-only 確認は Release 配布証明書の代替ではありません。
+
 ## Excel Add-in 配下
 
 `Addins\CaseInfoSystem.ExcelAddIn` 配下には、少なくとも次の種類のファイルが存在します。

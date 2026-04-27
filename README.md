@@ -64,6 +64,13 @@ VSTO packaging ガードは安全装置です。安易に外さず、compile 成
 - [AGENTS.md](AGENTS.md)
   - ドキュメント更新ルール。
 
+## 配布運用
+
+配布用パッケージの作り方と利用者向け導入手順は、次の文書を参照してください。
+
+- `docs/distribution-package-workflow.md`
+- `docs/distribution-package-user-guide.md`
+
 ## 補足
 
 - 各帳票の詳細仕様、差し込み内容、業務ルールはこの一式の対象外です。

@@ -174,7 +174,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(VSToolsPath)\$(VSToolsTargetsRelativePath)" Condition="'$(VSToolsPath)' != '' and Exists('$(VSToolsPath)\$(VSToolsTargetsRelativePath)') and '$(EnableVstoPackaging)' == 'true'" />
   <Target Name="BlockCoreBuildWithoutVstoPackaging" BeforeTargets="Build" Condition="'$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true' and '$(EnableVstoPackaging)' != 'true' and '$(AllowCoreBuildWithoutVstoPackaging)' != 'true' and Exists('$(RuntimeAddInDirFull)')">
-    <Error Text="CaseInfoSystem.WordAddIn cannot be reflected to the runtime Addins directory from dotnet build because VSTO packaging is disabled under MSBuild Core. Use MSBuild.exe /t:DeployDebugAddIn, or pass /p:AllowCoreBuildWithoutVstoPackaging=true only when you intentionally want a compile-only build." />
+    <Error Text="CaseInfoSystem.WordAddIn cannot be reflected to the runtime Addins directory from raw dotnet build because VSTO packaging is disabled under MSBuild Core. Use .\build.ps1 -Mode Compile for compile-only validation, or .\build.ps1 -Mode DeployDebugAddIn for Debug runtime reflection. Pass /p:AllowCoreBuildWithoutVstoPackaging=true only when you intentionally run the compile-only flow without the standard wrapper." />
   </Target>
   <Target Name="HotReloadBackup" BeforeTargets="Build" Condition="'$(BuildingInsideVisualStudio)' == 'true' and '$(Configuration)' != 'Release' and '$(SolutionDir)' != '' and Exists('$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1')">
     <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(SolutionDir)scripts\Invoke-HotReloadGuard.ps1&quot; -Mode Backup -Project WordAddIn -Configuration $(Configuration)" />

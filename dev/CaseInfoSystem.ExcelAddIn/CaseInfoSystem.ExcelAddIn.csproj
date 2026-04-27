@@ -692,7 +692,7 @@
     <Message Text="Enabled DeployDebugAddIn-only bypasses for ClickOnce signing verification, inclusion-list trust registration, and Office add-in registration." Importance="High" />
   </Target>
   <Target Name="BlockCoreBuildWithoutVstoPackaging" BeforeTargets="Build" Condition="'$(MSBuildRuntimeType)' == 'Core' and '$(BuildingInsideVisualStudio)' != 'true' and '$(EnableVstoPackaging)' != 'true' and '$(AllowCoreBuildWithoutVstoPackaging)' != 'true' and Exists('$(RuntimeAddInDirFull)')">
-    <Error Text="CaseInfoSystem.ExcelAddIn cannot be reflected to the runtime Addins directory from dotnet build because VSTO packaging is disabled under MSBuild Core. Use MSBuild.exe /t:DeployDebugAddIn, or pass /p:AllowCoreBuildWithoutVstoPackaging=true only when you intentionally want a compile-only build." />
+    <Error Text="CaseInfoSystem.ExcelAddIn cannot be reflected to the runtime Addins directory from raw dotnet build because VSTO packaging is disabled under MSBuild Core. Use .\build.ps1 -Mode Compile for compile-only validation, or .\build.ps1 -Mode DeployDebugAddIn for Debug runtime reflection. Pass /p:AllowCoreBuildWithoutVstoPackaging=true only when you intentionally run the compile-only flow without the standard wrapper." />
   </Target>
   <Target Name="UpdateUnifiedDeployPackage" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableVstoPackaging)' == 'true'">
     <ItemGroup>

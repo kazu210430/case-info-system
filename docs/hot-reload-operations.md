@@ -51,7 +51,13 @@
 
 ## 手で実行する例
 
-Word を実機反映付きでビルド:
+標準の Debug Add-in 配備:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode DeployDebugAddIn
+```
+
+内部ラッパーを直接使って Word だけ配備:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-DeployDebugAddIns.ps1 -Project WordAddIn
@@ -74,6 +80,13 @@ Excel だけ検証:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-HotReloadGuard.ps1 -Mode Verify -Project ExcelAddIn -Configuration Debug
 ```
+
+## build と実機反映の切り分け
+
+- `.\build.ps1 -Mode Compile` は compile-only 確認です。runtime `Addins/` は更新しません。
+- `.\build.ps1 -Mode DeployDebugAddIn` は Debug Add-in を runtime `Addins/` へ反映します。
+- `dotnet build .\dev\CaseInfoSystem.slnx` は標準確認コマンドではありません。VSTO packaging ガードが、compile-only 出力と実機反映を混同しないために意図的に失敗させます。
+- VSTO packaging ガードは安全装置なので、Debug 配備や Release 配布の都合で安易に外しません。
 
 ## Visual Studio への組み込み案
 

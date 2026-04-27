@@ -35,6 +35,19 @@
 5. `docs/git-operations.md`
 6. `AGENTS.md`
 
+## 標準コマンド
+
+- `.\build.ps1 -Mode Test`
+  - 標準の確認コマンドです。`dotnet test .\dev\CaseInfoSystem.slnx` 相当で、テスト実行を行います。
+- `.\build.ps1 -Mode Compile`
+  - CI 相当の compile-only 確認です。VSTO packaging を行わず、Release 構成のコンパイル可否だけを確認します。
+- `.\build.ps1 -Mode DeployDebugAddIn`
+  - ローカル実機確認用の Debug Add-in 配備です。runtime `Addins\` 反映まで含みます。
+
+`dotnet build .\dev\CaseInfoSystem.slnx` は標準確認コマンドとして使いません。`dotnet build` は MSBuild Core 上では VSTO packaging を行わないため、compile-only 出力を実機反映成功と誤認しないよう、Excel/Word Add-in 側の安全装置で意図的に失敗します。
+
+VSTO packaging ガードは安全装置です。安易に外さず、compile 成功と実機反映成功を必ず分けて扱ってください。
+
 ## ドキュメント一覧
 
 - [docs/architecture.md](docs/architecture.md)

@@ -34,6 +34,9 @@
 - `docs/architecture.md` にある構成と責務を壊さない
 - `docs/flows.md` にある対象機能のフローを確認してから修正する
 - `docs/ui-policy.md` にある UI 制御方針に従う
+- build / test / Debug Add-in 配備の確認は、原則としてリポジトリ直下の `build.ps1` を標準入口として使う
+- `dotnet build .\dev\CaseInfoSystem.slnx` を標準確認コマンドにしない。VSTO packaging ガードは安全装置として維持する
+- compile 成功と runtime `Addins\` への実機反映成功を混同しない
 - 既存のサービス責務を変更しない
 - 新しい処理は既存サービスの責務に合わせて追加する
 - UI 制御は専用サービス経由の方針を崩さない

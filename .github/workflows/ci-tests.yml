@@ -17,16 +17,10 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
       - name: Build solution
-        # CI is limited to restore/compile/test. It does not validate deployable VSTO output.
-        # Run restore as part of the same MSBuild invocation so the solution is evaluated on the
-        # same build path that actually compiles the Excel/Word Add-in projects.
-        # Skip manifest signing here because certificate-store-dependent release signing is outside
-        # this CI's scope; the goal is to catch product compile/build breakage, not packaging setup.
-        run: msbuild .\dev\CaseInfoSystem.slnx /restore /t:Build /p:Configuration=Release /p:SignManifests=false /p:ManifestCertificateThumbprint= /m
+        # CI is limited to compile/test. It intentionally does not validate deployable VSTO output
+        # or runtime Addins reflection. The standard wrapper keeps this entrypoint aligned with local use.
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode Compile
 
       - name: Run tests
-        run: dotnet test .\dev\CaseInfoSystem.Tests\CaseInfoSystem.Tests.csproj -c Release --no-build --no-restore
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode Test -Configuration Release -NoBuild -NoRestore

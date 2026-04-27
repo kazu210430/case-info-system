@@ -377,6 +377,7 @@
     <Compile Include="UI\AccountingInstallmentScheduleInputForm.Designer.cs">
       <DependentUpon>AccountingInstallmentScheduleInputForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="UI\AccountingFormButtonAppearanceHelper.cs" />
     <Compile Include="UI\ButtonCursorHelper.cs" />
     <Compile Include="UI\CaseInfoSystemRibbon.cs">
       <SubType>Component</SubType>

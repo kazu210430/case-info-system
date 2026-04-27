@@ -82,6 +82,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		internal AccountingPaymentHistoryInputForm ()
 		{
 			InitializeComponent ();
+			AccountingFormButtonAppearanceHelper.Apply (btn発行日を入力, btnリセット, btn今日, btn履歴を入力, btn今後の残高推移を出力, btn別名保存, btn削除);
 			ButtonCursorHelper.ApplyHandCursor (this);
 		}
 
@@ -348,7 +349,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.btn今日 = new System.Windows.Forms.Button ();
 			this.btn今日.Location = new System.Drawing.Point (160, 47);
 			this.btn今日.Name = "btn今日";
-			this.btn今日.Size = new System.Drawing.Size (40, 25);
+			this.btn今日.Size = new System.Drawing.Size (52, 25);
 			this.btn今日.TabIndex = 2;
 			this.btn今日.Text = "今日";
 			this.btn今日.UseVisualStyleBackColor = true;

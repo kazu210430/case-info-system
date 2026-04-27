@@ -46,6 +46,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		internal AccountingInstallmentScheduleInputForm ()
 		{
 			InitializeComponent ();
+			AccountingFormButtonAppearanceHelper.Apply (btnIssueDate, btnReset, btnCreateSchedule, btnApplyChange, btnSaveAs);
 			ButtonCursorHelper.ApplyHandCursor (this);
 		}
 

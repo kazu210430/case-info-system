@@ -87,7 +87,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
             private static Color GetHoverFillColor(Color baseColor)
             {
-                return baseColor.ToArgb() == DefaultDocumentButtonColor.ToArgb() ? DefaultHoverButtonColor : ControlPaint.LightLight(baseColor);
+                return baseColor.ToArgb() == DefaultDocumentButtonColor.ToArgb() ? DefaultHoverButtonColor : GetHoverAccentFillColor(baseColor);
             }
         }
 
@@ -147,7 +147,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
             private static Color GetHoverFillColor(Color baseColor)
             {
-                return baseColor.ToArgb() == DefaultDocumentButtonColor.ToArgb() ? DefaultHoverButtonColor : ControlPaint.Light(baseColor);
+                return baseColor.ToArgb() == DefaultDocumentButtonColor.ToArgb() ? DefaultHoverButtonColor : GetHoverAccentFillColor(baseColor);
             }
         }
 
@@ -160,7 +160,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
         private static readonly Color PaneBackColor = Color.FromArgb(242, 242, 242);
         private static readonly Color DefaultDocumentButtonColor = ColorTranslator.FromHtml("#FFFCF5");
-        private static readonly Color DefaultHoverButtonColor = ColorTranslator.FromHtml("#FFF6E8");
+        private static readonly Color DefaultHoverButtonColor = ColorTranslator.FromHtml("#BFEDF8");
         private static readonly Color DefaultButtonBorderColor = Color.DeepSkyBlue;
         private static readonly Color HoverButtonBorderColor = Color.DeepSkyBlue;
         private static readonly Color NoticeBackColor = PaneBackColor;
@@ -171,6 +171,29 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         private readonly Panel _noticePanel;
         private readonly Label _noticeLabel;
         private CaseTaskPaneViewState _currentViewState;
+
+        private static Color GetHoverAccentFillColor(Color baseColor)
+        {
+            return BlendColor(baseColor, Color.DeepSkyBlue, 0.25f);
+        }
+
+        private static Color BlendColor(Color fromColor, Color toColor, float amount)
+        {
+            if (amount <= 0f)
+            {
+                return fromColor;
+            }
+
+            if (amount >= 1f)
+            {
+                return toColor;
+            }
+
+            int red = fromColor.R + (int)Math.Round((toColor.R - fromColor.R) * amount);
+            int green = fromColor.G + (int)Math.Round((toColor.G - fromColor.G) * amount);
+            int blue = fromColor.B + (int)Math.Round((toColor.B - fromColor.B) * amount);
+            return Color.FromArgb(red, green, blue);
+        }
 
         internal DocTaskPaneControl()
         {

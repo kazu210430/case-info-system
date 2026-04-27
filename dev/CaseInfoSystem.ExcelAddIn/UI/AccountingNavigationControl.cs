@@ -13,7 +13,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private static readonly Color DefaultButtonColor = ColorTranslator.FromHtml ("#FFFCF5");
 
-		private static readonly Color HoverButtonColor = ColorTranslator.FromHtml ("#FFF6E8");
+		private static readonly Color HoverButtonColor = ColorTranslator.FromHtml ("#BFEDF8");
 
 		private static readonly Color PressedButtonColor = ColorTranslator.FromHtml ("#FFF1DA");
 

@@ -135,6 +135,36 @@ function Invoke-NormalizeDistributionWorkbookDocProps {
     }
 }
 
+function Get-CertificateBytesFromVstoManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath
+    )
+
+    Assert-FileExists -Path $ManifestPath -Label 'VSTO manifest'
+
+    [xml]$manifestXml = Get-Content -LiteralPath $ManifestPath -Raw
+    $certificateNode = $manifestXml.SelectSingleNode("//*[local-name()='X509Certificate']")
+    if ($null -eq $certificateNode -or [string]::IsNullOrWhiteSpace($certificateNode.InnerText)) {
+        throw "X509Certificate element was not found in VSTO manifest: $ManifestPath"
+    }
+
+    return [System.Convert]::FromBase64String($certificateNode.InnerText)
+}
+
+function Export-CertificateFromVstoManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OutputPath
+    )
+
+    $certificateBytes = Get-CertificateBytesFromVstoManifest -ManifestPath $ManifestPath
+    [System.IO.File]::WriteAllBytes($OutputPath, $certificateBytes)
+}
+
 function New-ZipFromDirectoryWithRootName {
     param(
         [Parameter(Mandatory = $true)]
@@ -191,6 +221,7 @@ $baseWorkbook = Join-Path $runtimeRoot '案件情報System_Base.xlsx'
 $sourceGuidePdf = Join-Path $runtimeRoot '案件情報System_利用開始ガイド.pdf'
 $sourceTemplates = Join-Path $runtimeRoot '雛形'
 $normalizeScript = Join-Path $repoRoot 'scripts\Normalize-DistributionWorkbookDocProps.ps1'
+$setupBatchTemplate = Join-Path $repoRoot 'distribution-assets\初回セットアップ.bat'
 
 try {
     Write-Step 'Checking fixed paths'
@@ -228,6 +259,7 @@ try {
     Assert-FileExists -Path $sourceGuidePdf -Label 'Runtime user guide PDF'
     Assert-DirectoryExists -Path $sourceTemplates -Label 'Runtime template folder'
     Assert-FileExists -Path $normalizeScript -Label 'Docprops normalization script'
+    Assert-FileExists -Path $setupBatchTemplate -Label 'Initial setup batch template'
 
     Write-Step 'Removing existing distribution ZIP'
     if (Test-Path -LiteralPath $zipPath) {
@@ -252,8 +284,19 @@ try {
     Copy-Item -LiteralPath $kernelWorkbook -Destination (Join-Path $distributionRoot '案件情報System_Kernel.xlsx') -Force
     Copy-Item -LiteralPath $baseWorkbook -Destination (Join-Path $distributionRoot '案件情報System_Base.xlsx') -Force
     Copy-Item -LiteralPath $sourceGuidePdf -Destination (Join-Path $distributionRoot '利用開始ガイド.pdf') -Force
+    Copy-Item -LiteralPath $setupBatchTemplate -Destination (Join-Path $distributionRoot '初回セットアップ.bat') -Force
     Copy-DirectoryContents -SourcePath $sourceTemplates -DestinationPath (Join-Path $distributionRoot '雛形') -ExcludeNamePatterns @('~$*')
     New-Item -ItemType Directory -Path (Join-Path $distributionRoot 'logs') -Force | Out-Null
+
+    Write-Step 'Exporting distribution certificate from Release VSTO manifest'
+    $excelCertificateBytes = Get-CertificateBytesFromVstoManifest -ManifestPath (Join-Path $releaseExcelAddIn 'CaseInfoSystem.ExcelAddIn.vsto')
+    $wordCertificateBytes = Get-CertificateBytesFromVstoManifest -ManifestPath (Join-Path $releaseWordAddIn 'CaseInfoSystem.WordAddIn.vsto')
+    if ([System.BitConverter]::ToString($excelCertificateBytes) -ne [System.BitConverter]::ToString($wordCertificateBytes)) {
+        throw 'Release Excel/Word VSTO manifests are signed with different certificates.'
+    }
+    Export-CertificateFromVstoManifest `
+        -ManifestPath (Join-Path $releaseExcelAddIn 'CaseInfoSystem.ExcelAddIn.vsto') `
+        -OutputPath (Join-Path $distributionRoot 'CaseInfoSystem.Internal.cer')
 
     Write-Step 'Normalizing copied Kernel/Base docprops'
     $distributionKernel = Join-Path $distributionRoot '案件情報System_Kernel.xlsx'

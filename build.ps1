@@ -1,6 +1,6 @@
 param(
     [ValidateSet('Test', 'Compile', 'DeployDebugAddIn', 'Help')]
-    [string]$Mode = 'Test',
+    [string]$Mode = 'Help',
 
     [ValidateSet('ExcelAddIn', 'WordAddIn', 'All')]
     [string]$Project = 'All',
@@ -32,25 +32,28 @@ function Invoke-ExternalCommand {
 }
 
 function Show-Help {
-    Write-Host 'Supported modes:'
+    Write-Host 'Usage:'
+    Write-Host '  .\build.ps1 -Mode <Test|Compile|DeployDebugAddIn|Help>'
+    Write-Host ''
+    Write-Host 'Available modes:'
+    Write-Host '  Test'
+    Write-Host '    Standard test entrypoint. Runs dotnet test for dev\CaseInfoSystem.slnx.'
+    Write-Host '  Compile'
+    Write-Host '    CI-equivalent safe build check. This is compile-only and does not deploy add-ins to the runtime Addins directory.'
+    Write-Host '  DeployDebugAddIn'
+    Write-Host '    Wraps scripts\Invoke-DeployDebugAddIns.ps1 and reflects Debug add-ins into the runtime Addins directory.'
+    Write-Host '  Help'
+    Write-Host '    Shows this help without running build, test, or deploy work.'
+    Write-Host ''
+    Write-Host 'Examples:'
+    Write-Host '  .\build.ps1'
     Write-Host '  .\build.ps1 -Mode Test'
     Write-Host '  .\build.ps1 -Mode Compile'
     Write-Host '  .\build.ps1 -Mode DeployDebugAddIn'
-    Write-Host ''
-    Write-Host 'Notes:'
-    Write-Host '  Test                Runs dotnet test for dev\CaseInfoSystem.slnx.'
-    Write-Host '  Compile             Runs compile-only validation without VSTO packaging.'
-    Write-Host '  DeployDebugAddIn    Wraps scripts\Invoke-DeployDebugAddIns.ps1 and reflects Debug add-ins into runtime Addins.'
 }
 
 try {
     $repoRoot = Split-Path -Path $PSCommandPath -Parent
-    $solutionPath = Join-Path $repoRoot 'dev\CaseInfoSystem.slnx'
-    $deployScriptPath = Join-Path $repoRoot 'scripts\Invoke-DeployDebugAddIns.ps1'
-
-    if (-not (Test-Path -LiteralPath $solutionPath)) {
-        throw "Solution file was not found: $solutionPath"
-    }
 
     switch ($Mode) {
         'Help' {
@@ -59,6 +62,11 @@ try {
         }
 
         'Test' {
+            $solutionPath = Join-Path $repoRoot 'dev\CaseInfoSystem.slnx'
+            if (-not (Test-Path -LiteralPath $solutionPath)) {
+                throw "Solution file was not found: $solutionPath"
+            }
+
             $resolvedConfiguration = if ([string]::IsNullOrWhiteSpace($Configuration)) { 'Debug' } else { $Configuration }
             $arguments = @('test', $solutionPath, '-c', $resolvedConfiguration)
 
@@ -74,6 +82,11 @@ try {
         }
 
         'Compile' {
+            $solutionPath = Join-Path $repoRoot 'dev\CaseInfoSystem.slnx'
+            if (-not (Test-Path -LiteralPath $solutionPath)) {
+                throw "Solution file was not found: $solutionPath"
+            }
+
             $resolvedConfiguration = if ([string]::IsNullOrWhiteSpace($Configuration)) { 'Release' } else { $Configuration }
 
             # Compile mode is intentionally packaging-free so it can run under dotnet/MSBuild Core.
@@ -94,6 +107,7 @@ try {
         }
 
         'DeployDebugAddIn' {
+            $deployScriptPath = Join-Path $repoRoot 'scripts\Invoke-DeployDebugAddIns.ps1'
             if (-not (Test-Path -LiteralPath $deployScriptPath)) {
                 throw "Deploy script was not found: $deployScriptPath"
             }

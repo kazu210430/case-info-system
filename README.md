@@ -40,7 +40,8 @@
 - `.\build.ps1 -Mode Test`
   - 標準の確認コマンドです。`dotnet test .\dev\CaseInfoSystem.slnx` 相当で、テスト実行を行います。
 - `.\build.ps1 -Mode Compile`
-  - CI 相当の compile-only 確認です。VSTO packaging を行わず、Release 構成のコンパイル可否だけを確認します。
+  - Compile = 「CI相当の安全なビルド確認」です。VSTO packaging を行わず、Release 構成のコンパイル可否だけを確認します。
+  - Add-in は配備されません。実機動作確認はできず、runtime 反映には `.\build.ps1 -Mode DeployDebugAddIn` が必要です。
 - `.\build.ps1 -Mode DeployDebugAddIn`
   - ローカル実機確認用の Debug Add-in 配備です。runtime `Addins\` 反映まで含みます。
 

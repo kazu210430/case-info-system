@@ -35,7 +35,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 Rectangle rect = new Rectangle(0, 0, base.Width - 1, base.Height - 1);
                 Color fillColor = IsSelected ? GetSelectedFillColor(BaseBackColor) : (_isHovering ? GetHoverFillColor(BaseBackColor) : BaseBackColor);
                 Color borderColor = IsSelected ? Color.DeepSkyBlue : (_isHovering ? HoverButtonBorderColor : DefaultButtonBorderColor);
-                int borderWidth = IsSelected ? 2 : 1;
+                int borderWidth = 1;
                 using (GraphicsPath path = CreateStaticLeftRoundedPath(rect, 12))
                 using (SolidBrush brush = new SolidBrush(fillColor))
                 using (Pen pen = new Pen(borderColor, borderWidth))

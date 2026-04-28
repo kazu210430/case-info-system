@@ -92,6 +92,55 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 文書ごとの差し込み項目と命名規則の最終業務ルールは、コードだけでは確定しません。
 - `DocumentExecutionMode.txt` などの制御ファイルの運用手順は、この文書では確定しません。
 
+## 雛形登録・更新フロー
+
+雛形登録・更新は `KernelCommandService` から `KernelTemplateSyncService` を呼び出して実行されます。利用者が配置した Word 雛形を検証し、適正なもののみを `雛形一覧` に登録する処理です。
+
+### フロー
+
+1. `KernelTemplateSyncService` が Kernel ブックを取得し、`SYSTEM_ROOT\雛形` を登録対象フォルダとして解決します。
+2. `KernelTemplateSyncService` が Kernel の管理シート `CaseList_FieldInventory` を読み取り、定義済み Tag 一覧を構築します。
+3. `WordTemplateRegistrationValidationService` が雛形フォルダ直下の候補ファイルを走査します。
+4. 各ファイルに対して登録前チェックを実施します。
+5. OK 雛形のみを `shMasterList` / `雛形一覧` の一覧へ書き戻します。
+6. NG 雛形は登録しません。
+7. 登録除外理由と警告を結果メッセージに表示します。
+8. `TASKPANE_MASTER_VERSION` を更新します。
+9. Kernel 保存後に Base へ TaskPane 用 snapshot を更新します。
+10. `MasterTemplateCatalogService.InvalidateCache()` を実行してキャッシュを無効化します。
+
+### 登録前チェック
+
+- ファイル名先頭の key No. が 2 桁かを確認します。
+- key No. が `01` から `99` の範囲内かを確認します。
+- key 重複を確認します。
+- 拡張子を確認します。候補走査対象は `.docx` / `.dotx` / `.docm` / `.dotm` ですが、`.docm` / `.dotm` は登録不可です。
+- Word ファイルとして読み取れるかを確認します。
+- テキスト / リッチテキスト ContentControl の Tag を検証します。
+
+### Tag 検証
+
+- `CaseList_FieldInventory` に定義された Tag のみ許可します。
+- `Date` は特例として許可します。
+- 未定義 Tag がある場合は登録不可です。
+
+### 警告
+
+- Tag 未設定のテキスト項目は警告になります。
+- 警告のみの場合は登録を許可します。
+
+### 非対象
+
+- 非テキスト ContentControl は無視します。
+
+### 出力
+
+- 登録成功件数
+- 登録除外件数
+- 警告件数
+- 各ファイルの除外理由
+- 各ファイルの警告内容
+
 ## 会計書類セット
 
 会計書類セットは `AccountingSetCommandService` を起点として処理されます。CASE では `AccountingSetCreateService` が作成処理を実行します。

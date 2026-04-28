@@ -202,6 +202,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 caseListHeaderRepository,
                 caseListMappingRepository,
                 accountingWorkbookService,
+                taskPaneSnapshotCacheService,
                 _logger);
             // Document boundary: bundle Word/document execution services and diagnostics.
             var documentComposition = new AddInDocumentCompositionFactory(_addIn, _logger)

@@ -39,9 +39,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
+		private readonly TaskPaneSnapshotCacheService _taskPaneSnapshotCacheService;
+
 		private readonly Logger _logger;
 
-		internal CaseListRegistrationService (ExcelInteropService excelInteropService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseDataSnapshotFactory caseDataSnapshotFactory, CaseListFieldDefinitionRepository fieldDefinitionRepository, CaseListHeaderRepository headerRepository, CaseListMappingRepository mappingRepository, AccountingWorkbookService accountingWorkbookService, Logger logger)
+		internal CaseListRegistrationService (ExcelInteropService excelInteropService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseDataSnapshotFactory caseDataSnapshotFactory, CaseListFieldDefinitionRepository fieldDefinitionRepository, CaseListHeaderRepository headerRepository, CaseListMappingRepository mappingRepository, AccountingWorkbookService accountingWorkbookService, TaskPaneSnapshotCacheService taskPaneSnapshotCacheService, Logger logger)
 		{
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_kernelWorkbookResolverService = kernelWorkbookResolverService ?? throw new ArgumentNullException ("kernelWorkbookResolverService");
@@ -50,6 +52,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_headerRepository = headerRepository ?? throw new ArgumentNullException ("headerRepository");
 			_mappingRepository = mappingRepository ?? throw new ArgumentNullException ("mappingRepository");
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
+			_taskPaneSnapshotCacheService = taskPaneSnapshotCacheService ?? throw new ArgumentNullException ("taskPaneSnapshotCacheService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
@@ -98,6 +101,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_excelInteropService.SetDocumentProperty (caseWorkbook, "CASELIST_REGISTERED", "1");
 			_excelInteropService.SetDocumentProperty (caseWorkbook, "CASELIST_ROW", nextCaseListRow.ToString ());
 			_excelInteropService.SetDocumentProperty (caseWorkbook, "TASKPANE_SNAPSHOT_CACHE_COUNT", "0");
+			_taskPaneSnapshotCacheService.ClearCaseSnapshotCacheChunks (caseWorkbook);
 			_logger.Info ("Case workbook task pane snapshot cache invalidated after case-list registration. caseListRegistered=1, caseListRow=" + nextCaseListRow);
 			if (!openedNow) {
 				_logger.Info ("Case list registration reused open kernel workbook.");

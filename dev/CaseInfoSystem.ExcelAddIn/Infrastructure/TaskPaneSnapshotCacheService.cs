@@ -1,5 +1,8 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.UI;
+using Microsoft.Office.Core;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
@@ -130,6 +133,69 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return false;
         }
 
+        internal void ClearCaseSnapshotCacheChunks(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
+            object properties = null;
+            try
+            {
+                properties = workbook.CustomDocumentProperties;
+                if (!(properties is DocumentProperties documentProperties))
+                {
+                    return;
+                }
+
+                var propertyNamesToDelete = new List<string>();
+                foreach (DocumentProperty item in documentProperties)
+                {
+                    try
+                    {
+                        string propertyName = Convert.ToString(item.Name) ?? string.Empty;
+                        if (IsCaseSnapshotChunkPropertyName(propertyName))
+                        {
+                            propertyNamesToDelete.Add(propertyName);
+                        }
+                    }
+                    finally
+                    {
+                        ReleaseComObject(item);
+                    }
+                }
+
+                if (propertyNamesToDelete.Count == 0)
+                {
+                    return;
+                }
+
+                dynamic dynamicProperties = properties;
+                for (int index = 0; index < propertyNamesToDelete.Count; index++)
+                {
+                    object property = null;
+                    try
+                    {
+                        string propertyName = propertyNamesToDelete[index];
+                        property = dynamicProperties[propertyName];
+                        dynamic dynamicProperty = property;
+                        dynamicProperty.Delete();
+                    }
+                    finally
+                    {
+                        ReleaseComObject(property);
+                    }
+                }
+
+                _logger.Info("TaskPaneSnapshotCacheService cleared CASE cache chunks. removedCount=" + propertyNamesToDelete.Count.ToString());
+            }
+            finally
+            {
+                ReleaseComObject(properties);
+            }
+        }
+
         private string LoadTaskPaneSnapshotCache(Excel.Workbook workbook)
         {
             return LoadSnapshotParts(workbook, TaskPaneCacheCountProp, TaskPaneCachePartPropPrefix);
@@ -211,6 +277,31 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 : trimmed;
         }
 
+        private static bool IsCaseSnapshotChunkPropertyName(string propertyName)
+        {
+            if (string.IsNullOrWhiteSpace(propertyName)
+                || !propertyName.StartsWith(TaskPaneCachePartPropPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string suffix = propertyName.Substring(TaskPaneCachePartPropPrefix.Length);
+            if (suffix.Length == 0)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < suffix.Length; index++)
+            {
+                if (!char.IsDigit(suffix[index]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private int ReadPositiveIntProperty(Excel.Workbook workbook, string propertyName)
         {
             string text = _excelInteropService.TryGetDocumentProperty(workbook, propertyName);
@@ -231,6 +322,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 _excelInteropService.SetDocumentProperty(workbook, partPropPrefix + partIndex.ToString("00"), string.Empty);
             }
+        }
+
+        private static void ReleaseComObject(object comObject)
+        {
+            if (comObject == null || !Marshal.IsComObject(comObject))
+            {
+                return;
+            }
+
+            Marshal.ReleaseComObject(comObject);
         }
     }
 }

@@ -20,6 +20,7 @@
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Management" />
+    <Reference Include="System.Xml.Linq" />
   </ItemGroup>
 
   <ItemGroup>
@@ -65,6 +66,7 @@
     <Compile Include="AccountingSetCreateServiceTests.cs" />
     <Compile Include="AccountingSetKernelSyncServiceTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
+    <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
@@ -98,6 +100,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseCreationService.cs" Link="Source\App\KernelCaseCreationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\NavigationService.cs" Link="Source\App\NavigationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WordTemplateRegistrationValidationService.cs" Link="Source\App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookContextSeed.cs" Link="Source\App\WorkbookContextSeed.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookSessionService.cs" Link="Source\App\WorkbookSessionService.cs" />
@@ -118,6 +121,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationPlan.cs" Link="Source\Domain\KernelCaseCreationPlan.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationRequest.cs" Link="Source\Domain\KernelCaseCreationRequest.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationResult.cs" Link="Source\Domain\KernelCaseCreationResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\TemplateRegistrationValidationEntry.cs" Link="Source\Domain\TemplateRegistrationValidationEntry.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\TemplateRegistrationValidationSummary.cs" Link="Source\Domain\TemplateRegistrationValidationSummary.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookContext.cs" Link="Source\Domain\WorkbookContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
@@ -131,6 +136,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\FolderWindowService.cs" Link="Source\Infrastructure\FolderWindowService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordTemplateContentControlInspectionService.cs" Link="Source\Infrastructure\WordTemplateContentControlInspectionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WordInteropService.cs" Link="Source\Infrastructure\WordInteropService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ITaskPaneView.cs" Link="Source\UI\ITaskPaneView.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneHost.cs" Link="Source\UI\TaskPaneHost.cs" />

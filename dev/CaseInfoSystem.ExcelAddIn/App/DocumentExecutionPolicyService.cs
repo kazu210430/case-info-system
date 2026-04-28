@@ -81,8 +81,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_loadedReviewNotesLastWriteUtcTicks = long.MinValue;
 		}
 
-		// These compatibility APIs no longer gate document execution at runtime.
-		// They remain permissive so diagnostics and legacy tooling can still read policy files safely.
+		// The current document runtime mainline no longer instantiates this service.
+		// These APIs remain in source during the retirement phase and stay permissive if reused.
 		internal bool IsVstoExecutionAllowed (DocumentTemplateSpec templateSpec)
 		{
 			return templateSpec != null;

@@ -83,11 +83,9 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 ### 実行モードと制御ファイル
 
 - 文書実行モードを読む `DocumentExecutionMode.txt` の存在はコードで確認できます。
-- `DocumentExecutionAllowlist.txt`、`DocumentExecutionAllowlist.review.txt` の存在も確認できます。
-- ただし、現行コードでは `DocumentExecutionAllowlist.txt`、`DocumentExecutionAllowlist.review.txt` は文書作成本線の runtime gating 本体としては使われていません。
 - `allowlist` は runtime gating には使われておらず、過去の運用・検証用の残存要素です。今後の段階的撤去候補として扱います。
 - `review` は runtime safety には寄与しておらず、PASS / HOLD / FAIL の記録媒体としての残存要素です。今後の段階的撤去候補として扱います。
-- allowlist / review のファイルと csproj 同梱設定は残っています。専用 tools の撤去は完了しており、完全撤去は次フェーズです。
+- allowlist / review の config ファイルと csproj 同梱設定は撤去済みです。専用 tools の撤去は完了しています。
 - `DocumentExecutionPolicyService` 自体もソース上は残っていますが、現在は runtime 本線から外れており、次フェーズの削除候補です。
 - pilot は runtime 本線で未使用だったため撤去済みです。
 - `mode` は runtime gating 目的ではありません。現行コードで確認できる主用途は Word warm-up 制御などの運用スイッチであり、allowlist / review とは分けて扱い、現時点では撤去対象に含めません。

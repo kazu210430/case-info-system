@@ -117,9 +117,7 @@ function Assert-ManagedFilesMatch {
     )
 
     $managedFiles = @(
-        'DocumentExecutionMode.txt',
-        'DocumentExecutionAllowlist.txt',
-        'DocumentExecutionAllowlist.review.txt'
+        'DocumentExecutionMode.txt'
     )
 
     foreach ($fileName in $managedFiles) {

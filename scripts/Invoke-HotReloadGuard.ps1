@@ -183,9 +183,7 @@ function Get-ProjectDefinitions {
             'CaseInfoSystem.ExcelAddIn.dll',
             'CaseInfoSystem.ExcelAddIn.dll.manifest',
             'CaseInfoSystem.ExcelAddIn.vsto',
-            'DocumentExecutionMode.txt',
-            'DocumentExecutionAllowlist.txt',
-            'DocumentExecutionAllowlist.review.txt'
+            'DocumentExecutionMode.txt'
         ) `
         -BackupItems $excelBackupItems `
         -RuntimeManifestPath (Join-Path $RuntimeRoot 'Addins\CaseInfoSystem.ExcelAddIn\CaseInfoSystem.ExcelAddIn.vsto') `

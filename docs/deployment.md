@@ -63,10 +63,8 @@
 存在が確認できるファイル:
 
 - `DocumentExecutionMode.txt`
-- `DocumentExecutionAllowlist.txt`
-- `DocumentExecutionAllowlist.review.txt`
 
-この文書では存在説明のみを扱い、中身や運用ルールは扱いません。
+allowlist / review の config ファイルは撤去済みです。この文書では mode ファイルの存在説明のみを扱い、中身や運用ルールは扱いません。
 
 ## Word Add-in 配下
 

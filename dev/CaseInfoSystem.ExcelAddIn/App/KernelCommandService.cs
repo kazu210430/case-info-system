@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
+using CaseInfoSystem.ExcelAddIn.UI;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
@@ -106,7 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			try {
 				KernelTemplateSyncResult kernelTemplateSyncResult = _kernelTemplateSyncService.Execute ();
-				MessageBox.Show (kernelTemplateSyncResult.Message, "案件情報System", MessageBoxButtons.OK, kernelTemplateSyncResult.Success ? MessageBoxIcon.Asterisk : MessageBoxIcon.Exclamation);
+				TemplateRegistrationResultForm.ShowNotice ("案件情報System", kernelTemplateSyncResult.Message);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectTemplate failed.", exception);
 				MessageBox.Show ("雛形登録・更新を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);

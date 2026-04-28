@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -143,19 +144,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly PathCompatibilityService _pathCompatibilityService;
 
+		private readonly CaseListFieldDefinitionRepository _caseListFieldDefinitionRepository;
+
+		private readonly WordTemplateRegistrationValidationService _wordTemplateRegistrationValidationService;
+
 		private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
 
 		private readonly CaseWorkbookLifecycleService _caseWorkbookLifecycleService;
 
 		private readonly Logger _logger;
 
-		internal KernelTemplateSyncService (Application application, KernelWorkbookService kernelWorkbookService, ExcelInteropService excelInteropService, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, MasterTemplateCatalogService masterTemplateCatalogService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, Logger logger)
+		internal KernelTemplateSyncService (Application application, KernelWorkbookService kernelWorkbookService, ExcelInteropService excelInteropService, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, WordTemplateRegistrationValidationService wordTemplateRegistrationValidationService, MasterTemplateCatalogService masterTemplateCatalogService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, Logger logger)
 		{
 			_application = application ?? throw new ArgumentNullException ("application");
 			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
+			_caseListFieldDefinitionRepository = caseListFieldDefinitionRepository ?? throw new ArgumentNullException ("caseListFieldDefinitionRepository");
+			_wordTemplateRegistrationValidationService = wordTemplateRegistrationValidationService ?? throw new ArgumentNullException ("wordTemplateRegistrationValidationService");
 			_masterTemplateCatalogService = masterTemplateCatalogService ?? throw new ArgumentNullException ("masterTemplateCatalogService");
 			_caseWorkbookLifecycleService = caseWorkbookLifecycleService ?? throw new ArgumentNullException ("caseWorkbookLifecycleService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
@@ -180,32 +187,44 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				ValidateMasterListSheet (worksheet);
 				string text = ResolveTemplateDirectory (openKernelWorkbook);
-				string duplicateInfo;
-				IReadOnlyDictionary<string, string> readOnlyDictionary = CollectTemplateFiles (text, out duplicateInfo);
-				if (readOnlyDictionary.Count == 0) {
+				IReadOnlyCollection<string> readOnlyCollection = LoadDefinedTemplateTags (openKernelWorkbook);
+				if (readOnlyCollection.Count == 0) {
 					return new KernelTemplateSyncResult {
 						Success = false,
 						TemplateDirectory = text,
-						Message = "雛形フォルダに「2桁数字_」で始まる Word 文書が見つかりませんでした。" + Environment.NewLine + "フォルダ: " + text
+						Message = "Kernelブックの管理シート CaseList_FieldInventory を読み取れません。"
 					};
 				}
-				int updatedCount = WriteToMasterList (worksheet, readOnlyDictionary);
+				TemplateRegistrationValidationSummary templateRegistrationValidationSummary = _wordTemplateRegistrationValidationService.Validate (text, readOnlyCollection);
+				if (templateRegistrationValidationSummary.DetectedFileCount == 0) {
+					return new KernelTemplateSyncResult {
+						Success = false,
+						TemplateDirectory = text,
+						DetectedCount = 0,
+						TemplateResults = templateRegistrationValidationSummary.TemplateResults,
+						Message = "雛形フォルダに Word 雛形 (.docx / .dotx / .docm / .dotm) が見つかりませんでした。" + Environment.NewLine + "フォルダ: " + text
+					};
+				}
+				IReadOnlyList<TemplateRegistrationValidationEntry> validTemplates = templateRegistrationValidationSummary.GetValidTemplates ();
+				int updatedCount = WriteToMasterList (worksheet, validTemplates);
 				int masterVersion = IncrementTaskPaneMasterVersion (openKernelWorkbook);
 				openKernelWorkbook.Save ();
 				string snapshotText = BuildTaskPaneSnapshot (worksheet, openKernelWorkbook, masterVersion);
 				string errorMessage;
 				bool baseSyncSucceeded = TrySyncTaskPaneSnapshotToBase (openKernelWorkbook, snapshotText, masterVersion, out errorMessage);
 				_masterTemplateCatalogService.InvalidateCache ();
-				_logger.Info ("Kernel template sync completed. updatedCount=" + updatedCount + ", detectedCount=" + readOnlyDictionary.Count + ", masterVersion=" + masterVersion);
+				_logger.Info ("Kernel template sync completed. updatedCount=" + updatedCount + ", detectedCount=" + templateRegistrationValidationSummary.DetectedFileCount + ", excludedCount=" + templateRegistrationValidationSummary.ExcludedTemplateCount + ", warningCount=" + templateRegistrationValidationSummary.WarningFileCount + ", masterVersion=" + masterVersion);
 				return new KernelTemplateSyncResult {
 					Success = true,
 					UpdatedCount = updatedCount,
-					DetectedCount = readOnlyDictionary.Count,
+					DetectedCount = templateRegistrationValidationSummary.DetectedFileCount,
+					ExcludedCount = templateRegistrationValidationSummary.ExcludedTemplateCount,
+					WarningCount = templateRegistrationValidationSummary.WarningFileCount,
 					MasterVersion = masterVersion,
 					TemplateDirectory = text,
-					DuplicateInfo = duplicateInfo,
+					TemplateResults = templateRegistrationValidationSummary.TemplateResults,
 					BaseSyncError = errorMessage,
-					Message = BuildCompletedMessage (text, updatedCount, readOnlyDictionary.Count, stopwatch.Elapsed, masterVersion, duplicateInfo, baseSyncSucceeded, errorMessage)
+					Message = BuildCompletedMessage (text, updatedCount, templateRegistrationValidationSummary, stopwatch.Elapsed, masterVersion, baseSyncSucceeded, errorMessage)
 				};
 			} finally {
 				if (worksheet != null && sheetProtectionState != null) {
@@ -215,54 +234,40 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private IReadOnlyDictionary<string, string> CollectTemplateFiles (string templateDirectory, out string duplicateInfo)
+		private IReadOnlyCollection<string> LoadDefinedTemplateTags (Workbook kernelWorkbook)
 		{
-			Dictionary<string, string> dictionary = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
-			StringBuilder stringBuilder = new StringBuilder ();
-			CollectTemplateFilesByPattern (templateDirectory, "*.do*", dictionary, stringBuilder);
-			CollectTemplateFilesByPattern (templateDirectory, "*.dot*", dictionary, stringBuilder);
-			duplicateInfo = stringBuilder.ToString ().TrimEnd ('\r', '\n');
-			return dictionary;
-		}
-
-		private void CollectTemplateFilesByPattern (string templateDirectory, string pattern, IDictionary<string, string> templates, StringBuilder duplicateBuilder)
-		{
-			string[] files = Directory.GetFiles (templateDirectory, pattern, SearchOption.TopDirectoryOnly);
-			Array.Sort (files, StringComparer.OrdinalIgnoreCase);
-			for (int i = 0; i < files.Length; i++) {
-				string text = Path.GetFileName (files [i]) ?? string.Empty;
-				string text2 = ExtractKeyFromFileName (text);
-				if (text2.Length != 0) {
-					if (templates.ContainsKey (text2)) {
-						duplicateBuilder.Append (text2).Append (" : ").Append (templates [text2])
-							.Append (" / ")
-							.Append (text)
-							.AppendLine ();
-					} else {
-						templates.Add (text2, text);
-					}
-				}
+			IReadOnlyDictionary<string, CaseListFieldDefinition> readOnlyDictionary = _caseListFieldDefinitionRepository.LoadDefinitions (kernelWorkbook);
+			if (readOnlyDictionary == null || readOnlyDictionary.Count == 0) {
+				return Array.Empty<string> ();
 			}
+			return readOnlyDictionary.Keys
+				.Where (key => !string.IsNullOrWhiteSpace (key))
+				.Select (key => key.Trim ())
+				.ToArray ();
 		}
 
-		private int WriteToMasterList (Worksheet masterSheet, IReadOnlyDictionary<string, string> templates)
+		private int WriteToMasterList (Worksheet masterSheet, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
 		{
 			int num = 3;
 			int num2 = 101;
 			masterSheet.Range [(dynamic)masterSheet.Cells [num, 1], (dynamic)masterSheet.Cells [num2, 3]].ClearContents ();
 			object[,] array = new object[99, 3];
 			int num3 = 0;
-			foreach (KeyValuePair<string, string> template in templates) {
-				if (int.TryParse (template.Key, out var result)) {
-					int num4 = result + 3 - 1;
-					if (num4 >= num && num4 <= num2) {
-						string text = template.Value ?? string.Empty;
-						int num5 = num4 - num;
-						array [num5, 0] = result.ToString ("00");
-						array [num5, 1] = text;
-						array [num5, 2] = ExtractDocumentName (text);
-						num3++;
-					}
+			if (templates == null) {
+				return 0;
+			}
+			foreach (TemplateRegistrationValidationEntry template in templates) {
+				if (template == null || !int.TryParse (template.Key, out var result)) {
+					continue;
+				}
+				int num4 = result + 3 - 1;
+				if (num4 >= num && num4 <= num2) {
+					string text = template.FileName ?? string.Empty;
+					int num5 = num4 - num;
+					array [num5, 0] = result.ToString ("00");
+					array [num5, 1] = text;
+					array [num5, 2] = template.DisplayName ?? ExtractDocumentName (text);
+					num3++;
 				}
 			}
 			_accountingWorkbookService.WriteRangeValues (masterSheet, "$A$" + num.ToString () + ":$C$" + num2.ToString (), array);
@@ -379,27 +384,48 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return string.Join (Environment.NewLine, list.ToArray ());
 		}
 
-		private static string BuildCompletedMessage (string templateDirectory, int updatedCount, int detectedCount, TimeSpan elapsed, int masterVersion, string duplicateInfo, bool baseSyncSucceeded, string baseSyncError)
+		private static string BuildCompletedMessage (string templateDirectory, int updatedCount, TemplateRegistrationValidationSummary validationSummary, TimeSpan elapsed, int masterVersion, bool baseSyncSucceeded, string baseSyncError)
 		{
 			StringBuilder stringBuilder = new StringBuilder ();
-			stringBuilder.Append ("シート内容の更新が完了しました。").AppendLine ().Append ("フォルダ: ")
-				.Append (templateDirectory)
-				.AppendLine ()
-				.Append ("更新件数: ")
+			List<TemplateRegistrationValidationEntry> list = ((validationSummary == null) ? new List<TemplateRegistrationValidationEntry> () : validationSummary.TemplateResults.Where (entry => entry != null && !entry.IsValid).OrderBy (entry => entry.FileName ?? string.Empty, StringComparer.OrdinalIgnoreCase).ToList ());
+			List<TemplateRegistrationValidationEntry> list2 = ((validationSummary == null) ? new List<TemplateRegistrationValidationEntry> () : validationSummary.TemplateResults.Where (entry => entry != null && entry.HasWarnings).OrderBy (entry => entry.FileName ?? string.Empty, StringComparer.OrdinalIgnoreCase).ToList ());
+			stringBuilder.Append ("雛形登録・更新が完了しました。").AppendLine ().Append ("登録成功: ")
 				.Append (updatedCount.ToString ())
 				.AppendLine ()
+				.Append ("登録除外: ")
+				.Append (list.Count.ToString ())
+				.AppendLine ()
+				.Append ("警告: ")
+				.Append (list2.Count.ToString ())
+				.AppendLine ()
+				.Append ("フォルダ: ")
+				.Append (templateDirectory)
+				.AppendLine ()
 				.Append ("検出件数: ")
-				.Append (detectedCount.ToString ())
+				.Append ((validationSummary == null) ? "0" : validationSummary.DetectedFileCount.ToString ())
 				.AppendLine ()
 				.Append ("処理時間(秒): ")
 				.Append (elapsed.TotalSeconds.ToString ("0.00"))
 				.AppendLine ()
 				.Append ("Master版: ")
 				.Append (masterVersion.ToString ());
-			if (!string.IsNullOrWhiteSpace (duplicateInfo)) {
-				stringBuilder.AppendLine ().AppendLine ().Append ("【注意】同一キーの重複がありました（先に見つかった方を採用）:")
-					.AppendLine ()
-					.Append (duplicateInfo.Trim ());
+			if (list.Count > 0) {
+				stringBuilder.AppendLine ().AppendLine ().Append ("登録除外:");
+				foreach (TemplateRegistrationValidationEntry item in list) {
+					stringBuilder.AppendLine ().Append ("- ").Append (item.FileName ?? string.Empty);
+					foreach (string error in item.Errors) {
+						stringBuilder.AppendLine ().Append ("  - ").Append (error ?? string.Empty);
+					}
+				}
+			}
+			if (list2.Count > 0) {
+				stringBuilder.AppendLine ().AppendLine ().Append ("警告:");
+				foreach (TemplateRegistrationValidationEntry item2 in list2) {
+					stringBuilder.AppendLine ().Append ("- ").Append (item2.FileName ?? string.Empty);
+					foreach (string warning in item2.Warnings) {
+						stringBuilder.AppendLine ().Append ("  - ").Append (warning ?? string.Empty);
+					}
+				}
 			}
 			if (!baseSyncSucceeded) {
 				stringBuilder.AppendLine ().AppendLine ().Append ("【注意】Base への初期 Task Pane 定義反映に失敗しました。")
@@ -459,15 +485,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private static string ExtractKeyFromFileName (string fileName)
-		{
-			if (string.IsNullOrWhiteSpace (fileName) || fileName.Length < 4 || fileName [2] != '_') {
-				return string.Empty;
-			}
-			string text = fileName.Substring (0, 2);
-			return IsTwoDigitNumber (text) ? text : string.Empty;
-		}
-
 		private static string ExtractDocumentName (string fileName)
 		{
 			if (string.IsNullOrWhiteSpace (fileName)) {
@@ -475,11 +492,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			string text = Path.GetFileNameWithoutExtension (fileName) ?? string.Empty;
 			return (text.Length >= 4) ? text.Substring (3) : string.Empty;
-		}
-
-		private static bool IsTwoDigitNumber (string text)
-		{
-			return !string.IsNullOrEmpty (text) && text.Length == 2 && char.IsDigit (text [0]) && char.IsDigit (text [1]);
 		}
 
 		private static string NormalizeDocKey (string key)

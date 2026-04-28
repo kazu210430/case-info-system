@@ -241,6 +241,7 @@
     <Compile Include="App\KernelWorkbookService.cs" />
     <Compile Include="App\MergeDataBuilder.cs" />
     <Compile Include="App\NavigationService.cs" />
+    <Compile Include="App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="App\TaskPaneManager.cs" />
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />
@@ -294,6 +295,8 @@
     <Compile Include="Domain\KernelTemplateSyncResult.cs" />
     <Compile Include="Domain\KernelUserDataReflectionResult.cs" />
     <Compile Include="Domain\MasterTemplateRecord.cs" />
+    <Compile Include="Domain\TemplateRegistrationValidationEntry.cs" />
+    <Compile Include="Domain\TemplateRegistrationValidationSummary.cs" />
     <Compile Include="Domain\DocumentTemplateSpec.cs" />
     <Compile Include="Domain\WorkbookResetDefinition.cs" />
     <Compile Include="Domain\WorkbookResetResult.cs" />
@@ -336,6 +339,7 @@
     <Compile Include="Infrastructure\TemplateDefinitionRepository.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotFormat.cs" />
     <Compile Include="Infrastructure\UserDataBaseMappingRepository.cs" />
+    <Compile Include="Infrastructure\WordTemplateContentControlInspectionService.cs" />
     <Compile Include="Infrastructure\WordInteropService.cs" />
     <Compile Include="Infrastructure\WorkbookRoleResolver.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
@@ -417,6 +421,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\CompletionNoticeForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\TemplateRegistrationResultForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\ExcelWindowOwner.cs" />

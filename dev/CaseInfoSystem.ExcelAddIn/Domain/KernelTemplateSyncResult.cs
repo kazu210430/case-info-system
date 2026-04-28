@@ -1,4 +1,7 @@
-﻿namespace CaseInfoSystem.ExcelAddIn.Domain
+﻿using System;
+using System.Collections.Generic;
+
+namespace CaseInfoSystem.ExcelAddIn.Domain
 {
     /// <summary>
     internal sealed class KernelTemplateSyncResult
@@ -9,6 +12,10 @@
 
         internal int DetectedCount { get; set; }
 
+        internal int ExcludedCount { get; set; }
+
+        internal int WarningCount { get; set; }
+
         internal int MasterVersion { get; set; }
 
         internal string TemplateDirectory { get; set; } = string.Empty;
@@ -16,6 +23,8 @@
         internal string DuplicateInfo { get; set; } = string.Empty;
 
         internal string BaseSyncError { get; set; } = string.Empty;
+
+        internal IReadOnlyList<TemplateRegistrationValidationEntry> TemplateResults { get; set; } = Array.Empty<TemplateRegistrationValidationEntry>();
 
         internal string Message { get; set; } = string.Empty;
     }

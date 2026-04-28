@@ -63,7 +63,6 @@ $trustAudit = & $TrustAuditScriptPath
     DeprecatedFallbackHits = $readiness.DeprecatedFallbackHits
     PackageManifestVersion = $readiness.PackageManifestVersion
     RuntimeManifestVersion = $readiness.RuntimeManifestVersion
-    PolicyValidation = $readiness.PolicyValidation
     ModeValidation = $readiness.ModeValidation
     XlsxAuditGeneratedDeployVersion = $xlsxAudit.GeneratedDeployVersion
     XlsxAuditRuntimeManifestVersion = $xlsxAudit.RuntimeManifestVersion

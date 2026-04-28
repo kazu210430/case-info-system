@@ -165,7 +165,6 @@ function Get-RegistryValueOrDefault {
 }
 
 $sourceCsRoot = $ProjectDirectory
-$validatePolicyScript = Join-Path $PSScriptRoot 'Validate-DocumentExecutionPolicy.ps1'
 $validateModeScript = Join-Path $PSScriptRoot 'Validate-DocumentExecutionMode.ps1'
 $xlsxAuditScript = Join-Path $PSScriptRoot 'Invoke-XlsxSwitchAudit.ps1'
 $trustAuditScript = Join-Path $PSScriptRoot 'Invoke-VstoTrustAudit.ps1'
@@ -206,7 +205,6 @@ if ($deprecatedFallbackHits.Count -gt 0) {
     throw ('Deprecated fallback terminology remains in add-in source: ' + (($deprecatedFallbackHits | ForEach-Object { $_.Path + ':' + $_.Line }) -join ', '))
 }
 
-$policyOutput = Invoke-ValidationScript -ScriptPath $validatePolicyScript -Parameters @{ PolicyDirectory = $RuntimeAddInDir }
 $modeOutput = Invoke-ValidationScript -ScriptPath $validateModeScript -Parameters @{ PolicyDirectory = $RuntimeAddInDir }
 $xlsxAuditOutput = & $xlsxAuditScript
 $trustAuditOutput = & $trustAuditScript -RuntimeManifestPath (Join-Path $RuntimeAddInDir 'CaseInfoSystem.ExcelAddIn.vsto')
@@ -258,7 +256,6 @@ $summary = [ordered]@{
     DeprecatedFallbackHits = $deprecatedFallbackHits.Count
     PackageManifestVersion = $packageManifestPair.ApplicationManifestVersion
     RuntimeManifestVersion = $runtimeManifestPair.ApplicationManifestVersion
-    PolicyValidation = ($policyOutput -join ' / ')
     ModeValidation = ($modeOutput -join ' / ')
     XlsxAuditGeneratedDeployVersion = $xlsxAuditOutput.GeneratedDeployVersion
     XlsxAuditRuntimeManifestVersion = $xlsxAuditOutput.RuntimeManifestVersion

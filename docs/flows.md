@@ -239,6 +239,79 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 - Window 単位で管理され、再利用と再描画の判定があります。
 - 一時抑止、遅延再試行、WindowActivate 専用処理が実装されています。
 
+### CASE 文書ボタンパネル更新仕様
+
+#### 目的
+
+CASE の文書ボタンパネル更新仕様は、次を同時に満たすためのものです。
+
+- 新規 CASE は最新の文書ボタン定義で開始する
+- 既に開いている CASE の Pane は勝手に変えない
+- 不要な TaskPane 再構築を避ける
+- 表示中 Pane と文書実行時の解決元を一致させる
+
+#### 雛形登録・更新時の流れ
+
+雛形登録・更新成功時は、次の順で TaskPane 更新元を進めます。
+
+1. `KernelTemplateSyncService` が `shMasterList` / `雛形一覧` を更新します。
+2. `KernelTemplateSyncService` が `TASKPANE_MASTER_VERSION` を `+1` します。
+3. この version 更新では内容差分の有無を見ません。雛形登録・更新は利用者の明示操作なので、成功時に無条件で `+1` してよい仕様です。
+4. `KernelTemplateSyncService` が TaskPane 用 snapshot を組み立て、Base に `TASKPANE_BASE_SNAPSHOT_*` と `TASKPANE_BASE_MASTER_VERSION` を埋め込みます。
+5. Base にも `TASKPANE_MASTER_VERSION` を保存し、新規 CASE が version ごと引き継げる状態にします。
+6. `MasterTemplateCatalogService.InvalidateCache()` を実行して master catalog cache を無効化します。
+
+#### 新規 CASE 作成時の流れ
+
+新規 CASE 作成では、TaskPane 更新仕様として次を前提にします。
+
+1. `KernelCaseCreationService` が Base を物理コピーして CASE を作成します。
+2. Base に埋め込まれていた `TASKPANE_BASE_SNAPSHOT_*` と `TASKPANE_BASE_MASTER_VERSION` は、新規 CASE にもそのまま入ります。
+3. CASE 側では `TaskPaneSnapshotCacheService` などの処理により、必要時に Base 埋込 snapshot / version を CASE cache へ昇格できます。
+4. このため、新規 CASE は原則として最新 snapshot を持った状態で始まり、初回表示時に不要な `shMasterList` 再構築を避けます。
+
+#### 既存 CASE を開く時の流れ
+
+既存 CASE の TaskPane 更新元は、`TaskPaneSnapshotBuilderService` で次の順に解決されます。
+
+1. `TASKPANE_SNAPSHOT_CACHE_*` が有効で、かつ CASE の `TASKPANE_MASTER_VERSION` が最新 master version 以上なら CASE cache を使います。
+2. CASE cache が空、または古い場合は `TASKPANE_BASE_SNAPSHOT_*` と `TASKPANE_BASE_MASTER_VERSION` を確認します。
+3. Base 側が有効なら、その snapshot を CASE cache へ昇格して使います。
+4. CASE cache / Base cache のどちらも使えない場合だけ `shMasterList` から再構築します。
+5. ただし、いったん Pane / host / control が生成された後は、その CASE を閉じるまで表示中の Pane を維持します。
+
+#### WorkbookActivate / WindowActivate の扱い
+
+- `WorkbookActivate` と `WindowActivate` は、既存 host の再表示・再利用を優先する仕様です。
+- `TaskPaneHostReusePolicy` は、同じ CASE workbook に対する `WorkbookActivate` / `WindowActivate` を host 再利用対象として扱います。
+- この経路では毎回 version 比較して Pane を再生成する仕様ではありません。
+- したがって、開いている CASE が、後から行われた雛形登録・更新に追随しないことは現行仕様です。
+- この仕様は、表示中の CASE の UI を利用者の明示操作なしに変えないために維持します。
+
+#### 表示中 Pane と文書実行時の cache 利用
+
+- `DocumentTemplateResolver` は、まず `TaskPaneSnapshotCacheService` を使って CASE cache から文書キーに対応する定義を解決します。
+- CASE cache に解決対象がない場合だけ `MasterTemplateCatalogService` の master catalog にフォールバックします。
+- そのため、開いている CASE では表示中 Pane と整合する CASE cache を使い続けてよく、master version だけを見ると stale に見える場合でも直ちに問題扱いしません。
+- 文書ボタン実行も、表示中 Pane と一致する cache を優先してよい仕様です。
+- 最新雛形を使いたい場合は、CASE を開き直して新しい snapshot 解決経路に入り直す運用とします。
+
+#### 案件一覧登録後の cache 整理
+
+- 案件一覧登録後は、CASE 側の `TASKPANE_SNAPSHOT_CACHE_COUNT` を `0` に更新して CASE cache を無効化します。
+- 同時に `TaskPaneSnapshotCacheService.ClearCaseSnapshotCacheChunks()` により `TASKPANE_SNAPSHOT_CACHE_01` などの chunk を削除します。
+- `TASKPANE_SNAPSHOT_CACHE_COUNT` 自体は削除せず、`0` として維持します。
+- `TASKPANE_BASE_SNAPSHOT_*` と `TASKPANE_BASE_SNAPSHOT_COUNT` / `TASKPANE_BASE_MASTER_VERSION` には触れません。
+
+#### 触ってはいけない注意点
+
+- `WorkbookActivate` / `WindowActivate` の host 再利用経路を安易に問題扱いしないこと。
+- 開いている CASE の Pane / host / control を close まで維持する仕様を壊さないこと。
+- 雛形登録・更新成功時の `TASKPANE_MASTER_VERSION` 無条件 `+1` を差分チェック方式に変えないこと。
+- `DocumentTemplateResolver` の CASE cache 優先を安易に変更しないこと。
+- Base snapshot 埋め込みを削らないこと。
+- `TASKPANE_SNAPSHOT_CACHE_COUNT` を削除対象に含めないこと。
+
 ## 不明点
 
 - この文書の不明点は、該当する各節の `### 不明点` に記載します。

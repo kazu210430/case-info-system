@@ -195,10 +195,6 @@
     <Compile Include="App\DocumentCommandService.cs" />
     <Compile Include="App\DocumentCreateService.cs" />
     <Compile Include="App\DocumentExecutionModeService.cs" />
-    <Compile Include="App\DocumentEligibilityDiagnosticsService.cs" />
-    <Compile Include="App\DocumentMasterCatalogDiagnosticsService.cs" />
-    <Compile Include="App\DocumentExecutionPolicyService.cs" />
-    <Compile Include="App\DocumentExecutionPolicyEntry.cs" />
     <Compile Include="App\DocumentExecutionEligibilityService.cs" />
     <Compile Include="App\DocumentMergeService.cs" />
     <Compile Include="App\DocumentNameOverrideScope.cs" />
@@ -273,7 +269,6 @@
     <Compile Include="Domain\CaseContext.cs" />
     <Compile Include="Domain\DocumentExecutionMode.cs" />
     <Compile Include="Domain\DocumentExecutionEligibility.cs" />
-    <Compile Include="Domain\DocumentReviewStatusSummary.cs" />
     <Compile Include="Domain\DocumentTemplateResolutionSource.cs" />
     <Compile Include="Domain\UserDataBaseMappingDefinition.cs" />
     <Compile Include="Domain\KernelCaseCreationMode.cs" />

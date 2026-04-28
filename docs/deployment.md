@@ -64,7 +64,7 @@
 
 - `DocumentExecutionMode.txt`
 
-allowlist / review の config ファイルは撤去済みです。この文書では mode ファイルの存在説明のみを扱い、中身や運用ルールは扱いません。
+allowlist / review の config ファイルと旧 runtime policy サービスは撤去済みです。この文書では mode ファイルの存在説明のみを扱い、中身や運用ルールは扱いません。
 
 ## Word Add-in 配下
 

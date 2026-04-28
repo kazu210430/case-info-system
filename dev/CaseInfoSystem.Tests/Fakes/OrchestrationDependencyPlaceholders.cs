@@ -331,30 +331,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
     }
 
-    internal sealed class DocumentExecutionPolicyService
-    {
-        internal Func<CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec, bool> OnIsVstoExecutionAllowed { get; set; }
-
-        internal Func<CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec, bool> OnIsRolloutReady { get; set; }
-
-        internal string AllowlistPath { get; set; } = string.Empty;
-
-        internal bool IsVstoExecutionAllowed(CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec templateSpec)
-        {
-            return OnIsVstoExecutionAllowed != null && OnIsVstoExecutionAllowed(templateSpec);
-        }
-
-        internal string GetAllowlistPath()
-        {
-            return AllowlistPath;
-        }
-
-        internal bool IsRolloutReady(CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec templateSpec)
-        {
-            return OnIsRolloutReady != null && OnIsRolloutReady(templateSpec);
-        }
-    }
-
     internal sealed class DocumentCreateService
     {
         internal Action<Excel.Workbook, CaseInfoSystem.ExcelAddIn.Domain.DocumentTemplateSpec, CaseInfoSystem.ExcelAddIn.Domain.CaseContext> OnExecute { get; set; }
@@ -402,14 +378,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             return OnCreateForDocumentCreate == null ? null : OnCreateForDocumentCreate(caseWorkbook);
         }
-    }
-
-    internal sealed class DocumentEligibilityDiagnosticsService
-    {
-    }
-
-    internal sealed class DocumentMasterCatalogDiagnosticsService
-    {
     }
 
     internal sealed class DocumentNamePromptService

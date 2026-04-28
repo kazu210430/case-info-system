@@ -149,11 +149,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						text = string.Empty;
 					}
 					if (!string.IsNullOrWhiteSpace (text) && TryReadLatestMasterVersion (workbook, out masterVersion)) {
-						if (!TryReadLatestMasterVersion (workbook, out masterVersion)) {
-							string snapshotText = ApplyDynamicSpecialButtonOverrides (text, workbook);
-							_logger.Info ("Task pane snapshot source=CaseCacheFallback, caseListCaption=" + GetCaseListCaption (workbook) + ", cacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT") ?? string.Empty));
-							return new TaskPaneBuildResult (snapshotText, updatedCaseSnapshotCache: false);
-						}
 						long documentPropertyLong = GetDocumentPropertyLong (workbook, "TASKPANE_MASTER_VERSION", 0L);
 						if (masterVersion <= 0 || masterVersion <= documentPropertyLong) {
 							string snapshotText2 = ApplyDynamicSpecialButtonOverrides (text, workbook);

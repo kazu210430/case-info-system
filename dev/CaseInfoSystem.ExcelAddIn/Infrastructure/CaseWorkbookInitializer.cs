@@ -30,25 +30,21 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal void InitializeForVisibleCreate (Workbook kernelWorkbook, Workbook caseWorkbook, KernelCaseCreationPlan plan)
 		{
-			InitializeCore (kernelWorkbook, caseWorkbook, plan, "1", "0");
+			InitializeCore (kernelWorkbook, caseWorkbook, plan);
 		}
 
 		internal void InitializeForHiddenCreate (Workbook kernelWorkbook, Workbook caseWorkbook, KernelCaseCreationPlan plan)
 		{
-			InitializeCore (kernelWorkbook, caseWorkbook, plan, "0", "1");
+			InitializeCore (kernelWorkbook, caseWorkbook, plan);
 		}
 
 		internal void CompleteVisibleCreateStartupState (Workbook caseWorkbook)
 		{
-			_excelInteropService.SetDocumentProperty (caseWorkbook, "KERNEL_JUST_CREATED", "0");
-			_excelInteropService.SetDocumentProperty (caseWorkbook, "TASKPANE_READY", "1");
 		}
 
-		private void InitializeCore (Workbook kernelWorkbook, Workbook caseWorkbook, KernelCaseCreationPlan plan, string kernelJustCreated, string taskPaneReady)
+		private void InitializeCore (Workbook kernelWorkbook, Workbook caseWorkbook, KernelCaseCreationPlan plan)
 		{
 			SetCoreDocumentProperties (caseWorkbook, plan);
-			_excelInteropService.SetDocumentProperty (caseWorkbook, "KERNEL_JUST_CREATED", kernelJustCreated);
-			_excelInteropService.SetDocumentProperty (caseWorkbook, "TASKPANE_READY", taskPaneReady);
 			ApplyCustomerToHomeSheet (kernelWorkbook, caseWorkbook, plan.CustomerName);
 			_caseTemplateSnapshotService.SyncMasterVersionFromKernel (kernelWorkbook, caseWorkbook);
 			_caseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache (caseWorkbook);

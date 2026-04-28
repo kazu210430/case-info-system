@@ -69,10 +69,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 snapshot.PreferredPaneWidth = ParseInt(GetField(fields, 4));
             }
 
-            if (fields.Length > 5)
-            {
-                snapshot.MasterVersion = ParseInt(GetField(fields, 5));
-            }
         }
 
         private static void ParseSpecial(TaskPaneSnapshot snapshot, string[] fields)

@@ -71,17 +71,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return false;
         }
 
-        /// <summary>
-        /// メソッド: MasterList に登録された文書テンプレート一覧を取得する。
-        /// 引数: caseWorkbook - SYSTEM_ROOT を解決するための CASE ブック。
-        /// 戻り値: 読み込み済みのテンプレート一覧。
-        /// 副作用: 必要に応じて Master ブックを読み取り、キャッシュを更新する。
-        /// </summary>
-        internal IReadOnlyList<MasterTemplateRecord> GetAllTemplates(Excel.Workbook caseWorkbook)
-        {
-            return GetMasterTemplateList(caseWorkbook);
-        }
-
         private IReadOnlyList<MasterTemplateRecord> GetMasterTemplateList(Excel.Workbook caseWorkbook)
         {
             if (_isCacheValid && _cachedTemplates != null)

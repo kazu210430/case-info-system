@@ -24,7 +24,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal bool HasError { get; set; }
         internal string ErrorMessage { get; set; }
         internal int PreferredPaneWidth { get; set; }
-        internal int MasterVersion { get; set; }
         internal List<TaskPaneActionDefinition> SpecialButtons { get; }
         internal List<TaskPaneTabDefinition> Tabs { get; }
         internal List<TaskPaneDocDefinition> DocButtons { get; }

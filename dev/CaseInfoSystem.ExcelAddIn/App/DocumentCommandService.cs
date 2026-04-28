@@ -74,7 +74,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private readonly DocumentExecutionModeService _documentExecutionModeService;
         private readonly DocumentExecutionEligibilityService _documentExecutionEligibilityService;
-        private readonly DocumentExecutionPolicyService _documentExecutionPolicyService;
         private readonly DocumentCreateService _documentCreateService;
         private readonly AccountingSetCommandService _accountingSetCommandService;
         private readonly CaseListRegistrationService _caseListRegistrationService;
@@ -93,7 +92,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             IActiveTaskPaneRefreshBridge activeTaskPaneRefreshBridge,
             DocumentExecutionModeService documentExecutionModeService,
             DocumentExecutionEligibilityService documentExecutionEligibilityService,
-            DocumentExecutionPolicyService documentExecutionPolicyService,
             DocumentCreateService documentCreateService,
             AccountingSetCommandService accountingSetCommandService,
             CaseListRegistrationService caseListRegistrationService,
@@ -107,7 +105,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _activeTaskPaneRefreshBridge = activeTaskPaneRefreshBridge ?? throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
             _documentExecutionModeService = documentExecutionModeService ?? throw new ArgumentNullException(nameof(documentExecutionModeService));
             _documentExecutionEligibilityService = documentExecutionEligibilityService ?? throw new ArgumentNullException(nameof(documentExecutionEligibilityService));
-            _documentExecutionPolicyService = documentExecutionPolicyService ?? throw new ArgumentNullException(nameof(documentExecutionPolicyService));
             _documentCreateService = documentCreateService ?? throw new ArgumentNullException(nameof(documentCreateService));
             _accountingSetCommandService = accountingSetCommandService ?? throw new ArgumentNullException(nameof(accountingSetCommandService));
             _caseListRegistrationService = caseListRegistrationService ?? throw new ArgumentNullException(nameof(caseListRegistrationService));
@@ -276,10 +273,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + " key=" + (key ?? string.Empty)
                         + " canExecute=" + eligibility.CanExecuteInVsto.ToString());
                     phaseStopwatch.Restart();
-                    bool isVstoExecutionAllowed = _documentExecutionPolicyService.IsVstoExecutionAllowed(eligibility.TemplateSpec);
                     DocumentCommandPreconditionDecision preconditionDecision = DocumentCommandPreconditionPolicy.Decide(
-                        eligibility.CanExecuteInVsto,
-                        isVstoExecutionAllowed);
+                        eligibility.CanExecuteInVsto);
                     DocumentCommandExecutionDecision executionDecision = DocumentCommandExecutionDecisionPolicy.Decide(preconditionDecision);
                     if (executionDecision == DocumentCommandExecutionDecision.ThrowBecauseIneligible)
                     {
@@ -291,38 +286,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         throw new InvalidOperationException("文書作成を実行できませんでした。理由: " + (eligibility.Reason ?? "eligible 判定に失敗しました。"));
                     }
 
-                    if (executionDecision == DocumentCommandExecutionDecision.ThrowBecauseNotAllowlisted)
-                    {
-                        string templateFileName = eligibility.TemplateSpec == null ? string.Empty : (eligibility.TemplateSpec.TemplateFileName ?? string.Empty);
-                        string allowlistPath = _documentExecutionPolicyService.GetAllowlistPath();
-                        _logger.Debug(
-                            "ExecuteDocumentAction",
-                            "AllowlistEvaluated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed)
-                            + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed)
-                            + " key=" + (key ?? string.Empty)
-                            + " allowed=false");
-                        _logger.Warn(
-                            "Document action was blocked because the template is not allowlisted for VSTO execution."
-                            + " mode=" + executionMode.ToString()
-                            + ", key=" + (key ?? string.Empty)
-                            + ", templateFile=" + templateFileName
-                            + ", allowlistPath=" + allowlistPath);
-                        throw new InvalidOperationException(
-                            "文書作成を実行できませんでした。VSTO 対象外の帳票です。"
-                            + Environment.NewLine
-                            + "key=" + (key ?? string.Empty)
-                            + Environment.NewLine
-                            + "templateFile=" + templateFileName
-                            + Environment.NewLine
-                            + "allowlist=" + allowlistPath);
-                    }
-
-                    _logger.Debug(
-                        "ExecuteDocumentAction",
-                        "AllowlistEvaluated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed)
-                        + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed)
-                        + " key=" + (key ?? string.Empty)
-                        + " allowed=true");
                     phaseStopwatch.Restart();
                     _documentCreateService.Execute(workbook, eligibility.TemplateSpec, eligibility.CaseContext);
                     _logger.Debug(
@@ -334,8 +297,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         "Document action was handled by VSTO document flow."
                         + " mode=" + executionMode.ToString()
                         + ", key=" + (key ?? string.Empty)
-                        + ", templateFile=" + (eligibility.TemplateSpec == null ? string.Empty : (eligibility.TemplateSpec.TemplateFileName ?? string.Empty))
-                        + ", rolloutReady=" + _documentExecutionPolicyService.IsRolloutReady(eligibility.TemplateSpec).ToString());
+                        + ", templateFile=" + (eligibility.TemplateSpec == null ? string.Empty : (eligibility.TemplateSpec.TemplateFileName ?? string.Empty)));
                 });
             }
         }

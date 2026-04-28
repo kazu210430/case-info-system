@@ -46,7 +46,6 @@ namespace CaseInfoSystem.Tests
                 new CollectingActiveTaskPaneRefreshBridge(reason => refreshCalls++),
                 new DocumentExecutionModeService(OrchestrationTestSupport.CreateLogger(new List<string>()), new ExcelInteropService()),
                 new DocumentExecutionEligibilityService(),
-                new DocumentExecutionPolicyService(),
                 new DocumentCreateService(),
                 new AccountingSetCommandService(),
                 new CaseListRegistrationService
@@ -113,7 +112,6 @@ namespace CaseInfoSystem.Tests
                 new CollectingActiveTaskPaneRefreshBridge(reason => refreshCalls++),
                 new DocumentExecutionModeService(OrchestrationTestSupport.CreateLogger(new List<string>()), new ExcelInteropService()),
                 new DocumentExecutionEligibilityService(),
-                new DocumentExecutionPolicyService(),
                 new DocumentCreateService(),
                 new AccountingSetCommandService(),
                 new CaseListRegistrationService

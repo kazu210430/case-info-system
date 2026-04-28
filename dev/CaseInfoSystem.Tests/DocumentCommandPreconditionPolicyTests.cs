@@ -9,38 +9,16 @@ namespace CaseInfoSystem.Tests
         public void Decide_ReturnsBlockBecauseIneligible_WhenEligibilityFailed()
         {
             DocumentCommandPreconditionDecision decision = DocumentCommandPreconditionPolicy.Decide(
-                canExecuteInVsto: false,
-                isVstoExecutionAllowed: true);
+                canExecuteInVsto: false);
 
             Assert.Equal(DocumentCommandPreconditionDecision.BlockBecauseIneligible, decision);
         }
 
         [Fact]
-        public void Decide_ReturnsBlockBecauseIneligible_WhenBothChecksFail()
+        public void Decide_ReturnsContinue_WhenEligibilityPasses()
         {
             DocumentCommandPreconditionDecision decision = DocumentCommandPreconditionPolicy.Decide(
-                canExecuteInVsto: false,
-                isVstoExecutionAllowed: false);
-
-            Assert.Equal(DocumentCommandPreconditionDecision.BlockBecauseIneligible, decision);
-        }
-
-        [Fact]
-        public void Decide_ReturnsBlockBecauseNotAllowlisted_WhenEligibilityPassedButAllowlistFailed()
-        {
-            DocumentCommandPreconditionDecision decision = DocumentCommandPreconditionPolicy.Decide(
-                canExecuteInVsto: true,
-                isVstoExecutionAllowed: false);
-
-            Assert.Equal(DocumentCommandPreconditionDecision.BlockBecauseNotAllowlisted, decision);
-        }
-
-        [Fact]
-        public void Decide_ReturnsContinue_WhenEligibilityAndAllowlistPass()
-        {
-            DocumentCommandPreconditionDecision decision = DocumentCommandPreconditionPolicy.Decide(
-                canExecuteInVsto: true,
-                isVstoExecutionAllowed: true);
+                canExecuteInVsto: true);
 
             Assert.Equal(DocumentCommandPreconditionDecision.Continue, decision);
         }

@@ -534,7 +534,6 @@ namespace CaseInfoSystem.Tests
                 new CollectingActiveTaskPaneRefreshBridge(),
                 new DocumentExecutionModeService(OrchestrationTestSupport.CreateLogger(new List<string>()), new ExcelInteropService()),
                 new DocumentExecutionEligibilityService(),
-                new DocumentExecutionPolicyService(),
                 new DocumentCreateService(),
                 new AccountingSetCommandService(),
                 new CaseListRegistrationService(),

@@ -3,8 +3,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal enum DocumentCommandExecutionDecision
     {
         Continue,
-        ThrowBecauseIneligible,
-        ThrowBecauseNotAllowlisted
+        ThrowBecauseIneligible
     }
 
     internal static class DocumentCommandExecutionDecisionPolicy
@@ -14,11 +13,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (preconditionDecision == DocumentCommandPreconditionDecision.Continue)
             {
                 return DocumentCommandExecutionDecision.Continue;
-            }
-
-            if (preconditionDecision == DocumentCommandPreconditionDecision.BlockBecauseNotAllowlisted)
-            {
-                return DocumentCommandExecutionDecision.ThrowBecauseNotAllowlisted;
             }
 
             return DocumentCommandExecutionDecision.ThrowBecauseIneligible;

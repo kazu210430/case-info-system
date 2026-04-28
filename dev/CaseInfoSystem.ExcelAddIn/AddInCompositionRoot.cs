@@ -374,7 +374,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 caseContextFactory,
                 documentOutputService,
                 _logger);
-            var documentExecutionPolicyService = new DocumentExecutionPolicyService(_logger, excelInteropService);
             var mergeDataBuilder = new MergeDataBuilder();
             var documentMergeService = new DocumentMergeService(_logger);
             var wordInteropService = new WordInteropService(pathCompatibilityService, _logger);
@@ -403,7 +402,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 activeTaskPaneRefreshBridge,
                 documentExecutionModeService,
                 documentExecutionEligibilityService,
-                documentExecutionPolicyService,
                 documentCreateService,
                 accountingSetCommandService,
                 caseListRegistrationService,

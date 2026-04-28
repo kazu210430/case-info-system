@@ -24,15 +24,6 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void Decide_ReturnsThrowBecauseNotAllowlisted_ForNotAllowlistedPrecondition()
-        {
-            DocumentCommandExecutionDecision decision = DocumentCommandExecutionDecisionPolicy.Decide(
-                DocumentCommandPreconditionDecision.BlockBecauseNotAllowlisted);
-
-            Assert.Equal(DocumentCommandExecutionDecision.ThrowBecauseNotAllowlisted, decision);
-        }
-
-        [Fact]
         public void Decide_ReturnsThrowBecauseIneligible_ForUnknownPreconditionValue()
         {
             DocumentCommandExecutionDecision decision = DocumentCommandExecutionDecisionPolicy.Decide(

@@ -64,7 +64,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 1. `DocumentCommandService` が TaskPane の選択ボタンから文書キーを受け取ります。
 2. `DocumentExecutionModeService` が `DocumentExecutionMode.txt` を読み込みます。
 3. `DocumentExecutionEligibilityService` が登録済みテンプレートを前提に `DocumentTemplateResolver` で `templateSpec` を解決し、テンプレート種別、マクロ有無、出力先、CASE コンテキストを確認します。
-4. `DocumentExecutionPolicyService` が呼び出されますが、現行実装では permissive な互換レイヤーとして動作しており、allowlist / review によって文書作成可否を制御しません。
+4. `DocumentCommandService` は runtime の allowlist / review block を行わず、そのまま `DocumentCreateService` に進みます。
 5. `DocumentCreateService` が文書名を解決し、`DocumentOutputService` が出力先を解決します。
 6. `MergeDataBuilder` が CASE データから差し込み用データを構築します。
 7. `DocumentPresentationWaitService` が待機 UI を表示します。
@@ -78,15 +78,16 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 文書実行時の主防御は runtime allowlist gating ではなく、雛形登録前 validation です。
 - `KernelTemplateSyncService` と `WordTemplateRegistrationValidationService` が、不正な雛形や不正な定義を登録前に排除します。
 - 実行時は、登録済み `templateSpec` を前提に `DocumentExecutionEligibilityService` が基本適格性を確認します。
-- `DocumentExecutionPolicyService` は現状 permissive で、allowlist / review による実行可否の制御は行いません。
+- `DocumentExecutionPolicyService` は現状 permissive で、文書作成本線の runtime 実行可否には関与しません。
 
 ### 実行モードと制御ファイル
 
 - 文書実行モードを読む `DocumentExecutionMode.txt` の存在はコードで確認できます。
 - `DocumentExecutionAllowlist.txt`、`DocumentExecutionAllowlist.review.txt` の存在も確認できます。
-- ただし、現行コードでは `DocumentExecutionAllowlist.txt`、`DocumentExecutionAllowlist.review.txt` は runtime gating 本体としては使われていません。
+- ただし、現行コードでは `DocumentExecutionAllowlist.txt`、`DocumentExecutionAllowlist.review.txt` は文書作成本線の runtime gating 本体としては使われていません。
 - `allowlist` は runtime gating には使われておらず、過去の運用・検証用の残存要素です。今後の段階的撤去候補として扱います。
 - `review` は runtime safety には寄与しておらず、PASS / HOLD / FAIL の記録媒体としての残存要素です。今後の段階的撤去候補として扱います。
+- allowlist / review のファイルや tools は残っています。完全撤去は次フェーズです。
 - pilot は runtime 本線で未使用だったため撤去済みです。
 - `mode` は runtime gating 目的ではありません。現行コードで確認できる主用途は Word warm-up 制御などの運用スイッチであり、allowlist / review とは分けて扱い、現時点では撤去対象に含めません。
 

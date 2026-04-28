@@ -160,10 +160,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>DocumentExecutionMode.txt</TargetPath>
     </Content>
-    <Content Include="Config\DocumentExecutionPilot.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <TargetPath>DocumentExecutionPilot.txt</TargetPath>
-    </Content>
     <Content Include="Config\DocumentExecutionAllowlist.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>DocumentExecutionAllowlist.txt</TargetPath>
@@ -722,7 +718,6 @@
       <DeployPackageFiles Include="$(TargetDir)\*.manifest" />
       <DeployPackageFiles Include="$(TargetDir)\*.vsto" />
       <DeployPackageFiles Include="$(TargetDir)DocumentExecutionMode.txt" />
-      <DeployPackageFiles Include="$(TargetDir)DocumentExecutionPilot.txt" />
       <DeployPackageFiles Include="$(TargetDir)DocumentExecutionAllowlist.txt" />
       <DeployPackageFiles Include="$(TargetDir)DocumentExecutionAllowlist.review.txt" />
       <DeployPackageFiles Remove="$(TargetDir)\*.pdb" />
@@ -742,7 +737,6 @@
       <DebugDeployPackageFiles Include="$(TargetDir)\*.manifest" />
       <DebugDeployPackageFiles Include="$(TargetDir)\*.vsto" />
       <DebugDeployPackageFiles Include="$(TargetDir)DocumentExecutionMode.txt" />
-      <DebugDeployPackageFiles Include="$(TargetDir)DocumentExecutionPilot.txt" />
       <DebugDeployPackageFiles Include="$(TargetDir)DocumentExecutionAllowlist.txt" />
       <DebugDeployPackageFiles Include="$(TargetDir)DocumentExecutionAllowlist.review.txt" />
       <DebugDeployPackageFiles Remove="$(TargetDir)\*.pdb" />

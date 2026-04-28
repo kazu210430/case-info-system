@@ -65,7 +65,6 @@ $trustAudit = & $TrustAuditScriptPath
     RuntimeManifestVersion = $readiness.RuntimeManifestVersion
     PolicyValidation = $readiness.PolicyValidation
     ModeValidation = $readiness.ModeValidation
-    PilotValidation = $readiness.PilotValidation
     XlsxAuditGeneratedDeployVersion = $xlsxAudit.GeneratedDeployVersion
     XlsxAuditRuntimeManifestVersion = $xlsxAudit.RuntimeManifestVersion
     XlsxAuditUnexpectedXlsmLiteralHitCount = $xlsxAudit.UnexpectedXlsmLiteralHitCount

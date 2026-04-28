@@ -118,7 +118,6 @@ function Assert-ManagedFilesMatch {
 
     $managedFiles = @(
         'DocumentExecutionMode.txt',
-        'DocumentExecutionPilot.txt',
         'DocumentExecutionAllowlist.txt',
         'DocumentExecutionAllowlist.review.txt'
     )
@@ -168,7 +167,6 @@ function Get-RegistryValueOrDefault {
 $sourceCsRoot = $ProjectDirectory
 $validatePolicyScript = Join-Path $PSScriptRoot 'Validate-DocumentExecutionPolicy.ps1'
 $validateModeScript = Join-Path $PSScriptRoot 'Validate-DocumentExecutionMode.ps1'
-$validatePilotScript = Join-Path $PSScriptRoot 'Validate-DocumentExecutionPilot.ps1'
 $xlsxAuditScript = Join-Path $PSScriptRoot 'Invoke-XlsxSwitchAudit.ps1'
 $trustAuditScript = Join-Path $PSScriptRoot 'Invoke-VstoTrustAudit.ps1'
 $workbookEventAuditScript = Join-Path $PSScriptRoot 'Invoke-WorkbookEventMigrationAudit.ps1'
@@ -210,7 +208,6 @@ if ($deprecatedFallbackHits.Count -gt 0) {
 
 $policyOutput = Invoke-ValidationScript -ScriptPath $validatePolicyScript -Parameters @{ PolicyDirectory = $RuntimeAddInDir }
 $modeOutput = Invoke-ValidationScript -ScriptPath $validateModeScript -Parameters @{ PolicyDirectory = $RuntimeAddInDir }
-$pilotOutput = Invoke-ValidationScript -ScriptPath $validatePilotScript -Parameters @{ PolicyDirectory = $RuntimeAddInDir }
 $xlsxAuditOutput = & $xlsxAuditScript
 $trustAuditOutput = & $trustAuditScript -RuntimeManifestPath (Join-Path $RuntimeAddInDir 'CaseInfoSystem.ExcelAddIn.vsto')
 $workbookEventAuditOutput = & $workbookEventAuditScript
@@ -263,7 +260,6 @@ $summary = [ordered]@{
     RuntimeManifestVersion = $runtimeManifestPair.ApplicationManifestVersion
     PolicyValidation = ($policyOutput -join ' / ')
     ModeValidation = ($modeOutput -join ' / ')
-    PilotValidation = ($pilotOutput -join ' / ')
     XlsxAuditGeneratedDeployVersion = $xlsxAuditOutput.GeneratedDeployVersion
     XlsxAuditRuntimeManifestVersion = $xlsxAuditOutput.RuntimeManifestVersion
     XlsxAuditUnexpectedXlsmLiteralHitCount = $xlsxAuditOutput.UnexpectedXlsmLiteralHitCount

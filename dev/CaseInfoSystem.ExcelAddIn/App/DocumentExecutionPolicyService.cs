@@ -26,8 +26,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const char EntrySeparator = '|';
 
-		private const string PilotFileName = "DocumentExecutionPilot.txt";
-
 		private const string AllowlistFileName = "DocumentExecutionAllowlist.txt";
 
 		private const string ReviewNotesFileName = "DocumentExecutionAllowlist.review.txt";
@@ -56,8 +54,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly ExcelInteropService _excelInteropService;
 
-		private IReadOnlyList<DocumentExecutionPolicyEntry> _pilotDocuments;
-
 		private IReadOnlyList<DocumentExecutionPolicyEntry> _allowedDocuments;
 
 		private HashSet<string> _reviewPassedKeys;
@@ -76,7 +72,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
-			_pilotDocuments = Array.Empty<DocumentExecutionPolicyEntry> ();
 			_allowedDocuments = Array.Empty<DocumentExecutionPolicyEntry> ();
 			_reviewPassedKeys = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
 			_reviewStatusByEntryIdentity = new Dictionary<string, DocumentReviewStatusSummary> (StringComparer.OrdinalIgnoreCase);
@@ -91,22 +86,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return templateSpec != null;
 		}
 
-		internal bool IsPilotExecutionAllowed (DocumentTemplateSpec templateSpec)
-		{
-			EnsureLoaded ();
-			return ContainsEntry (_pilotDocuments, templateSpec);
-		}
-
 		internal IReadOnlyCollection<DocumentExecutionPolicyEntry> GetAllowedDocuments ()
 		{
 			EnsureLoaded ();
 			return _allowedDocuments;
-		}
-
-		internal IReadOnlyCollection<DocumentExecutionPolicyEntry> GetPilotDocuments ()
-		{
-			EnsureLoaded ();
-			return _pilotDocuments;
 		}
 
 		internal IReadOnlyCollection<string> GetReviewedDocumentIdentities ()
@@ -118,11 +101,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal string GetAllowlistPath ()
 		{
 			return ResolvePolicyFilePath ("DocumentExecutionAllowlist.txt");
-		}
-
-		internal string GetPilotPath ()
-		{
-			return ResolvePolicyFilePath ("DocumentExecutionPilot.txt");
 		}
 
 		internal string GetReviewNotesPath ()
@@ -257,7 +235,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_loadedReviewNotesPath = text2;
 				_loadedAllowlistLastWriteUtcTicks = fileLastWriteUtcTicks;
 				_loadedReviewNotesLastWriteUtcTicks = fileLastWriteUtcTicks2;
-				_pilotDocuments = LoadEntriesFromFile ("DocumentExecutionPilot.txt", "Document execution pilot file");
 				_allowedDocuments = LoadAllowedDocuments ();
 				_reviewPassedKeys = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
 				_reviewStatusByEntryIdentity = LoadReviewStatusByEntryIdentity (_reviewPassedKeys);
@@ -305,19 +282,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 			}
 			return string.Empty;
-		}
-
-		private static bool ContainsEntry (IEnumerable<DocumentExecutionPolicyEntry> entries, DocumentTemplateSpec templateSpec)
-		{
-			if (entries == null || templateSpec == null) {
-				return false;
-			}
-			string normalizedKey = (templateSpec.Key ?? string.Empty).Trim ();
-			string normalizedTemplateFileName = (templateSpec.TemplateFileName ?? string.Empty).Trim ();
-			if (normalizedKey.Length == 0 || normalizedTemplateFileName.Length == 0) {
-				return false;
-			}
-			return entries.Any ((DocumentExecutionPolicyEntry entry) => entry != null && string.Equals (entry.Key, normalizedKey, StringComparison.OrdinalIgnoreCase) && string.Equals (entry.TemplateFileName, normalizedTemplateFileName, StringComparison.OrdinalIgnoreCase));
 		}
 
 		private IReadOnlyList<DocumentExecutionPolicyEntry> LoadEntriesFromFile (string fileName, string logLabel)

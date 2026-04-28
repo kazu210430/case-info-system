@@ -63,7 +63,6 @@
 存在が確認できるファイル:
 
 - `DocumentExecutionMode.txt`
-- `DocumentExecutionPilot.txt`
 - `DocumentExecutionAllowlist.txt`
 - `DocumentExecutionAllowlist.review.txt`
 

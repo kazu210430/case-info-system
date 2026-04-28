@@ -9,7 +9,7 @@
 確認項目
 - Debug / Release ビルド
 - package / runtime manifest version 一致
-- policy / mode / pilot ファイル検証
+- policy / mode ファイル検証
 - add-in ソースに `Application.Run` が残っていないこと
 - add-in ソースに `VbaBridgeService` が残っていないこと
 - add-in ソースに旧 fallback 表現が残っていないこと
@@ -22,7 +22,6 @@
 - DeprecatedFallbackHits = 0
 - PolicyValidation に allowlistEntries=32, passReviewEntries=32
 - ModeValidation に AllowlistedOnly
-- PilotValidation に entries=0
 - XlsxAuditUnexpectedXlsmLiteralHitCount = 0
 - TrustAuditComManifestMatches = True
 - TrustAuditSecurityInclusionExists = True

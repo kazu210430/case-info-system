@@ -184,7 +184,6 @@ function Get-ProjectDefinitions {
             'CaseInfoSystem.ExcelAddIn.dll.manifest',
             'CaseInfoSystem.ExcelAddIn.vsto',
             'DocumentExecutionMode.txt',
-            'DocumentExecutionPilot.txt',
             'DocumentExecutionAllowlist.txt',
             'DocumentExecutionAllowlist.review.txt'
         ) `

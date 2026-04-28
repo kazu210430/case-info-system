@@ -362,15 +362,6 @@
       <dsig:DigestValue>7Ad9QvdBwoY6ZJEP4Zw8S5eceD+MbbJidX3pinBf8nk=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="DocumentExecutionPilot.txt" size="248">
-    <hash>
-      <dsig:Transforms>
-        <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
-      </dsig:Transforms>
-      <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>6wu1wehsZFP+Sr/GxM2y+7snwCYW1RHv8iWJsu1PmvM=</dsig:DigestValue>
-    </hash>
-  </file>
   <vstav3:addIn xmlns:vstav3="urn:schemas-microsoft-com:vsta.v3">
     <vstav3:entryPointsCollection>
       <vstav3:entryPoints>

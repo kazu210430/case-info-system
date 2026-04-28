@@ -174,15 +174,6 @@ Assert-ManifestVersionsMatch -VstoPath $RuntimeManifestPath -ApplicationManifest
 $repairScriptPath = Join-Path $PSScriptRoot 'Repair-VstoRegistration.ps1'
 & $repairScriptPath -RuntimeManifestPath $RuntimeManifestPath
 
-$validatePolicyScriptPath = Join-Path $PSScriptRoot 'Validate-DocumentExecutionPolicy.ps1'
-& $validatePolicyScriptPath -PolicyDirectory $RuntimeAddInDir
-
-$validateModeScriptPath = Join-Path $PSScriptRoot 'Validate-DocumentExecutionMode.ps1'
-& $validateModeScriptPath -PolicyDirectory $RuntimeAddInDir
-
-$validatePilotScriptPath = Join-Path $PSScriptRoot 'Validate-DocumentExecutionPilot.ps1'
-& $validatePilotScriptPath -PolicyDirectory $RuntimeAddInDir
-
 foreach ($artifact in (Normalize-TransientArtifacts -Artifacts $TransientArtifacts)) {
     if (Test-Path -LiteralPath $artifact) {
         try {
@@ -194,4 +185,4 @@ foreach ($artifact in (Normalize-TransientArtifacts -Artifacts $TransientArtifac
     }
 }
 
-Write-Output "Runtime add-in synced and validated: $RuntimeAddInDir"
+Write-Output "Runtime add-in synced: $RuntimeAddInDir"

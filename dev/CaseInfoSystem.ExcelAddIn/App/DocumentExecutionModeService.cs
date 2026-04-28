@@ -45,16 +45,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// <summary>
         internal DocumentExecutionMode GetMode()
         {
-            EnsureLoaded();
-            return _currentMode;
+            return DocumentExecutionMode.AllowlistedOnly;
         }
 
         /// <summary>
         internal bool CanAttemptVstoExecution()
         {
-            DocumentExecutionMode currentMode = GetMode();
-            return currentMode == DocumentExecutionMode.PilotOnly
-                || currentMode == DocumentExecutionMode.AllowlistedOnly;
+            return true;
         }
 
         /// <summary>

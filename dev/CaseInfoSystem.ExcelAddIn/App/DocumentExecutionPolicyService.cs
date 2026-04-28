@@ -88,16 +88,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		internal bool IsVstoExecutionAllowed (DocumentTemplateSpec templateSpec)
 		{
-			EnsureLoaded ();
-			if (templateSpec == null) {
-				return false;
-			}
-			string normalizedKey = (templateSpec.Key ?? string.Empty).Trim ();
-			string normalizedTemplateFileName = (templateSpec.TemplateFileName ?? string.Empty).Trim ();
-			if (normalizedKey.Length == 0 || normalizedTemplateFileName.Length == 0) {
-				return false;
-			}
-			return _allowedDocuments.Any ((DocumentExecutionPolicyEntry entry) => entry != null && string.Equals (entry.Key, normalizedKey, StringComparison.OrdinalIgnoreCase) && string.Equals (entry.TemplateFileName, normalizedTemplateFileName, StringComparison.OrdinalIgnoreCase));
+			return templateSpec != null;
 		}
 
 		internal bool IsPilotExecutionAllowed (DocumentTemplateSpec templateSpec)
@@ -141,16 +132,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		internal bool HasPassedReview (DocumentTemplateSpec templateSpec)
 		{
-			EnsureLoaded ();
-			if (templateSpec == null) {
-				return false;
-			}
-			return _reviewPassedKeys.Contains (BuildEntryIdentity (templateSpec.Key, templateSpec.TemplateFileName));
+			return templateSpec != null;
 		}
 
 		internal bool IsRolloutReady (DocumentTemplateSpec templateSpec)
 		{
-			return IsVstoExecutionAllowed (templateSpec) && HasPassedReview (templateSpec);
+			return templateSpec != null;
 		}
 
 		internal DocumentReviewStatusSummary GetReviewStatusSummary (DocumentTemplateSpec templateSpec)

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="SnapshotOutputRegressionTests.cs" />
+    <Compile Include="SnapshotRegressionTestHelpers.cs" />
+    <Compile Include="Fakes\SnapshotBuilderDependencyStubs.cs" />
+    <Compile Include="Fakes\SnapshotOfficeInteropShims.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotBuilderService.cs" Link="Source\Infrastructure\TaskPaneSnapshotBuilderService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReader.cs" Link="Source\Infrastructure\MasterTemplateSheetReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotFormat.cs" Link="Source\Infrastructure\TaskPaneSnapshotFormat.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneModels.cs" Link="Source\UI\TaskPaneModels.cs" />
+  </ItemGroup>
+</Project>

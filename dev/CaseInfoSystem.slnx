@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn.csproj" Id="9a89a9aa-0a0d-49d4-8efa-d450d4c624d5" />
   <Project Path="CaseInfoSystem.ExcelLauncher/CaseInfoSystem.ExcelLauncher.csproj" Id="b8e8861b-166b-4d7c-bca2-319d45094887" />
+  <Project Path="CaseInfoSystem.SnapshotRegressionTests/CaseInfoSystem.SnapshotRegressionTests.csproj" />
   <Project Path="CaseInfoSystem.Tests/CaseInfoSystem.Tests.csproj" />
   <Project Path="CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn.csproj" Id="3e864f67-4d4e-4fca-afe6-4c9cc8bbf0bf" />
 </Solution>

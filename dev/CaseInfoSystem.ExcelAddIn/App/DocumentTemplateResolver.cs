@@ -16,19 +16,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
-        private readonly DocumentTemplateLookupService _documentTemplateLookupService;
+        private readonly IDocumentTemplateLookupReader _documentTemplateLookupReader;
         private readonly Logger _logger;
 
         /// <summary>
         internal DocumentTemplateResolver(
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
-            DocumentTemplateLookupService documentTemplateLookupService,
+            IDocumentTemplateLookupReader documentTemplateLookupReader,
             Logger logger)
         {
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
-            _documentTemplateLookupService = documentTemplateLookupService ?? throw new ArgumentNullException(nameof(documentTemplateLookupService));
+            _documentTemplateLookupReader = documentTemplateLookupReader ?? throw new ArgumentNullException(nameof(documentTemplateLookupReader));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -47,7 +47,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             Stopwatch stopwatch = Stopwatch.StartNew();
-            if (!_documentTemplateLookupService.TryResolveWithMasterFallback(workbook, normalizedKey, out DocumentTemplateLookupResult lookupResult))
+            if (!_documentTemplateLookupReader.TryResolveWithMasterFallback(workbook, normalizedKey, out DocumentTemplateLookupResult lookupResult))
             {
                 _logger.Info("DocumentTemplateResolver could not resolve key. key=" + normalizedKey);
                 return null;

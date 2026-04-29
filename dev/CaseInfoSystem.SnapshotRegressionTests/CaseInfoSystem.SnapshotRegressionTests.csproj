@@ -28,6 +28,7 @@
     <Compile Include="Fakes\SnapshotBuilderDependencyStubs.cs" />
     <Compile Include="Fakes\SnapshotOfficeInteropShims.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ICaseCacheDocumentTemplateReader.cs" Link="Source\App\ICaseCacheDocumentTemplateReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\IDocumentTemplateLookupReader.cs" Link="Source\App\IDocumentTemplateLookupReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs" Link="Source\App\DocumentNamePromptService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs" Link="Source\App\DocumentTemplateLookupService.cs" />

@@ -365,10 +365,12 @@ namespace CaseInfoSystem.ExcelAddIn
             var documentTemplateLookupService = new DocumentTemplateLookupService(
                 taskPaneSnapshotCacheService,
                 masterTemplateCatalogService);
+            IDocumentTemplateLookupReader documentTemplateLookupReader = documentTemplateLookupService;
+            ICaseCacheDocumentTemplateReader caseCacheDocumentTemplateReader = documentTemplateLookupService;
             var documentTemplateResolver = new DocumentTemplateResolver(
                 excelInteropService,
                 pathCompatibilityService,
-                documentTemplateLookupService,
+                documentTemplateLookupReader,
                 _logger);
             var documentExecutionModeService = new DocumentExecutionModeService(_logger, excelInteropService);
             var documentExecutionEligibilityService = new DocumentExecutionEligibilityService(
@@ -413,7 +415,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _logger);
             var documentNamePromptService = new DocumentNamePromptService(
                 excelInteropService,
-                documentTemplateLookupService,
+                caseCacheDocumentTemplateReader,
                 _logger);
             return new AddInDocumentComposition(
                 documentCommandService,

@@ -6,7 +6,7 @@ using Excel = Microsoft.Office.Interop.Excel;
 namespace CaseInfoSystem.ExcelAddIn.App
 {
     /// <summary>
-    internal sealed class DocumentTemplateLookupService : ICaseCacheDocumentTemplateReader
+    internal sealed class DocumentTemplateLookupService : ICaseCacheDocumentTemplateReader, IDocumentTemplateLookupReader
     {
         private readonly TaskPaneSnapshotCacheService _taskPaneSnapshotCacheService;
         private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
@@ -24,7 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _taskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache(workbook, key, out result);
         }
 
-        internal bool TryResolveWithMasterFallback(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
+        public bool TryResolveWithMasterFallback(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
         {
             result = null;
 

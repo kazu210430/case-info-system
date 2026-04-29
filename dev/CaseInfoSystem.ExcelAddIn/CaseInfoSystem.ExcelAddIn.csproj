@@ -161,6 +161,7 @@
       <TargetPath>DocumentExecutionMode.txt</TargetPath>
     </Content>
     <Compile Include="App\ICaseCacheDocumentTemplateReader.cs" />
+    <Compile Include="App\IDocumentTemplateLookupReader.cs" />
     <Compile Include="App\AccountingFormHelperService.cs" />
     <Compile Include="App\AccountingInstallmentScheduleCommandService.cs" />
     <Compile Include="App\AccountingNumericCellReader.cs" />

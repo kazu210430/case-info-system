@@ -79,6 +79,11 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 16. `DocumentMergeService` が ContentControl の除去処理を行います。
 17. `DocumentSaveService` が保存し、`WordInteropService` が Word 文書を表示します。
 
+補足:
+
+- `DocumentNamePromptService` が使う snapshot / CASE cache は表示状態に合わせた補助情報であり、文書生成の正本ではありません。
+- 保存・生成・実行判断は、`DocumentExecutionEligibilityService` と `DocumentTemplateResolver` が正本側の確認を行う前提です。
+
 ### 現在の安全モデル
 
 - 文書実行時の主防御は runtime allowlist gating ではなく、雛形登録前 validation です。
@@ -285,6 +290,11 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 3. Base 側が有効なら、その snapshot を CASE cache へ昇格して使います。
 4. CASE cache / Base cache のどちらも使えない場合だけ `shMasterList` から再構築します。
 5. ただし、いったん Pane / host / control が生成された後は、その CASE を閉じるまで表示中の Pane を維持します。
+
+補足:
+
+- Base 埋込 snapshot と CASE cache はいずれも派生 cache であり、global 正本ではありません。
+- TaskPane snapshot は表示用断面であり、保存・生成・実行判断の正本にしてはいけません。
 
 #### WorkbookActivate / WindowActivate の扱い
 

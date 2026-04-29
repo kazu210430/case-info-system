@@ -2,7 +2,7 @@
 
 ## 1. 目的と前提
 
-この文書は、雛形一覧 / TaskPane snapshot / 文書ボタン metadata の現状を、将来の統合修正前に棚卸しするための調査メモです。
+この文書は、雛形一覧 / TaskPane snapshot / 文書ボタン metadata の現状を、将来の統合修正前に棚卸しし、`cache API` 統合時に壊してはいけない境界を整理するための調査メモです。
 
 - 参照前提:
   - `docs/architecture.md`
@@ -29,6 +29,18 @@
   - `WordTemplateRegistrationValidationService`
 
 この文書は現状整理のみを目的とし、仕様変更提案やコード変更は含みません。
+
+### 1.1 この文書で使う用語
+
+- `metadata`
+  - コード上の正式な型名ではありません。
+  - 本書では、文書ボタンやテンプレート lookup に関わる `key / caption / template file name / tab / color / version / source` の定義群をまとめて指します。
+- `正本`
+  - 保存・生成・実行判断の根拠として最終確認すべき情報源を指します。
+- `派生 cache`
+  - 正本から複製・昇格・再構築される補助保存を指します。
+- `snapshot`
+  - TaskPane 表示用に整形された断面を指します。表示補助であり、正本ではありません。
 
 ## 2. 現状のデータ流れ
 
@@ -396,3 +408,157 @@
 - 重複の中心は `雛形一覧` 解釈、snapshot 生成、cache 保存、`key -> caption/file` 解決である。
 - `DocumentNamePromptService` は CASE cache だけを参照する補助 lookup、`DocumentTemplateResolver` は master fallback を持つ実行 lookup、という責務分離が現行仕様である。
 - 特に `TaskPaneSnapshotBuilderService`、`KernelTemplateSyncService`、`MasterTemplateCatalogService`、`TaskPaneSnapshotCacheService`、`CaseTemplateSnapshotService` の間に、統合余地が大きい。
+
+## 11. 正本・cache・snapshot・Base・CASE 整理表
+
+| 情報項目 | 正本 | 派生cache | snapshot利用 | 主な参照元 | 更新タイミング | invalidate条件 | 備考 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 文書 `key` | Kernel `雛形一覧` A列 | Base `TASKPANE_BASE_SNAPSHOT_*`、CASE `TASKPANE_SNAPSHOT_CACHE_*` | `DOC` 行に保持 | `KernelTemplateSyncService`、`TaskPaneSnapshotBuilderService`、`MasterTemplateCatalogService`、`TaskPaneSnapshotCacheService`、`DocumentTemplateResolver` | 雛形登録・更新成功時に `雛形一覧` 更新 | 雛形登録・更新成功後は旧 cache/snapshot が stale 化 | 2桁正規化は複数サービスで重複実装されている |
+| 文書 caption / 既定文書名 | Kernel `雛形一覧` C列 | Base `TASKPANE_BASE_SNAPSHOT_*`、CASE `TASKPANE_SNAPSHOT_CACHE_*` | `DOC.Caption` として保持 | `TaskPaneSnapshotBuilderService`、`MasterTemplateCatalogService`、`TaskPaneSnapshotCacheService`、`DocumentNamePromptService`、`DocumentCreateService` | 雛形登録・更新成功時に `雛形一覧` 更新 | 雛形登録・更新成功後は旧 cache/snapshot が stale 化 | UI表示名と既定文書名に同じ値を使う現行仕様 |
+| テンプレート file name | Kernel `雛形一覧` B列 | Base `TASKPANE_BASE_SNAPSHOT_*`、CASE `TASKPANE_SNAPSHOT_CACHE_*` | `DOC.TemplateFileName` として保持 | `TaskPaneSnapshotBuilderService`、`MasterTemplateCatalogService`、`TaskPaneSnapshotCacheService`、`DocumentTemplateResolver` | 雛形登録・更新成功時に `雛形一覧` 更新 | 雛形登録・更新成功後は旧 cache/snapshot が stale 化 | 実行時の `TemplatePath` はこの値から都度導出する |
+| テンプレート file path | 専用の保存正本は持たない。`WORD_TEMPLATE_DIR` または `SYSTEM_ROOT\雛形` と template file name から都度導出 | なし | なし | `DocumentTemplateResolver`、`DocumentExecutionEligibilityService`、`DocumentCreateService` | 文書実行時に都度解決 | `WORD_TEMPLATE_DIR` / `SYSTEM_ROOT` / file name のいずれかが変わった時点で再解決が必要 | path 自体を snapshot 正本扱いしていない |
+| tab 名 / ボタン色 | Kernel `雛形一覧` D:F のうち runtime 読取対象列 | Base `TASKPANE_BASE_SNAPSHOT_*`、CASE `TASKPANE_SNAPSHOT_CACHE_*` | `TAB` 行、`DOC.FillColor` に保持 | `KernelTemplateSyncService`、`TaskPaneSnapshotBuilderService`、`TaskPaneManager` | 雛形一覧手修正後、次回 snapshot 再構築時に反映 | 雛形一覧手修正後は既存 cache/snapshot が stale 化 | `KernelTemplateSyncService` の自動更新対象は A:C のみ |
+| global master version | Kernel `TASKPANE_MASTER_VERSION` | Base `TASKPANE_MASTER_VERSION`、Base `TASKPANE_BASE_MASTER_VERSION`、CASE `TASKPANE_MASTER_VERSION` | `META` 行にも埋込まれるが parser 主経路では未利用 | `KernelTemplateSyncService`、`TaskPaneSnapshotBuilderService`、`TaskPaneSnapshotCacheService`、`CaseTemplateSnapshotService`、`DocumentExecutionEligibilityService` | 雛形登録・更新成功時に `KernelTemplateSyncService` が無条件 `+1` | 次回雛形登録・更新成功時 | Base / CASE 側は global 正本ではなく mirror / provenance |
+| Base 埋込 snapshot 本体 | Kernel `雛形一覧` から再生成された Base `TASKPANE_BASE_SNAPSHOT_*` | CASE `TASKPANE_SNAPSHOT_CACHE_*` へ昇格される | CASE 初回表示前後に利用 | `CaseTemplateSnapshotService`、`TaskPaneSnapshotBuilderService`、`TaskPaneSnapshotCacheService` | 雛形登録・更新成功後の Base 同期時 | 雛形登録・更新成功、互換 export version 不一致 | 新規 CASE の初期表示高速化のための派生 cache |
+| Base 埋込 snapshot version | Base `TASKPANE_BASE_MASTER_VERSION` | CASE `TASKPANE_MASTER_VERSION` へコピーされることがある | 直接は UI 表示に使わない | `CaseTemplateSnapshotService`、`TaskPaneSnapshotBuilderService`、`TaskPaneSnapshotCacheService` | 雛形登録・更新成功後の Base 同期時 | 雛形登録・更新成功 | Base 埋込 snapshot の由来 version を示す |
+| CASE snapshot cache 本体 | CASE `TASKPANE_SNAPSHOT_CACHE_*` | なし | 表示中 Pane の再描画と文書 lookup に利用 | `TaskPaneSnapshotBuilderService`、`TaskPaneSnapshotCacheService`、`DocumentTemplateResolver`、`DocumentNamePromptService` | Base 昇格時、MasterList rebuild 時、表示中 CASE の更新時 | 案件一覧登録後、互換 export version 不一致、master version stale | 表示中 Pane と実行時解決元を揃えるための派生 cache |
+| CASE cache provenance version | CASE `TASKPANE_MASTER_VERSION` | なし | 直接は UI 表示に使わない | `TaskPaneSnapshotBuilderService`、`TaskPaneSnapshotCacheService`、`DocumentExecutionEligibilityService` | Base 昇格時、MasterList rebuild 時、CaseTemplateSnapshotService 初期化時 | 雛形登録・更新成功後に古く見える。案件一覧登録後も値自体は残り得る | global 正本ではなく freshness / provenance 用 |
+| 表示用 `TaskPaneSnapshot` / `CaseTaskPaneViewState` | 正本なし。CASE cache / Base 埋込 / MasterList rebuild から都度生成 | メモリ上のみ | あり | `TaskPaneSnapshotParser`、`CaseTaskPaneViewStateBuilder`、`TaskPaneManager` | CASE pane 描画時、アクション後再描画時 | host 再生成、再描画、Workbook close | 表示断面であり、保存・生成・実行判断の正本にしてはいけない |
+| 文書名 override | 正本なし。一時 DocProperty `TASKPANE_DOC_NAME_OVERRIDE_*` | なし | なし | `DocumentNamePromptService`、`DocumentNameOverrideScope`、`DocumentCreateService` | prompt 確定時 | `DocumentNameOverrideScope.Dispose()` 実行時 | 一時情報であり cache API 統合対象の正本ではない |
+| `CASELIST_REGISTERED` 状態 | CASE DocProperty | snapshot special button caption/backcolor に反映される | `SPECIAL` 行へ動的上書き | `CaseListRegistrationService`、`TaskPaneSnapshotBuilderService`、`TaskPaneManager` | 案件一覧登録時 | `CASELIST_REGISTERED` 再変更時 | 文書テンプレ metadata とは別の CASE 状態。snapshot の一部だけ動的差し替えする |
+| `SYSTEM_ROOT` / `WORD_TEMPLATE_DIR` | CASE DocProperty | なし | なし | `DocumentTemplateResolver`、`AccountingTemplateResolver`、`MasterTemplateCatalogService`、`TaskPaneSnapshotBuilderService` | CASE 初期化時、会計書類セット生成時 | CASE 作り直し、DocProperty 再設定時 | lookup の入口情報。テンプレート metadata 正本そのものではない |
+
+### 11.1 Base と CASE の責務境界
+
+- Base が持つ責務
+  - 新規 CASE に配る初期状態を持つこと
+  - `TASKPANE_BASE_SNAPSHOT_*` と `TASKPANE_BASE_MASTER_VERSION` を保持し、新規 CASE の初回表示高速化に使うこと
+  - tag 定義の運用正本である `ホーム` A列を人間運用上の基準として持つこと
+- Base が持たない責務
+  - 表示中 CASE 固有の最新 UI 状態を保持すること
+  - 文書実行時の最終判断を引き受けること
+  - 開いている CASE の host / pane 再利用状態を決めること
+- CASE が持つ責務
+  - 表示中 Pane と整合する `TASKPANE_SNAPSHOT_CACHE_*` を保持すること
+  - `CASELIST_REGISTERED`、文書名 override、一時 UI 状態など案件固有の実行時状態を持つこと
+  - `SYSTEM_ROOT` / `WORD_TEMPLATE_DIR` を入口に実行時 lookup を開始できること
+- CASE が持たない責務
+  - global master version の正本になること
+  - Kernel `雛形一覧` の代わりに全案件共通 metadata を決定すること
+
+## 12. 現在の参照経路と直接読込が残る箇所
+
+### 12.1 現在の lookup 経路
+
+- 文書名入力 prompt:
+  - `DocumentNamePromptService`
+  - `DocumentTemplateLookupService.TryResolveFromCaseCache`
+  - `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache`
+- 文書実行時 template 解決:
+  - `DocumentExecutionEligibilityService`
+  - `DocumentTemplateResolver`
+  - `DocumentTemplateLookupService.TryResolveWithMasterFallback`
+  - 先に `TaskPaneSnapshotCacheService`
+  - miss 時だけ `MasterTemplateCatalogService`
+- TaskPane 表示時 snapshot 解決:
+  - `TaskPaneSnapshotBuilderService`
+  - `CASE cache -> Base 埋込 snapshot -> Kernel 雛形一覧再構築`
+
+### 12.2 直接読込が残る箇所
+
+- `KernelTemplateSyncService`
+  - `CaseList_FieldInventory` を直接読む
+  - Kernel `雛形一覧` を直接更新し、その場で Base snapshot を組み立てる
+- `TaskPaneSnapshotBuilderService`
+  - CASE / Base DocProperty cache を直接読む
+  - 必要時は Master ブックを開くか package 直読し、`雛形一覧` と `TASKPANE_MASTER_VERSION` を直接読む
+- `MasterTemplateCatalogService`
+  - CASE から解決した `SYSTEM_ROOT` を手掛かりに Master ブックを read-only で開き、`雛形一覧` を直接読む
+- `DocumentTemplateResolver`
+  - `WORD_TEMPLATE_DIR` / `SYSTEM_ROOT` を直接読んで `TemplatePath` を導出する
+- `AccountingTemplateResolver`
+  - `SYSTEM_ROOT\雛形` を直接走査して会計書類セット Excel テンプレートを探す
+
+### 12.3 単一路線化後も現時点では残すべき直読
+
+- `KernelTemplateSyncService` の雛形登録・更新
+  - 正本を書き換える処理なので、read-only API に寄せない
+- `DocumentExecutionEligibilityService` の `TemplatePath` 実在確認
+  - 実行判断なので snapshot / cache を正本扱いしない
+- `AccountingTemplateResolver` の会計 Excel テンプレート解決
+  - Word 文書テンプレ metadata lookup とは別責務のため、今は統一対象に含めない
+
+## 13. cache API 統合に向けた境界方針
+
+### 13.1 最初に統一してよい読み取り口
+
+- `key -> template metadata` の read-only 参照口
+  - 候補項目は `key / caption / template file name / tab / color / resolution source / version provenance`
+  - 既存の `DocumentTemplateLookupService` を起点にしつつ、CASE cache 参照と master fallback の現行差分を明示的に持たせる
+- `雛形一覧` の single reader
+  - `KernelTemplateSyncService`、`TaskPaneSnapshotBuilderService`、`MasterTemplateCatalogService` に分散している A:F 列解釈を共通 reader に寄せる
+- snapshot storage read helper
+  - `TaskPaneSnapshotCacheService` と `CaseTemplateSnapshotService` の chunk 読取・昇格・clear の重複を、まず読み取り補助から寄せる
+
+### 13.2 まだ統一してはいけない処理
+
+- `KernelTemplateSyncService` による `雛形一覧` 更新と `TASKPANE_MASTER_VERSION` 更新
+- Base への `TASKPANE_BASE_*` 書込
+- CASE pane host 再利用と `WorkbookActivate` / `WindowActivate` の表示制御
+- `DocumentNamePromptService` の cache-only policy
+- `AccountingTemplateResolver` の会計 Excel テンプレート探索
+
+### 13.3 snapshot を正本扱いしてはいけない箇所
+
+- `DocumentExecutionEligibilityService` の実行可否判定
+  - `TemplatePath` 実在確認
+  - 対応拡張子確認
+  - macro-enabled template の扱い
+  - 出力先フォルダ解決
+  - CASE context / merge data 解決
+- `KernelTemplateSyncService` の雛形登録・更新
+  - 正本は Kernel `雛形一覧` と `CaseList_FieldInventory`
+- `AccountingSetCreateService` / `AccountingTemplateResolver`
+  - 会計 Excel テンプレートは snapshot からは引かない
+
+### 13.4 保存・生成・実行判断で正本確認が必要な箇所
+
+- 文書実行前:
+  - `DocumentTemplateResolver` による `TemplatePath` 導出
+  - `DocumentExecutionEligibilityService` による実行可否確認
+- 雛形登録・更新時:
+  - `CaseList_FieldInventory`
+  - Kernel `雛形一覧`
+  - `SYSTEM_ROOT\雛形` 配下の実ファイル
+- 会計書類セット生成時:
+  - `AccountingTemplateResolver` による `SYSTEM_ROOT\雛形` の実ファイル確認
+
+### 13.5 安全な移行順序
+
+1. 第1段階: 現状棚卸しと正本表の作成のみ
+   - 今回の作業範囲。コード変更なし
+2. 第2段階: 読み取り専用 API の候補設計
+   - `key -> template metadata`
+   - `雛形一覧` single reader
+   - snapshot storage read helper
+3. 第3段階: 既存処理と新 API の同値確認テスト
+   - CASE cache hit
+   - CASE cache miss + master fallback
+   - Base 埋込 snapshot 昇格
+   - master version stale
+   - 案件一覧登録後 invalidate
+4. 第4段階: 限定的な参照差し替え
+   - まず read-only lookup だけ差し替える
+   - 書込系と UI host 制御は触らない
+5. 第5段階: 重複読込・旧経路の削除検討
+   - 同値確認が通った経路から順に縮退する
+
+## 14. 設計上の固定点
+
+- `DocumentNamePromptService` の確定済み仕様は変更しない
+  - CASE cache hit 時だけ caption を prompt 初期値に使う
+  - CASE cache miss 時は master fallback せず空欄のまま開く
+- snapshot は表示用断面であり、正本ではない
+- cache は参照補助であり、保存・生成・実行判断の正本ではない
+- 開いている CASE が後から行われた雛形登録・更新に追随しないことは現行仕様として維持する
+- `TASKPANE_MASTER_VERSION` の雛形登録・更新成功時 `+1` は差分判定付きに変えない

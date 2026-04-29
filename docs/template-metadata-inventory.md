@@ -45,6 +45,9 @@
    - B列: `template file name`
    - C列: `caption`
 5. 同サービスは `TASKPANE_MASTER_VERSION` を更新し、その後 Base 用 snapshot を生成して Base に埋め込む。
+6. `雛形一覧` D:F は、人間による手修正で更新する運用である。
+   - E列の tab 名と D/F の色は runtime で読取対象だが、自動生成・自動更新される前提ではない。
+   - `KernelTemplateSyncService` が自動更新する対象は A:C に限られる。
 
 ### 2.2 雛形一覧から Base 埋込 snapshot まで
 
@@ -178,7 +181,7 @@
 | 分類対象 | 正本と判断した場所 | 根拠 |
 | --- | --- | --- |
 | runtime 用 `template key / file name / caption` | Kernel `雛形一覧` A:C | `MasterTemplateCatalogService` と snapshot builder 群がここを直接読むため |
-| runtime 用 tab 名 / 色 | Kernel `雛形一覧` D:F / E:F | snapshot builder 群がここを読む一方、sync は A:C しか書かないため |
+| runtime 用 tab 名 / 色 | Kernel `雛形一覧` D:F / E:F | snapshot builder 群がここを読む一方、sync は A:C しか書かず、D:F は人間による手修正運用で維持されるため |
 | global master version | Kernel `TASKPANE_MASTER_VERSION` | 更新元が `KernelTemplateSyncService` に集約されているため |
 | 実体テンプレートファイル | `SYSTEM_ROOT\雛形` 配下ファイル | 文書作成時に最終的に参照される実ファイルであるため |
 
@@ -317,6 +320,7 @@
 
 - `key / caption / file / tab / colors` を一度だけ解釈する shared reader を持つ
 - `MasterTemplateCatalogService`、`TaskPaneSnapshotBuilderService`、`KernelTemplateSyncService` はその reader を使う形へ寄せる
+- ただし `雛形一覧` D:F の手修正運用は前提として維持し、tab 名や色を自動生成・自動更新する設計に変えない
 
 期待効果:
 
@@ -371,8 +375,6 @@
 
 ## 9. 未確認事項
 
-- `雛形一覧` D:F の運用上の更新者と更新手順
-  - コード上は読取箇所を確認できたが、更新主体は今回の対象コードだけでは確定しない。
 - snapshot `META` の version / workbook name / workbook path / preferred width が外部利用されるか
   - `dev\CaseInfoSystem.ExcelAddIn` 内では主経路利用を確認できない項目がある。
 - `CaseTemplateSnapshotService` が現役設計なのか、移行途中の残存補助なのか

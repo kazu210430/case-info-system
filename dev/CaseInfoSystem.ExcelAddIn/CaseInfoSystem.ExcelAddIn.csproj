@@ -307,6 +307,7 @@
     <Compile Include="Infrastructure\KernelWorkbookResolverService.cs" />
     <Compile Include="Infrastructure\Logger.cs" />
     <Compile Include="Infrastructure\MasterTemplateCatalogService.cs" />
+    <Compile Include="Infrastructure\MasterTemplateSheetReader.cs" />
     <Compile Include="Infrastructure\PathCompatibilityService.cs" />
     <Compile Include="Infrastructure\WorkbookClipboardPreservationService.cs" />
     <Compile Include="Infrastructure\WorkbookResetDefinitionRepository.cs" />

@@ -22,10 +22,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="DocumentTemplateLookupServiceTests.cs" />
     <Compile Include="SnapshotOutputRegressionTests.cs" />
     <Compile Include="SnapshotRegressionTestHelpers.cs" />
     <Compile Include="Fakes\SnapshotBuilderDependencyStubs.cs" />
     <Compile Include="Fakes\SnapshotOfficeInteropShims.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs" Link="Source\App\DocumentNamePromptService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs" Link="Source\App\DocumentTemplateLookupService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateResolver.cs" Link="Source\App\DocumentTemplateResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateLookupResult.cs" Link="Source\Domain\DocumentTemplateLookupResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateResolutionSource.cs" Link="Source\Domain\DocumentTemplateResolutionSource.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateSpec.cs" Link="Source\Domain\DocumentTemplateSpec.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\MasterTemplateRecord.cs" Link="Source\Domain\MasterTemplateRecord.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateCatalogService.cs" Link="Source\Infrastructure\MasterTemplateCatalogService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs" Link="Source\Infrastructure\TaskPaneSnapshotCacheService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotBuilderService.cs" Link="Source\Infrastructure\TaskPaneSnapshotBuilderService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReader.cs" Link="Source\Infrastructure\MasterTemplateSheetReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />

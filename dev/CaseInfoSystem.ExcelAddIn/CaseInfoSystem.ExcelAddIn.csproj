@@ -196,6 +196,7 @@
     <Compile Include="App\DocumentCreateService.cs" />
     <Compile Include="App\DocumentExecutionModeService.cs" />
     <Compile Include="App\DocumentExecutionEligibilityService.cs" />
+    <Compile Include="App\DocumentTemplateLookupService.cs" />
     <Compile Include="App\DocumentMergeService.cs" />
     <Compile Include="App\DocumentNameOverrideScope.cs" />
     <Compile Include="App\DocumentNamePromptService.cs" />
@@ -277,6 +278,7 @@
     <Compile Include="Domain\KernelCaseCreationResult.cs" />
     <Compile Include="Domain\KernelTemplateSyncResult.cs" />
     <Compile Include="Domain\KernelUserDataReflectionResult.cs" />
+    <Compile Include="Domain\DocumentTemplateLookupResult.cs" />
     <Compile Include="Domain\MasterTemplateRecord.cs" />
     <Compile Include="Domain\TemplateRegistrationValidationEntry.cs" />
     <Compile Include="Domain\TemplateRegistrationValidationSummary.cs" />

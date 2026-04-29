@@ -16,22 +16,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
-        private readonly TaskPaneSnapshotCacheService _taskPaneSnapshotCacheService;
-        private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
+        private readonly DocumentTemplateLookupService _documentTemplateLookupService;
         private readonly Logger _logger;
 
         /// <summary>
         internal DocumentTemplateResolver(
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
-            TaskPaneSnapshotCacheService taskPaneSnapshotCacheService,
-            MasterTemplateCatalogService masterTemplateCatalogService,
+            DocumentTemplateLookupService documentTemplateLookupService,
             Logger logger)
         {
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
-            _taskPaneSnapshotCacheService = taskPaneSnapshotCacheService ?? throw new ArgumentNullException(nameof(taskPaneSnapshotCacheService));
-            _masterTemplateCatalogService = masterTemplateCatalogService ?? throw new ArgumentNullException(nameof(masterTemplateCatalogService));
+            _documentTemplateLookupService = documentTemplateLookupService ?? throw new ArgumentNullException(nameof(documentTemplateLookupService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -50,25 +47,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             Stopwatch stopwatch = Stopwatch.StartNew();
-            DocumentTemplateResolutionSource resolutionSource = DocumentTemplateResolutionSource.Unknown;
-            if (!_taskPaneSnapshotCacheService.TryGetDocInfoFromCache(workbook, normalizedKey, out string templateFileName, out string documentName))
+            if (!_documentTemplateLookupService.TryResolveWithMasterFallback(workbook, normalizedKey, out DocumentTemplateLookupResult lookupResult))
             {
-                MasterTemplateRecord masterRecord;
-                if (!_masterTemplateCatalogService.TryGetTemplateByKey(workbook, normalizedKey, out masterRecord))
-                {
-                    _logger.Info("DocumentTemplateResolver could not resolve key. key=" + normalizedKey);
-                    return null;
-                }
-
-                templateFileName = masterRecord.TemplateFileName ?? string.Empty;
-                documentName = masterRecord.DocumentName ?? string.Empty;
-                resolutionSource = DocumentTemplateResolutionSource.MasterCatalog;
-            }
-            else
-            {
-                resolutionSource = DocumentTemplateResolutionSource.SnapshotCache;
+                _logger.Info("DocumentTemplateResolver could not resolve key. key=" + normalizedKey);
+                return null;
             }
 
+            string templateFileName = lookupResult.TemplateFileName ?? string.Empty;
+            string documentName = lookupResult.DocumentName ?? string.Empty;
             string templateDirectory = ResolveTemplateDirectory(workbook);
             string templatePath = templateFileName.Length == 0 || templateDirectory.Length == 0
                 ? string.Empty
@@ -78,7 +64,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "DocumentTemplateResolver.Resolve",
                 "Completed elapsed=" + FormatElapsedSeconds(stopwatch.Elapsed)
                 + " key=" + normalizedKey
-                + " source=" + resolutionSource.ToString()
+                + " source=" + lookupResult.ResolutionSource.ToString()
                 + " templateFile=" + templateFileName
                 + " templatePath=" + templatePath);
 
@@ -89,7 +75,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 TemplateFileName = templateFileName,
                 TemplatePath = templatePath,
                 ActionKind = "doc",
-                ResolutionSource = resolutionSource
+                ResolutionSource = lookupResult.ResolutionSource
             };
         }
 

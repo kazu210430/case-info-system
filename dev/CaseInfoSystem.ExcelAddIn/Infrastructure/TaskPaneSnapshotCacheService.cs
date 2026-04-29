@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.UI;
 using Microsoft.Office.Core;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -83,10 +84,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return true;
         }
 
-        internal bool TryGetDocInfoFromCache(Excel.Workbook workbook, string key, out string templateFileName, out string documentName)
+        internal bool TryGetDocumentTemplateLookupFromCache(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
         {
-            templateFileName = string.Empty;
-            documentName = string.Empty;
+            result = null;
 
             if (workbook == null)
             {
@@ -125,12 +125,38 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     continue;
                 }
 
-                documentName = definition.Caption ?? string.Empty;
-                templateFileName = definition.TemplateFileName ?? string.Empty;
-                return templateFileName.Length > 0;
+                string templateFileName = definition.TemplateFileName ?? string.Empty;
+                if (templateFileName.Length == 0)
+                {
+                    return false;
+                }
+
+                result = new DocumentTemplateLookupResult
+                {
+                    Key = normalizedKey,
+                    DocumentName = definition.Caption ?? string.Empty,
+                    TemplateFileName = templateFileName,
+                    ResolutionSource = DocumentTemplateResolutionSource.SnapshotCache
+                };
+                return true;
             }
 
             return false;
+        }
+
+        internal bool TryGetDocInfoFromCache(Excel.Workbook workbook, string key, out string templateFileName, out string documentName)
+        {
+            templateFileName = string.Empty;
+            documentName = string.Empty;
+
+            if (!TryGetDocumentTemplateLookupFromCache(workbook, key, out DocumentTemplateLookupResult result))
+            {
+                return false;
+            }
+
+            templateFileName = result.TemplateFileName;
+            documentName = result.DocumentName;
+            return true;
         }
 
         internal void ClearCaseSnapshotCacheChunks(Excel.Workbook workbook)

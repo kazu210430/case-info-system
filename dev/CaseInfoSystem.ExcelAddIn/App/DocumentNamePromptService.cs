@@ -9,17 +9,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class DocumentNamePromptService
     {
         private readonly ExcelInteropService _excelInteropService;
-        private readonly TaskPaneSnapshotCacheService _taskPaneSnapshotCacheService;
+        private readonly DocumentTemplateLookupService _documentTemplateLookupService;
         private readonly Logger _logger;
 
         /// <summary>
         internal DocumentNamePromptService(
             ExcelInteropService excelInteropService,
-            TaskPaneSnapshotCacheService taskPaneSnapshotCacheService,
+            DocumentTemplateLookupService documentTemplateLookupService,
             Logger logger)
         {
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
-            _taskPaneSnapshotCacheService = taskPaneSnapshotCacheService ?? throw new ArgumentNullException(nameof(taskPaneSnapshotCacheService));
+            _documentTemplateLookupService = documentTemplateLookupService ?? throw new ArgumentNullException(nameof(documentTemplateLookupService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -70,8 +70,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return string.Empty;
             }
 
-            return _taskPaneSnapshotCacheService.TryGetDocInfoFromCache(workbook, key, out string _, out string documentName)
-                ? documentName
+            return _documentTemplateLookupService.TryResolveFromCaseCache(workbook, key, out Domain.DocumentTemplateLookupResult lookupResult)
+                ? lookupResult.DocumentName
                 : string.Empty;
         }
 

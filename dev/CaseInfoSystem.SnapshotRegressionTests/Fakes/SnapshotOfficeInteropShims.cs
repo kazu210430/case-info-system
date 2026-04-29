@@ -56,6 +56,10 @@ namespace Microsoft.Office.Interop.Excel
     {
         public bool EnableEvents { get; set; } = true;
 
+        public Workbook ActiveWorkbook { get; set; }
+
+        public Window ActiveWindow { get; set; }
+
         public Workbooks Workbooks { get; }
 
         public Application()
@@ -115,23 +119,23 @@ namespace Microsoft.Office.Interop.Excel
 
         public Workbook Open(
             string filename,
-            object updateLinks,
-            bool readOnly,
-            object format,
-            object password,
-            object writeResPassword,
-            object ignoreReadOnlyRecommended,
-            object origin,
-            object delimiter,
-            object editable,
-            object notify,
-            object converter,
-            object addToMru,
-            object local,
-            object corruptLoad)
+            object UpdateLinks = null,
+            bool ReadOnly = false,
+            object Format = null,
+            object Password = null,
+            object WriteResPassword = null,
+            object IgnoreReadOnlyRecommended = null,
+            object Origin = null,
+            object Delimiter = null,
+            object Editable = null,
+            object Notify = null,
+            object Converter = null,
+            object AddToMru = null,
+            object Local = null,
+            object CorruptLoad = null)
         {
             Workbook workbook = OpenBehavior != null
-                ? OpenBehavior(filename, updateLinks, readOnly)
+                ? OpenBehavior(filename, UpdateLinks, ReadOnly)
                 : new Workbook
                 {
                     FullName = filename ?? string.Empty,
@@ -160,9 +164,14 @@ namespace Microsoft.Office.Interop.Excel
 
         public object CustomDocumentProperties { get; set; }
 
-        public void Close(bool saveChanges, object filename, object routeWorkbook)
+        public void Close(bool saveChanges = false, object filename = null, object routeWorkbook = null)
         {
             Application?.Workbooks.Remove(this);
+            if (Application?.ActiveWorkbook == this)
+            {
+                Application.ActiveWorkbook = null;
+                Application.ActiveWindow = null;
+            }
         }
     }
 
@@ -197,6 +206,10 @@ namespace Microsoft.Office.Interop.Excel
     public sealed class Window
     {
         public bool Visible { get; set; } = true;
+
+        public void Activate()
+        {
+        }
     }
 
     public sealed class Worksheets : IEnumerable<Worksheet>

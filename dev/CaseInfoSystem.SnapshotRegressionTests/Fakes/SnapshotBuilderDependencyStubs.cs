@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using Microsoft.Office.Core;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -24,6 +25,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         internal void Warn(string message)
         {
             _writeTrace(message ?? string.Empty);
+        }
+
+        internal void Debug(string context, string message)
+        {
+            _writeTrace((context ?? string.Empty) + " " + (message ?? string.Empty));
         }
 
         internal void Error(string context, Exception exception)
@@ -140,6 +146,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return workbook?.Name ?? string.Empty;
         }
 
+        internal Excel.Workbook GetActiveWorkbook()
+        {
+            return _application?.ActiveWorkbook;
+        }
+
+        internal Excel.Window GetActiveWindow()
+        {
+            return _application?.ActiveWindow;
+        }
+
         internal string GetWorkbookFullName(Excel.Workbook workbook)
         {
             return workbook?.FullName ?? string.Empty;
@@ -181,6 +197,52 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return null;
+        }
+
+        internal Excel.Window GetFirstVisibleWindow(Excel.Workbook workbook)
+        {
+            return workbook?.Windows.FirstOrDefault(window => window.Visible);
+        }
+    }
+}
+
+namespace CaseInfoSystem.ExcelAddIn.UI
+{
+    internal sealed class ExcelWindowOwner : IDisposable
+    {
+        internal static ExcelWindowOwner From(Microsoft.Office.Interop.Excel.Window window)
+        {
+            return new ExcelWindowOwner();
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    internal static class DocumentNamePromptForm
+    {
+        internal sealed class PromptResult
+        {
+            internal bool Accepted { get; set; }
+
+            internal string DocumentName { get; set; } = string.Empty;
+        }
+
+        internal static Func<ExcelWindowOwner, string, PromptResult> OnTryPrompt { get; set; }
+
+        internal static bool TryPrompt(ExcelWindowOwner owner, string initialDocumentName, out string finalDocumentName)
+        {
+            PromptResult result = OnTryPrompt == null
+                ? new PromptResult
+                {
+                    Accepted = true,
+                    DocumentName = initialDocumentName ?? string.Empty
+                }
+                : OnTryPrompt(owner, initialDocumentName ?? string.Empty) ?? new PromptResult();
+
+            finalDocumentName = result.DocumentName ?? string.Empty;
+            return result.Accepted;
         }
     }
 }

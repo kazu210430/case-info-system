@@ -362,11 +362,13 @@ namespace CaseInfoSystem.ExcelAddIn
             AccountingSetCommandService accountingSetCommandService,
             CaseListRegistrationService caseListRegistrationService)
         {
+            var documentTemplateLookupService = new DocumentTemplateLookupService(
+                taskPaneSnapshotCacheService,
+                masterTemplateCatalogService);
             var documentTemplateResolver = new DocumentTemplateResolver(
                 excelInteropService,
                 pathCompatibilityService,
-                taskPaneSnapshotCacheService,
-                masterTemplateCatalogService,
+                documentTemplateLookupService,
                 _logger);
             var documentExecutionModeService = new DocumentExecutionModeService(_logger, excelInteropService);
             var documentExecutionEligibilityService = new DocumentExecutionEligibilityService(
@@ -411,7 +413,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _logger);
             var documentNamePromptService = new DocumentNamePromptService(
                 excelInteropService,
-                taskPaneSnapshotCacheService,
+                documentTemplateLookupService,
                 _logger);
             return new AddInDocumentComposition(
                 documentCommandService,

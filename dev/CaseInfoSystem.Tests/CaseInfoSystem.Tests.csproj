@@ -65,6 +65,7 @@
     <Compile Include="AccountingNumericCellReaderTests.cs" />
     <Compile Include="AccountingSetCreateServiceTests.cs" />
     <Compile Include="AccountingSetKernelSyncServiceTests.cs" />
+    <Compile Include="MasterTemplateSheetReaderTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
     <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
     <!-- TaskPaneManager policies -->
@@ -126,6 +127,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookContext.cs" Link="Source\Domain\WorkbookContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReader.cs" Link="Source\Infrastructure\MasterTemplateSheetReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IExcelInteropService.cs" Link="Source\Infrastructure\IExcelInteropService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IPathCompatibilityService.cs" Link="Source\Infrastructure\IPathCompatibilityService.cs" />

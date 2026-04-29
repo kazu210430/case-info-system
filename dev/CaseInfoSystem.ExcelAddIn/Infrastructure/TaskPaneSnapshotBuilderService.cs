@@ -26,53 +26,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		private sealed class MasterSheetSnapshot
-		{
-			private readonly Dictionary<string, long> _tabBackColors;
-
-			internal int LastRow { get; }
-
-			internal List<MasterSheetRow> Rows { get; }
-
-			internal MasterSheetSnapshot (int lastRow, List<MasterSheetRow> rows, Dictionary<string, long> tabBackColors)
-			{
-				LastRow = lastRow;
-				Rows = rows ?? new List<MasterSheetRow> ();
-				_tabBackColors = tabBackColors ?? new Dictionary<string, long> (StringComparer.OrdinalIgnoreCase);
-			}
-
-			internal long GetTabBackColor (string tabName)
-			{
-				if (string.IsNullOrWhiteSpace (tabName)) {
-					return 0L;
-				}
-				long value;
-				return _tabBackColors.TryGetValue (tabName, out value) ? value : 0;
-			}
-		}
-
-		private sealed class MasterSheetRow
-		{
-			internal string Key { get; }
-
-			internal string TemplateFile { get; }
-
-			internal string Caption { get; }
-
-			internal string TabName { get; }
-
-			internal long FillColor { get; }
-
-			internal MasterSheetRow (string key, string templateFile, string caption, string tabName, long fillColor)
-			{
-				Key = key ?? string.Empty;
-				TemplateFile = templateFile ?? string.Empty;
-				Caption = caption ?? string.Empty;
-				TabName = tabName ?? string.Empty;
-				FillColor = fillColor;
-			}
-		}
-
 		private const string LineMeta = "META";
 
 		private const string LineSpecial = "SPECIAL";
@@ -307,14 +260,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private void AppendTemplateDefinitions (List<string> lines, Dictionary<string, int> tabOrder, Dictionary<string, int> rowMap, Worksheet masterWorksheet)
 		{
-			MasterSheetSnapshot masterSheetSnapshot = ReadMasterSheetSnapshot (masterWorksheet);
-			if (masterSheetSnapshot.LastRow < 3) {
+			MasterTemplateSheetData masterSheetData = MasterTemplateSheetReader.Read (masterWorksheet);
+			if (masterSheetData.LastRow < 3) {
 				return;
 			}
+			Dictionary<string, long> tabBackColors = BuildTabBackColors (masterSheetData.Rows, normalizeBlankTabName: false);
 			string text = "全て";
-			foreach (MasterSheetRow row in masterSheetSnapshot.Rows) {
+			foreach (MasterTemplateSheetRowData row in masterSheetData.Rows) {
 				string key = row.Key;
-				string templateFile = row.TemplateFile;
+				string templateFile = row.TemplateFileName;
 				string caption = row.Caption;
 				string text2 = row.TabName;
 				if (!string.IsNullOrWhiteSpace (key) && !string.IsNullOrWhiteSpace (caption)) {
@@ -324,7 +278,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					if (!tabOrder.ContainsKey (text2)) {
 						int value = tabOrder.Count + 1;
 						tabOrder.Add (text2, value);
-						lines.Add (JoinFields ("TAB", value.ToString (), text2, masterSheetSnapshot.GetTabBackColor (text2).ToString ()));
+						lines.Add (JoinFields ("TAB", value.ToString (), text2, GetTabBackColor (tabBackColors, text2).ToString ()));
 						rowMap.Add (text2, 0);
 					}
 					rowMap [text2]++;
@@ -452,32 +406,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		private string ResolveTabName (Worksheet masterWorksheet, int rowNumber)
-		{
-			return (Convert.ToString ((dynamic)(masterWorksheet.Cells [rowNumber, "E"] as Range).Value2) ?? string.Empty).Trim ();
-		}
-
-		private long GetTabBackColor (Worksheet masterWorksheet, string tabName)
-		{
-			int num = ((dynamic)masterWorksheet.Cells [masterWorksheet.Rows.Count, "A"]).End [XlDirection.xlUp].Row;
-			string text = string.Empty;
-			long result = 0L;
-			for (int i = 3; i <= num; i++) {
-				string text2 = ResolveTabName (masterWorksheet, i);
-				if (text2.Length == 0) {
-					text2 = "その他";
-				}
-				if (string.Equals (text2, tabName, StringComparison.OrdinalIgnoreCase)) {
-					string text3 = NormalizeDocKey (Convert.ToString ((dynamic)(masterWorksheet.Cells [i, "A"] as Range).Value2));
-					if (text3.Length != 0 && (text.Length == 0 || CompareDocKeys (text3, text) < 0)) {
-						text = text3;
-						result = Convert.ToInt64 ((dynamic)(masterWorksheet.Cells [i, "F"] as Range).Interior.Color);
-					}
-				}
-			}
-			return result;
-		}
-
 		private static int CompareDocKeys (string leftKey, string rightKey)
 		{
 			if (long.TryParse (leftKey, out var result) && long.TryParse (rightKey, out var result2)) {
@@ -492,7 +420,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				return 720;
 			}
 			try {
-				MasterSheetSnapshot masterSheetSnapshot = ReadMasterSheetSnapshot (masterWorksheet);
+				MasterTemplateSheetData masterSheetSnapshot = MasterTemplateSheetReader.Read (masterWorksheet);
 				int num = 0;
 				int num2 = 0;
 				for (int i = 0; i < masterSheetSnapshot.Rows.Count; i++) {
@@ -518,60 +446,35 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		private MasterSheetSnapshot ReadMasterSheetSnapshot (Worksheet masterWorksheet)
+		private static Dictionary<string, long> BuildTabBackColors (IReadOnlyList<MasterTemplateSheetRowData> rows, bool normalizeBlankTabName)
 		{
-			if (masterWorksheet == null) {
-				return new MasterSheetSnapshot (0, new List<MasterSheetRow> (), new Dictionary<string, long> (StringComparer.OrdinalIgnoreCase));
+			Dictionary<string, string> dictionary = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
+			Dictionary<string, long> dictionary2 = new Dictionary<string, long> (StringComparer.OrdinalIgnoreCase);
+			if (rows == null) {
+				return dictionary2;
 			}
-			Range range = null;
-			try {
-				int num = ((dynamic)masterWorksheet.Cells [masterWorksheet.Rows.Count, "A"]).End [XlDirection.xlUp].Row;
-				if (num < 3) {
-					return new MasterSheetSnapshot (num, new List<MasterSheetRow> (), new Dictionary<string, long> (StringComparer.OrdinalIgnoreCase));
+			for (int i = 0; i < rows.Count; i++) {
+				MasterTemplateSheetRowData masterTemplateSheetRowData = rows [i];
+				string key = masterTemplateSheetRowData.Key;
+				string text = masterTemplateSheetRowData.TabName;
+				if (normalizeBlankTabName && text.Length == 0) {
+					text = "その他";
 				}
-				range = ((_Worksheet)masterWorksheet).get_Range ((object)("A" + 3), (object)("E" + num));
-				if (!(range.Value2 is object[,] array)) {
-					return new MasterSheetSnapshot (num, new List<MasterSheetRow> (), new Dictionary<string, long> (StringComparer.OrdinalIgnoreCase));
+				if (key.Length != 0 && (!dictionary.TryGetValue (text, out var value) || CompareDocKeys (key, value) < 0)) {
+					dictionary [text] = key;
+					dictionary2 [text] = masterTemplateSheetRowData.TabBackColor;
 				}
-				List<MasterSheetRow> list = new List<MasterSheetRow> (array.GetUpperBound (0));
-				Dictionary<string, string> dictionary = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
-				Dictionary<string, long> dictionary2 = new Dictionary<string, long> (StringComparer.OrdinalIgnoreCase);
-				int upperBound = array.GetUpperBound (0);
-				for (int i = 1; i <= upperBound; i++) {
-					int rowNumber = 3 + i - 1;
-					string text = NormalizeDocKey (Convert.ToString (array [i, 1]));
-					string templateFile = (Convert.ToString (array [i, 2]) ?? string.Empty).Trim ();
-					string caption = (Convert.ToString (array [i, 3]) ?? string.Empty).Trim ();
-					string text2 = (Convert.ToString (array [i, 5]) ?? string.Empty).Trim ();
-					if (text2.Length == 0) {
-						text2 = string.Empty;
-					}
-					long cellInteriorColor = GetCellInteriorColor (masterWorksheet, rowNumber, "D");
-					long cellInteriorColor2 = GetCellInteriorColor (masterWorksheet, rowNumber, "F");
-					list.Add (new MasterSheetRow (text, templateFile, caption, text2, cellInteriorColor));
-					if (text.Length != 0 && (!dictionary.TryGetValue (text2, out var value) || CompareDocKeys (text, value) < 0)) {
-						dictionary [text2] = text;
-						dictionary2 [text2] = cellInteriorColor2;
-					}
-				}
-				return new MasterSheetSnapshot (num, list, dictionary2);
-			} finally {
-				ReleaseComObject (range);
 			}
+			return dictionary2;
 		}
 
-		private static long GetCellInteriorColor (Worksheet worksheet, int rowNumber, string columnName)
+		private static long GetTabBackColor (IReadOnlyDictionary<string, long> tabBackColors, string tabName)
 		{
-			Range range = null;
-			Interior interior = null;
-			try {
-				range = worksheet.Cells [rowNumber, columnName] as Range;
-				interior = range?.Interior;
-				return Convert.ToInt64 ((dynamic)((interior == null) ? ((object)0) : interior.Color));
-			} finally {
-				ReleaseComObject (interior);
-				ReleaseComObject (range);
+			if (tabBackColors == null || string.IsNullOrWhiteSpace (tabName)) {
+				return 0L;
 			}
+			long value;
+			return tabBackColors.TryGetValue (tabName, out value) ? value : 0L;
 		}
 
 		private static void ReleaseComObject (object comObject)

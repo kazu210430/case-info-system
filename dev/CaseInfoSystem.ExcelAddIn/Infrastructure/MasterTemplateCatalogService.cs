@@ -16,7 +16,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         private const string MasterSheetName = "雛形一覧";
         private const string MasterSheetCodeName = "shMasterList";
-        private const int MasterListFirstDataRow = 3;
         private const string SystemRootPropertyName = "SYSTEM_ROOT";
 
         private readonly Excel.Application _application;
@@ -183,68 +182,37 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 throw new InvalidOperationException("雛形一覧シートが見つかりません。 book=" + _excelInteropService.GetWorkbookFullName(masterWorkbook));
             }
 
-            Excel.Range lastCell = worksheet.Cells[worksheet.Rows.Count, "A"] as Excel.Range;
-            if (lastCell == null)
-            {
-                throw new InvalidOperationException("雛形一覧シートの最終行セルを取得できませんでした。");
-            }
-
-            Excel.Range lastUsedCell = lastCell.End[Excel.XlDirection.xlUp] as Excel.Range;
-            if (lastUsedCell == null)
-            {
-                throw new InvalidOperationException("雛形一覧シートの使用済み最終行を取得できませんでした。");
-            }
-
-            int lastRow = lastUsedCell.Row;
+            MasterTemplateSheetData masterSheetData = MasterTemplateSheetReader.Read(worksheet);
             var result = new List<MasterTemplateRecord>();
-            if (lastRow < MasterListFirstDataRow)
+            if (masterSheetData.LastRow < 3)
             {
                 return result;
             }
 
-            Excel.Range valuesRange = null;
-            try
+            for (int index = 0; index < masterSheetData.Rows.Count; index++)
             {
-                // 処理ブロック: A:C は一括取得し、色だけ個別セルから取得する。
-                // テンプレート行数が多いほどセル単位読込の往復回数差が効くため、まず値の取得をまとめる。
-                valuesRange = worksheet.Range["A" + MasterListFirstDataRow.ToString(), "C" + lastRow.ToString()];
-                object[,] values = valuesRange.Value2 as object[,];
-                if (values == null)
+                MasterTemplateSheetRowData row = masterSheetData.Rows[index];
+                string key = row.Key;
+                string templateFileName = row.TemplateFileName;
+                string documentName = row.Caption;
+                if (string.IsNullOrWhiteSpace(key) && string.IsNullOrWhiteSpace(templateFileName) && string.IsNullOrWhiteSpace(documentName))
                 {
-                    return result;
+                    continue;
                 }
 
-                int upperRow = values.GetUpperBound(0);
-                for (int rowOffset = 1; rowOffset <= upperRow; rowOffset++)
+                if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(templateFileName))
                 {
-                    int rowIndex = MasterListFirstDataRow + rowOffset - 1;
-                    string key = NormalizeDocButtonKey(Convert.ToString(values[rowOffset, 1]));
-                    string templateFileName = Convert.ToString(values[rowOffset, 2]) ?? string.Empty;
-                    string documentName = Convert.ToString(values[rowOffset, 3]) ?? string.Empty;
-                    if (string.IsNullOrWhiteSpace(key) && string.IsNullOrWhiteSpace(templateFileName) && string.IsNullOrWhiteSpace(documentName))
-                    {
-                        continue;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(templateFileName))
-                    {
-                        _logger.Warn("MasterTemplateCatalogService ignored incomplete row. row=" + rowIndex.ToString() + ", key=" + key + ", templateFileName=" + templateFileName);
-                        continue;
-                    }
-
-                    long backColor = GetCellInteriorColor(worksheet, rowIndex, 4);
-                    result.Add(new MasterTemplateRecord
-                    {
-                        Key = key,
-                        TemplateFileName = templateFileName,
-                        DocumentName = documentName,
-                        BackColor = backColor
-                    });
+                    _logger.Warn("MasterTemplateCatalogService ignored incomplete row. row=" + row.RowIndex.ToString() + ", key=" + key + ", templateFileName=" + templateFileName);
+                    continue;
                 }
-            }
-            finally
-            {
-                ReleaseComObject(valuesRange);
+
+                result.Add(new MasterTemplateRecord
+                {
+                    Key = key,
+                    TemplateFileName = templateFileName,
+                    DocumentName = documentName,
+                    BackColor = row.FillColor
+                });
             }
 
             return result;
@@ -266,27 +234,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 _logger.Error("MasterTemplateCatalogService.GetMasterListWorksheet failed.", ex);
                 return null;
-            }
-        }
-
-        // メソッド: 指定セルの塗りつぶし色を取得する。
-        // 引数: worksheet - 対象シート, rowIndex - 行番号, columnIndex - 列番号。
-        // 戻り値: OLE Color 値。
-        // 副作用: Excel Cell / Interior にアクセスする。
-        private static long GetCellInteriorColor(Excel.Worksheet worksheet, int rowIndex, int columnIndex)
-        {
-            Excel.Range cell = null;
-            Excel.Interior interior = null;
-            try
-            {
-                cell = worksheet.Cells[rowIndex, columnIndex] as Excel.Range;
-                interior = cell == null ? null : cell.Interior;
-                return Convert.ToInt64(interior == null ? 0 : interior.Color);
-            }
-            finally
-            {
-                ReleaseComObject(interior);
-                ReleaseComObject(cell);
             }
         }
 

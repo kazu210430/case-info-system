@@ -16,23 +16,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Workbook workbook,
             string reason,
             Func<Excel.Workbook, string, int, bool> tryShowOnce,
-            Action<Excel.Workbook, string, int> waitBeforeRetry,
+            Action<Excel.Workbook, string, int, Action> scheduleRetry,
             Action onShown,
             Action<Excel.Workbook, string> scheduleFallback)
         {
-            for (int attempt = 0; attempt < _maxAttempts; attempt++)
+            if (tryShowOnce(workbook, reason, 1))
             {
-                int attemptNumber = attempt + 1;
-                if (tryShowOnce(workbook, reason, attemptNumber))
+                onShown();
+                return;
+            }
+
+            ScheduleRetryAttempt(2);
+
+            void ScheduleRetryAttempt(int attemptNumber)
+            {
+                if (attemptNumber > _maxAttempts)
                 {
-                    onShown();
+                    scheduleFallback(workbook, reason);
                     return;
                 }
 
-                waitBeforeRetry(workbook, reason, attemptNumber);
-            }
+                scheduleRetry(
+                    workbook,
+                    reason,
+                    attemptNumber,
+                    () =>
+                    {
+                        if (tryShowOnce(workbook, reason, attemptNumber))
+                        {
+                            onShown();
+                            return;
+                        }
 
-            scheduleFallback(workbook, reason);
+                        ScheduleRetryAttempt(attemptNumber + 1);
+                    });
+            }
         }
     }
 }

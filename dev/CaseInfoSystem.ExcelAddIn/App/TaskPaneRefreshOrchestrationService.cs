@@ -1,8 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Threading;
-using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.ExcelAddIn.UI;
@@ -28,6 +27,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
 
         private System.Windows.Forms.Timer _pendingPaneRefreshTimer;
+        private readonly List<System.Windows.Forms.Timer> _waitReadyRetryTimers = new List<System.Windows.Forms.Timer>();
         private int _pendingPaneRefreshAttemptsRemaining;
         private string _pendingPaneRefreshReason;
         private string _pendingPaneRefreshWorkbookFullName;
@@ -203,7 +203,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook,
                 reason,
                 TryShowWorkbookTaskPaneOnce,
-                WaitForTaskPaneReadyRetry,
+                ScheduleTaskPaneReadyRetry,
                 StopPendingPaneRefreshTimer,
                 ScheduleWorkbookTaskPaneRefresh);
         }
@@ -294,10 +294,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + FormatWorkbookDescriptor(workbook)
                     + ", resolveAttempt="
                     + (attempt + 1).ToString(CultureInfo.InvariantCulture)
-                    + ", doEvents=true, sleepMs="
-                    + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
-                Application.DoEvents();
-                Thread.Sleep(WorkbookPaneWindowResolveDelayMs);
+                    + ", deferredToRetryCoordinator=true");
             }
 
             _logger?.Warn(
@@ -320,10 +317,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (_pendingPaneRefreshTimer == null)
             {
+                StopWaitReadyRetryTimers();
                 return;
             }
 
             _pendingPaneRefreshTimer.Stop();
+            StopWaitReadyRetryTimers();
         }
 
         private void EnsurePendingPaneRefreshTimer()
@@ -456,20 +455,44 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private void WaitForTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber)
+        private void ScheduleTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber, Action retryAction)
         {
             _logger?.Info(
                 KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry reason="
+                + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry-scheduled reason="
                 + (reason ?? string.Empty)
                 + ", workbook="
                 + FormatWorkbookDescriptor(workbook)
                 + ", attempt="
                 + attemptNumber.ToString(CultureInfo.InvariantCulture)
-                + ", doEvents=true, sleepMs=80");
-            _logger?.Info("TaskPane wait-ready retry wait. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
-            Application.DoEvents();
-            Thread.Sleep(80);
+                + ", delayMs="
+                + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
+            _logger?.Info("TaskPane wait-ready retry scheduled. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
+
+            if (retryAction == null)
+            {
+                return;
+            }
+
+            System.Windows.Forms.Timer retryTimer = new System.Windows.Forms.Timer
+            {
+                Interval = WorkbookPaneWindowResolveDelayMs
+            };
+
+            EventHandler tickHandler = null;
+            tickHandler = (sender, args) =>
+            {
+                retryTimer.Stop();
+                retryTimer.Tick -= tickHandler;
+                _waitReadyRetryTimers.Remove(retryTimer);
+                retryTimer.Dispose();
+                _logger?.Info("TaskPane wait-ready retry firing. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
+                retryAction();
+            };
+
+            _waitReadyRetryTimers.Add(retryTimer);
+            retryTimer.Tick += tickHandler;
+            retryTimer.Start();
         }
 
         private void PendingPaneRefreshTimer_Tick(object sender, EventArgs e)
@@ -536,6 +559,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return _excelInteropService.FindOpenWorkbook(_pendingPaneRefreshWorkbookFullName);
+        }
+
+        private void StopWaitReadyRetryTimers()
+        {
+            if (_waitReadyRetryTimers.Count == 0)
+            {
+                return;
+            }
+
+            foreach (System.Windows.Forms.Timer retryTimer in _waitReadyRetryTimers.ToArray())
+            {
+                retryTimer.Stop();
+                retryTimer.Dispose();
+            }
+
+            _waitReadyRetryTimers.Clear();
         }
 
         private string SafeWorkbookFullName(Excel.Workbook workbook)

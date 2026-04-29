@@ -141,6 +141,8 @@
 ### 第2段階: read-only API 追加
 
 - `ICaseCacheDocumentTemplateReader`
+- 最小実装では `ICaseCacheDocumentTemplateReader` だけを先行追加し、`DocumentNamePromptService` の依存を cache-only reader に限定する。
+- fallback ありの統合 reader は今回は追加せず、`DocumentTemplateResolver` は既存の `DocumentTemplateLookupService` を維持する。
 - `IDocumentTemplateLookupReader`
 - `IMasterTemplateCatalogReader`
 - `ICaseSnapshotStorageReader`

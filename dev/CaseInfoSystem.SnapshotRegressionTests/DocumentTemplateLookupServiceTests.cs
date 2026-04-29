@@ -110,6 +110,39 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             Assert.Equal(string.Empty, promptedInitialName);
         }
 
+        [Fact]
+        public void CaseCacheReader_WhenCaseCacheMissing_DoesNotFallbackToMasterCatalog()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
+
+            TestServices services = CreateServices(scenario.Application);
+
+            bool resolved = services.CaseCacheReader.TryResolveFromCaseCache(scenario.CaseWorkbook, "1", out DocumentTemplateLookupResult lookupResult);
+
+            Assert.False(resolved);
+            Assert.Null(lookupResult);
+        }
+
+        [Fact]
+        public void Resolve_WhenWordTemplateDirectoryMissing_UsesSystemRootTemplateFolderForTemplatePath()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+
+            TestServices services = CreateServices(scenario.Application);
+            SnapshotBuilderScenario.InputRow row = CreateRows()[0];
+
+            DocumentTemplateSpec templateSpec = services.Resolver.Resolve(scenario.CaseWorkbook, "1");
+
+            Assert.NotNull(templateSpec);
+            Assert.Equal(row.TemplateFileName, templateSpec.TemplateFileName);
+            Assert.Equal(
+                Path.Combine(@"C:\SnapshotRegression\SystemRoot", "\u96DB\u5F62", row.TemplateFileName),
+                templateSpec.TemplatePath);
+            Assert.Equal(DocumentTemplateResolutionSource.SnapshotCache, templateSpec.ResolutionSource);
+        }
+
         private static TestServices CreateServices(Excel.Application application)
         {
             var logger = new Logger(_ => { });
@@ -121,6 +154,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
 
             return new TestServices(
                 excelInteropService,
+                lookupService,
                 new DocumentTemplateResolver(excelInteropService, pathCompatibilityService, lookupService, logger),
                 new DocumentNamePromptService(excelInteropService, lookupService, logger));
         }
@@ -165,15 +199,19 @@ namespace CaseInfoSystem.SnapshotRegressionTests
         {
             internal TestServices(
                 ExcelInteropService excelInteropService,
+                ICaseCacheDocumentTemplateReader caseCacheReader,
                 DocumentTemplateResolver resolver,
                 DocumentNamePromptService promptService)
             {
                 ExcelInteropService = excelInteropService;
+                CaseCacheReader = caseCacheReader;
                 Resolver = resolver;
                 PromptService = promptService;
             }
 
             internal ExcelInteropService ExcelInteropService { get; }
+
+            internal ICaseCacheDocumentTemplateReader CaseCacheReader { get; }
 
             internal DocumentTemplateResolver Resolver { get; }
 

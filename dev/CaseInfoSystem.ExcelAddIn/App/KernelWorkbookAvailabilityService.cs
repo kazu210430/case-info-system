@@ -42,39 +42,120 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     return;
                 }
 
-                // 処理ブロック: suppression 判定の consume ポイント。
-                // 判定と消費は coordinator の責務で、このメソッドは結果に応じた後続動作だけを調停する。
-                _logger?.Info("[Suppression:Check] event=" + eventName);
-                if (_kernelHomeCoordinator.ShouldSuppressKernelHomeDisplay(eventName))
+                KernelHomeDisplayAvailabilityState state = BuildDisplayAvailabilityState(eventName, workbook, kernelHomeForm);
+                KernelHomeDisplayAction action = KernelHomeDisplayAvailabilityPolicy.Decide(
+                    state.HasKernelWorkbookReached,
+                    state.IsDisplayReady,
+                    state.HasVisibleKernelHome,
+                    state.IsSuppressed,
+                    state.IsDisplayContextAllowed,
+                    state.ShouldReloadVisibleKernelHome);
+                _logger?.Info(
+                    "Kernel HOME availability state. eventName="
+                    + state.EventName
+                    + ", hasKernelWorkbookReached="
+                    + state.HasKernelWorkbookReached.ToString()
+                    + ", isDisplayReady="
+                    + state.IsDisplayReady.ToString()
+                    + ", hasVisibleKernelHome="
+                    + state.HasVisibleKernelHome.ToString()
+                    + ", isSuppressed="
+                    + state.IsSuppressed.ToString()
+                    + ", isDisplayContextAllowed="
+                    + state.IsDisplayContextAllowed.ToString()
+                    + ", shouldReloadVisibleKernelHome="
+                    + state.ShouldReloadVisibleKernelHome.ToString()
+                    + ", action="
+                    + action.ToString()
+                    + ", workbook="
+                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
+
+                if (action == KernelHomeDisplayAction.Show)
                 {
-                    _logger?.Info("[Suppression:Consumed] event=" + eventName);
-                    _logger.Info((eventName ?? string.Empty) + " suppressed kernel home display.");
+                    _logger.Info("Kernel HOME requested from " + state.EventName);
+                    _showKernelHomePlaceholderWithExternalWorkbookSuppression("HandleKernelWorkbookBecameAvailable." + state.EventName);
                     return;
                 }
 
-                // 処理ブロック: HOME 表示抑止が成立しなかった場合のみ、イベント種別と現在状態に応じて表示分岐する。
-                if (kernelHomeForm == null || kernelHomeForm.IsDisposed)
-                {
-                    if (_kernelHomeCoordinator.ShouldAutoShowKernelHomeForEvent(eventName, workbook))
-                    {
-                        _logger.Info("Kernel HOME requested from " + (eventName ?? string.Empty));
-                        _showKernelHomePlaceholderWithExternalWorkbookSuppression("HandleKernelWorkbookBecameAvailable." + (eventName ?? string.Empty));
-                    }
-
-                    return;
-                }
-
-                // 処理ブロック: 既存 HOME 表示中の UI 更新。
-                if (kernelHomeForm.Visible && _kernelHomeCoordinator.ShouldReloadVisibleKernelHomeForEvent(eventName, workbook))
+                if (action == KernelHomeDisplayAction.ReloadVisible)
                 {
                     kernelHomeForm.ReloadSettings();
-                    _logger.Info("KernelHomeForm reloaded after " + (eventName ?? string.Empty));
+                    _logger.Info("KernelHomeForm reloaded after " + state.EventName);
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error("HandleKernelWorkbookBecameAvailable failed. eventName=" + (eventName ?? string.Empty), ex);
             }
+        }
+
+        private KernelHomeDisplayAvailabilityState BuildDisplayAvailabilityState(string eventName, Excel.Workbook workbook, KernelHomeForm kernelHomeForm)
+        {
+            string normalizedEventName = eventName ?? string.Empty;
+            bool hasVisibleKernelHome = kernelHomeForm != null && !kernelHomeForm.IsDisposed && kernelHomeForm.Visible;
+            return new KernelHomeDisplayAvailabilityState
+            {
+                EventName = normalizedEventName,
+                HasKernelWorkbookReached = workbook != null && _kernelWorkbookService.IsKernelWorkbook(workbook),
+                IsDisplayReady = kernelHomeForm == null || kernelHomeForm.IsDisposed || !kernelHomeForm.Visible,
+                HasVisibleKernelHome = hasVisibleKernelHome,
+                IsSuppressed = _kernelHomeCoordinator.ShouldSuppressKernelHomeDisplay(normalizedEventName),
+                IsDisplayContextAllowed = _kernelHomeCoordinator.ShouldAutoShowKernelHomeForEvent(normalizedEventName, workbook),
+                ShouldReloadVisibleKernelHome = hasVisibleKernelHome && _kernelHomeCoordinator.ShouldReloadVisibleKernelHomeForEvent(normalizedEventName, workbook)
+            };
+        }
+
+        private sealed class KernelHomeDisplayAvailabilityState
+        {
+            internal string EventName { get; set; } = string.Empty;
+
+            internal bool HasKernelWorkbookReached { get; set; }
+
+            internal bool IsDisplayReady { get; set; }
+
+            internal bool HasVisibleKernelHome { get; set; }
+
+            internal bool IsSuppressed { get; set; }
+
+            internal bool IsDisplayContextAllowed { get; set; }
+
+            internal bool ShouldReloadVisibleKernelHome { get; set; }
+        }
+    }
+
+    internal enum KernelHomeDisplayAction
+    {
+        None = 0,
+        Show = 1,
+        ReloadVisible = 2
+    }
+
+    internal static class KernelHomeDisplayAvailabilityPolicy
+    {
+        internal static KernelHomeDisplayAction Decide(
+            bool hasKernelWorkbookReached,
+            bool isDisplayReady,
+            bool hasVisibleKernelHome,
+            bool isSuppressed,
+            bool isDisplayContextAllowed,
+            bool shouldReloadVisibleKernelHome)
+        {
+            if (!hasKernelWorkbookReached || isSuppressed)
+            {
+                return KernelHomeDisplayAction.None;
+            }
+
+            if (hasVisibleKernelHome && shouldReloadVisibleKernelHome)
+            {
+                return KernelHomeDisplayAction.ReloadVisible;
+            }
+
+            if (!isDisplayReady || !isDisplayContextAllowed)
+            {
+                return KernelHomeDisplayAction.None;
+            }
+
+            return KernelHomeDisplayAction.Show;
         }
     }
 }

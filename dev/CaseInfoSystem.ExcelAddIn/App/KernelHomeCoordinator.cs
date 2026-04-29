@@ -31,17 +31,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool ShouldAutoShowKernelHomeForEvent(string eventName, Excel.Workbook workbook)
         {
-            if (!string.Equals(eventName, "WorkbookOpen", StringComparison.OrdinalIgnoreCase))
-            {
-                _addin.Logger.Info(
-                    "Kernel HOME auto-show skipped because event is not WorkbookOpen. eventName="
-                    + (eventName ?? string.Empty)
-                    + ", workbook="
-                    + _addin.GetWorkbookFullNameForLogging(workbook));
-                return false;
-            }
-
-            return _addin.ShouldShowKernelHomeOnStartup(workbook);
+            bool shouldShow = _addin.ShouldShowKernelHomeOnStartup(workbook);
+            _addin.Logger.Info(
+                "Kernel HOME display context evaluated. eventName="
+                + (eventName ?? string.Empty)
+                + ", shouldShow="
+                + shouldShow.ToString()
+                + ", workbook="
+                + _addin.GetWorkbookFullNameForLogging(workbook));
+            return shouldShow;
         }
 
         internal bool ShouldReloadVisibleKernelHomeForEvent(string eventName, Excel.Workbook workbook)

@@ -88,6 +88,14 @@
    - `MasterTemplateCatalogService` 経由の Kernel `雛形一覧`
 6. `DocumentCreateService` が `DocumentTemplateSpec.DocumentName` と override 情報から最終文書名を決め、`TemplateFileName` から `TemplatePath` を導出して文書作成を実行する。
 
+### 2.6 文書名入力 lookup policy
+
+- `DocumentNamePromptService` は文書名入力ダイアログの初期値を決める補助サービスであり、文書実行可否判定や実体テンプレート解決の正本ではない。
+- `DocumentNamePromptService` は `DocumentTemplateLookupService.TryResolveFromCaseCache` を使い、CASE cache から `caption` を引けた場合だけ prompt 初期値へ反映する。
+- CASE cache に対象 key が存在しない場合、文書名入力側では master catalog にフォールバックしない。
+- master fallback は `DocumentTemplateResolver` が担う実行時解決責務であり、`key -> file / caption -> TemplatePath` を解決する。
+- この分離により、文書名入力 UI は現在の CASE 表示状態に従い、文書実行側は実体テンプレート解決を担う。
+
 ## 3. metadata 項目整理
 
 | 項目 | 現状の正本 / 起点 | 主な生成元 | 主な読取先 | 主な変換 |
@@ -299,7 +307,7 @@
 
 - `DocumentTemplateResolver` は CASE cache に無ければ master catalog にフォールバックする。
 - `DocumentNamePromptService` は CASE cache のみを参照し、master catalog にはフォールバックしない。
-- 現行の CASE pane 操作では通常 cache がある前提で動くが、lookup ポリシー自体は一致していない。
+- この差分は現行仕様であり、文書名入力 UI を表示中 CASE pane と整合させつつ、実行時解決だけが master fallback を持つ。
 
 ### 6.5 version の意味付けが複数ある
 
@@ -379,8 +387,6 @@
   - `dev\CaseInfoSystem.ExcelAddIn` 内では主経路利用を確認できない項目がある。
 - `CaseTemplateSnapshotService` が現役設計なのか、移行途中の残存補助なのか
   - 新規 CASE 初期化では使われているが、同系統処理は別サービスにも存在する。
-- `DocumentNamePromptService` の cache-only lookup が意図的設計かどうか
-  - 実装事実は確認できるが、設計意図まではコードだけでは断定できない。
 
 ## 10. まとめ
 
@@ -388,4 +394,5 @@
 - Base 埋込 snapshot と CASE cache は、どちらも正本ではなく派生 cache である。
 - global version の正本は Kernel `TASKPANE_MASTER_VERSION` であり、Base / CASE 側の同名または関連 version は mirror / provenance として読むのが現状に合う。
 - 重複の中心は `雛形一覧` 解釈、snapshot 生成、cache 保存、`key -> caption/file` 解決である。
+- `DocumentNamePromptService` は CASE cache だけを参照する補助 lookup、`DocumentTemplateResolver` は master fallback を持つ実行 lookup、という責務分離が現行仕様である。
 - 特に `TaskPaneSnapshotBuilderService`、`KernelTemplateSyncService`、`MasterTemplateCatalogService`、`TaskPaneSnapshotCacheService`、`CaseTemplateSnapshotService` の間に、統合余地が大きい。

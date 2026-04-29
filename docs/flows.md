@@ -61,17 +61,23 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 ### `doc` の流れ
 
-1. `DocumentCommandService` が TaskPane の選択ボタンから文書キーを受け取ります。
-2. `DocumentExecutionModeService` が `DocumentExecutionMode.txt` を読み込みます。
-3. `DocumentExecutionEligibilityService` が登録済みテンプレートを前提に `DocumentTemplateResolver` で `templateSpec` を解決し、テンプレート種別、マクロ有無、出力先、CASE コンテキストを確認します。
-4. `DocumentCommandService` は runtime の allowlist / review block を行わず、そのまま `DocumentCreateService` に進みます。
-5. `DocumentCreateService` が文書名を解決し、`DocumentOutputService` が出力先を解決します。
-6. `MergeDataBuilder` が CASE データから差し込み用データを構築します。
-7. `DocumentPresentationWaitService` が待機 UI を表示します。
-8. `WordInteropService` が Word アプリケーションを取得または再利用します。
-9. `WordInteropService` がテンプレートから文書を生成し、`DocumentMergeService` が差し込み処理を行います。
-10. `DocumentMergeService` が ContentControl の除去処理を行います。
-11. `DocumentSaveService` が保存し、`WordInteropService` が Word 文書を表示します。
+1. `TaskPaneManager` が TaskPane の選択ボタンから `actionKind` と文書キーを受け取ります。
+2. `TaskPaneManager` は `doc` 実行前に `DocumentNamePromptService.TryPrepare` を呼び、文書名入力ダイアログの初期値を準備します。
+3. `DocumentNamePromptService` は `DocumentTemplateLookupService.TryResolveFromCaseCache` を通して CASE cache だけを参照し、`caption` を prompt 初期値に使います。
+4. CASE cache に対象 key が無い場合、文書名入力側では master catalog へフォールバックせず、空欄のまま prompt を開きます。
+5. prompt で確定した値は `DocumentNameOverrideScope` により一時 DocProperty として保持されます。
+6. `DocumentCommandService` が文書キーを受け取ります。
+7. `DocumentExecutionModeService` が `DocumentExecutionMode.txt` を読み込みます。
+8. `DocumentExecutionEligibilityService` が登録済みテンプレートを前提に `DocumentTemplateResolver` で `templateSpec` を解決し、テンプレート種別、マクロ有無、出力先、CASE コンテキストを確認します。
+9. `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を使い、まず CASE cache を参照し、解決できない場合だけ `MasterTemplateCatalogService` の master catalog にフォールバックします。
+10. `DocumentCommandService` は runtime の allowlist / review block を行わず、そのまま `DocumentCreateService` に進みます。
+11. `DocumentCreateService` が `templateSpec.DocumentName` と一時 override を使って文書名を解決し、`DocumentOutputService` が出力先を解決します。
+12. `MergeDataBuilder` が CASE データから差し込み用データを構築します。
+13. `DocumentPresentationWaitService` が待機 UI を表示します。
+14. `WordInteropService` が Word アプリケーションを取得または再利用します。
+15. `WordInteropService` がテンプレートから文書を生成し、`DocumentMergeService` が差し込み処理を行います。
+16. `DocumentMergeService` が ContentControl の除去処理を行います。
+17. `DocumentSaveService` が保存し、`WordInteropService` が Word 文書を表示します。
 
 ### 現在の安全モデル
 
@@ -290,9 +296,14 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 
 #### 表示中 Pane と文書実行時の cache 利用
 
+- `DocumentNamePromptService` は文書名入力 UI 用の補助情報だけを扱い、CASE cache から `caption` を引けた場合にだけ prompt 初期値へ反映します。
+- `DocumentNamePromptService` は実行可否判定や実体テンプレートファイル解決の正本ではありません。
+- `DocumentNamePromptService` は CASE cache miss 時に master fallback しません。文書名入力 UI は、表示中 Pane と整合する CASE cache 表示状態に従います。
 - `DocumentTemplateResolver` は、まず `TaskPaneSnapshotCacheService` を使って CASE cache から文書キーに対応する定義を解決します。
 - CASE cache に解決対象がない場合だけ `MasterTemplateCatalogService` の master catalog にフォールバックします。
+- master fallback は `DocumentTemplateResolver` 側の実行時解決責務として扱います。
 - そのため、開いている CASE では表示中 Pane と整合する CASE cache を使い続けてよく、master version だけを見ると stale に見える場合でも直ちに問題扱いしません。
+- 文書名入力 UI と文書実行は責務を分離し、前者は現在の CASE 表示状態、後者は実行可能なテンプレート解決を担います。
 - 文書ボタン実行も、表示中 Pane と一致する cache を優先してよい仕様です。
 - 最新雛形を使いたい場合は、CASE を開き直して新しい snapshot 解決経路に入り直す運用とします。
 

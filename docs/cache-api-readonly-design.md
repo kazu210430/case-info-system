@@ -101,6 +101,8 @@
 
 ## 7. 同値確認テスト案
 
+詳細なケース表と停止条件は `docs/cache-api-equivalence-test-design.md` を正とする。本節は read-only API 候補設計に接続するための要約だけを残す。
+
 将来 API を実装する前提で、最低限次を確認する。
 
 | テスト観点 | 期待結果 |
@@ -111,7 +113,7 @@
 | master fallback 禁止 | prompt 系 caller では master catalog に進まない |
 | `caption` / `key` / `file` 一致 | 現行 `DocumentTemplateLookupServiceTests` と同値である |
 | snapshot format version 非互換 | 互換性なし CASE cache / Base snapshot は clear され、互換な経路だけが残る |
-| master version stale | CASE cache stale 時に実行系は master 正本、表示系は rebuild 経路へ進む |
+| master version stale | 表示系は stale を見て rebuild 経路へ進む。一方で prompt / 実行 lookup は CASE cache hit 中に stale だけで master fallback へ切り替えない |
 | Base 由来 snapshot 初期配布 | 新規 CASE 初期化後、Base snapshot が CASE cache に promote される |
 | CASE cache clear 後の再構築 | `TASKPANE_SNAPSHOT_CACHE_COUNT=0` 後に Base または MasterList から期待通り戻る |
 | `DocumentNamePromptService` の cache-only 仕様 | cache miss でも prompt 初期値は空、master fallback は発生しない |

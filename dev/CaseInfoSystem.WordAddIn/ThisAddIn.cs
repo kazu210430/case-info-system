@@ -12,9 +12,14 @@ namespace CaseInfoSystem.WordAddIn
     public partial class ThisAddIn
     {
         private const string StylePaneEnabledPropertyName = "StylePaneEnabled";
+        private const int StylePaneActivationRetryIntervalMilliseconds = 250;
+        private const int StylePaneActivationRetryMaxAttempts = 20;
 
         private ContentControlBatchReplaceService _contentControlBatchReplaceService;
         private WordApplicationRibbon _wordApplicationRibbon;
+        private Timer _stylePaneActivationRetryTimer;
+        private int _stylePaneActivationRetryAttemptsRemaining;
+        private string _stylePaneActivationRetryReason;
 
         private void ThisAddIn_Startup(object sender, EventArgs e)
         {
@@ -25,6 +30,11 @@ namespace CaseInfoSystem.WordAddIn
                 ExecuteStartupStep("service composition", delegate
                 {
                     _contentControlBatchReplaceService = new ContentControlBatchReplaceService();
+                    _stylePaneActivationRetryTimer = new Timer
+                    {
+                        Interval = StylePaneActivationRetryIntervalMilliseconds
+                    };
+                    _stylePaneActivationRetryTimer.Tick += StylePaneActivationRetryTimer_Tick;
                 });
 
                 ExecuteStartupStep("event subscribe", delegate
@@ -38,8 +48,8 @@ namespace CaseInfoSystem.WordAddIn
                 ExecuteStartupStep("taskpane or pane initialization", delegate
                 {
                     // ActiveDocument is not guaranteed to exist during startup.
-                    // Document-specific pane state is refreshed by the existing document lifecycle events.
-                    ApplyStylesPaneVisibility(null, true, "taskpane or pane initialization");
+                    // ApplyStylePaneVisibilityWithRetry schedules a bounded retry so the style pane can be re-applied after Word finishes preparing the window/document.
+                    ApplyStylePaneVisibilityWithRetry(TryGetActiveDocument("taskpane or pane initialization"), "taskpane or pane initialization");
                 });
 
                 WordAddInStartupLogWriter.Write("WordAddin startup end");
@@ -57,10 +67,19 @@ namespace CaseInfoSystem.WordAddIn
 
             try
             {
+                StopStylePaneActivationRetry("shutdown");
+
                 Word.ApplicationEvents4_Event applicationEvents = (Word.ApplicationEvents4_Event)Application;
                 applicationEvents.DocumentOpen -= Application_DocumentOpen;
                 applicationEvents.NewDocument -= Application_NewDocument;
                 applicationEvents.WindowActivate -= Application_WindowActivate;
+                if (_stylePaneActivationRetryTimer != null)
+                {
+                    _stylePaneActivationRetryTimer.Tick -= StylePaneActivationRetryTimer_Tick;
+                    _stylePaneActivationRetryTimer.Dispose();
+                    _stylePaneActivationRetryTimer = null;
+                }
+
                 WordAddInStartupLogWriter.Write("WordAddin shutdown end");
             }
             catch (Exception ex)
@@ -72,17 +91,17 @@ namespace CaseInfoSystem.WordAddIn
 
         private void Application_DocumentOpen(Word.Document document)
         {
-            ApplyStylesPaneVisibility(document);
+            ApplyStylePaneVisibilityWithRetry(document, "DocumentOpen");
         }
 
         private void Application_NewDocument(Word.Document document)
         {
-            ApplyStylesPaneVisibility(document);
+            ApplyStylePaneVisibilityWithRetry(document, "NewDocument");
         }
 
         private void Application_WindowActivate(Word.Document document, Word.Window window)
         {
-            ApplyStylesPaneVisibility(document);
+            ApplyStylePaneVisibilityWithRetry(document, "WindowActivate");
         }
 
         internal void ToggleStylePaneForActiveDocument()
@@ -97,15 +116,21 @@ namespace CaseInfoSystem.WordAddIn
 
             bool nextState = !IsStylePaneEnabled(activeDocument);
             SetStylePaneEnabled(activeDocument, nextState);
-            ApplyStylesPaneVisibility(activeDocument);
+            ApplyStylePaneVisibilityWithRetry(activeDocument, "ToggleStylePaneForActiveDocument");
         }
 
-        private void ApplyStylesPaneVisibility(Word.Document document)
+        private void ApplyStylePaneVisibilityWithRetry(Word.Document document, string reason)
         {
-            ApplyStylesPaneVisibility(document, false, null);
+            if (ApplyStylesPaneVisibility(document, false, reason))
+            {
+                StopStylePaneActivationRetry(reason + " immediate success");
+                return;
+            }
+
+            ScheduleStylePaneActivationRetry(reason);
         }
 
-        private void ApplyStylesPaneVisibility(Word.Document document, bool throwOnFailure, string diagnosticStepName)
+        private bool ApplyStylesPaneVisibility(Word.Document document, bool throwOnFailure, string diagnosticStepName)
         {
             if (Application == null)
             {
@@ -114,12 +139,35 @@ namespace CaseInfoSystem.WordAddIn
                     WordAddInStartupLogWriter.Write(diagnosticStepName + " skipped because Application is null");
                 }
 
-                return;
+                return false;
             }
+
+            if (document == null)
+            {
+                if (!string.IsNullOrWhiteSpace(diagnosticStepName))
+                {
+                    WordAddInStartupLogWriter.Write(diagnosticStepName + " skipped because document is unavailable");
+                }
+
+                UpdateRibbonToggleState(null);
+                return false;
+            }
+
+            bool stylePaneEnabled = IsStylePaneEnabled(document);
 
             try
             {
-                Application.TaskPanes[Word.WdTaskPanes.wdTaskPaneFormatting].Visible = IsStylePaneEnabled(document);
+                Application.TaskPanes[Word.WdTaskPanes.wdTaskPaneFormatting].Visible = stylePaneEnabled;
+
+                if (!string.IsNullOrWhiteSpace(diagnosticStepName))
+                {
+                    WordAddInStartupLogWriter.Write(
+                        diagnosticStepName
+                        + " applied style pane visibility="
+                        + stylePaneEnabled
+                        + " document="
+                        + DescribeDocument(document));
+                }
             }
             catch (Exception ex)
             {
@@ -132,15 +180,20 @@ namespace CaseInfoSystem.WordAddIn
                 {
                     throw;
                 }
+
+                UpdateRibbonToggleState(document);
+                return false;
             }
 
             UpdateRibbonToggleState(document);
+            return true;
         }
 
         internal void RegisterRibbon(WordApplicationRibbon ribbon)
         {
             _wordApplicationRibbon = ribbon;
             UpdateRibbonToggleState(TryGetActiveDocument("RegisterRibbon initial state"));
+            ScheduleStylePaneActivationRetry("RegisterRibbon");
         }
 
         private void UpdateRibbonToggleState(Word.Document document)
@@ -182,8 +235,9 @@ namespace CaseInfoSystem.WordAddIn
                     return bool.TryParse(Convert.ToString(value), out parsedValue) && parsedValue;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                WordAddInStartupLogWriter.WriteException("IsStylePaneEnabled failure for " + DescribeDocument(document), ex);
             }
 
             return false;
@@ -290,8 +344,9 @@ namespace CaseInfoSystem.WordAddIn
                     return new IntPtr(activeWindow.Hwnd);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                WordAddInStartupLogWriter.WriteException("ResolveWordWindowHandle failure", ex);
             }
 
             return IntPtr.Zero;
@@ -312,6 +367,93 @@ namespace CaseInfoSystem.WordAddIn
             {
                 WordAddInStartupLogWriter.WriteException(diagnosticContext + " active document unavailable", ex);
                 return null;
+            }
+        }
+
+        private void ScheduleStylePaneActivationRetry(string reason)
+        {
+            if (_stylePaneActivationRetryTimer == null)
+            {
+                WordAddInStartupLogWriter.Write("style pane activation retry skipped because timer is unavailable");
+                return;
+            }
+
+            _stylePaneActivationRetryAttemptsRemaining = Math.Max(_stylePaneActivationRetryAttemptsRemaining, StylePaneActivationRetryMaxAttempts);
+            _stylePaneActivationRetryReason = reason ?? "unknown";
+
+            if (_stylePaneActivationRetryTimer.Enabled)
+            {
+                WordAddInStartupLogWriter.Write(
+                    "style pane activation retry refreshed"
+                    + " reason=" + _stylePaneActivationRetryReason
+                    + " attemptsRemaining=" + _stylePaneActivationRetryAttemptsRemaining);
+                return;
+            }
+
+            _stylePaneActivationRetryTimer.Start();
+            WordAddInStartupLogWriter.Write(
+                "style pane activation retry scheduled"
+                + " reason=" + _stylePaneActivationRetryReason
+                + " intervalMs=" + StylePaneActivationRetryIntervalMilliseconds
+                + " attemptsRemaining=" + _stylePaneActivationRetryAttemptsRemaining);
+        }
+
+        private void StopStylePaneActivationRetry(string reason)
+        {
+            if (_stylePaneActivationRetryTimer == null || !_stylePaneActivationRetryTimer.Enabled)
+            {
+                return;
+            }
+
+            _stylePaneActivationRetryTimer.Stop();
+            _stylePaneActivationRetryAttemptsRemaining = 0;
+            _stylePaneActivationRetryReason = null;
+
+            if (!string.IsNullOrWhiteSpace(reason))
+            {
+                WordAddInStartupLogWriter.Write("style pane activation retry stopped reason=" + reason);
+            }
+        }
+
+        private void StylePaneActivationRetryTimer_Tick(object sender, EventArgs e)
+        {
+            string reason = _stylePaneActivationRetryReason ?? "timer";
+            string diagnosticContext = reason + " retry attempt " + (StylePaneActivationRetryMaxAttempts - _stylePaneActivationRetryAttemptsRemaining + 1);
+            Word.Document activeDocument = TryGetActiveDocument(diagnosticContext);
+            if (ApplyStylesPaneVisibility(activeDocument, false, diagnosticContext))
+            {
+                StopStylePaneActivationRetry(diagnosticContext + " success");
+                return;
+            }
+
+            _stylePaneActivationRetryAttemptsRemaining--;
+            if (_stylePaneActivationRetryAttemptsRemaining > 0)
+            {
+                WordAddInStartupLogWriter.Write(
+                    diagnosticContext
+                    + " pending"
+                    + " attemptsRemaining=" + _stylePaneActivationRetryAttemptsRemaining);
+                return;
+            }
+
+            StopStylePaneActivationRetry(diagnosticContext + " exhausted");
+        }
+
+        private static string DescribeDocument(Word.Document document)
+        {
+            if (document == null)
+            {
+                return "<null>";
+            }
+
+            try
+            {
+                return string.IsNullOrWhiteSpace(document.FullName) ? document.Name : document.FullName;
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException("DescribeDocument failure", ex);
+                return "<unavailable>";
             }
         }
 

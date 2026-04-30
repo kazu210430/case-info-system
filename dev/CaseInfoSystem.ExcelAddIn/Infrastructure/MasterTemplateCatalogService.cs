@@ -12,7 +12,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     /// Master ブックの雛形一覧を読み取り、文書ボタン用のテンプレート定義を返すサービス。
     /// SYSTEM_ROOT を基準に Master ブックを開き、一覧シートをキャッシュして利用する。
     /// </summary>
-    internal sealed class MasterTemplateCatalogService
+    internal sealed class MasterTemplateCatalogService : IMasterTemplateCatalogReader
     {
         private const string MasterSheetName = "雛形一覧";
         private const string MasterSheetCodeName = "shMasterList";
@@ -50,7 +50,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             _cachedTemplates = null;
         }
 
-        internal bool TryGetTemplateByKey(Excel.Workbook caseWorkbook, string key, out MasterTemplateRecord record)
+        public bool TryGetTemplateByKey(Excel.Workbook caseWorkbook, string key, out MasterTemplateRecord record)
         {
             record = null;
             string normalizedKey = NormalizeDocButtonKey(key);

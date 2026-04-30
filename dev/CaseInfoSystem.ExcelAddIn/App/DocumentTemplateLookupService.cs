@@ -9,14 +9,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class DocumentTemplateLookupService : ICaseCacheDocumentTemplateReader, IDocumentTemplateLookupReader
     {
         private readonly TaskPaneSnapshotCacheService _taskPaneSnapshotCacheService;
-        private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
+        private readonly IMasterTemplateCatalogReader _masterTemplateCatalogReader;
 
         internal DocumentTemplateLookupService(
             TaskPaneSnapshotCacheService taskPaneSnapshotCacheService,
-            MasterTemplateCatalogService masterTemplateCatalogService)
+            IMasterTemplateCatalogReader masterTemplateCatalogReader)
         {
             _taskPaneSnapshotCacheService = taskPaneSnapshotCacheService ?? throw new ArgumentNullException(nameof(taskPaneSnapshotCacheService));
-            _masterTemplateCatalogService = masterTemplateCatalogService ?? throw new ArgumentNullException(nameof(masterTemplateCatalogService));
+            _masterTemplateCatalogReader = masterTemplateCatalogReader ?? throw new ArgumentNullException(nameof(masterTemplateCatalogReader));
         }
 
         public bool TryResolveFromCaseCache(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
@@ -38,7 +38,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            if (!_masterTemplateCatalogService.TryGetTemplateByKey(workbook, key, out MasterTemplateRecord masterRecord))
+            if (!_masterTemplateCatalogReader.TryGetTemplateByKey(workbook, key, out MasterTemplateRecord masterRecord))
             {
                 return false;
             }

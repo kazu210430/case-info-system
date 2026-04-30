@@ -364,9 +364,10 @@ namespace CaseInfoSystem.ExcelAddIn
             AccountingSetCommandService accountingSetCommandService,
             CaseListRegistrationService caseListRegistrationService)
         {
+            IMasterTemplateCatalogReader masterTemplateCatalogReader = masterTemplateCatalogService;
             var documentTemplateLookupService = new DocumentTemplateLookupService(
                 taskPaneSnapshotCacheService,
-                masterTemplateCatalogService);
+                masterTemplateCatalogReader);
             IDocumentTemplateLookupReader documentTemplateLookupReader = documentTemplateLookupService;
             ICaseCacheDocumentTemplateReader caseCacheDocumentTemplateReader = documentTemplateLookupService;
             var documentTemplateResolver = new DocumentTemplateResolver(

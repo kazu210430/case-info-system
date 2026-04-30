@@ -312,6 +312,7 @@
     <Compile Include="Infrastructure\KernelWorkbookResolverService.cs" />
     <Compile Include="Infrastructure\Logger.cs" />
     <Compile Include="Infrastructure\MasterTemplateCatalogService.cs" />
+    <Compile Include="Infrastructure\IMasterTemplateCatalogReader.cs" />
     <Compile Include="Infrastructure\MasterTemplateSheetReaderAdapter.cs" />
     <Compile Include="Infrastructure\MasterTemplateSheetReader.cs" />
     <Compile Include="Infrastructure\PathCompatibilityService.cs" />

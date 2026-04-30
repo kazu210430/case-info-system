@@ -325,8 +325,8 @@
     - window hwnd 非空
     - 有効期限 5 秒
   - 解除:
-    - 5 秒経過時
-    - または内部状態明示クリア時
+    - コード上、確認できる解除経路は 5 秒経過による期限切れ経路
+    - `ClearCaseWorkbookActivateProtection(...)` は private であり、外部から明示解除される公開経路は確認できない
 
 ### CASE pane / HOME pane との関係
 
@@ -390,12 +390,15 @@
 - ready-show は「即時 1 回で決め打ち」ではなく段階的 retry であること
 - visible CASE pane が既にある場合は refresh 不要として成功扱いにすること
 - CASE refresh 成功後に `BeginCaseWorkbookActivateProtection(...)` が入ること
-- retry の目的が「新しい snapshot を取りに行くこと」ではなく、「window / host / foreground 安定化」であること
+- retry は window / host / foreground 安定化の意図が強く見えること
+- ただし各 attempt は `TryRefreshTaskPane(...)` を通るため、通常の pane refresh / snapshot 取得経路から完全に切り離されたものとは断定しないこと
 
 ### 未確認のまま残すべき内容
 
 - `80ms` / `400ms` / `3 attempts` の値が業務仕様由来か経験則由来かはコードだけでは確定しない。
 - `ShouldIgnoreTaskPaneRefreshDuringProtection(...)` が active window 基準で広めに refresh を止める理由は、実装上は確認できるが、設計意図の正式記述は未確認。
+- retry / attempt coordinator の正式な設計意図は、コード断面から推測できる範囲を超えては確定しない。
+- protection の明示クリア経路が設計上存在するかどうかは未確認。
 - retry coordinator を現在の数値以外へ変えた場合の UX 期待値は docs 未記載。
 
 ## 4. 次作業への影響

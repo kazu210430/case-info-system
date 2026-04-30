@@ -21,6 +21,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
+        private readonly IMasterTemplateSheetReader _masterTemplateSheetReader;
         private readonly Logger _logger;
         private List<MasterTemplateRecord> _cachedTemplates;
         private bool _isCacheValid;
@@ -29,11 +30,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             Excel.Application application,
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
+            IMasterTemplateSheetReader masterTemplateSheetReader,
             Logger logger)
         {
             _application = application ?? throw new ArgumentNullException(nameof(application));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
+            _masterTemplateSheetReader = masterTemplateSheetReader ?? throw new ArgumentNullException(nameof(masterTemplateSheetReader));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -182,7 +185,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 throw new InvalidOperationException("雛形一覧シートが見つかりません。 book=" + _excelInteropService.GetWorkbookFullName(masterWorkbook));
             }
 
-            MasterTemplateSheetData masterSheetData = MasterTemplateSheetReader.Read(worksheet);
+            MasterTemplateSheetData masterSheetData = _masterTemplateSheetReader.Read(worksheet);
             var result = new List<MasterTemplateRecord>();
             if (masterSheetData.LastRow < 3)
             {

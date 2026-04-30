@@ -154,7 +154,8 @@ namespace CaseInfoSystem.ExcelAddIn
             var caseWorkbookLifecycleService = new CaseWorkbookLifecycleService(WorkbookRoleResolver, _application, ExcelInteropService, pathCompatibilityService, transientPaneSuppressionService, folderWindowService, _logger);
             var kernelCasePathService = new KernelCasePathService(pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(ExcelInteropService, _logger);
-            var masterTemplateCatalogService = new MasterTemplateCatalogService(_application, ExcelInteropService, pathCompatibilityService, _logger);
+            var masterTemplateSheetReader = new MasterTemplateSheetReaderAdapter();
+            var masterTemplateCatalogService = new MasterTemplateCatalogService(_application, ExcelInteropService, pathCompatibilityService, masterTemplateSheetReader, _logger);
             var wordTemplateContentControlInspectionService = new WordTemplateContentControlInspectionService();
             var wordTemplateRegistrationValidationService = new WordTemplateRegistrationValidationService(wordTemplateContentControlInspectionService, _logger);
             var documentOutputService = new DocumentOutputService(ExcelInteropService, pathCompatibilityService, _logger);

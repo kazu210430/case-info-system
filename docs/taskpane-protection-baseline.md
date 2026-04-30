@@ -88,7 +88,18 @@
 ## 10. ログで確認できた語句
 
 - ログ確認結果: ログ未確認
-- 補足: [taskpane-protection-observation-checklist.md](</C:/Users/kazu2/Documents/案件情報System/開発用/docs/taskpane-protection-observation-checklist.md>) に記載した語句群は、今回の Codex 作業では runtime ログ上で照合していません。
+- 補足: [taskpane-protection-observation-checklist.md](</C:/Users/kazu2/Documents/案件情報System/開発用/docs/taskpane-protection-observation-checklist.md>) の `ログ棚卸し` には、現行コードで確認できた語句、出力元ファイル / 処理、観測できる内容、baseline 記録時の使い方を整理しています。
+- 次回実機観測で優先して照合する語句:
+  - `TaskPane wait-ready start.`
+  - `TaskPane wait-ready retry scheduled.`
+  - `TaskPane timer fallback scheduled.`
+  - `TaskPane wait-ready early-complete because visible CASE pane is already shown.`
+  - `Excel WorkbookActivate fired.`
+  - `Excel WindowActivate fired.`
+  - `source=WorkbookActivateProtection action=ignore event=WorkbookActivate`
+  - `source=WindowActivateProtection action=ignore event=WindowActivate`
+  - `ShowCreatedCase task pane ready-show requested.`
+  - `NewCaseDefault timing. segment=taskPaneReadyWaitToRefreshCompleted`
 
 ## 11. 未実施項目
 
@@ -106,6 +117,7 @@
 - protection 5 秒失効の正式な設計根拠
 - fallback timer が必要になる代表ケースの固定的な再現条件
 - `WindowActivate` 側を単独で追いやすいログの有無
+- workbook 解決失敗後に active CASE context fallback へ入ったことを直接示す専用ログの有無
 
 ## 13. 今後コード修正時に比較すべき観点
 

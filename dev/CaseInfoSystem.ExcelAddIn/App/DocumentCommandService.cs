@@ -22,6 +22,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         void RequestRefresh(string reason);
     }
 
+    internal interface IKernelSheetPaneRefreshBridge
+    {
+        bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason);
+    }
+
     internal sealed class ThisAddInScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge
     {
         private readonly ThisAddIn _addIn;
@@ -67,6 +72,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
     }
 
+    internal sealed class ThisAddInKernelSheetPaneRefreshBridge : IKernelSheetPaneRefreshBridge
+    {
+        private readonly ThisAddIn _addIn;
+
+        internal ThisAddInKernelSheetPaneRefreshBridge(ThisAddIn addIn)
+        {
+            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+        }
+
+        public bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason)
+        {
+            return _addIn.ShowKernelSheetAndRefreshPane(sheetCodeName, reason);
+        }
+    }
+
     internal sealed class DocumentCommandService
     {
         private const string DocumentActionKind = "doc";
@@ -82,7 +102,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly IScreenUpdatingExecutionBridge _screenUpdatingExecutionBridge;
         private readonly ITaskPaneRefreshSuppressionBridge _taskPaneRefreshSuppressionBridge;
         private readonly IActiveTaskPaneRefreshBridge _activeTaskPaneRefreshBridge;
-        private readonly ThisAddIn _addIn;
+        private readonly IKernelSheetPaneRefreshBridge _kernelSheetPaneRefreshBridge;
         private readonly Logger _logger;
 
         internal DocumentCommandService(
@@ -98,11 +118,40 @@ namespace CaseInfoSystem.ExcelAddIn.App
             CaseContextFactory caseContextFactory,
             ExcelInteropService excelInteropService,
             Logger logger)
+            : this(
+                screenUpdatingExecutionBridge,
+                taskPaneRefreshSuppressionBridge,
+                activeTaskPaneRefreshBridge,
+                new ThisAddInKernelSheetPaneRefreshBridge(addIn),
+                documentExecutionModeService,
+                documentExecutionEligibilityService,
+                documentCreateService,
+                accountingSetCommandService,
+                caseListRegistrationService,
+                caseContextFactory,
+                excelInteropService,
+                logger)
         {
-            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+        }
+
+        internal DocumentCommandService(
+            IScreenUpdatingExecutionBridge screenUpdatingExecutionBridge,
+            ITaskPaneRefreshSuppressionBridge taskPaneRefreshSuppressionBridge,
+            IActiveTaskPaneRefreshBridge activeTaskPaneRefreshBridge,
+            IKernelSheetPaneRefreshBridge kernelSheetPaneRefreshBridge,
+            DocumentExecutionModeService documentExecutionModeService,
+            DocumentExecutionEligibilityService documentExecutionEligibilityService,
+            DocumentCreateService documentCreateService,
+            AccountingSetCommandService accountingSetCommandService,
+            CaseListRegistrationService caseListRegistrationService,
+            CaseContextFactory caseContextFactory,
+            ExcelInteropService excelInteropService,
+            Logger logger)
+        {
             _screenUpdatingExecutionBridge = screenUpdatingExecutionBridge ?? throw new ArgumentNullException(nameof(screenUpdatingExecutionBridge));
             _taskPaneRefreshSuppressionBridge = taskPaneRefreshSuppressionBridge ?? throw new ArgumentNullException(nameof(taskPaneRefreshSuppressionBridge));
             _activeTaskPaneRefreshBridge = activeTaskPaneRefreshBridge ?? throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
+            _kernelSheetPaneRefreshBridge = kernelSheetPaneRefreshBridge ?? throw new ArgumentNullException(nameof(kernelSheetPaneRefreshBridge));
             _documentExecutionModeService = documentExecutionModeService ?? throw new ArgumentNullException(nameof(documentExecutionModeService));
             _documentExecutionEligibilityService = documentExecutionEligibilityService ?? throw new ArgumentNullException(nameof(documentExecutionEligibilityService));
             _documentCreateService = documentCreateService ?? throw new ArgumentNullException(nameof(documentCreateService));
@@ -185,7 +234,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 string kernelTransitionSheetCodeName = "shCaseList";
                 string kernelTransitionReason = "DocumentCommandService.Execute";
-                bool paneRefreshed = _addIn.ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
+                bool paneRefreshed = _kernelSheetPaneRefreshBridge.ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
                 if (!paneRefreshed)
                 {
                     _logger.Info("Kernel case list pane refresh by unified add-in was not available.");

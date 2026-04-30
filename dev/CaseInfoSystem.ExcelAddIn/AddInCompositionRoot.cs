@@ -407,11 +407,12 @@ namespace CaseInfoSystem.ExcelAddIn
             var screenUpdatingExecutionBridge = new ThisAddInScreenUpdatingExecutionBridge(_addIn);
             var taskPaneRefreshSuppressionBridge = new ThisAddInTaskPaneRefreshSuppressionBridge(_addIn);
             var activeTaskPaneRefreshBridge = new ThisAddInActiveTaskPaneRefreshBridge(_addIn);
+            var kernelSheetPaneRefreshBridge = new ThisAddInKernelSheetPaneRefreshBridge(_addIn);
             var documentCommandService = new DocumentCommandService(
-                _addIn,
                 screenUpdatingExecutionBridge,
                 taskPaneRefreshSuppressionBridge,
                 activeTaskPaneRefreshBridge,
+                kernelSheetPaneRefreshBridge,
                 documentExecutionModeService,
                 documentExecutionEligibilityService,
                 documentCreateService,

@@ -600,7 +600,9 @@ namespace CaseInfoSystem.ExcelAddIn
                 kernelCaseInteractionState,
                 userErrorService,
                 _logger);
+            var windowActivatePanePredicateBridge = new ThisAddInWindowActivatePanePredicateBridge(_addIn);
             var windowActivatePaneHandlingService = new WindowActivatePaneHandlingService(
+                windowActivatePanePredicateBridge,
                 _handleExternalWorkbookDetected,
                 _shouldSuppressCasePaneRefresh,
                 _refreshTaskPane);

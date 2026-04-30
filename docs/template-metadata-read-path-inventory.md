@@ -138,6 +138,29 @@
   - `TASKPANE_DOC_NAME_OVERRIDE_ENABLED`
   - `TASKPANE_DOC_NAME_OVERRIDE`
 
+#### 4.4.1 `DocumentNamePromptService` lookup inventory
+
+| 項目 | 現在の事実 |
+| --- | --- |
+| サービス名 | `DocumentNamePromptService` |
+| 現在の責務 | 文書名入力 prompt を開く前に、CASE cache から初期値候補を引き、確定値を `DocumentNameOverrideScope` に渡す補助 UI サービス |
+| 入力 | `Excel.Workbook`、押下された文書 `key` |
+| 出力 | `bool`、`DocumentNameOverrideScope`、一時 DocProperty `TASKPANE_DOC_NAME_OVERRIDE_ENABLED` / `TASKPANE_DOC_NAME_OVERRIDE` |
+| 直接依存 | `ExcelInteropService`、`ICaseCacheDocumentTemplateReader`、`Logger` |
+| 参照 metadata | lookup 入力として `key`、lookup 成功時の `DocumentTemplateLookupResult.DocumentName` |
+| 間接的に参照成立に効く metadata | `TaskPaneSnapshotCacheService` 側では `TaskPaneDocDefinition.TemplateFileName` が空だと lookup 不成立になるため、prompt 側は `TemplateFileName` を直接使わないが、`file` 情報の有無に間接依存する |
+| 参照しない情報 | `TemplatePath`、master catalog、実体テンプレートファイル存在、実行可否 |
+| 情報源 | 第一経路は CASE `TASKPANE_SNAPSHOT_CACHE_*`。CASE cache 空または古い場合は `TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` により Base `TASKPANE_BASE_*` が CASE cache へ昇格した後、その CASE cache を読む |
+| lookup service 使用状況 | `DocumentNamePromptService` 自身は `ICaseCacheDocumentTemplateReader` 経由。実体は `DocumentTemplateLookupService.TryResolveFromCaseCache` が `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` へ委譲する |
+| cache-only policy の実装上の意味 | `TryResolveFromCaseCache` が失敗した時点で空文字を返し、prompt 初期値を空欄のまま開く。`MasterTemplateCatalogService` への fallback 呼び出しは行わない |
+| master fallback を追加しない理由 | `docs/flows.md` が、文書名入力 UI は表示中 Pane と整合する CASE cache 表示状態に従い、master fallback は `DocumentTemplateResolver` 側の実行時解決責務と定義しているため |
+| `DocumentTemplateResolver` との違い | `DocumentNamePromptService` は prompt 初期値だけを扱う補助 UI。`DocumentTemplateResolver` は `IDocumentTemplateLookupReader` 経由で CASE cache 優先・master fallback ありの metadata 解決を行い、さらに `TemplatePath` を導出する実行側サービス |
+| `TaskPaneSnapshotCacheService` との関係 | prompt 側の cache-only lookup は最終的に `TaskPaneSnapshotCacheService` が返す `DocumentTemplateLookupResult` に依存する。Base promote、snapshot compatibility 判定、CASE cache clear の影響を受ける |
+| 既存テスト | `DocumentTemplateLookupServiceTests` が、CASE cache hit 時の prompt 初期値反映、CASE cache miss 時の prompt 空欄維持、resolver 側 master fallback との責務分離、`ICaseCacheDocumentTemplateReader` の no-fallback を担保している |
+| 今後の整理余地 | 既に consumer 依存は `ICaseCacheDocumentTemplateReader` に分離済み。今後整理するなら、`DocumentNamePromptService` の constructor 契約を変えず、cache-only lookup 実装の内部委譲や test coverage 拡張を小単位で進める余地がある |
+| 変更リスク | prompt 初期値の参照元を master 側へ広げると、表示中 Pane と prompt のズレ、開いている CASE が後から登録された雛形へ勝手に追随する挙動変化、`docs/flows.md` と矛盾するリスクがある |
+| 今は触らない理由 | cache-only policy と prompt 挙動は docs とテストで固定点があり、今回の目的は調査と記録のみであるため |
+
 ### 4.5 `TaskPaneSnapshotCacheService` / `TaskPaneSnapshotBuilderService`
 
 #### `TaskPaneSnapshotCacheService`
@@ -207,6 +230,7 @@
 2. `DocumentTemplateLookupService`
    - `key -> DocumentName / TemplateFileName / ResolutionSource` の read-only 窓口を固定する
    - prompt cache-only と resolver master fallback の両 policy は保持する
+   - `DocumentNamePromptService` 側はすでに `ICaseCacheDocumentTemplateReader` 依存なので、将来差し替える場合も consumer 契約は固定したまま内部委譲だけを動かすのが最小単位候補
 3. Base / CASE snapshot storage の read helper
    - `TaskPaneSnapshotCacheService` と `CaseTemplateSnapshotService` の読取重複を先に整理する
 4. その後で限定的な consumer 差し替え

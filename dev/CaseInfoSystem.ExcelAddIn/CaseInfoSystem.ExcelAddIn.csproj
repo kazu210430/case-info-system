@@ -325,6 +325,7 @@
     <Compile Include="Infrastructure\UserErrorService.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotParser.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" />
+    <Compile Include="Infrastructure\TaskPaneSnapshotChunkStorageHelper.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotCacheService.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotBuilderService.cs" />
     <Compile Include="Infrastructure\TemplateDefinitionRepository.cs" />

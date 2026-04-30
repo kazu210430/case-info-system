@@ -136,6 +136,22 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             Assert.Equal("5", initializerContext.GetProperty("TASKPANE_MASTER_VERSION"));
         }
 
+        [Fact]
+        public void PromoteEmbeddedSnapshotToCaseCache_WhenEmbeddedSnapshotIsIncompatible_ClearsBaseAndCaseSnapshotChunks()
+        {
+            using var context = TestContext.Create();
+            string existingCaseSnapshot = CreateCompatibleSnapshotText("01", "CASE既存", "01_case.docx");
+            context.SetCaseSnapshot(existingCaseSnapshot);
+            context.SetBaseSnapshot("META\t1\tlegacy");
+
+            context.CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache(context.Workbook);
+
+            Assert.Equal("0", context.GetProperty("TASKPANE_BASE_SNAPSHOT_COUNT"));
+            Assert.Equal(string.Empty, context.GetProperty("TASKPANE_BASE_SNAPSHOT_01"));
+            Assert.Equal("0", context.GetProperty("TASKPANE_SNAPSHOT_CACHE_COUNT"));
+            Assert.Equal(string.Empty, context.GetProperty("TASKPANE_SNAPSHOT_CACHE_01"));
+        }
+
         private static string CreateCompatibleSnapshotText(string key, string caption, string templateFileName)
         {
             using var scenario = SnapshotBuilderScenario.Create(

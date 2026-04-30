@@ -234,38 +234,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private void SaveTaskPaneSnapshotCache(Excel.Workbook workbook, string snapshotText)
         {
-            if (workbook == null)
-            {
-                return;
-            }
-
-            string previousCountText = _excelInteropService.TryGetDocumentProperty(workbook, TaskPaneCacheCountProp);
-            int previousCount = int.TryParse(previousCountText, out int parsedCount) ? parsedCount : 0;
-
-            if (string.IsNullOrEmpty(snapshotText))
-            {
-                _excelInteropService.SetDocumentProperty(workbook, TaskPaneCacheCountProp, "0");
-                return;
-            }
-
-            const int taskPaneCacheChunkSize = 240;
-            int partCount = ((snapshotText.Length - 1) / taskPaneCacheChunkSize) + 1;
-            _excelInteropService.SetDocumentProperty(workbook, TaskPaneCacheCountProp, partCount.ToString());
-
-            for (int partIndex = 1; partIndex <= partCount; partIndex++)
-            {
-                int startIndex = (partIndex - 1) * taskPaneCacheChunkSize;
-                int length = Math.Min(taskPaneCacheChunkSize, snapshotText.Length - startIndex);
-                _excelInteropService.SetDocumentProperty(
-                    workbook,
-                    TaskPaneCachePartPropPrefix + partIndex.ToString("00"),
-                    snapshotText.Substring(startIndex, length));
-            }
-
-            for (int partIndex = partCount + 1; partIndex <= previousCount; partIndex++)
-            {
-                _excelInteropService.SetDocumentProperty(workbook, TaskPaneCachePartPropPrefix + partIndex.ToString("00"), string.Empty);
-            }
+            TaskPaneSnapshotChunkStorageHelper.SaveSnapshot(
+                _excelInteropService,
+                workbook,
+                TaskPaneCacheCountProp,
+                TaskPaneCachePartPropPrefix,
+                snapshotText);
         }
 
         private static string NormalizeDocButtonKey(string key)
@@ -315,17 +289,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         /// <summary>
         private void ClearSnapshotParts(Excel.Workbook workbook, string countPropName, string partPropPrefix)
         {
-            if (workbook == null)
-            {
-                return;
-            }
-
-            int previousCount = ReadPositiveIntProperty(workbook, countPropName);
-            _excelInteropService.SetDocumentProperty(workbook, countPropName, "0");
-            for (int partIndex = 1; partIndex <= previousCount; partIndex++)
-            {
-                _excelInteropService.SetDocumentProperty(workbook, partPropPrefix + partIndex.ToString("00"), string.Empty);
-            }
+            TaskPaneSnapshotChunkStorageHelper.ClearSnapshot(_excelInteropService, workbook, countPropName, partPropPrefix);
         }
 
         private static void ReleaseComObject(object comObject)

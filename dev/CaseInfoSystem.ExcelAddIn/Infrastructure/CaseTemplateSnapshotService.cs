@@ -87,12 +87,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         /// <summary>
         private void ClearSnapshot(Excel.Workbook workbook, string countPropName, string partPropPrefix)
         {
-            int previousCount = ReadPositiveIntProperty(workbook, countPropName);
-            _excelInteropService.SetDocumentProperty(workbook, countPropName, "0");
-            for (int partIndex = 1; partIndex <= previousCount; partIndex++)
-            {
-                _excelInteropService.SetDocumentProperty(workbook, partPropPrefix + partIndex.ToString("00"), string.Empty);
-            }
+            TaskPaneSnapshotChunkStorageHelper.ClearSnapshot(_excelInteropService, workbook, countPropName, partPropPrefix);
         }
     }
 }

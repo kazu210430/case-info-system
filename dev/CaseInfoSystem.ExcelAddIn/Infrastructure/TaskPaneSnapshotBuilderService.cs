@@ -52,8 +52,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private const int MasterListFirstDataRow = 3;
 
-		private const int TaskPaneCacheChunkSize = 240;
-
 		private const int CaseListButtonBackColorUnregistered = 14803448;
 
 		private const int CaseListButtonBackColorRegistered = 12566463;
@@ -499,36 +497,17 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private void SaveCaseSnapshotCache (Workbook workbook, string snapshotText)
 		{
-			string s = _excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT");
-			int result;
-			int num = (int.TryParse (s, out result) ? result : 0);
-			if (string.IsNullOrEmpty (snapshotText)) {
-				_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT", "0");
-				return;
-			}
-			int num2 = (snapshotText.Length - 1) / 240 + 1;
-			_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT", num2.ToString ());
-			for (int i = 1; i <= num2; i++) {
-				int num3 = (i - 1) * 240;
-				int length = Math.Min (240, snapshotText.Length - num3);
-				_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_" + i.ToString ("00"), snapshotText.Substring (num3, length));
-			}
-			for (int j = num2 + 1; j <= num; j++) {
-				_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_" + j.ToString ("00"), string.Empty);
-			}
+			TaskPaneSnapshotChunkStorageHelper.SaveSnapshot (
+				_excelInteropService,
+				workbook,
+				TaskPaneCacheCountProp,
+				TaskPaneCachePartPropPrefix,
+				snapshotText);
 		}
 
 		private void ClearSnapshotCache (Workbook workbook, string countPropName, string partPropPrefix)
 		{
-			if (workbook != null) {
-				string s = _excelInteropService.TryGetDocumentProperty (workbook, countPropName);
-				int result;
-				int num = (int.TryParse (s, out result) ? result : 0);
-				_excelInteropService.SetDocumentProperty (workbook, countPropName, "0");
-				for (int i = 1; i <= num; i++) {
-					_excelInteropService.SetDocumentProperty (workbook, partPropPrefix + i.ToString ("00"), string.Empty);
-				}
-			}
+			TaskPaneSnapshotChunkStorageHelper.ClearSnapshot (_excelInteropService, workbook, countPropName, partPropPrefix);
 		}
 
 		private string ApplyDynamicSpecialButtonOverrides (string snapshotText, Workbook workbook)

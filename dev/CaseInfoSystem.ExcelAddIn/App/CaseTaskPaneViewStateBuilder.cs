@@ -146,14 +146,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return CreateMessageState(snapshot.ErrorMessage);
             }
 
-            List<CaseTaskPaneTabPageViewState> tabPages = BuildTabPages(snapshot);
+            IReadOnlyList<TaskPaneActionDefinition> specialButtons = snapshot.SpecialButtons;
+            IReadOnlyList<TaskPaneTabDefinition> tabs = snapshot.Tabs;
+            IReadOnlyList<TaskPaneDocDefinition> documents = snapshot.DocButtons;
+
+            List<CaseTaskPaneTabPageViewState> tabPages = BuildTabPages(tabs, documents);
             if (tabPages.Count == 0)
             {
                 return CreateMessageState("No available document buttons.");
             }
 
             string resolvedTabName = ResolveSelectedTabName(tabPages, selectedTabName);
-            return new CaseTaskPaneViewState(string.Empty, resolvedTabName, BuildSpecialButtons(snapshot), tabPages);
+            return new CaseTaskPaneViewState(string.Empty, resolvedTabName, BuildSpecialButtons(specialButtons), tabPages);
         }
 
         internal CaseTaskPaneViewState BuildWorkbookNotFoundState()
@@ -171,10 +175,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new CaseTaskPaneViewState(message ?? string.Empty, string.Empty, Array.Empty<CaseTaskPaneActionViewState>(), Array.Empty<CaseTaskPaneTabPageViewState>());
         }
 
-        private static List<CaseTaskPaneActionViewState> BuildSpecialButtons(TaskPaneSnapshot snapshot)
+        private static List<CaseTaskPaneActionViewState> BuildSpecialButtons(IReadOnlyList<TaskPaneActionDefinition> specialButtons)
         {
             var buttons = new List<CaseTaskPaneActionViewState>();
-            foreach (TaskPaneActionDefinition action in snapshot.SpecialButtons)
+            foreach (TaskPaneActionDefinition action in specialButtons ?? Array.Empty<TaskPaneActionDefinition>())
             {
                 if (action == null)
                 {
@@ -193,9 +197,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return buttons;
         }
 
-        private static List<CaseTaskPaneTabPageViewState> BuildTabPages(TaskPaneSnapshot snapshot)
+        private static List<CaseTaskPaneTabPageViewState> BuildTabPages(IReadOnlyList<TaskPaneTabDefinition> tabs, IReadOnlyList<TaskPaneDocDefinition> documents)
         {
-            var orderedTabs = snapshot.Tabs.Where(tab => tab != null).OrderBy(tab => tab.Order).ToList();
+            IEnumerable<TaskPaneTabDefinition> sourceTabs = tabs ?? Array.Empty<TaskPaneTabDefinition>();
+            var orderedTabs = sourceTabs.Where(tab => tab != null).OrderBy(tab => tab.Order).ToList();
             var tabPages = new List<CaseTaskPaneTabPageViewState>(orderedTabs.Count);
             foreach (TaskPaneTabDefinition tab in orderedTabs)
             {
@@ -205,16 +210,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     TabName = tab.TabName ?? string.Empty,
                     BackColor = tab.BackColor
                 };
-                page.SetDocumentButtons(BuildDocumentButtonsForTab(snapshot.DocButtons, page.TabName));
+                page.SetDocumentButtons(BuildDocumentButtonsForTab(documents, page.TabName));
                 tabPages.Add(page);
             }
 
             return tabPages;
         }
 
-        private static IEnumerable<CaseTaskPaneActionViewState> BuildDocumentButtonsForTab(IEnumerable<TaskPaneDocDefinition> documents, string tabName)
+        private static IEnumerable<CaseTaskPaneActionViewState> BuildDocumentButtonsForTab(IReadOnlyList<TaskPaneDocDefinition> documents, string tabName)
         {
-            IEnumerable<TaskPaneDocDefinition> source = documents ?? Enumerable.Empty<TaskPaneDocDefinition>();
+            IEnumerable<TaskPaneDocDefinition> source = documents ?? Array.Empty<TaskPaneDocDefinition>();
             // Preserve the previous UI-side tab filtering and ordering rules in the app layer.
             IEnumerable<TaskPaneDocDefinition> filteredDocuments = IsAllTab(tabName)
                 ? source.Where(document => document != null).OrderBy(document => ParseDocOrderKey(document.Key)).ThenBy(document => document.Key ?? string.Empty, StringComparer.Ordinal)

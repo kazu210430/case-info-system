@@ -1,5 +1,7 @@
 # read-only API adoption status
 
+- 関連 checkpoint: `docs/readonly-snapshot-refactor-checkpoint.md`
+
 ## 1. 現在の状態（事実のみ）
 
 ### read-only API 導入済み箇所

@@ -7,7 +7,7 @@
 1. 巨大サービスの責務集中の整理
 2. App 層からの `ThisAddIn` / `Globals.ThisAddIn` 直接依存の整理
 
-今回の追記では、TaskPane suppression 周辺の未確認事項を追加調査し、bridge 化やサービス分割の危険箇所をもう一段明確化します。
+今回の更新では、現行 `main` に取り込み済みの bridge 化を完了済みとして反映し、未着手・保留の領域と別途調査対象を切り分けます。
 
 ## 参照した前提 docs
 
@@ -22,6 +22,7 @@
 - `dev/CaseInfoSystem.ExcelAddIn/App/KernelWorkbookService.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneManager.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/CaseWorkbookLifecycleService.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/AccountingSetCreateService.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/DocumentCreateService.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/KernelCasePresentationService.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneRefreshOrchestrationService.cs`
@@ -207,35 +208,109 @@
 
 `AddInCompositionRoot` と `DocumentCommandService` では、すでに次の bridge パターンが存在する。
 
+- `ThisAddInAccountingSetReadyShowBridge`
+- `ThisAddInDocumentCreateHostBridge`
 - `ThisAddInScreenUpdatingExecutionBridge`
 - `ThisAddInTaskPaneRefreshSuppressionBridge`
 - `ThisAddInActiveTaskPaneRefreshBridge`
+- `ThisAddInKernelSheetPaneRefreshBridge`
+- `ThisAddInWindowActivatePanePredicateBridge`
 
 このため、App 層から `ThisAddIn` の機能へ寄せる既存方式自体は存在する。
 
-## 2-2. 依存箇所一覧
+## 2-2. 現行 `main` で完了済みの bridge 化
+
+### `AccountingSetCreateService`
+
+- 追加済み bridge
+  - `IAccountingSetReadyShowBridge`
+  - `ThisAddInAccountingSetReadyShowBridge`
+- 元の直接依存
+  - `ShowWorkbookTaskPaneWhenReady(...)`
+- 現在の呼び出し先
+  - `_accountingSetReadyShowBridge.ShowWorkbookTaskPaneWhenReady(...)`
+- 現行コードで確認できること
+  - bridge は `ThisAddIn.ShowWorkbookTaskPaneWhenReady(...)` への 1:1 委譲である。
+  - `AddInCompositionRoot` で bridge を生成して `AccountingSetCreateService` に注入している。
+  - この bridge 化は現行 `main` に取り込み済みである。
+
+### `DocumentCreateService`
+
+- 追加済み bridge
+  - `IDocumentCreateHostBridge`
+  - `ThisAddInDocumentCreateHostBridge`
+- 元の直接依存
+  - Excel `Application`
+  - `StatusBar`
+- 現在の呼び出し先
+  - `_documentCreateHostBridge.GetApplication()`
+  - `_documentCreateHostBridge.SetStatusBar(...)`
+  - `_documentCreateHostBridge.ClearStatusBar()`
+- 現行コードで確認できること
+  - `Application` / `StatusBar` 依存は bridge 経由になっている。
+  - bridge は `ThisAddIn.Application` と `StatusBar` 更新を薄く包む構成である。
+  - 文書生成フロー自体は `DocumentCreateService` の既存責務から変わっていない。
+
+### `DocumentCommandService`
+
+- 追加済み bridge
+  - `IScreenUpdatingExecutionBridge`
+  - `ITaskPaneRefreshSuppressionBridge`
+  - `IActiveTaskPaneRefreshBridge`
+  - `IKernelSheetPaneRefreshBridge`
+  - 各 `ThisAddIn...Bridge`
+- 元の直接依存
+  - `RunWithScreenUpdatingSuspended(...)`
+  - `SuppressTaskPaneRefresh(...)`
+  - `RefreshActiveTaskPane(...)`
+  - `ShowKernelSheetAndRefreshPane(...)`
+- 現在の呼び出し先
+  - `_screenUpdatingExecutionBridge`
+  - `_taskPaneRefreshSuppressionBridge`
+  - `_activeTaskPaneRefreshBridge`
+  - `_kernelSheetPaneRefreshBridge`
+- 現行コードで確認できること
+  - `AddInCompositionRoot` で各 bridge を生成して `DocumentCommandService` に注入している。
+  - 各 bridge は `ThisAddIn` 側メソッドへの 1:1 委譲である。
+  - `Execute(...)` の実行順序を変更したことはコード上から確認できない。
+
+### `WindowActivatePaneHandlingService`
+
+- 追加済み bridge
+  - `IWindowActivatePanePredicateBridge`
+  - `ThisAddInWindowActivatePanePredicateBridge`
+- 元の直接依存
+  - `ShouldIgnoreWindowActivateDuringCaseProtection(...)`
+- 現在の呼び出し先
+  - `_windowActivatePanePredicateBridge.ShouldIgnoreDuringCaseProtection(...)`
+- 現行コードで確認できること
+  - WindowActivate protection 判定は bridge 経由に置き換わっている。
+  - `Handle(...)` の分岐順は `protection 判定 -> external workbook 検出 -> suppression 判定 -> refresh` のまま維持されている。
+  - この bridge 化は現行 `main` に取り込み済みである。
+
+## 2-3. 残っている依存箇所一覧
 
 | ファイル | 箇所 | 何のために触れているか | 既存 bridge へ寄せやすさ | 主な注意点 |
 | --- | --- | --- | --- | --- |
-| `DocumentCreateService.cs` | Excel `Application` / `StatusBar` 参照 | 文書作成中の UI 抑止と復元 | 高い | `ScreenUpdating` 復元漏れを起こさないこと |
 | `KernelCasePresentationService.cs` | `SuppressUpcomingCasePaneActivationRefresh` / `ShowWorkbookTaskPaneWhenReady` 呼出 | CASE 表示直後の suppression と ready-show 予約 | 中程度 | suppression と ready-show の順序を壊さないこと |
 | `TaskPaneRefreshOrchestrationService.cs` | `Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection` / `HasVisibleCasePaneForWorkbookWindow` | protection 判定と visible pane 早期完了判定 | 中程度 | retry 系の最上流条件なので位置ずれが危険 |
-| `WindowActivatePaneHandlingService.cs` | `Globals.ThisAddIn.ShouldIgnoreWindowActivateDuringCaseProtection` | WindowActivate protection 判定 | 比較的高い | 頻発イベントなので timing ずれが危険 |
+| `TaskPaneRefreshCoordinator.cs` | `Globals.ThisAddIn.BeginCaseWorkbookActivateProtection` | CASE refresh 成功後の protection 開始 | 低い | protection 3入口との組み合わせを崩さないこと |
+| `WorkbookLifecycleCoordinator.cs` | `Globals.ThisAddIn.ShouldIgnoreWorkbookActivateDuringCaseProtection` | WorkbookActivate 再入抑止 | 中程度 | activate protection 判定の入口なので timing ずれが危険 |
 | `TaskPaneManager.cs` | `TaskPaneHost` 生成時の `ThisAddIn` 注入 / `RequestTaskPaneDisplayForTargetWindow` | host の VSTO 境界と post-action refresh 再表示経路 | 低い | host 管理と表示調停が密結合 |
 
-## 2-3. AddInCompositionRoot から見える境界
+## 2-4. AddInCompositionRoot から見える境界
 
 ### 確認できたこと
 
-- `DocumentCommandService` は bridge 経由の境界をすでに持つ。
+- `AccountingSetCreateService`、`DocumentCreateService`、`DocumentCommandService`、`WindowActivatePaneHandlingService` は bridge 経由の境界を現行 `main` に持つ。
 - `TaskPaneManager` には `ThisAddIn` 本体を直接渡している。
 - `WindowActivatePaneHandlingService` と `TaskPaneRefreshOrchestrationService` には delegate 群を注入しているが、実処理の一部では依然 `Globals.ThisAddIn` に戻る。
 - `TaskPaneDisplayRetryCoordinator` と `WorkbookTaskPaneDisplayAttemptCoordinator` は `AddInTaskPaneCompositionFactory` で生成され、`TaskPaneRefreshOrchestrationService` に注入される。
 
 ### 整理上の示唆
 
-- `DocumentCreateService` の小さな bridge 化は、既存パターンに最も寄せやすい。
-- `WindowActivatePaneHandlingService` と `TaskPaneRefreshOrchestrationService` は、constructor まわりを大きく崩さず predicate bridge を追加しやすい。
+- `AccountingSetCreateService`、`DocumentCreateService`、`DocumentCommandService`、`WindowActivatePaneHandlingService` は未着手候補ではなく、完了済みとして扱うべきである。
+- `KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` は protection / ready-show / suppression の危険領域として別途調査対象に残る。
 - `TaskPaneManager` と `TaskPaneHost` は `ThisAddIn` による VSTO `CustomTaskPane` 作成境界を持つため、ここは単純な `Globals.ThisAddIn` 排除より一段重い。
 
 ## 3. TaskPane suppression 周辺の追加確認
@@ -401,31 +476,41 @@
 - protection の明示クリア経路が設計上存在するかどうかは未確認。
 - retry coordinator を現在の数値以外へ変えた場合の UX 期待値は docs 未記載。
 
-## 4. 次作業への影響
+## 4. 現時点の整理
 
-### 危険度更新
+### bridge 化済みとして扱う対象
 
-| 実装候補 | 危険度 | 更新理由 |
-| --- | --- | --- |
-| `DocumentCreateService` の小さな bridge 化 | 低 | TaskPane suppression / ready-show 系と直接つながっておらず、既存 bridge パターンもある |
-| `WindowActivatePaneHandlingService` の predicate bridge 化 | 中 | 呼出箇所は 1 箇所だが、頻発イベントで timing ずれが出ると refresh 暴発につながる |
-| `TaskPaneRefreshOrchestrationService` の predicate bridge 化 | 中高 | protection 判定が retry 系の最上流にあり、ready-show / fallback timer の両方に影響する |
-| `KernelCasePresentationService` の ready-show bridge 化 | 中高 | suppression 設定と ready-show 要求の順序が現行 flicker 抑止の中核にある |
-| `TaskPaneManager` 分割 | 高 | `TaskPaneHost` の VSTO 境界、host metadata、visible pane reader、post-action refresh が密結合している |
-| `KernelWorkbookService` 分割 | 高 | UI 制御、window 制御、HOME lifecycle、Kernel workbook access が同居し、`docs/ui-policy.md` 違反を起こしやすい |
+- `AccountingSetCreateService`
+- `DocumentCreateService`
+- `DocumentCommandService`
+- `WindowActivatePaneHandlingService`
 
-### 着手順の再整理
+上記 4 本は、現行 `main` では bridge 実装と `AddInCompositionRoot` の配線を確認できるため、未着手候補ではなく完了済みとして扱う。
 
-1. `DocumentCreateService` の小さな bridge 化
-2. `WindowActivatePaneHandlingService` の predicate bridge 化
-3. `TaskPaneRefreshOrchestrationService` の predicate bridge 化
-4. `KernelCasePresentationService` の ready-show bridge 化
-5. `KernelWorkbookService` / `TaskPaneManager` の分割検討
+### 未着手・保留として残す対象
+
+- `KernelCasePresentationService`
+- `TaskPaneRefreshOrchestrationService`
+- `TaskPaneRefreshCoordinator`
+- `WorkbookLifecycleCoordinator`
+- `TaskPaneManager`
+- `KernelWorkbookService`
+
+上記は、ready-show / suppression / protection / VSTO 境界の危険領域を含むため、今回の docs 更新では完了扱いへ移さず、未着手・保留として残す。
+
+### 別途調査対象として残す事項
+
+- protection 5 秒失効
+- retry `80ms`
+- fallback timer `400ms`
+- retry `3 attempts`
+- visible pane early-complete
+- ready-show / suppression の順序
 
 ### 所見
 
-- 今回の追加調査により、`TaskPaneManager` 分割は「大きいから危険」ではなく、「ready-show 成功判定に使う host state が manager 側に残っているため危険」という根拠が増えた。
-- `TaskPaneRefreshOrchestrationService` の predicate bridge 化は、以前より危険度を一段上げて扱うべきである。理由は protection 判定が retry / timer / visible-pane early-complete の手前にあるため。
+- `TaskPaneManager` は `TaskPaneHost` の VSTO `CustomTaskPane` 生成・破棄境界を含むため、単純な bridge 化候補としては扱いにくい。
+- `KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` は protection / ready-show / suppression の相互依存が残っており、実装着手前に別途調査が必要である。
 
 ## 5. 変更時に守るべき既存挙動まとめ
 

@@ -210,29 +210,118 @@
 
 ### 4.5 `TaskPaneSnapshotCacheService` / `TaskPaneSnapshotBuilderService`
 
-#### `TaskPaneSnapshotCacheService`
+#### 4.5.1 Base snapshot / CASE snapshot cache storage inventory
 
-- 保持:
-  - CASE `TASKPANE_SNAPSHOT_CACHE_*`
-  - Base `TASKPANE_BASE_SNAPSHOT_*`
-- 読取:
-  - 必要なら Base snapshot を CASE cache へ promote
-  - snapshot を parse して `TaskPaneDocDefinition` から `DocumentName` と `TemplateFileName` を返す
-- 位置づけ:
-  - 表示整合のための補助 cache
-  - latest master version との照合はここでは行わない
+| 項目 | Base snapshot | CASE snapshot cache |
+| --- | --- | --- |
+| 意味 | Base ブックに埋め込まれる配布用 snapshot。新規 CASE 作成時と CASE cache 欠損時の初期ソース | 開いている CASE で表示・prompt・resolver が優先参照する作業用 cache |
+| 保存先 DocProperty | `TASKPANE_BASE_SNAPSHOT_COUNT`、`TASKPANE_BASE_SNAPSHOT_01..NN`、`TASKPANE_BASE_MASTER_VERSION` | `TASKPANE_SNAPSHOT_CACHE_COUNT`、`TASKPANE_SNAPSHOT_CACHE_01..NN`、CASE 側 `TASKPANE_MASTER_VERSION` |
+| 主な writer | `KernelTemplateSyncService.SaveSnapshotToBaseWorkbook` | `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache`、`TaskPaneSnapshotCacheService.SaveTaskPaneSnapshotCache`、`TaskPaneSnapshotBuilderService.SaveCaseSnapshotCache` |
+| 主な reader | `TaskPaneSnapshotCacheService`、`TaskPaneSnapshotBuilderService`、`CaseTemplateSnapshotService` | `TaskPaneSnapshotCacheService`、`TaskPaneSnapshotBuilderService`、その先の `DocumentTemplateLookupService` / `DocumentNamePromptService` / `DocumentTemplateResolver` |
+| 用途 | 新規 CASE 初期状態の配布、CASE cache 再生元 | 表示中 Pane の文書定義、prompt 初期値、resolver の CASE cache 優先 lookup |
+| 正本性 | 正本ではない | 正本ではない |
+| global master との関係 | `TASKPANE_BASE_MASTER_VERSION` に「この Base snapshot を作ったときの master version」を保持 | CASE 側 `TASKPANE_MASTER_VERSION` に「この CASE cache / CASE 表示系が最後に採用した master version」を保持 |
 
-#### `TaskPaneSnapshotBuilderService`
+補足:
 
-- 読取:
-  - CASE / Base DocProperty cache
-  - Master `TASKPANE_MASTER_VERSION`
-  - Master `雛形一覧`
-- 保持:
-  - Master 再構築または Base fallback の結果を CASE cache に保存
-- 位置づけ:
-  - 表示用 snapshot builder
-  - 保存・生成・実行判断の正本ではない
+- Base snapshot と CASE snapshot cache はどちらも `TaskPaneSnapshotFormat.ExportVersion=2` の snapshot text を 240 文字単位で chunk 保存します。
+- `TaskPaneSnapshotParser` は `META` 行を読めますが、parser 結果として master version を保持していません。master version は DocProperty 側で判定されます。
+
+#### 4.5.2 `TASKPANE_MASTER_VERSION` 系 DocProperty の役割
+
+| DocProperty | 配置先 | 現在の役割 |
+| --- | --- | --- |
+| `TASKPANE_MASTER_VERSION` | Kernel | `KernelTemplateSyncService.IncrementTaskPaneMasterVersion` が更新する global master version の正本 |
+| `TASKPANE_MASTER_VERSION` | Base | Base 保存時に mirror される値。新規 CASE 作成時にコピーされうる |
+| `TASKPANE_MASTER_VERSION` | CASE | CASE cache / 表示系が最後に採用した master version。`TaskPaneSnapshotBuilderService` の stale 判定、`TaskPaneSnapshotCacheService` の promote 判定、`DocumentExecutionEligibilityService` の eligibility cache key に使われる |
+| `TASKPANE_BASE_MASTER_VERSION` | Base と CASE 内の埋込 Base snapshot 領域 | Base snapshot 自体の provenance。Base snapshot を CASE cache へ promote / fallback するときの比較値 |
+
+補足:
+
+- `DocumentExecutionEligibilityService` は `workbook.FullName + TASKPANE_MASTER_VERSION + actionKind + key` を eligibility cache key に使います。
+- `CaseWorkbookInitializer` はいったん Kernel の `TASKPANE_MASTER_VERSION` を CASE に写しますが、その直後に `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache` が `TASKPANE_BASE_MASTER_VERSION` を CASE 側 `TASKPANE_MASTER_VERSION` へ上書きします。したがって新規 CASE の実効 version は、最終的に埋込 Base snapshot 側へ揃います。
+
+#### 4.5.3 `TaskPaneSnapshotCacheService` inventory
+
+| 項目 | 現在の事実 |
+| --- | --- |
+| サービス名 | `TaskPaneSnapshotCacheService` |
+| 現在の責務 | CASE cache lookup 用の read helper。必要時に Base snapshot を CASE cache へ promote し、その後 CASE cache を parse して `key -> DocumentName / TemplateFileName` を返す |
+| 入力 | `Excel.Workbook`、文書 `key` |
+| 出力 | `DocumentTemplateLookupResult` または `false`。補助 API として `TryGetDocInfoFromCache`、`ClearCaseSnapshotCacheChunks` を持つ |
+| 直接依存 | `ExcelInteropService`、`Logger` |
+| 読取対象 | CASE `TASKPANE_SNAPSHOT_CACHE_COUNT` / `TASKPANE_SNAPSHOT_CACHE_XX`、Base `TASKPANE_BASE_SNAPSHOT_COUNT` / `TASKPANE_BASE_SNAPSHOT_XX`、CASE `TASKPANE_MASTER_VERSION`、`TASKPANE_BASE_MASTER_VERSION` |
+| write path | `PromoteBaseSnapshotToCaseCacheIfNeeded` が CASE cache chunk と CASE `TASKPANE_MASTER_VERSION` を更新する。`ClearSnapshotParts` は count を `0` にし、既存 chunk prop へ空文字を書き戻す。`ClearCaseSnapshotCacheChunks` は `TASKPANE_SNAPSHOT_CACHE_XX` だけを Delete する |
+| read path | `DocumentTemplateLookupService.TryResolveFromCaseCache` から呼ばれ、`DocumentNamePromptService` と `DocumentTemplateResolver` の CASE cache lookup 入口になる |
+| promote 条件 | `PromoteBaseSnapshotToCaseCacheIfNeeded` は、1) Base snapshot が存在し互換、かつ 2) CASE cache が空、または 3) `TASKPANE_BASE_MASTER_VERSION > TASKPANE_MASTER_VERSION`、または 4) CASE 側 version 未設定かつ Base 側 version が正値、のときに Base snapshot を CASE cache へ昇格する |
+| compatibility / clear 条件 | CASE cache snapshot text が非互換なら CASE cache count を `0` にし chunk を空文字化。Base snapshot text が非互換なら Base snapshot count を `0` にし chunk を空文字化。lookup 対象 CASE cache が非互換なら lookup 前に CASE cache を clear して `false` を返す |
+| しないこと | latest master version の読取や global stale 判定はしない。`TemplateFileName` が空の `DOC` 行を成功扱いしない |
+| `PromoteBaseSnapshotToCaseCacheIfNeeded` の意味 | 表示中 CASE の lookup 系が最低限参照できる CASE cache を補充するための on-demand promote。global 最新かどうかではなく、CASE と埋込 Base の version 比較だけで動く |
+| `DocumentTemplateLookupService` / `DocumentNamePromptService` / `DocumentTemplateResolver` との接続 | `DocumentTemplateLookupService` がこのサービスを CASE cache reader として包む。`DocumentNamePromptService` は cache-only、`DocumentTemplateResolver` は miss 時のみ master fallback へ進む |
+| 今後の整理余地 | `LoadSnapshotParts` / `SaveTaskPaneSnapshotCache` / `ClearSnapshotParts` / promote 判定は `CaseTemplateSnapshotService` と重複しており、read helper 化の最小候補になる |
+| 変更リスク | promote 条件を latest master 連動に変える、`TemplateFileName` 空行を成功扱いに変える、Base clear をやめる、`ClearCaseSnapshotCacheChunks` に count 変更を混ぜる、といった変更は prompt / resolver / case-list registration の前提を壊しやすい |
+| 今は触らない理由 | lookup のたびに promote と compatibility clear が入るため、表示整合・prompt 初期値・resolver の CASE cache 優先がこの service の副作用を前提にしている |
+
+#### 4.5.4 `TaskPaneSnapshotBuilderService` inventory
+
+| 項目 | 現在の事実 |
+| --- | --- |
+| サービス名 | `TaskPaneSnapshotBuilderService` |
+| 現在の責務 | CASE pane 表示用 snapshot の構築元を選び、必要なら CASE cache を更新して `TaskPaneBuildResult` を返す表示系 builder |
+| 入力 | `Excel.Workbook` |
+| 出力 | `TaskPaneBuildResult(SnapshotText, UpdatedCaseSnapshotCache)` |
+| 直接依存 | `Excel.Application`、`ExcelInteropService`、`PathCompatibilityService`、`IMasterTemplateSheetReader`、`Logger` |
+| 読取対象 | CASE `TASKPANE_SNAPSHOT_CACHE_*`、Base `TASKPANE_BASE_SNAPSHOT_*`、CASE `TASKPANE_MASTER_VERSION`、`TASKPANE_BASE_MASTER_VERSION`、Master `TASKPANE_MASTER_VERSION`、Master `雛形一覧` |
+| write path | Base fallback または Master rebuild 時に CASE `TASKPANE_SNAPSHOT_CACHE_*` を更新する。Base fallback / Master rebuild 時は CASE `TASKPANE_MASTER_VERSION` も更新する。非互換 CASE/Base cache はそれぞれ count=`0` と chunk 空文字化で clear する |
+| read path | `TaskPaneManager.RenderHost` と `RenderCaseHostAfterAction` が `ICaseTaskPaneSnapshotReader.BuildSnapshotText` 経由で使う |
+| CASE cache 採用条件 | CASE cache が存在し互換で、さらに `TryReadLatestMasterVersion` が成功し、`latestMasterVersion <= CASE TASKPANE_MASTER_VERSION` のときにのみ source=`CaseCache` で採用する |
+| Base snapshot 採用条件 | Base snapshot が存在し互換で、かつ 1) latest master version を読めない、または 2) `latestMasterVersion <= TASKPANE_BASE_MASTER_VERSION` のときに source=`BaseCacheFallback` または `BaseCache` として採用し、同時に CASE cache へ保存する |
+| Master rebuild 条件 | CASE cache / Base snapshot のどちらも採用できない場合だけ Master を read-only で開き、`雛形一覧` から snapshot を再構築して CASE cache へ保存する |
+| compatibility / clear 条件 | CASE cache text が `ExportVersion=2` 以外なら CASE cache を clear。Base snapshot text が非互換なら Base snapshot を clear。どちらも clear 後は次の候補へ進む |
+| `TASKPANE_MASTER_VERSION` の役割 | CASE cache stale 判定では CASE 側 version、Base fallback では `TASKPANE_BASE_MASTER_VERSION`、Master rebuild では Master 側 version を CASE 側へ書き戻す |
+| 表示専用の補正 | CASE cache 採用時は `ApplyDynamicSpecialButtonOverrides` で `CASELIST_REGISTERED` に応じた SPECIAL ボタン表示だけを動的補正して返すが、その補正結果を CASE cache へ保存し直しはしない |
+| `TaskPaneManager` との関係 | `TaskPaneManager` はこの結果を parse して view state を作る。builder が CASE cache を更新したかどうかは `TaskPaneBuildResult.UpdatedCaseSnapshotCache` と `TaskPaneManager` の通知判定に使われる |
+| `TaskPaneSnapshotCacheService` との境界 | builder は表示元選択と latest master 比較を持つ。cache service は lookup と on-demand promote だけを持つ。両者は同じ DocProperty 群を読むが stale 判定材料が異なる |
+| 今後の整理余地 | CASE/Base chunk load/save/clear は helper 化余地があるが、latest master 比較と CASE cache 更新通知の責務は builder から外しにくい |
+| 変更リスク | CASE cache 採用条件、Base fallback 条件、Master rebuild 条件、`UpdatedCaseSnapshotCache` の返し方を変えると `TaskPaneManager` の再利用・通知・表示更新ポリシーに波及する |
+| 今は触らない理由 | display path、cache write、stale 判定、Master read-only open、通知フラグが 1 メソッドに密結合しているため |
+
+#### 4.5.5 CASE cache / Base snapshot の write path 実態
+
+| 起点 | サービス | 現在の write / clear |
+| --- | --- | --- |
+| 雛形登録・更新成功 | `KernelTemplateSyncService` | Kernel `TASKPANE_MASTER_VERSION` を `+1` し、Base へ `TASKPANE_BASE_SNAPSHOT_*`、`TASKPANE_BASE_MASTER_VERSION`、`TASKPANE_MASTER_VERSION` を書く |
+| 新規 CASE 初期化 | `CaseWorkbookInitializer -> CaseTemplateSnapshotService` | Kernel の `TASKPANE_MASTER_VERSION` を CASE に写し、その後 Base snapshot を CASE cache へコピーし、`TASKPANE_BASE_MASTER_VERSION` があれば CASE `TASKPANE_MASTER_VERSION` をその値へ揃える |
+| lookup 時 | `TaskPaneSnapshotCacheService` | Base snapshot が CASE より新しい、または CASE cache が空なら CASE cache へ promote する |
+| CASE pane 表示時 | `TaskPaneSnapshotBuilderService` | Base fallback または Master rebuild の結果を CASE cache へ保存し、必要に応じて CASE `TASKPANE_MASTER_VERSION` を更新する |
+| 案件一覧登録後 | `CaseListRegistrationService` | CASE `TASKPANE_SNAPSHOT_CACHE_COUNT=0` をセットし、`TaskPaneSnapshotCacheService.ClearCaseSnapshotCacheChunks` で `TASKPANE_SNAPSHOT_CACHE_XX` を削除する |
+
+補足:
+
+- CASE cache write path は 1 つではありません。initializer、lookup、display build の 3 経路があり、どこで最新化されたかで比較材料が少し異なります。
+- `CaseTemplateSnapshotService` も `TaskPaneSnapshotCacheService` も Base -> CASE promote を持っており、今後 read helper 化するならここが最初の重複解消候補です。
+
+#### 4.5.6 既存テストが担保していること / いないこと
+
+- `SnapshotOutputRegressionTests`
+  - Master rebuild で生成される snapshot text 形式
+  - CASE cache への保存
+  - Master rebuild 後に CASE `TASKPANE_MASTER_VERSION` が更新されること
+  - `TemplateFileName` 空でも `DOC` 行自体は snapshot に残ること
+- `DocumentTemplateLookupServiceTests`
+  - CASE cache hit 時、resolver と prompt が同じ `DocumentName` / `TemplateFileName` 系 metadata を使うこと
+  - CASE cache miss 時、resolver だけが master fallback すること
+  - prompt 側は cache-only で、master fallback しないこと
+  - `WORD_TEMPLATE_DIR` 未設定時に `SYSTEM_ROOT\雛形` へ path fallback すること
+- `TaskPaneManager*Tests`
+  - `UpdatedCaseSnapshotCache` を使った通知判断
+  - `WorkbookActivate` / `WindowActivate` での host 再利用と再描画スキップ方針
+
+現時点で確認できていない専用テスト:
+
+- `TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` の昇格条件そのもの
+- CASE / Base snapshot の compatibility 不一致 clear
+- `CaseTemplateSnapshotService` 初期 promote と `TaskPaneSnapshotCacheService` promote の差分
 
 ### 4.6 `MasterTemplateCatalogService` / `MasterTemplateSheetReaderAdapter` との関係
 

@@ -390,6 +390,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentOutputService,
                 wordInteropService,
                 _logger);
+            var documentCreateHostBridge = new ThisAddInDocumentCreateHostBridge(_addIn);
             var documentCreateService = new DocumentCreateService(
                 excelInteropService,
                 caseContextFactory,
@@ -399,6 +400,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentSaveService,
                 wordInteropService,
                 documentPresentationWaitService,
+                documentCreateHostBridge,
                 _logger);
             var screenUpdatingExecutionBridge = new ThisAddInScreenUpdatingExecutionBridge(_addIn);
             var taskPaneRefreshSuppressionBridge = new ThisAddInTaskPaneRefreshSuppressionBridge(_addIn);

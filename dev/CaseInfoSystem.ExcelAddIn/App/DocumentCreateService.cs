@@ -8,6 +8,54 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    internal interface IDocumentCreateHostBridge
+    {
+        Excel.Application GetApplication();
+
+        void SetStatusBar(string messageText);
+
+        void ClearStatusBar();
+    }
+
+    internal sealed class ThisAddInDocumentCreateHostBridge : IDocumentCreateHostBridge
+    {
+        private readonly ThisAddIn _addIn;
+
+        internal ThisAddInDocumentCreateHostBridge(ThisAddIn addIn)
+        {
+            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
+        }
+
+        public Excel.Application GetApplication()
+        {
+            return _addIn.Application;
+        }
+
+        public void SetStatusBar(string messageText)
+        {
+            try
+            {
+                _addIn.Application.StatusBar = messageText ?? string.Empty;
+            }
+            catch
+            {
+                // 例外処理: ステータスバー更新失敗は致命ではないため握りつぶす。
+            }
+        }
+
+        public void ClearStatusBar()
+        {
+            try
+            {
+                _addIn.Application.StatusBar = false;
+            }
+            catch
+            {
+                // 例外処理: ステータスバー解除失敗は致命ではないため握りつぶす。
+            }
+        }
+    }
+
     /// <summary>
     /// クラス: Word 文書作成フロー全体を調停する。
     /// 責務: テンプレ解決、案件値収集、差込、保存、Word 表示までを VSTO 主導で実行する。
@@ -25,6 +73,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly DocumentSaveService _documentSaveService;
         private readonly WordInteropService _wordInteropService;
         private readonly DocumentPresentationWaitService _documentPresentationWaitService;
+        private readonly IDocumentCreateHostBridge _documentCreateHostBridge;
         private readonly Logger _logger;
 
         /// <summary>
@@ -45,6 +94,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             DocumentSaveService documentSaveService,
             WordInteropService wordInteropService,
             DocumentPresentationWaitService documentPresentationWaitService,
+            IDocumentCreateHostBridge documentCreateHostBridge,
             Logger logger)
         {
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
@@ -55,6 +105,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _documentSaveService = documentSaveService ?? throw new ArgumentNullException(nameof(documentSaveService));
             _wordInteropService = wordInteropService ?? throw new ArgumentNullException(nameof(wordInteropService));
             _documentPresentationWaitService = documentPresentationWaitService ?? throw new ArgumentNullException(nameof(documentPresentationWaitService));
+            _documentCreateHostBridge = documentCreateHostBridge ?? throw new ArgumentNullException(nameof(documentCreateHostBridge));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -177,13 +228,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             DocumentPresentationWaitService.WaitSession waitSession = null;
             var totalStopwatch = Stopwatch.StartNew();
             var phaseStopwatch = Stopwatch.StartNew();
+            Excel.Application excelApplication = null;
 
             try
             {
                 _logger.Debug("ExecuteCreateDocument", "Start template=" + (templateSpec == null ? string.Empty : templateSpec.TemplatePath) + " output=" + (outputPath ?? string.Empty));
-                previousWindowState = Globals.ThisAddIn.Application.WindowState;
-                excelUiState = ExcelUiState.Capture(Globals.ThisAddIn.Application);
-                excelUiState.ApplyForDocumentCreate(Globals.ThisAddIn.Application, false);
+                excelApplication = _documentCreateHostBridge.GetApplication();
+                previousWindowState = excelApplication.WindowState;
+                excelUiState = ExcelUiState.Capture(excelApplication);
+                excelUiState.ApplyForDocumentCreate(excelApplication, false);
                 waitSession = _documentPresentationWaitService.ShowWaiting(totalStopwatch);
 
                 stage = "AcquireWordApplication";
@@ -292,14 +345,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _wordInteropService.RestorePerformanceState(wordApplication, wordPerformanceState);
                 if (excelUiState != null)
                 {
-                    excelUiState.Restore(Globals.ThisAddIn.Application, restoreExcelWindowPresentation);
+                    excelUiState.Restore(excelApplication, restoreExcelWindowPresentation);
                 }
 
                 if (restoreExcelWindowPresentation)
                 {
                     try
                     {
-                        Globals.ThisAddIn.Application.WindowState = previousWindowState;
+                        excelApplication.WindowState = previousWindowState;
                     }
                     catch
                     {
@@ -318,16 +371,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// 戻り値: なし。
         /// 副作用: ステータスバーを書き換える。
         /// </summary>
-        private static void SetStatusBar(string messageText)
+        private void SetStatusBar(string messageText)
         {
-            try
-            {
-                Globals.ThisAddIn.Application.StatusBar = messageText ?? string.Empty;
-            }
-            catch
-            {
-                // 例外処理: ステータスバー更新失敗は致命ではないため握りつぶす。
-            }
+            _documentCreateHostBridge.SetStatusBar(messageText);
         }
 
         /// <summary>
@@ -336,16 +382,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// 戻り値: なし。
         /// 副作用: ステータスバー制御を Excel 既定へ戻す。
         /// </summary>
-        private static void ClearStatusBar()
+        private void ClearStatusBar()
         {
-            try
-            {
-                Globals.ThisAddIn.Application.StatusBar = false;
-            }
-            catch
-            {
-                // 例外処理: ステータスバー解除失敗は致命ではないため握りつぶす。
-            }
+            _documentCreateHostBridge.ClearStatusBar();
         }
 
         /// <summary>

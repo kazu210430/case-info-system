@@ -42,6 +42,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseTemplateSnapshotService.cs" Link="Source\Infrastructure\CaseTemplateSnapshotService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateCatalogService.cs" Link="Source\Infrastructure\MasterTemplateCatalogService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReaderAdapter.cs" Link="Source\Infrastructure\MasterTemplateSheetReaderAdapter.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" Link="Source\Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs" Link="Source\Infrastructure\TaskPaneSnapshotCacheService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotBuilderService.cs" Link="Source\Infrastructure\TaskPaneSnapshotBuilderService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReader.cs" Link="Source\Infrastructure\MasterTemplateSheetReader.cs" />

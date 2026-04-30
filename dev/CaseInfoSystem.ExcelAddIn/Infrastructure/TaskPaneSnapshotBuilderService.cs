@@ -494,15 +494,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private string LoadSnapshotCache (Workbook workbook, string countPropName, string partPropPrefix)
 		{
-			string s = _excelInteropService.TryGetDocumentProperty (workbook, countPropName);
-			if (!int.TryParse (s, out var result) || result <= 0) {
-				return string.Empty;
-			}
-			StringBuilder stringBuilder = new StringBuilder ();
-			for (int i = 1; i <= result; i++) {
-				stringBuilder.Append (_excelInteropService.TryGetDocumentProperty (workbook, partPropPrefix + i.ToString ("00")));
-			}
-			return stringBuilder.ToString ();
+			return TaskPaneSnapshotChunkReadHelper.LoadSnapshot (_excelInteropService, workbook, countPropName, partPropPrefix);
 		}
 
 		private void SaveCaseSnapshotCache (Workbook workbook, string snapshotText)

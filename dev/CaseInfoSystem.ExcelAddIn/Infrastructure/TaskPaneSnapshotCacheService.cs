@@ -224,34 +224,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private string LoadTaskPaneSnapshotCache(Excel.Workbook workbook)
         {
-            return LoadSnapshotParts(workbook, TaskPaneCacheCountProp, TaskPaneCachePartPropPrefix);
+            return TaskPaneSnapshotChunkReadHelper.LoadSnapshot(_excelInteropService, workbook, TaskPaneCacheCountProp, TaskPaneCachePartPropPrefix);
         }
 
         private string LoadTaskPaneBaseSnapshotCache(Excel.Workbook workbook)
         {
-            return LoadSnapshotParts(workbook, TaskPaneBaseCacheCountProp, TaskPaneBaseCachePartPropPrefix);
-        }
-
-        private string LoadSnapshotParts(Excel.Workbook workbook, string countPropName, string partPropPrefix)
-        {
-            if (workbook == null)
-            {
-                return string.Empty;
-            }
-
-            string countText = _excelInteropService.TryGetDocumentProperty(workbook, countPropName);
-            if (!int.TryParse(countText, out int partCount) || partCount <= 0)
-            {
-                return string.Empty;
-            }
-
-            var builder = new System.Text.StringBuilder();
-            for (int partIndex = 1; partIndex <= partCount; partIndex++)
-            {
-                builder.Append(_excelInteropService.TryGetDocumentProperty(workbook, partPropPrefix + partIndex.ToString("00")));
-            }
-
-            return builder.ToString();
+            return TaskPaneSnapshotChunkReadHelper.LoadSnapshot(_excelInteropService, workbook, TaskPaneBaseCacheCountProp, TaskPaneBaseCachePartPropPrefix);
         }
 
         private void SaveTaskPaneSnapshotCache(Excel.Workbook workbook, string snapshotText)

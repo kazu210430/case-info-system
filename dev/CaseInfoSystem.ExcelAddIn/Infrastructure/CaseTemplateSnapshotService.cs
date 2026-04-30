@@ -81,19 +81,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         /// <summary>
         private string LoadSnapshot(Excel.Workbook workbook, string countPropName, string partPropPrefix)
         {
-            int partCount = ReadPositiveIntProperty(workbook, countPropName);
-            if (partCount <= 0)
-            {
-                return string.Empty;
-            }
-
-            var builder = new System.Text.StringBuilder();
-            for (int partIndex = 1; partIndex <= partCount; partIndex++)
-            {
-                builder.Append(_excelInteropService.TryGetDocumentProperty(workbook, partPropPrefix + partIndex.ToString("00")));
-            }
-
-            return builder.ToString();
+            return TaskPaneSnapshotChunkReadHelper.LoadSnapshot(_excelInteropService, workbook, countPropName, partPropPrefix);
         }
 
         /// <summary>

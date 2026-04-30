@@ -208,3 +208,29 @@ Base から CASE への昇格責務は 1 箇所に集約されていません。
 - [flows.md](C:\Users\kazu2\Documents\案件情報System\開発用\docs\flows.md)
 - [ui-policy.md](C:\Users\kazu2\Documents\案件情報System\開発用\docs\ui-policy.md)
 - [template-metadata-inventory.md](C:\Users\kazu2\Documents\案件情報System\開発用\docs\template-metadata-inventory.md)
+
+## 付録: 本流外の low-risk 候補
+
+### Word warm-up 判定の参照差し替え
+
+対象:
+ThisAddIn.ScheduleWordWarmup()
+
+内容:
+_documentExecutionModeService.CanAttemptVstoExecution() の参照を
+interface 化または依存整理する候補
+
+理由:
+- promotion 副作用なし
+- prompt / document execution 本線に影響しない
+- TemplatePath / snapshot 再構築に非関与
+- consumer 側のみで完結
+
+評価:
+- 安全性: 高い
+- 実装コスト: 低
+- 優先度: 低〜中（本流外）
+
+方針:
+- 今回は実装しない
+- read-only API adoption 本流完了後にまとめて実施する

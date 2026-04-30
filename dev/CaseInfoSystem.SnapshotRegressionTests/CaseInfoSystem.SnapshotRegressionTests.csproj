@@ -24,6 +24,7 @@
   <ItemGroup>
     <Compile Include="DocumentTemplateLookupServiceTests.cs" />
     <Compile Include="SnapshotOutputRegressionTests.cs" />
+    <Compile Include="TaskPaneSnapshotCacheStorageBehaviorTests.cs" />
     <Compile Include="SnapshotRegressionTestHelpers.cs" />
     <Compile Include="Fakes\SnapshotBuilderDependencyStubs.cs" />
     <Compile Include="Fakes\SnapshotOfficeInteropShims.cs" />
@@ -38,6 +39,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateResolutionSource.cs" Link="Source\Domain\DocumentTemplateResolutionSource.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateSpec.cs" Link="Source\Domain\DocumentTemplateSpec.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\MasterTemplateRecord.cs" Link="Source\Domain\MasterTemplateRecord.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseTemplateSnapshotService.cs" Link="Source\Infrastructure\CaseTemplateSnapshotService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateCatalogService.cs" Link="Source\Infrastructure\MasterTemplateCatalogService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReaderAdapter.cs" Link="Source\Infrastructure\MasterTemplateSheetReaderAdapter.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs" Link="Source\Infrastructure\TaskPaneSnapshotCacheService.cs" />

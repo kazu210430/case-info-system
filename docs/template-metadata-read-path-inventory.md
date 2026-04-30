@@ -121,6 +121,53 @@
 
 つまり、`DocumentTemplateResolver` にとっての metadata 正本は snapshot そのものではなく、`CASE cache` を優先参照したうえで足りない時に読む `MasterTemplateCatalogService` 側です。`TemplatePath` は保存正本を持たず resolver で毎回計算します。
 
+#### 4.3.1 `DocumentTemplateResolver` lookup inventory
+
+| 項目 | 現在の事実 |
+| --- | --- |
+| サービス名 | `DocumentTemplateResolver` |
+| 現在の責務 | 文書 `key` を正規化し、`IDocumentTemplateLookupReader.TryResolveWithMasterFallback` で `DocumentName` / `TemplateFileName` / `ResolutionSource` を解決し、`WORD_TEMPLATE_DIR` または `SYSTEM_ROOT\雛形` から `TemplatePath` を導出して `DocumentTemplateSpec` を返す。未解決時は `null` を返す |
+| 入力 | `Excel.Workbook`、文書 `key` |
+| 出力 | `DocumentTemplateSpec` または `null`。補助 API として `TemplateExists`、`IsSupportedWordTemplate` を持ち、`DocumentExecutionEligibilityService` が後段判定に使う |
+| 直接依存 | `ExcelInteropService`、`PathCompatibilityService`、`IDocumentTemplateLookupReader`、`Logger` |
+| 参照 metadata | `DocumentTemplateLookupResult.Key` / `DocumentName` / `TemplateFileName` / `ResolutionSource`、CASE DocProperty `WORD_TEMPLATE_DIR` / `SYSTEM_ROOT` |
+| 情報源 | 1) `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache`、2) miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey`、3) path 部分は resolver 自身が DocProperty から導出 |
+| lookup service 使用状況 | `AddInCompositionRoot` が `DocumentTemplateLookupService` を `IDocumentTemplateLookupReader` として注入し、現在の consumer は `DocumentExecutionEligibilityService -> DocumentTemplateResolver` |
+| CASE cache 優先の実装上の意味 | `TryResolveWithMasterFallback` は先に CASE cache-only lookup を実行し、成功したらその `DocumentName` / `TemplateFileName` をそのまま採用する。resolver 自身は global master version の新旧比較を行わないため、開いている CASE の表示中 Pane と同じ cache 系 metadata を実行側でも使う |
+| master fallback の実装上の意味 | fallback は CASE cache lookup が `false` を返した時だけ発火する。対象には cache 空、snapshot 互換性不一致による clear 後、key 不一致、`TemplateFileName` 空で lookup 不成立になったケースが含まれる |
+| `TemplatePath` 導出責務 | 保存済み正本はなく、resolver が `WORD_TEMPLATE_DIR` 優先、未設定時は `SYSTEM_ROOT\雛形` を組み立てて都度決める。どちらも取れない場合は空文字 |
+| `DocumentNamePromptService` との違い | prompt 側は CASE cache caption の補助 UI。resolver 側は master fallback と path 導出まで含む実行用解決 |
+| `TaskPaneSnapshotCacheService` との関係 | cache lookup の成否は `TaskPaneSnapshotCacheService` に依存し、Base -> CASE promote、snapshot compatibility clear、`TemplateFileName` 空時の不成立判定の影響を受ける |
+| `MasterTemplateCatalogService` との関係 | fallback 時だけ master reader を使う。master 側は `SYSTEM_ROOT` を手掛かりに Kernel workbook を read-only で開き、`雛形一覧` の `key` と `TemplateFileName` が揃う行だけ `MasterTemplateRecord` に載せる |
+| 既存テスト | `DocumentTemplateLookupServiceTests` が CASE cache hit、CASE cache miss + master fallback、key 不在、cache-only reader no-fallback、`WORD_TEMPLATE_DIR` 未設定時の `SYSTEM_ROOT\雛形` path 導出を確認している |
+| 今後の整理余地 | 現在の consumer 契約は `IDocumentTemplateLookupReader` で固定されているため、将来の整理は constructor や interface を変えずに `DocumentTemplateLookupService` 内部委譲を差し替えるのが最小境界 |
+| 変更リスク | CASE cache 優先や path 導出責務を resolver から外すと、`DocumentExecutionEligibilityService` の実行判定、表示中 Pane との整合、`docs/flows.md` の責務分離に波及する |
+| 今は触らない理由 | 実装・docs・既存テストが CASE cache 優先 + master fallback + resolver の path 導出を前提に揃っているため |
+
+#### 4.3.2 `DocumentTemplateLookupService` inventory
+
+| 項目 | 現在の事実 |
+| --- | --- |
+| サービス名 | `DocumentTemplateLookupService` |
+| 現在の責務 | `ICaseCacheDocumentTemplateReader` と `IDocumentTemplateLookupReader` の両方を実装し、CASE cache-only lookup と master fallback lookup の方針差を 1 箇所で調停する |
+| 入力 | `Excel.Workbook`、文書 `key` |
+| 出力 | `DocumentTemplateLookupResult` または `false` |
+| 直接依存 | `TaskPaneSnapshotCacheService`、`MasterTemplateCatalogService` |
+| CASE cache-only 経路 | `TryResolveFromCaseCache` はそのまま `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` へ委譲する |
+| master fallback 経路 | `TryResolveWithMasterFallback` は CASE cache hit なら即 return し、miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey` を呼ぶ。fallback 結果も `TemplateFileName` が空なら失敗扱いにする |
+| lookup service 使用状況 | 既に `DocumentNamePromptService` は `ICaseCacheDocumentTemplateReader` 経由、`DocumentTemplateResolver` は `IDocumentTemplateLookupReader` 経由で利用している。今回の調査範囲では、この 2 箇所が `DocumentTemplateLookupService` 経由化済みの consumer |
+| CASE cache 優先の意味 | prompt と resolver の双方が同じ CASE cache reader を共有しつつ、caller intent に応じて fallback 可否だけを切り分けられる |
+| master fallback の意味 | fallback の責務を `DocumentNamePromptService` ではなく `DocumentTemplateResolver` 側へ限定するための policy 境界 |
+| `TaskPaneSnapshotCacheService` / `MasterTemplateCatalogService` との境界 | cache の promote / clear / parse は `TaskPaneSnapshotCacheService`、master の open/read-only/cache は `MasterTemplateCatalogService`、caller 向けの fallback policy だけを `DocumentTemplateLookupService` が持つ |
+| 今後の安全な最小単位 | 既存 consumer 契約を保ったまま、このサービス内部の委譲先や projection を整理するのが最も狭い変更面 |
+| 変更リスク | `TryResolveFromCaseCache` に fallback を混ぜる、または `TryResolveWithMasterFallback` の hit/miss 条件を変えると、prompt と resolver の責務分離が崩れる |
+| 今は触らない理由 | `AddInCompositionRoot` の interface 配線、`DocumentNamePromptService` の cache-only policy、`DocumentTemplateResolver` の fallback policy がここを前提に成立しているため |
+
+補足:
+
+- この調査範囲で確認できた既存テストは `DocumentTemplateLookupServiceTests` に集中しており、prompt/resolver の責務分離と `TemplatePath` 導出は担保されている。
+- 一方で、`TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` の昇格条件、snapshot 互換性不一致 clear、`DocumentExecutionEligibilityService` の `TASKPANE_MASTER_VERSION` を含む eligibility cache key については、この調査範囲では専用テストを確認できていない。
+
 ### 4.4 `DocumentNamePromptService` が使う情報
 
 - 入力:

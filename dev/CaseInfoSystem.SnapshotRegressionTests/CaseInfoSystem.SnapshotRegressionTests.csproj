@@ -24,6 +24,7 @@
   <ItemGroup>
     <Compile Include="DocumentTemplateLookupServiceTests.cs" />
     <Compile Include="SnapshotOutputRegressionTests.cs" />
+    <Compile Include="TaskPaneSnapshotChunkHelperTests.cs" />
     <Compile Include="TaskPaneSnapshotCacheStorageBehaviorTests.cs" />
     <Compile Include="SnapshotRegressionTestHelpers.cs" />
     <Compile Include="Fakes\SnapshotBuilderDependencyStubs.cs" />

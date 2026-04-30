@@ -57,8 +57,11 @@
 | `MasterTemplateSheetReader` | `key` `TemplateFileName` `caption` `TabName` `FillColor` `TabBackColor` | `雛形一覧` A:E 値と D/F 塗り色、3行目以降 | 正本 reader | `MasterTemplateCatalogService` `TaskPaneSnapshotBuilderService`、一部 `KernelTemplateSyncService` | Excel Worksheet | 列意味解釈がここに依存する | read-only reader の共通口として維持 | 既存列構成と色読取を崩すと display / resolver 両方に波及する |
 | `MasterTemplateSheetReaderAdapter` | `MasterTemplateSheetReader` の read-only adapter | `MasterTemplateSheetReader` | adapter | `AddInCompositionRoot` から注入 | `MasterTemplateSheetReader.Read` | 低 | 既存 direct call の置換先 | 既に low-risk な adapter なので役割変更不要 |
 | `MasterTemplateCatalogService` | `key` `DocumentName` `TemplateFileName` `BackColor` | `SYSTEM_ROOT` 解決後の Master `雛形一覧` | 正本 reader + メモリ cache | `DocumentTemplateLookupService` `KernelTemplateSyncService.InvalidateCache()` | `IMasterTemplateSheetReader` | 中 | `key -> template metadata` の共通 projection へ寄せる | cache invalidation と Master open/read-only 制御が一体 |
+| `TaskPaneSnapshotChunkReadHelper` | snapshot chunk の count 読取と連結 | `TASKPANE_*_COUNT`、`TASKPANE_*_XX` DocProperty | shared primitive reader | `TaskPaneSnapshotCacheService` `CaseTemplateSnapshotService` `TaskPaneSnapshotBuilderService` | `ExcelInteropService.TryGetDocumentProperty` | 低 | Base/CASE 共通の raw chunk read 契約として維持 | ここへ promote / stale / UI policy を混ぜると helper 境界が崩れる |
+| `TaskPaneSnapshotChunkStorageHelper` | snapshot chunk の count 更新、分割保存、末尾 chunk 空文字化、clear | `TASKPANE_*_COUNT`、`TASKPANE_*_XX` DocProperty | shared primitive writer | `TaskPaneSnapshotCacheService` `CaseTemplateSnapshotService` `TaskPaneSnapshotBuilderService` | `ExcelInteropService.SetDocumentProperty` | 低 | Base/CASE 共通の raw chunk write 契約として維持 | delete / promote / compatibility policy を持たせない前提で再利用されている |
 | `TaskPaneSnapshotBuilderService` | 文書ボタン表示用 snapshot、`TAB/DOC` 定義、master version | CASE cache / Base cache / Master `雛形一覧` | 派生 snapshot builder | `TaskPaneManager` | `IMasterTemplateSheetReader`、Workbook package / read-only Master open | 高 | snapshot build と storage read の分離 | 表示フロー、stale 判定、CASE cache 更新が密結合 |
 | `TaskPaneSnapshotCacheService` | `key -> DocumentName / TemplateFileName` lookup、Base -> CASE promote | CASE `TASKPANE_SNAPSHOT_CACHE_*`、Base `TASKPANE_BASE_*` | 派生 cache reader | `DocumentTemplateLookupService`、CASE cache cleanup | `TaskPaneSnapshotParser` | 中 | Base/CASE snapshot read helper の共通化 | promote / clear / compatibility 判定を持つ |
+| `CaseTemplateSnapshotService` | 新規 CASE 初期化時の CASE version 同期、Base snapshot の CASE cache 昇格 | Kernel `TASKPANE_MASTER_VERSION`、CASE/Base snapshot DocProperty | initializer 専用 promote service | `CaseWorkbookInitializer` | `TaskPaneSnapshotChunkReadHelper` `TaskPaneSnapshotChunkStorageHelper` | 中 | init 専用 promote と lookup promote の差分を明示したまま重複整理 | 新規 CASE 初期化で既存 CASE cache を上書きする初期化責務を持ち、lookup 時 promote と同一化できない |
 | `DocumentTemplateLookupService` | CASE cache-only lookup と master fallback lookup | `TaskPaneSnapshotCacheService`、`MasterTemplateCatalogService` | 読取調停 | `DocumentTemplateResolver` `DocumentNamePromptService` | 同左 | 低 | read-only lookup 契約の中心に寄せる | 現行の fallback policy を変えないことが重要 |
 | `DocumentTemplateResolver` | `DocumentName` `TemplateFileName` `TemplatePath` `ResolutionSource` | CASE cache、Master catalog、`WORD_TEMPLATE_DIR`、`SYSTEM_ROOT` | 実行側 reader | `DocumentExecutionEligibilityService` | `IDocumentTemplateLookupReader` | 高 | path 導出を残したまま lookup 部だけ共通化 | `TemplatePath` と実ファイル確認の責務を壊せない |
 | `DocumentNamePromptService` | prompt 初期値、override 一時保持 | CASE cache、Excel active/visible window | 補助 UI reader | `TaskPaneManager` | `ICaseCacheDocumentTemplateReader` `DocumentNameOverrideScope` | 高 | prompt 初期値 lookup の read-only 依存を維持 | cache-only policy を変えると表示中 Pane とズレる |
@@ -241,12 +244,33 @@
 - `DocumentExecutionEligibilityService` は `workbook.FullName + TASKPANE_MASTER_VERSION + actionKind + key` を eligibility cache key に使います。
 - `CaseWorkbookInitializer` はいったん Kernel の `TASKPANE_MASTER_VERSION` を CASE に写しますが、その直後に `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache` が `TASKPANE_BASE_MASTER_VERSION` を CASE 側 `TASKPANE_MASTER_VERSION` へ上書きします。したがって新規 CASE の実効 version は、最終的に埋込 Base snapshot 側へ揃います。
 
-#### 4.5.3 `TaskPaneSnapshotCacheService` inventory
+#### 4.5.3 snapshot chunk helper の責務境界
+
+| helper | 現在の責務 | 持たない責務 |
+| --- | --- | --- |
+| `TaskPaneSnapshotChunkReadHelper` | count DocProperty を正数として読み、`TASKPANE_*_XX` を `01..NN` 順で連結して raw snapshot text を返す。引数不足、count 不正、count<=0 は空文字を返す | promote 判断、compatibility 判定、stale 判定、Master rebuild、`TaskPaneSnapshotParser` 呼び出し、UI 制御 |
+| `TaskPaneSnapshotChunkStorageHelper.SaveSnapshot` | snapshot text を既定 240 文字で分割し、count 更新、使用中 chunk 書込、余剰旧 chunk の空文字化を行う | どの snapshot を保存するかの選択、master version 更新、property delete、UI 制御 |
+| `TaskPaneSnapshotChunkStorageHelper.ClearSnapshot` | count を `0` にし、以前使われていた chunk prop を空文字化する | promote 判断、compatibility 判定、stale 判定、Master rebuild、property delete、UI 制御 |
+
+補足:
+
+- `TaskPaneSnapshotChunkStorageHelper.SaveSnapshot` は `snapshotText` が空のとき count を `0` にして終了します。既存 chunk prop の空文字化まで必要な経路は `ClearSnapshot` を使います。
+- helper は raw chunk I/O の shared primitive であり、Base と CASE のどちらを扱うか、いつ clear/promote するかは caller 側サービスに残ります。
+
+helper が持たない責務:
+
+- promote 判断
+- compatibility 判定
+- stale 判定
+- Master rebuild
+- UI 制御
+
+#### 4.5.4 `TaskPaneSnapshotCacheService` inventory
 
 | 項目 | 現在の事実 |
 | --- | --- |
 | サービス名 | `TaskPaneSnapshotCacheService` |
-| 現在の責務 | CASE cache lookup 用の read helper。必要時に Base snapshot を CASE cache へ promote し、その後 CASE cache を parse して `key -> DocumentName / TemplateFileName` を返す |
+| 現在の責務 | helper で CASE/Base chunk を読み書きしつつ、CASE cache lookup、on-demand Base -> CASE promote、compatibility clear、key 正規化、`DocumentTemplateLookupResult` 生成を担う |
 | 入力 | `Excel.Workbook`、文書 `key` |
 | 出力 | `DocumentTemplateLookupResult` または `false`。補助 API として `TryGetDocInfoFromCache`、`ClearCaseSnapshotCacheChunks` を持つ |
 | 直接依存 | `ExcelInteropService`、`Logger` |
@@ -262,7 +286,7 @@
 | 変更リスク | promote 条件を latest master 連動に変える、`TemplateFileName` 空行を成功扱いに変える、Base clear をやめる、`ClearCaseSnapshotCacheChunks` に count 変更を混ぜる、といった変更は prompt / resolver / case-list registration の前提を壊しやすい |
 | 今は触らない理由 | lookup のたびに promote と compatibility clear が入るため、表示整合・prompt 初期値・resolver の CASE cache 優先がこの service の副作用を前提にしている |
 
-#### 4.5.4 `TaskPaneSnapshotBuilderService` inventory
+#### 4.5.5 `TaskPaneSnapshotBuilderService` inventory
 
 | 項目 | 現在の事実 |
 | --- | --- |
@@ -286,7 +310,25 @@
 | 変更リスク | CASE cache 採用条件、Base fallback 条件、Master rebuild 条件、`UpdatedCaseSnapshotCache` の返し方を変えると `TaskPaneManager` の再利用・通知・表示更新ポリシーに波及する |
 | 今は触らない理由 | display path、cache write、stale 判定、Master read-only open、通知フラグが 1 メソッドに密結合しているため |
 
-#### 4.5.5 CASE cache / Base snapshot の write path 実態
+#### 4.5.6 `CaseTemplateSnapshotService` inventory
+
+| 項目 | 現在の事実 |
+| --- | --- |
+| サービス名 | `CaseTemplateSnapshotService` |
+| 現在の責務 | 新規 CASE 初期化時に Kernel `TASKPANE_MASTER_VERSION` を CASE へ同期し、埋込 Base snapshot を CASE cache へ初期 promote する initializer 専用 service |
+| 入力 | `Excel.Workbook kernelWorkbook`、`Excel.Workbook caseWorkbook` |
+| 出力 | なし。副作用として CASE `TASKPANE_MASTER_VERSION`、`TASKPANE_SNAPSHOT_CACHE_*` を更新する |
+| 直接依存 | `ExcelInteropService` |
+| helper 利用 | Base snapshot 読取は `TaskPaneSnapshotChunkReadHelper`、Base/CASE clear は `TaskPaneSnapshotChunkStorageHelper.ClearSnapshot` を使う |
+| 初期 promote の挙動 | `TASKPANE_BASE_SNAPSHOT_COUNT > 0` なら Base snapshot を CASE cache chunk へ物理コピーし、`TASKPANE_BASE_MASTER_VERSION` が正値なら CASE `TASKPANE_MASTER_VERSION` をその値へ揃える |
+| compatibility / clear 条件 | Base snapshot が非互換なら Base snapshot と CASE cache の両方を clear する |
+| `TaskPaneSnapshotCacheService` と異なる点 | lookup 時 promote と違い、既存 CASE cache がより新しくても初期化時 promote は埋込 Base snapshot で上書きする |
+| しないこと | latest master version との stale 判定、Master rebuild、文書 `key` lookup、UI 制御 |
+| 今後の整理余地 | raw chunk copy 自体は helper へ寄せられるが、新規 CASE 初期化専用の上書き policy は service 側へ残す必要がある |
+| 変更リスク | init promote を lookup promote と同一化すると、新規 CASE 作成直後の CASE cache / version 初期化意味が変わる |
+| 今は触らない理由 | `CaseWorkbookInitializer` 配下の初期化フローがこの「初回は Base を正として写す」前提で成立しているため |
+
+#### 4.5.7 CASE cache / Base snapshot の write path 実態
 
 | 起点 | サービス | 現在の write / clear |
 | --- | --- | --- |
@@ -301,7 +343,7 @@
 - CASE cache write path は 1 つではありません。initializer、lookup、display build の 3 経路があり、どこで最新化されたかで比較材料が少し異なります。
 - `CaseTemplateSnapshotService` も `TaskPaneSnapshotCacheService` も Base -> CASE promote を持っており、今後 read helper 化するならここが最初の重複解消候補です。
 
-#### 4.5.6 既存テストが担保していること / いないこと
+#### 4.5.8 既存テストが担保していること / いないこと
 
 - `SnapshotOutputRegressionTests`
   - Master rebuild で生成される snapshot text 形式
@@ -316,12 +358,19 @@
 - `TaskPaneManager*Tests`
   - `UpdatedCaseSnapshotCache` を使った通知判断
   - `WorkbookActivate` / `WindowActivate` での host 再利用と再描画スキップ方針
+- `TaskPaneSnapshotCacheStorageBehaviorTests`
+  - `TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` が、CASE cache 空、Base version の方が新しい、CASE version 欠損の各条件で promote すること
+  - CASE cache が有効で Base version が新しくないときは promote しないこと
+  - CASE cache 非互換時は CASE cache を clear すること
+  - Base snapshot 非互換時は lookup promote 経路では Base snapshot だけを clear し、有効 CASE cache は残すこと
+  - `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache` は lookup promote と異なり、初期化時は既存 CASE cache を上書きしうること
+  - `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache` で Base snapshot が非互換なら Base と CASE の両 snapshot を clear すること
 
 現時点で確認できていない専用テスト:
 
-- `TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` の昇格条件そのもの
-- CASE / Base snapshot の compatibility 不一致 clear
-- `CaseTemplateSnapshotService` 初期 promote と `TaskPaneSnapshotCacheService` promote の差分
+- `TaskPaneSnapshotChunkReadHelper` / `TaskPaneSnapshotChunkStorageHelper` 単体の direct unit test
+- `TaskPaneSnapshotChunkStorageHelper.SaveSnapshot(string.Empty)` の count だけを `0` にする境界
+- helper 自体が property delete を行わないことの専用固定点
 
 ### 4.6 `MasterTemplateCatalogService` / `MasterTemplateSheetReaderAdapter` との関係
 
@@ -360,16 +409,20 @@
 
 ## 6. 今後の安全な整理順
 
-1. `MasterTemplateSheetReader` 系
+1. `TaskPaneSnapshotChunkReadHelper` / `TaskPaneSnapshotChunkStorageHelper`
+   - raw chunk I/O 契約だけを対象にし、promote / stale / UI policy を持ち込まない
+   - caller ごとの差分は維持したまま、DocProperty 連結・分割・clear の境界だけを固定する
+2. `TaskPaneSnapshotCacheService` と `CaseTemplateSnapshotService`
+   - helper を共有 primitive として使い続けつつ、Base -> CASE promote の重複を整理する
+   - ただし lookup promote と initializer promote の policy 差は残す
+3. `MasterTemplateSheetReader` 系
    - `雛形一覧` 列解釈の read-only 入口をさらに統一する
    - 特に `KernelTemplateSyncService` 側の direct call を adapter 寄せ候補として整理する
-2. `DocumentTemplateLookupService`
+4. `DocumentTemplateLookupService`
    - `key -> DocumentName / TemplateFileName / ResolutionSource` の read-only 窓口を固定する
    - prompt cache-only と resolver master fallback の両 policy は保持する
    - `DocumentNamePromptService` 側はすでに `ICaseCacheDocumentTemplateReader` 依存なので、将来差し替える場合も consumer 契約は固定したまま内部委譲だけを動かすのが最小単位候補
-3. Base / CASE snapshot storage の read helper
-   - `TaskPaneSnapshotCacheService` と `CaseTemplateSnapshotService` の読取重複を先に整理する
-4. その後で限定的な consumer 差し替え
+5. その後で限定的な consumer 差し替え
    - `TaskPaneManager`
    - `DocumentNamePromptService`
    - `DocumentTemplateResolver`
@@ -379,6 +432,8 @@
 | 箇所 | 理由 |
 | --- | --- |
 | `TaskPaneSnapshotBuilderService.BuildSnapshotText` | CASE cache / Base cache / Master rebuild、stale 判定、CASE cache 更新が一体 |
+| helper へ promote / stale / UI policy を寄せる変更 | shared primitive の責務を超え、`TaskPaneSnapshotCacheService` / `CaseTemplateSnapshotService` / `TaskPaneSnapshotBuilderService` の境界を壊しやすい |
+| `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache` | 新規 CASE 初期化専用で、lookup promote とは意図的に上書き policy が異なる |
 | `DocumentNamePromptService` の cache-only policy | 表示中 Pane と prompt 初期値の整合を保つ前提 |
 | `DocumentTemplateResolver` の CASE cache 優先 | 開いている CASE の表示状態と実行解決元を揃える前提 |
 | `KernelTemplateSyncService` の `TASKPANE_MASTER_VERSION` 更新と Base 書込 | 正本更新の責務そのもの |

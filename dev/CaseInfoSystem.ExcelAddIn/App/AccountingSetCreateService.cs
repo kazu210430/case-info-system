@@ -8,6 +8,26 @@ using Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+	internal interface IAccountingSetReadyShowBridge
+	{
+		void ShowWorkbookTaskPaneWhenReady (Workbook workbook, string reason);
+	}
+
+	internal sealed class ThisAddInAccountingSetReadyShowBridge : IAccountingSetReadyShowBridge
+	{
+		private readonly ThisAddIn _addIn;
+
+		internal ThisAddInAccountingSetReadyShowBridge (ThisAddIn addIn)
+		{
+			_addIn = addIn ?? throw new ArgumentNullException ("addIn");
+		}
+
+		public void ShowWorkbookTaskPaneWhenReady (Workbook workbook, string reason)
+		{
+			_addIn.ShowWorkbookTaskPaneWhenReady (workbook, reason);
+		}
+	}
+
 	internal sealed class AccountingSetCreateService
 	{
 		private const string CustomerNameKey = "\u9867\u5BA2_\u540D\u524D";
@@ -40,9 +60,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly AccountingSetPresentationWaitService _accountingSetPresentationWaitService;
 
+		private readonly IAccountingSetReadyShowBridge _accountingSetReadyShowBridge;
+
 		private readonly Logger _logger;
 
 		internal AccountingSetCreateService (ExcelInteropService excelInteropService, CaseContextFactory caseContextFactory, DocumentOutputService documentOutputService, AccountingSetNamingService accountingSetNamingService, AccountingTemplateResolver accountingTemplateResolver, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, TransientPaneSuppressionService transientPaneSuppressionService, AccountingSetPresentationWaitService accountingSetPresentationWaitService, Logger logger)
+			: this (excelInteropService, caseContextFactory, documentOutputService, accountingSetNamingService, accountingTemplateResolver, accountingWorkbookService, pathCompatibilityService, transientPaneSuppressionService, accountingSetPresentationWaitService, new ThisAddInAccountingSetReadyShowBridge (Globals.ThisAddIn), logger)
+		{
+		}
+
+		internal AccountingSetCreateService (ExcelInteropService excelInteropService, CaseContextFactory caseContextFactory, DocumentOutputService documentOutputService, AccountingSetNamingService accountingSetNamingService, AccountingTemplateResolver accountingTemplateResolver, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, TransientPaneSuppressionService transientPaneSuppressionService, AccountingSetPresentationWaitService accountingSetPresentationWaitService, IAccountingSetReadyShowBridge accountingSetReadyShowBridge, Logger logger)
 		{
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_caseContextFactory = caseContextFactory ?? throw new ArgumentNullException ("caseContextFactory");
@@ -53,6 +80,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException ("transientPaneSuppressionService");
 			_accountingSetPresentationWaitService = accountingSetPresentationWaitService ?? throw new ArgumentNullException ("accountingSetPresentationWaitService");
+			_accountingSetReadyShowBridge = accountingSetReadyShowBridge ?? throw new ArgumentNullException ("accountingSetReadyShowBridge");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
@@ -110,7 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Accounting set CASE create pane handoff activated. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
 				_logger.Info ("Accounting set CASE create pane handoff before wait-ready. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
 				waitSession?.UpdateStage (AccountingSetPresentationWaitService.ShowingInputScreenStageTitle);
-				Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady (workbook, "AccountingSetCreateService.Execute");
+				_accountingSetReadyShowBridge.ShowWorkbookTaskPaneWhenReady (workbook, "AccountingSetCreateService.Execute");
 				waitSession?.Close ();
 				_logger.Info ("Accounting set CASE create pane handoff queued. workbook=" + _excelInteropService.GetWorkbookFullName (workbook));
 				if (accountingLawyerMappingResult.OverflowCount > 0) {

@@ -173,6 +173,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var accountingWorkbookLifecycleService = new AccountingWorkbookLifecycleService(WorkbookRoleResolver, accountingWorkbookService, accountingFormHelperService, accountingPaymentHistoryImportService, _logger);
             var accountingInternalCommandService = new AccountingInternalCommandService(navigationService, accountingPaymentHistoryImportService, accountingFormHelperService, accountingSaveAsService, _logger);
             var accountingSetPresentationWaitService = new AccountingSetPresentationWaitService(_logger);
+            var accountingSetReadyShowBridge = new ThisAddInAccountingSetReadyShowBridge(_addIn);
             var accountingSetCreateService = new AccountingSetCreateService(
                 ExcelInteropService,
                 caseContextFactory,
@@ -183,6 +184,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 pathCompatibilityService,
                 transientPaneSuppressionService,
                 accountingSetPresentationWaitService,
+                accountingSetReadyShowBridge,
                 _logger);
             var accountingSetKernelSyncService = new AccountingSetKernelSyncService(
                 ExcelInteropService,

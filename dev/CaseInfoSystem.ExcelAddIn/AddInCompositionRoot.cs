@@ -572,6 +572,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 excelInteropService,
                 pathCompatibilityService,
                 _logger);
+            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader = taskPaneSnapshotBuilderService;
             var workbookCaseTaskPaneRefreshCommandService = new WorkbookCaseTaskPaneRefreshCommandService(
                 workbookRoleResolver,
                 excelInteropService,
@@ -582,7 +583,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var taskPaneManager = new TaskPaneManager(
                 _addIn,
                 excelInteropService,
-                taskPaneSnapshotBuilderService,
+                caseTaskPaneSnapshotReader,
                 documentCommandService,
                 documentNamePromptService,
                 kernelCommandService,

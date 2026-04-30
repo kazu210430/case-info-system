@@ -13,7 +13,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
-        private readonly TaskPaneSnapshotBuilderService _taskPaneSnapshotBuilderService;
+        private readonly ICaseTaskPaneSnapshotReader _caseTaskPaneSnapshotReader;
         private readonly DocumentCommandService _documentCommandService;
         private readonly DocumentNamePromptService _documentNamePromptService;
         private readonly KernelCommandService _kernelCommandService;
@@ -31,7 +31,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneManager(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            TaskPaneSnapshotBuilderService taskPaneSnapshotBuilderService,
+            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             DocumentCommandService documentCommandService,
             DocumentNamePromptService documentNamePromptService,
             KernelCommandService kernelCommandService,
@@ -44,7 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             : this(
                 addIn,
                 excelInteropService,
-                taskPaneSnapshotBuilderService,
+                caseTaskPaneSnapshotReader,
                 documentCommandService,
                 documentNamePromptService,
                 kernelCommandService,
@@ -61,7 +61,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneManager(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            TaskPaneSnapshotBuilderService taskPaneSnapshotBuilderService,
+            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             DocumentCommandService documentCommandService,
             DocumentNamePromptService documentNamePromptService,
             KernelCommandService kernelCommandService,
@@ -75,7 +75,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
-            _taskPaneSnapshotBuilderService = taskPaneSnapshotBuilderService ?? throw new ArgumentNullException(nameof(taskPaneSnapshotBuilderService));
+            _caseTaskPaneSnapshotReader = caseTaskPaneSnapshotReader ?? throw new ArgumentNullException(nameof(caseTaskPaneSnapshotReader));
             _documentCommandService = documentCommandService ?? throw new ArgumentNullException(nameof(documentCommandService));
             _documentNamePromptService = documentNamePromptService ?? throw new ArgumentNullException(nameof(documentNamePromptService));
             _kernelCommandService = kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService));
@@ -93,7 +93,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _addIn = null;
             _excelInteropService = null;
-            _taskPaneSnapshotBuilderService = null;
+            _caseTaskPaneSnapshotReader = null;
             _documentCommandService = null;
             _documentNamePromptService = null;
             _kernelCommandService = null;
@@ -738,7 +738,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
             bool? originalWorkbookSavedState = TryGetWorkbookSavedState(context.Workbook);
-            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _taskPaneSnapshotBuilderService.BuildSnapshotText(context.Workbook);
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _caseTaskPaneSnapshotReader.BuildSnapshotText(context.Workbook);
             string snapshotText = buildResult.SnapshotText;
             _logger.Info("RenderHost snapshot acquired. role=Case, length=" + snapshotText.Length.ToString());
             TaskPaneSnapshot snapshot = TaskPaneSnapshotParser.Parse(snapshotText);
@@ -1005,7 +1005,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// </summary>
         private void RenderCaseHostAfterAction(DocumentButtonsControl control, Excel.Workbook workbook)
         {
-            string snapshotText = _taskPaneSnapshotBuilderService.BuildSnapshotText(workbook).SnapshotText;
+            string snapshotText = _caseTaskPaneSnapshotReader.BuildSnapshotText(workbook).SnapshotText;
             TaskPaneSnapshot snapshot = TaskPaneSnapshotParser.Parse(snapshotText);
             // 処理ブロック: アクション後 refresh でも選択タブを保持したまま App 層で再構築する。
             CaseTaskPaneViewState viewState = _caseTaskPaneViewStateBuilder.Build(snapshot, control.SelectedTabName);

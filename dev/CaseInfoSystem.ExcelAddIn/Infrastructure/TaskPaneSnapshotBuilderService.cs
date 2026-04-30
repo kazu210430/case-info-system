@@ -11,7 +11,7 @@ using Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
-	internal sealed class TaskPaneSnapshotBuilderService
+	internal sealed class TaskPaneSnapshotBuilderService : CaseInfoSystem.ExcelAddIn.App.ICaseTaskPaneSnapshotReader
 	{
 		internal sealed class TaskPaneBuildResult
 		{
@@ -82,7 +82,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal TaskPaneBuildResult BuildSnapshotText (Workbook workbook)
+		public TaskPaneBuildResult BuildSnapshotText (Workbook workbook)
 		{
 			if (workbook == null) {
 				return new TaskPaneBuildResult (string.Empty, updatedCaseSnapshotCache: false);
@@ -183,6 +183,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				}
 			}
 		}
+
 
 		private bool TryReadLatestMasterVersion (Workbook caseWorkbook, out long masterVersion)
 		{

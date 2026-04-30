@@ -224,7 +224,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         }
     }
 
-    internal sealed class TaskPaneSnapshotBuilderService
+    internal sealed class TaskPaneSnapshotBuilderService : CaseInfoSystem.ExcelAddIn.App.ICaseTaskPaneSnapshotReader
     {
         internal sealed class TaskPaneBuildResult
         {
@@ -246,6 +246,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return OnBuildSnapshotText != null
                 ? OnBuildSnapshotText(workbook)
                 : new TaskPaneBuildResult(string.Empty, updatedCaseSnapshotCache: false);
+        }
+
+        TaskPaneBuildResult CaseInfoSystem.ExcelAddIn.App.ICaseTaskPaneSnapshotReader.BuildSnapshotText(Excel.Workbook workbook)
+        {
+            return BuildSnapshotText(workbook);
         }
     }
 }

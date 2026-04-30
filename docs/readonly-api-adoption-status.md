@@ -10,6 +10,9 @@
 - `TaskPaneManager` 周り
   - `91d0777` で `TaskPaneSnapshotBuilderService` に `ICaseTaskPaneSnapshotReader` を追加した。
   - consumer 側は `TaskPaneManager` から `TaskPaneSnapshotBuilderService` 直接依存を外し、`ICaseTaskPaneSnapshotReader` 経由へ差し替えた。
+- `TaskPaneSnapshotBuilderService` 周り
+  - 2026-04-30 時点の作業で `IMasterTemplateSheetReader` を constructor 注入した。
+  - `MasterList rebuild` と pane 幅計算で使う master sheet 読み取りを、`MasterTemplateSheetReader` 直接呼び出しから既存 adapter 経由へ差し替えた。
 
 ### 差し替え方針
 

@@ -72,13 +72,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private readonly PathCompatibilityService _pathCompatibilityService;
 
+		private readonly IMasterTemplateSheetReader _masterTemplateSheetReader;
+
 		private readonly Logger _logger;
 
-		internal TaskPaneSnapshotBuilderService (Application application, ExcelInteropService excelInteropService, PathCompatibilityService pathCompatibilityService, Logger logger)
+		internal TaskPaneSnapshotBuilderService (Application application, ExcelInteropService excelInteropService, PathCompatibilityService pathCompatibilityService, IMasterTemplateSheetReader masterTemplateSheetReader, Logger logger)
 		{
 			_application = application ?? throw new ArgumentNullException ("application");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
+			_masterTemplateSheetReader = masterTemplateSheetReader ?? throw new ArgumentNullException ("masterTemplateSheetReader");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
@@ -261,7 +264,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private void AppendTemplateDefinitions (List<string> lines, Dictionary<string, int> tabOrder, Dictionary<string, int> rowMap, Worksheet masterWorksheet)
 		{
-			MasterTemplateSheetData masterSheetData = MasterTemplateSheetReader.Read (masterWorksheet);
+			MasterTemplateSheetData masterSheetData = _masterTemplateSheetReader.Read (masterWorksheet);
 			if (masterSheetData.LastRow < 3) {
 				return;
 			}
@@ -421,7 +424,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				return 720;
 			}
 			try {
-				MasterTemplateSheetData masterSheetSnapshot = MasterTemplateSheetReader.Read (masterWorksheet);
+				MasterTemplateSheetData masterSheetSnapshot = _masterTemplateSheetReader.Read (masterWorksheet);
 				int num = 0;
 				int num2 = 0;
 				for (int i = 0; i < masterSheetSnapshot.Rows.Count; i++) {

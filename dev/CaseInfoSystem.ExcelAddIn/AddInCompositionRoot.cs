@@ -304,6 +304,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 .Compose(
                     pathCompatibilityService,
                     ExcelInteropService,
+                    masterTemplateSheetReader,
                     WorkbookRoleResolver,
                     documentCommandService,
                     documentNamePromptService,
@@ -556,6 +557,7 @@ namespace CaseInfoSystem.ExcelAddIn
         internal AddInTaskPaneComposition Compose(
             PathCompatibilityService pathCompatibilityService,
             ExcelInteropService excelInteropService,
+            IMasterTemplateSheetReader masterTemplateSheetReader,
             WorkbookRoleResolver workbookRoleResolver,
             DocumentCommandService documentCommandService,
             DocumentNamePromptService documentNamePromptService,
@@ -572,6 +574,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _application,
                 excelInteropService,
                 pathCompatibilityService,
+                masterTemplateSheetReader,
                 _logger);
             ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader = taskPaneSnapshotBuilderService;
             var workbookCaseTaskPaneRefreshCommandService = new WorkbookCaseTaskPaneRefreshCommandService(

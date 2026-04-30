@@ -20,9 +20,9 @@
 
 ### テスト状態
 
-- 2026-04-30 時点の `main` で `.\build.ps1 -Mode Compile` は成功。
-- 2026-04-30 時点の `main` で `.\build.ps1 -Mode Test` は成功。
-- 2026-04-30 時点の `main` で `CaseInfoSystem.SnapshotRegressionTests` は 8 件すべて成功。
+- 2026-04-30 時点の read-only API adoption 作業ブランチで `.\build.ps1 -Mode Compile` は成功。
+- 2026-04-30 時点の read-only API adoption 作業ブランチで `.\build.ps1 -Mode Test` は成功。
+- 2026-04-30 時点の read-only API adoption 作業ブランチで `CaseInfoSystem.SnapshotRegressionTests` は 8 件すべて成功。
 
 ### 実機確認結果
 

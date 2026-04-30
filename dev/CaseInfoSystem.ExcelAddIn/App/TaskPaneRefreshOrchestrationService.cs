@@ -540,12 +540,61 @@ namespace CaseInfoSystem.ExcelAddIn.App
             WorkbookContext context = _workbookSessionService == null ? null : _workbookSessionService.ResolveActiveContext("PendingPaneRefresh");
             if (context == null || context.Role != WorkbookRole.Case)
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-stop reason="
+                    + (_pendingPaneRefreshReason ?? string.Empty)
+                    + ", pendingWorkbookFullName=\""
+                    + (_pendingPaneRefreshWorkbookFullName ?? string.Empty)
+                    + "\", contextRole="
+                    + (context == null ? "null" : context.Role.ToString())
+                    + ", attemptsRemaining="
+                    + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
                 StopPendingPaneRefreshTimer();
                 return;
             }
 
             _pendingPaneRefreshAttemptsRemaining--;
-            if (TryRefreshTaskPane(_pendingPaneRefreshReason, null, null).IsRefreshSucceeded)
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-start reason="
+                + (_pendingPaneRefreshReason ?? string.Empty)
+                + ", pendingWorkbookFullName=\""
+                + (_pendingPaneRefreshWorkbookFullName ?? string.Empty)
+                + "\", contextWorkbook="
+                + FormatWorkbookDescriptor(context.Workbook)
+                + ", attemptsRemaining="
+                + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture)
+                + ", activeState="
+                + FormatActiveState());
+            _logger?.Info(
+                "TaskPane timer fallback active CASE context start. reason="
+                + (_pendingPaneRefreshReason ?? string.Empty)
+                + ", pendingWorkbook="
+                + (_pendingPaneRefreshWorkbookFullName ?? string.Empty)
+                + ", attemptsRemaining="
+                + _pendingPaneRefreshAttemptsRemaining.ToString(CultureInfo.InvariantCulture));
+            bool fallbackRefreshed = TryRefreshTaskPane(_pendingPaneRefreshReason, null, null).IsRefreshSucceeded;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-end reason="
+                + (_pendingPaneRefreshReason ?? string.Empty)
+                + ", pendingWorkbookFullName=\""
+                + (_pendingPaneRefreshWorkbookFullName ?? string.Empty)
+                + "\", contextWorkbook="
+                + FormatWorkbookDescriptor(context.Workbook)
+                + ", refreshed="
+                + fallbackRefreshed.ToString()
+                + ", activeState="
+                + FormatActiveState());
+            _logger?.Info(
+                "TaskPane timer fallback active CASE context result. reason="
+                + (_pendingPaneRefreshReason ?? string.Empty)
+                + ", pendingWorkbook="
+                + (_pendingPaneRefreshWorkbookFullName ?? string.Empty)
+                + ", refreshed="
+                + fallbackRefreshed.ToString());
+            if (fallbackRefreshed)
             {
                 StopPendingPaneRefreshTimer();
             }

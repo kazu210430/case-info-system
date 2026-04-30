@@ -608,7 +608,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 windowActivatePanePredicateBridge,
                 _handleExternalWorkbookDetected,
                 _shouldSuppressCasePaneRefresh,
-                _refreshTaskPane);
+                _refreshTaskPane,
+                _logger);
             var taskPaneRefreshCoordinator = new TaskPaneRefreshCoordinator(
                 workbookSessionService,
                 taskPaneManager,

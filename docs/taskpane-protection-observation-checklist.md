@@ -277,3 +277,29 @@
 - protection 5 秒失効の正式な設計根拠
 - fallback timer が必要になる代表ケースの固定的な再現条件
 - `WindowActivate` 側を単独で追いやすいログの有無
+
+## Added Observation Logs On 2026-05-01
+
+This supplement captures the minimum new log phrases added for TaskPane observation without changing behavior.
+
+| Log phrase | Source file / path | What it makes observable | What still remains unobservable | How to use it in baseline recording |
+| --- | --- | --- | --- | --- |
+| `source=WindowActivatePaneHandlingService action=protection-return` | `App/WindowActivatePaneHandlingService.cs` `Handle(...)` | `WindowActivate` returned because of protection | Internal comparison details inside the protection predicate | Treat this as the definitive branch marker for protection return |
+| `source=WindowActivatePaneHandlingService action=suppression-return` | `App/WindowActivatePaneHandlingService.cs` `Handle(...)` | `WindowActivate` returned because of suppression | Suppression token/count internals | Use after `TaskPane event entry. event=WindowActivate` to separate suppression return from other exits |
+| `source=WindowActivatePaneHandlingService action=refresh-proceed` | `App/WindowActivatePaneHandlingService.cs` `Handle(...)` | `WindowActivate` proceeded to refresh | Refresh success/failure after the call | Pair with `source=ThisAddIn action=refresh-call-start` and `...end` |
+| `source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-start` | `App/TaskPaneRefreshOrchestrationService.cs` `PendingPaneRefreshTimer_Tick(...)` | Workbook resolution failed and active CASE context fallback started | Root cause of workbook/window resolution failure | Use after `TaskPane timer fallback scheduled.` to confirm fallback branch entry |
+| `TaskPane timer fallback active CASE context start.` | `App/TaskPaneRefreshOrchestrationService.cs` `PendingPaneRefreshTimer_Tick(...)` | Human-readable start marker for active CASE context fallback | Internal active-context matching details | Quick keyword for manual log scans |
+| `source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-end` | `App/TaskPaneRefreshOrchestrationService.cs` `PendingPaneRefreshTimer_Tick(...)` | Fallback branch completed and whether `refreshed=true/false` | Detailed reason why refresh failed | Use as the structured result marker for fallback observations |
+| `TaskPane timer fallback active CASE context result.` | `App/TaskPaneRefreshOrchestrationService.cs` `PendingPaneRefreshTimer_Tick(...)` | Human-readable result marker for active CASE context fallback | Coordinator-internal decision details | Quick keyword for manual log scans |
+| `source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-stop` | `App/TaskPaneRefreshOrchestrationService.cs` `PendingPaneRefreshTimer_Tick(...)` | Workbook resolution failed and the timer stopped without entering active CASE context fallback | Whether that stop was the desired UX | Use to distinguish "fallback branch not entered" from "fallback branch entered" |
+| `source=TaskPaneManager action=visible-case-pane-check result=NoWindowKey` | `App/TaskPaneManager.cs` `HasVisibleCasePaneForWorkbookWindow(...)` | The visible-pane check failed before window key resolution | Why the window key was missing | Record as an early-complete false reason |
+| `source=TaskPaneManager action=visible-case-pane-check result=NoHost` | `App/TaskPaneManager.cs` `HasVisibleCasePaneForWorkbookWindow(...)` | The target window had no registered pane host | Why no host existed yet | Record as an early-complete false reason |
+| `source=TaskPaneManager action=visible-case-pane-check result=WorkbookMismatch` | `App/TaskPaneManager.cs` `HasVisibleCasePaneForWorkbookWindow(...)` | Window resolved but workbook did not match the host workbook | Whether the mismatch came from stale host state or a different workbook | Record as an early-complete false reason |
+| `source=TaskPaneManager action=visible-case-pane-check result=NotVisibleOrNotCase` | `App/TaskPaneManager.cs` `HasVisibleCasePaneForWorkbookWindow(...)` | A host existed but it was not a visible CASE pane | Why host visibility/role differed | Record as the final false reason before refresh continues |
+| `source=TaskPaneManager action=visible-case-pane-check result=VisibleCasePaneFound` | `App/TaskPaneManager.cs` `HasVisibleCasePaneForWorkbookWindow(...)` | Visible CASE pane early-complete succeeded | The earlier event chain that made the pane visible | Pair with `TaskPane wait-ready early-complete because visible CASE pane is already shown.` |
+
+### Remaining gaps after this supplement
+
+- The new logs do not reveal the internal predicate details of protection or suppression.
+- The new logs do not reveal the root cause behind workbook/window resolution failure.
+- A complete `WindowActivate`-only trace still requires combining event-boundary logs and refresh-call logs.

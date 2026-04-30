@@ -136,3 +136,33 @@
 
 - 実機観測が可能な環境で、この文書の `未実施` を実測結果へ置き換える。
 - 観測できなかった項目は `OK` にせず、引き続き `未実施` または `未確認` のまま残す。
+
+## Added Baseline Log Keywords On 2026-05-01
+
+The following log phrases became available after the minimum observation-log reinforcement on top of commit `10d471866732d0b156ed72eda1421c90abc2a298`.
+
+- `source=WindowActivatePaneHandlingService action=protection-return`
+- `source=WindowActivatePaneHandlingService action=suppression-return`
+- `source=WindowActivatePaneHandlingService action=refresh-proceed`
+- `source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-start`
+- `TaskPane timer fallback active CASE context start.`
+- `source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-end`
+- `TaskPane timer fallback active CASE context result.`
+- `source=TaskPaneRefreshOrchestrationService action=defer-active-context-fallback-stop`
+- `source=TaskPaneManager action=visible-case-pane-check result=NoWindowKey`
+- `source=TaskPaneManager action=visible-case-pane-check result=NoHost`
+- `source=TaskPaneManager action=visible-case-pane-check result=WorkbookMismatch`
+- `source=TaskPaneManager action=visible-case-pane-check result=NotVisibleOrNotCase`
+- `source=TaskPaneManager action=visible-case-pane-check result=VisibleCasePaneFound`
+
+### How to use these new phrases in future baseline observation
+
+- Use the three `WindowActivatePaneHandlingService` phrases to separate protection return, suppression return, and refresh proceed inside `Handle(...)`.
+- Use the four active CASE context fallback phrases to distinguish timer firing, fallback branch entry, fallback branch result, and stop-without-fallback.
+- Use the five `visible-case-pane-check` result phrases to explain why visible pane early-complete succeeded or failed.
+
+### Still unconfirmed after this log-only change
+
+- The internal predicate details behind protection and suppression are still not directly logged.
+- The root cause behind workbook/window resolution failure is still not directly logged.
+- A complete `WindowActivate`-only timeline still needs existing event-boundary and refresh-call logs together.

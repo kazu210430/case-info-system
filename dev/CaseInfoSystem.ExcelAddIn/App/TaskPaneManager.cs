@@ -217,9 +217,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal bool HasVisibleCasePaneForWorkbookWindow(Excel.Workbook workbook, Excel.Window window)
         {
             string windowKey = SafeGetWindowKey(window);
-            if (string.IsNullOrWhiteSpace(windowKey)
-                || !_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            if (string.IsNullOrWhiteSpace(windowKey))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=visible-case-pane-check result=NoWindowKey"
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", inputWindow="
+                    + FormatWindowDescriptor(window));
+                return false;
+            }
+
+            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=visible-case-pane-check result=NoHost"
+                    + ", windowKey="
+                    + windowKey
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook));
                 return false;
             }
 
@@ -227,10 +245,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (string.IsNullOrWhiteSpace(workbookFullName)
                 || !string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
             {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=visible-case-pane-check result=WorkbookMismatch"
+                    + ", windowKey="
+                    + windowKey
+                    + ", host="
+                    + FormatHostDescriptor(host)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook));
                 return false;
             }
 
-            return GetHostedWorkbookRole(host) == WorkbookRole.Case && host.IsVisible;
+            WorkbookRole hostedRole = GetHostedWorkbookRole(host);
+            bool isVisibleCasePane = hostedRole == WorkbookRole.Case && host.IsVisible;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=visible-case-pane-check result="
+                + (isVisibleCasePane ? "VisibleCasePaneFound" : "NotVisibleOrNotCase")
+                + ", windowKey="
+                + windowKey
+                + ", host="
+                + FormatHostDescriptor(host)
+                + ", hostedRole="
+                + hostedRole.ToString()
+                + ", hostVisible="
+                + host.IsVisible.ToString());
+            return isVisibleCasePane;
         }
 
         private void EvaluateDisplayRequestPaneState(

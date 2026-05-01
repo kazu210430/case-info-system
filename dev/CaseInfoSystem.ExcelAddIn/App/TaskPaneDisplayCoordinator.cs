@@ -18,6 +18,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<Excel.Window, string> _safeGetWindowKey;
         private readonly Func<TaskPaneHost, string> _formatHostDescriptor;
         private readonly Func<Excel.Workbook, string> _formatWorkbookDescriptor;
+        private readonly Func<Excel.Window, string> _formatWindowDescriptor;
         private readonly Action<string> _removeHost;
 
         internal TaskPaneDisplayCoordinator(
@@ -28,6 +29,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Func<Excel.Window, string> safeGetWindowKey,
             Func<TaskPaneHost, string> formatHostDescriptor,
             Func<Excel.Workbook, string> formatWorkbookDescriptor,
+            Func<Excel.Window, string> formatWindowDescriptor,
             Action<string> removeHost)
         {
             _hostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
@@ -37,6 +39,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _safeGetWindowKey = safeGetWindowKey ?? throw new ArgumentNullException(nameof(safeGetWindowKey));
             _formatHostDescriptor = formatHostDescriptor ?? throw new ArgumentNullException(nameof(formatHostDescriptor));
             _formatWorkbookDescriptor = formatWorkbookDescriptor ?? throw new ArgumentNullException(nameof(formatWorkbookDescriptor));
+            _formatWindowDescriptor = formatWindowDescriptor ?? throw new ArgumentNullException(nameof(formatWindowDescriptor));
             _removeHost = removeHost ?? throw new ArgumentNullException(nameof(removeHost));
         }
 
@@ -84,6 +87,108 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             _logger.Info("TaskPane existing host shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
             return true;
+        }
+
+        internal bool TryShowExistingPaneForDisplayRequest(ExcelInteropService excelInteropService, Excel.Workbook workbook, Excel.Window window)
+        {
+            TaskPaneDisplayRequestPaneState paneState = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+                excelInteropService,
+                _hostsByWindowKey,
+                workbook,
+                window);
+
+            if (!TaskPaneShowExistingPolicy.ShouldShowExisting(
+                hasExistingHost: paneState.HasExistingHost,
+                isSameWorkbook: paneState.IsSameWorkbook,
+                isRenderSignatureCurrent: paneState.IsRenderSignatureCurrent))
+            {
+                return false;
+            }
+
+            return TryShowExistingPane(excelInteropService, workbook, window, "DisplayRequest.ShowExisting");
+        }
+
+        internal bool ShouldShowWithRenderPaneForDisplayRequest(ExcelInteropService excelInteropService, Excel.Workbook workbook, Excel.Window window)
+        {
+            TaskPaneDisplayRequestPaneState paneState = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+                excelInteropService,
+                _hostsByWindowKey,
+                workbook,
+                window);
+
+            return TaskPaneShowWithRenderPolicy.ShouldShowWithRender(
+                paneState.HasExistingHost,
+                paneState.IsSameWorkbook,
+                paneState.IsRenderSignatureCurrent);
+        }
+
+        internal bool HasManagedPaneForWindow(Excel.Window window)
+        {
+            string windowKey = _safeGetWindowKey(window);
+            return !string.IsNullOrWhiteSpace(windowKey)
+                && _hostsByWindowKey.ContainsKey(windowKey);
+        }
+
+        internal bool HasVisibleCasePaneForWorkbookWindow(ExcelInteropService excelInteropService, Excel.Workbook workbook, Excel.Window window)
+        {
+            string windowKey = _safeGetWindowKey(window);
+            if (string.IsNullOrWhiteSpace(windowKey))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=visible-case-pane-check result=NoWindowKey"
+                    + ", workbook="
+                    + _formatWorkbookDescriptor(workbook)
+                    + ", inputWindow="
+                    + _formatWindowDescriptor(window));
+                return false;
+            }
+
+            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=visible-case-pane-check result=NoHost"
+                    + ", windowKey="
+                    + windowKey
+                    + ", workbook="
+                    + _formatWorkbookDescriptor(workbook));
+                return false;
+            }
+
+            string workbookFullName = workbook == null || excelInteropService == null
+                ? string.Empty
+                : excelInteropService.GetWorkbookFullName(workbook);
+            if (string.IsNullOrWhiteSpace(workbookFullName)
+                || !string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=visible-case-pane-check result=WorkbookMismatch"
+                    + ", windowKey="
+                    + windowKey
+                    + ", host="
+                    + _formatHostDescriptor(host)
+                    + ", workbook="
+                    + _formatWorkbookDescriptor(workbook));
+                return false;
+            }
+
+            WorkbookRole hostedRole = GetHostedWorkbookRole(host);
+            bool isVisibleCasePane = hostedRole == WorkbookRole.Case && host.IsVisible;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=visible-case-pane-check result="
+                + (isVisibleCasePane ? "VisibleCasePaneFound" : "NotVisibleOrNotCase")
+                + ", windowKey="
+                + windowKey
+                + ", host="
+                + _formatHostDescriptor(host)
+                + ", hostedRole="
+                + hostedRole.ToString()
+                + ", hostVisible="
+                + host.IsVisible.ToString());
+            return isVisibleCasePane;
         }
 
         internal void HideAll()
@@ -272,6 +377,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Error("TaskPane host hide failed. reason=" + (reason ?? string.Empty) + ", windowKey=" + host.WindowKey, ex);
                 _removeHost(host.WindowKey);
             }
+        }
+
+        private static WorkbookRole GetHostedWorkbookRole(TaskPaneHost host)
+        {
+            if (host == null || host.Control == null)
+            {
+                return WorkbookRole.Unknown;
+            }
+
+            if (host.Control is DocumentButtonsControl)
+            {
+                return WorkbookRole.Case;
+            }
+
+            if (host.Control is KernelNavigationControl)
+            {
+                return WorkbookRole.Kernel;
+            }
+
+            if (host.Control is AccountingNavigationControl)
+            {
+                return WorkbookRole.Accounting;
+            }
+
+            return WorkbookRole.Unknown;
         }
     }
 }

@@ -7,6 +7,7 @@
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
+- 優先度A TaskPane リファクタの現時点スナップショット: `docs/taskpane-refactor-current-state.md`
 - metadata / cache / snapshot の補足: `docs/template-metadata-inventory.md`
 - 読取経路の補足: `docs/template-metadata-read-path-inventory.md`
 

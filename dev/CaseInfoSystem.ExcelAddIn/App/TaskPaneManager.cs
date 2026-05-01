@@ -18,6 +18,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCommandService _kernelCommandService;
         private readonly AccountingSheetCommandService _accountingSheetCommandService;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
+        private readonly CasePaneSnapshotRenderService _casePaneSnapshotRenderService;
         private readonly AccountingInternalCommandService _accountingInternalCommandService;
         private readonly UserErrorService _userErrorService;
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
@@ -48,6 +49,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 kernelCommandService,
                 accountingSheetCommandService,
                 caseTaskPaneViewStateBuilder,
+                new CasePaneSnapshotRenderService(caseTaskPaneSnapshotReader, caseTaskPaneViewStateBuilder),
                 accountingInternalCommandService,
                 kernelCaseInteractionState,
                 userErrorService,
@@ -69,6 +71,37 @@ namespace CaseInfoSystem.ExcelAddIn.App
             UserErrorService userErrorService,
             Logger logger,
             TaskPaneManagerTestHooks testHooks)
+            : this(
+                addIn,
+                excelInteropService,
+                caseTaskPaneSnapshotReader,
+                taskPaneBusinessActionLauncher,
+                kernelCommandService,
+                accountingSheetCommandService,
+                caseTaskPaneViewStateBuilder,
+                new CasePaneSnapshotRenderService(caseTaskPaneSnapshotReader, caseTaskPaneViewStateBuilder),
+                accountingInternalCommandService,
+                kernelCaseInteractionState,
+                userErrorService,
+                logger,
+                testHooks)
+        {
+        }
+
+        internal TaskPaneManager(
+            ThisAddIn addIn,
+            ExcelInteropService excelInteropService,
+            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
+            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
+            KernelCommandService kernelCommandService,
+            AccountingSheetCommandService accountingSheetCommandService,
+            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
+            CasePaneSnapshotRenderService casePaneSnapshotRenderService,
+            AccountingInternalCommandService accountingInternalCommandService,
+            KernelCaseInteractionState kernelCaseInteractionState,
+            UserErrorService userErrorService,
+            Logger logger,
+            TaskPaneManagerTestHooks testHooks)
         {
             _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
@@ -77,6 +110,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCommandService = kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService));
             _accountingSheetCommandService = accountingSheetCommandService ?? throw new ArgumentNullException(nameof(accountingSheetCommandService));
             _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
+            _casePaneSnapshotRenderService = casePaneSnapshotRenderService ?? throw new ArgumentNullException(nameof(casePaneSnapshotRenderService));
             _accountingInternalCommandService = accountingInternalCommandService ?? throw new ArgumentNullException(nameof(accountingInternalCommandService));
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
@@ -103,6 +137,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCommandService = null;
             _accountingSheetCommandService = null;
             _caseTaskPaneViewStateBuilder = null;
+            _casePaneSnapshotRenderService = null;
             _accountingInternalCommandService = null;
             _userErrorService = null;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -628,14 +663,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
             bool? originalWorkbookSavedState = TryGetWorkbookSavedState(context.Workbook);
-            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _caseTaskPaneSnapshotReader.BuildSnapshotText(context.Workbook);
+            CasePaneSnapshotRenderService.CasePaneSnapshotRenderResult renderResult = _casePaneSnapshotRenderService.Render(caseControl, context.Workbook);
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = renderResult.BuildResult;
             string snapshotText = buildResult.SnapshotText;
             _logger.Info("RenderHost snapshot acquired. role=Case, length=" + snapshotText.Length.ToString());
-            TaskPaneSnapshot snapshot = TaskPaneSnapshotParser.Parse(snapshotText);
+            TaskPaneSnapshot snapshot = renderResult.Snapshot;
             _logger.Info("RenderHost snapshot parsed. role=Case, hasError=" + snapshot.HasError.ToString() + ", tabs=" + snapshot.Tabs.Count.ToString() + ", docs=" + snapshot.DocButtons.Count.ToString());
-            // 処理ブロック: CASE pane の表示判断は App 層で固定化し、UI には描画済み状態だけを渡す。
-            CaseTaskPaneViewState viewState = _caseTaskPaneViewStateBuilder.Build(snapshot, caseControl.SelectedTabName);
-            caseControl.Render(viewState);
             NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
             _logger.Info("RenderHost completed. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
         }
@@ -850,11 +883,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// </summary>
         private void RenderCaseHostAfterAction(DocumentButtonsControl control, Excel.Workbook workbook)
         {
-            string snapshotText = _caseTaskPaneSnapshotReader.BuildSnapshotText(workbook).SnapshotText;
-            TaskPaneSnapshot snapshot = TaskPaneSnapshotParser.Parse(snapshotText);
-            // 処理ブロック: アクション後 refresh でも選択タブを保持したまま App 層で再構築する。
-            CaseTaskPaneViewState viewState = _caseTaskPaneViewStateBuilder.Build(snapshot, control.SelectedTabName);
-            control.Render(viewState);
+            _casePaneSnapshotRenderService.RenderAfterAction(control, workbook);
         }
 
         private bool TryShowHost(TaskPaneHost host, string reason)

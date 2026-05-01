@@ -31,6 +31,7 @@
     <Compile Include="ExcelLauncherProgramTests.cs" />
     <Compile Include="TaskPaneBusinessActionLauncherTests.cs" />
     <Compile Include="TaskPaneManagerThinOrchestrationTests.cs" />
+    <Compile Include="CasePaneSnapshotRenderServiceTests.cs" />
     <Compile Include="TaskPaneRenderStateEvaluatorTests.cs" />
     <Compile Include="DocumentCommandServiceTests.cs" />
     <Compile Include="DocumentExecutionModeServiceTests.cs" />
@@ -97,6 +98,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseInteractionState.cs" Link="Source\App\KernelCaseInteractionState.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNamingService.cs" Link="Source\App\KernelNamingService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ICaseTaskPaneSnapshotReader.cs" Link="Source\App\ICaseTaskPaneSnapshotReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneSnapshotRenderService.cs" Link="Source\App\CasePaneSnapshotRenderService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayCoordinator.cs" Link="Source\App\TaskPaneDisplayCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneBusinessActionLauncher.cs" Link="Source\App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManager.cs" Link="Source\App\TaskPaneManager.cs" />

@@ -583,6 +583,9 @@ namespace CaseInfoSystem.ExcelAddIn
                 masterTemplateSheetReader,
                 _logger);
             ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader = taskPaneSnapshotBuilderService;
+            var casePaneSnapshotRenderService = new CasePaneSnapshotRenderService(
+                caseTaskPaneSnapshotReader,
+                caseTaskPaneViewStateBuilder);
             var workbookCaseTaskPaneRefreshCommandService = new WorkbookCaseTaskPaneRefreshCommandService(
                 workbookRoleResolver,
                 excelInteropService,
@@ -601,10 +604,12 @@ namespace CaseInfoSystem.ExcelAddIn
                 kernelCommandService,
                 accountingSheetCommandService,
                 caseTaskPaneViewStateBuilder,
+                casePaneSnapshotRenderService,
                 accountingInternalCommandService,
                 kernelCaseInteractionState,
                 userErrorService,
-                _logger);
+                _logger,
+                testHooks: null);
             var windowActivatePanePredicateBridge = new ThisAddInWindowActivatePanePredicateBridge(_addIn);
             var windowActivatePaneHandlingService = new WindowActivatePaneHandlingService(
                 windowActivatePanePredicateBridge,

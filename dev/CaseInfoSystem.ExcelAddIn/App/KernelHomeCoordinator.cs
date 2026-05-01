@@ -31,10 +31,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool ShouldAutoShowKernelHomeForEvent(string eventName, Excel.Workbook workbook)
         {
-            bool shouldShow = _addin.ShouldShowKernelHomeOnStartup(workbook);
+            bool startupPolicyAllowsDisplay = _addin.ShouldShowKernelHomeOnStartup(workbook);
+            bool shouldShow = KernelHomeAutoDisplayEventPolicy.ShouldAutoShow(eventName, startupPolicyAllowsDisplay);
             _addin.Logger.Info(
                 "Kernel HOME display context evaluated. eventName="
                 + (eventName ?? string.Empty)
+                + ", startupPolicyAllowsDisplay="
+                + startupPolicyAllowsDisplay.ToString()
                 + ", shouldShow="
                 + shouldShow.ToString()
                 + ", workbook="

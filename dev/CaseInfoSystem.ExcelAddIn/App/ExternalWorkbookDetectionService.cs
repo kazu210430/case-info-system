@@ -41,9 +41,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             try
             {
                 bool isCaseWorkbook = _workbookRoleResolver != null && _workbookRoleResolver.IsCaseWorkbook(workbook);
-                if (_kernelCaseInteractionState != null
-                    && !_kernelCaseInteractionState.IsKernelCaseCreationFlowActive
-                    && !isCaseWorkbook)
+                bool isKernelCaseCreationFlowActive = _kernelCaseInteractionState != null
+                    && _kernelCaseInteractionState.IsKernelCaseCreationFlowActive;
+                if (!KernelHomeExternalClosePolicy.ShouldCloseKernelHome(isKernelCaseCreationFlowActive))
                 {
                     _logger?.Info(
                         "Kernel HOME external workbook detection ignored to preserve cross-workbook state. eventName="

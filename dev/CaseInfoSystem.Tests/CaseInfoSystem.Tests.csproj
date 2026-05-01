@@ -52,6 +52,7 @@
     <Compile Include="KernelWorkbookHomeReleaseFallbackPolicyTests.cs" />
     <Compile Include="KernelWorkbookPromotionPolicyTests.cs" />
     <Compile Include="KernelWorkbookServicePolicyTests.cs" />
+    <Compile Include="KernelHomeWindowIndependencePolicyTests.cs" />
     <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
     <Compile Include="KernelWorkbookWindowRestorePolicyTests.cs" />
     <Compile Include="NavigationServiceTests.cs" />
@@ -88,6 +89,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandActionRoutePolicy.cs" Link="Source\App\DocumentCommandActionRoutePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandExecutionDecisionPolicy.cs" Link="Source\App\DocumentCommandExecutionDecisionPolicy.cs" />
     <!-- KernelWorkbookService policies -->
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelHomeAutoDisplayEventPolicy.cs" Link="Source\App\KernelHomeAutoDisplayEventPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelHomeExternalClosePolicy.cs" Link="Source\App\KernelHomeExternalClosePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelHomeSessionDisplayPolicy.cs" Link="Source\App\KernelHomeSessionDisplayPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseInteractionState.cs" Link="Source\App\KernelCaseInteractionState.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNamingService.cs" Link="Source\App\KernelNamingService.cs" />

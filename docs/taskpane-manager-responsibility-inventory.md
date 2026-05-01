@@ -62,6 +62,7 @@
 - WindowActivate 境界の判定は `WindowActivatePaneHandlingService` 側に分離済み
 - `doc` 実行前の prompt 初期値準備順序は `TaskPaneBusinessActionLauncher` に分離済み
 - CASE pane の snapshot build / parse / view state build は `CasePaneSnapshotRenderService` と関連 reader / builder に分離済み
+- CASE cache 更新後処理は `CasePaneCacheRefreshNotificationService` に分離済み
 - host reuse / post-action refresh / notification の一部は policy class に切り出されている
 
 ## まだ TaskPaneManager に残っているもの
@@ -71,8 +72,6 @@
 - nested class のまま残っている `TaskPaneRefreshFlowCoordinator`
 - `RemoveStaleKernelHosts(...)` による Kernel host の掃除
 - `RenderHost(...)` から role 別 render を切り替える最終責務
-- `NotifyCasePaneUpdatedIfNeeded(...)`、`TryGetWorkbookSavedState(...)`、`RestoreWorkbookSavedState(...)` による CASE cache 更新後処理
-  - この処理群は render 完了後にだけ走る副作用境界であり、refresh フロー本線や window 解決とは切り離して扱う必要がある。
 - host / workbook / window / context の descriptor 生成と trace 出力
 
 ## 今は触らない方がよい領域
@@ -92,6 +91,7 @@
 - 1 責務で閉じており、window 境界や ready-show に触れない
 - `WorkbookOpen` / `WorkbookActivate` 時だけ通知する現在ルールをそのまま移せる
 - 失敗時も戻しやすく、`TaskPaneManager` の render 後処理が見通しよくなる
+- 実施済み。render 後にだけ走る副作用境界として、refresh フロー本線や window 解決から分離した
 
 ### 候補2
 

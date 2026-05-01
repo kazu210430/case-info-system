@@ -4,7 +4,6 @@ using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.ExcelAddIn.UI;
 using Excel = Microsoft.Office.Interop.Excel;
-using System.Windows.Forms;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
@@ -28,8 +27,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
         private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
         private readonly TaskPaneRefreshFlowCoordinator _taskPaneRefreshFlowCoordinator;
+        private readonly CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
         private readonly TaskPaneManagerTestHooks _testHooks;
-        private const string ProductTitle = "案件情報System";
         private int _kernelFlickerTraceRefreshPaneSequence;
 
         internal TaskPaneManager(
@@ -120,6 +119,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
+            _casePaneCacheRefreshNotificationService = new CasePaneCacheRefreshNotificationService(
+                _logger,
+                workbook => _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook),
+                _testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null
+                    ? new Action<string>(reason => _testHooks.OnCasePaneUpdatedNotification(reason))
+                    : null);
             _taskPaneHostRegistry = new TaskPaneHostRegistry(
                 _hostsByWindowKey,
                 _addIn,
@@ -158,6 +163,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
+            _casePaneCacheRefreshNotificationService = new CasePaneCacheRefreshNotificationService(
+                _logger,
+                workbook => workbook == null ? string.Empty : (workbook.FullName ?? string.Empty),
+                _testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null
+                    ? new Action<string>(reason => _testHooks.OnCasePaneUpdatedNotification(reason))
+                    : null);
             _taskPaneHostRegistry = new TaskPaneHostRegistry(
                 _hostsByWindowKey,
                 _addIn,
@@ -503,103 +514,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private void RenderCaseHost(DocumentButtonsControl caseControl, WorkbookContext context, string reason)
         {
             _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
-            bool? originalWorkbookSavedState = TryGetWorkbookSavedState(context.Workbook);
+            bool? originalWorkbookSavedState = _casePaneCacheRefreshNotificationService.TryGetWorkbookSavedState(context.Workbook);
             CasePaneSnapshotRenderService.CasePaneSnapshotRenderResult renderResult = _casePaneSnapshotRenderService.Render(caseControl, context.Workbook);
             TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = renderResult.BuildResult;
             string snapshotText = buildResult.SnapshotText;
             _logger.Info("RenderHost snapshot acquired. role=Case, length=" + snapshotText.Length.ToString());
             TaskPaneSnapshot snapshot = renderResult.Snapshot;
             _logger.Info("RenderHost snapshot parsed. role=Case, hasError=" + snapshot.HasError.ToString() + ", tabs=" + snapshot.Tabs.Count.ToString() + ", docs=" + snapshot.DocButtons.Count.ToString());
-            NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
+            _casePaneCacheRefreshNotificationService.NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
             _logger.Info("RenderHost completed. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
-        }
-
-        /// <summary>
-        /// メソッド: CASE の文書ボタンパネル内部更新後に、開く導線専用の後処理を適用する。
-        /// 引数: workbook - 対象 CASE ブック, reason - pane 更新理由, buildResult - スナップショット生成結果。
-        /// 戻り値: なし。
-        /// 副作用: 内部キャッシュ更新による保存確認を抑止し、業務メッセージを表示する。
-        /// </summary>
-        internal void NotifyCasePaneUpdatedIfNeeded(Excel.Workbook workbook, string reason, TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult, bool? originalSavedState = null)
-        {
-            if (workbook == null)
-            {
-                return;
-            }
-
-            try
-            {
-                bool updatedCaseSnapshotCache = buildResult != null && buildResult.UpdatedCaseSnapshotCache;
-                if (updatedCaseSnapshotCache)
-                {
-                    RestoreWorkbookSavedState(workbook, originalSavedState);
-                }
-
-                if (!CasePaneCacheRefreshNotificationPolicy.ShouldNotify(updatedCaseSnapshotCache, reason))
-                {
-                    return;
-                }
-
-                if (_testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null)
-                {
-                    _testHooks.OnCasePaneUpdatedNotification(reason ?? string.Empty);
-                    return;
-                }
-
-                MessageBox.Show("文書ボタンパネルを更新しました", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                _logger.Info("CASE pane cache refresh notification was shown. workbook=" + SafeGetWorkbookName(workbook) + ", reason=" + (reason ?? string.Empty));
-            }
-            catch (Exception ex)
-            {
-                // 例外処理: 通知失敗で CASE 表示自体を止めないため、ログのみ残して継続する。
-                _logger.Error("NotifyCasePaneUpdatedIfNeeded failed.", ex);
-            }
-        }
-
-        /// <summary>
-        /// メソッド: ログ出力用に workbook 名を安全に取得する。
-        /// 引数: workbook - 対象 workbook。
-        /// 戻り値: workbook フルパス。取得できない場合は空文字。
-        /// 副作用: なし。
-        /// </summary>
-        private string SafeGetWorkbookName(Excel.Workbook workbook)
-        {
-            return workbook == null ? string.Empty : (_excelInteropService.GetWorkbookFullName(workbook) ?? string.Empty);
-        }
-
-        private bool? TryGetWorkbookSavedState(Excel.Workbook workbook)
-        {
-            if (workbook == null)
-            {
-                return null;
-            }
-
-            try
-            {
-                return workbook.Saved;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("TryGetWorkbookSavedState failed.", ex);
-                return null;
-            }
-        }
-
-        private void RestoreWorkbookSavedState(Excel.Workbook workbook, bool? originalSavedState)
-        {
-            if (workbook == null || !originalSavedState.HasValue)
-            {
-                return;
-            }
-
-            try
-            {
-                workbook.Saved = originalSavedState.Value;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("RestoreWorkbookSavedState failed.", ex);
-            }
         }
 
         internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)

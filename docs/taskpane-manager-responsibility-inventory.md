@@ -72,6 +72,7 @@
 - `RemoveStaleKernelHosts(...)` による Kernel host の掃除
 - `RenderHost(...)` から role 別 render を切り替える最終責務
 - `NotifyCasePaneUpdatedIfNeeded(...)`、`TryGetWorkbookSavedState(...)`、`RestoreWorkbookSavedState(...)` による CASE cache 更新後処理
+  - この処理群は render 完了後にだけ走る副作用境界であり、refresh フロー本線や window 解決とは切り離して扱う必要がある。
 - host / workbook / window / context の descriptor 生成と trace 出力
 
 ## 今は触らない方がよい領域
@@ -119,3 +120,27 @@
 - 既存テストが候補1から候補3をどこまで直接保護しているかは、この調査では網羅確認していない
 - visible pane early-complete、retry 値、protection 秒数の正式な仕様根拠は、既存 docs とコードだけでは確定しない
 - 実機観測時の体感差分が最も出やすいのが候補2か候補3かは、コードだけでは断定しない
+
+## 設計指針（SOLID 準拠）
+
+本リファクタリングは、振る舞い不変を前提に SOLID 原則へ沿って段階的に進める。
+
+### Single Responsibility Principle（単一責任）
+
+- `TaskPaneManager` は複数責務を持つ状態から、段階的に責務を分離する。
+- 「観測」「判定」「副作用」「UI制御」を同じ単位に混在させない。
+
+### Dependency Direction（依存方向）
+
+- 上位のフロー制御は、下位の詳細処理へ直接依存しない形へ寄せる。
+- 特に副作用処理は独立サービスとして切り出し、表示調停や event 境界から疎結合に保つ。
+
+### Side Effect Isolation（副作用の隔離）
+
+- 状態変更、キャッシュ更新、通知は明確な副作用境界に閉じる。
+- これらを event 境界や window 解決ロジックと混在させない。
+
+### Incremental Refactoring（段階的分離）
+
+- 1回の変更では 1 責務だけを切り出す。
+- 常に振る舞い不変を最優先とする。

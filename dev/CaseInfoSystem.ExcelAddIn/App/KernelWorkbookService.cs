@@ -274,7 +274,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void CloseHomeSession(bool saveKernelWorkbook, string entryPoint)
         {
-            _homeSessionCloseCoordinator.Execute(saveKernelWorkbook, entryPoint);
+            string caller = ResolveExternalCaller();
+            _homeSessionCloseCoordinator.Execute(saveKernelWorkbook, entryPoint, caller);
         }
 
         private Excel.Workbook GetOpenKernelWorkbookCore()
@@ -1507,7 +1508,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _owner = owner ?? throw new ArgumentNullException(nameof(owner));
             }
 
-            internal void Execute(bool saveKernelWorkbook, string entryPoint)
+            internal void Execute(bool saveKernelWorkbook, string entryPoint, string caller)
             {
                 Excel.Workbook workbook = _owner.GetOpenKernelWorkbookCore();
                 bool otherVisibleWorkbookExists = _owner.HasOtherVisibleWorkbookCore(workbook);
@@ -1521,7 +1522,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     skipDisplayRestoreForCaseCreation,
                     otherVisibleWorkbookExists,
                     otherWorkbookExists);
-                string caller = ResolveExternalCaller();
                 _owner.LogKernelFlickerTrace(
                     "source=KernelWorkbookService action=close-home-session-enter entryPoint="
                     + (entryPoint ?? string.Empty)

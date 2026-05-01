@@ -27,6 +27,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneHostRegistry _taskPaneHostRegistry;
         private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
         private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
+        private readonly TaskPaneRefreshFlowCoordinator _taskPaneRefreshFlowCoordinator;
         private readonly TaskPaneManagerTestHooks _testHooks;
         private const string ProductTitle = "案件情報System";
         private int _kernelFlickerTraceRefreshPaneSequence;
@@ -137,6 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook => FormatWorkbookDescriptor(workbook),
                 windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
             _taskPaneActionDispatcher = new TaskPaneActionDispatcher(this);
+            _taskPaneRefreshFlowCoordinator = new TaskPaneRefreshFlowCoordinator(this);
         }
 
         internal TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
@@ -173,32 +175,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook => FormatWorkbookDescriptor(workbook),
                 windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
             _taskPaneActionDispatcher = new TaskPaneActionDispatcher(this);
+            _taskPaneRefreshFlowCoordinator = new TaskPaneRefreshFlowCoordinator(this);
         }
 
-        // 表示調停責務: refresh の主経路で前提確認、host 解決、reuse、render/show を順序どおり調停する。
         internal bool RefreshPane(WorkbookContext context, string reason)
         {
-            int refreshPaneCallId = ++_kernelFlickerTraceRefreshPaneSequence;
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=refresh-pane-start refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context));
-            if (!TryAcceptRefreshPaneRequest(context, reason, refreshPaneCallId, out WorkbookRole role, out string windowKey))
-            {
-                return false;
-            }
-
-            TaskPaneHost host = ResolveRefreshHost(context, windowKey, refreshPaneCallId);
-            if (TryReuseCaseHostForRefresh(host, context, reason, windowKey, refreshPaneCallId))
-            {
-                return true;
-            }
-
-            return RenderAndShowHostForRefresh(host, context, reason, windowKey, refreshPaneCallId);
+            return _taskPaneRefreshFlowCoordinator.RefreshPane(context, reason);
         }
 
         internal bool TryShowExistingPane(Excel.Workbook workbook, Excel.Window window, string reason)
@@ -1248,6 +1230,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 _owner._logger.Info("CASE pane refreshed after action. workbook=" + (host.WorkbookFullName ?? string.Empty));
+            }
+        }
+
+        // Refresh flow 責務: RefreshPane の主経路で前提確認、host 解決、reuse、render/show を順序どおり調停する。
+        private sealed class TaskPaneRefreshFlowCoordinator
+        {
+            private readonly TaskPaneManager _owner;
+
+            internal TaskPaneRefreshFlowCoordinator(TaskPaneManager owner)
+            {
+                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            }
+
+            internal bool RefreshPane(WorkbookContext context, string reason)
+            {
+                int refreshPaneCallId = ++_owner._kernelFlickerTraceRefreshPaneSequence;
+                _owner._logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=refresh-pane-start refreshPaneCallId="
+                    + refreshPaneCallId.ToString()
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", context="
+                    + _owner.FormatContextDescriptor(context));
+                if (!_owner.TryAcceptRefreshPaneRequest(context, reason, refreshPaneCallId, out WorkbookRole role, out string windowKey))
+                {
+                    return false;
+                }
+
+                TaskPaneHost host = _owner.ResolveRefreshHost(context, windowKey, refreshPaneCallId);
+                if (_owner.TryReuseCaseHostForRefresh(host, context, reason, windowKey, refreshPaneCallId))
+                {
+                    return true;
+                }
+
+                return _owner.RenderAndShowHostForRefresh(host, context, reason, windowKey, refreshPaneCallId);
             }
         }
     }

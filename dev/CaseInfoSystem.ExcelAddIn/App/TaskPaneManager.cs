@@ -25,6 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
         private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
+        private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
         private readonly TaskPaneManagerTestHooks _testHooks;
         private const string ProductTitle = "案件情報System";
         private int _kernelFlickerTraceRefreshPaneSequence;
@@ -126,6 +127,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
                 RemoveHost);
+            _taskPaneActionDispatcher = new TaskPaneActionDispatcher(this);
         }
 
         internal TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
@@ -153,6 +155,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
                 RemoveHost);
+            _taskPaneActionDispatcher = new TaskPaneActionDispatcher(this);
         }
 
         // 表示調停責務: refresh の主経路で前提確認、host 解決、reuse、render/show を順序どおり調停する。
@@ -551,7 +554,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             var caseControl = new DocumentButtonsControl();
             var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey);
-            caseControl.ActionInvoked += (sender, e) => CaseControl_ActionInvoked(windowKey, caseControl, e);
+            caseControl.ActionInvoked += (sender, e) => _taskPaneActionDispatcher.HandleCaseControlActionInvoked(windowKey, caseControl, e);
             _hostsByWindowKey.Add(windowKey, caseHost);
             _logger?.Info(
                 KernelFlickerTracePrefix
@@ -759,110 +762,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 _logger.Error("RestoreWorkbookSavedState failed.", ex);
             }
-        }
-
-        // Action 中継責務: pane UI から受けた操作を workbook/context 解決後に各サービスへ橋渡しする。
-        private void CaseControl_ActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(windowKey) || control == null)
-            {
-                _logger.Warn("CaseControl_ActionInvoked skipped because host identity was not available.");
-                return;
-            }
-
-            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                _logger.Warn("CaseControl_ActionInvoked skipped because host was not found. windowKey=" + windowKey);
-                return;
-            }
-
-            Excel.Workbook workbook = _excelInteropService.FindOpenWorkbook(host.WorkbookFullName);
-            if (workbook == null)
-            {
-                _logger.Warn("CaseControl_ActionInvoked skipped because workbook was not found. windowKey=" + windowKey);
-                control.Render(_caseTaskPaneViewStateBuilder.BuildWorkbookNotFoundState());
-                return;
-            }
-
-            try
-            {
-                bool shouldContinue = _taskPaneBusinessActionLauncher.TryExecute(workbook, e.ActionKind, e.Key);
-                if (!shouldContinue)
-                {
-                    return;
-                }
-
-                HandleCasePostActionRefresh(host, workbook, control, e.ActionKind);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("CaseControl_ActionInvoked failed.", ex);
-                control.Render(_caseTaskPaneViewStateBuilder.BuildActionFailedState());
-                _userErrorService.ShowUserError("CaseControl_ActionInvoked", ex);
-            }
-        }
-
-        /// <summary>
-        /// メソッド: CASE pane アクション実行後の refresh 方針を適用する。
-        /// 引数: host - 対象 host, workbook - 対象 workbook, control - 対象 control, actionKind - 実行した action 種別。
-        /// 戻り値: なし。
-        /// 副作用: 既存の action 種別ごとの refresh / 遅延 / スキップ方針をそのまま適用する。
-        /// </summary>
-        private void HandleCasePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
-        {
-            TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide(actionKind);
-            if (decision == TaskPanePostActionRefreshDecision.SkipForForegroundPreservation)
-            {
-                string reason = string.Equals(actionKind, "accounting", StringComparison.OrdinalIgnoreCase)
-                    ? "accounting set should keep the generated workbook in the foreground."
-                    : "document create should keep Word in the foreground.";
-                _logger.Info("CASE pane refresh after action skipped because " + reason);
-                return;
-            }
-
-            if (decision == TaskPanePostActionRefreshDecision.DeferAndInvalidateSignature)
-            {
-                InvalidateHostRenderStateForForcedRefresh(host);
-                _logger.Info("CASE pane refresh after case-list action was deferred so Kernel navigation can take the foreground.");
-                return;
-            }
-
-            RefreshCaseHostAfterAction(host, workbook, control, actionKind);
-        }
-
-        private void RefreshCaseHostAfterAction(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
-        {
-            if (host == null || workbook == null || control == null)
-            {
-                return;
-            }
-
-            if (_addIn != null && host.Window != null)
-            {
-                _addIn.RequestTaskPaneDisplayForTargetWindow(
-                    TaskPaneDisplayRequest.ForPostActionRefresh(actionKind),
-                    workbook,
-                    host.Window);
-                return;
-            }
-
-            InvalidateHostRenderStateForForcedRefresh(host);
-            RenderCaseHostAfterAction(control, workbook);
-            host.LastRenderSignature = TaskPaneRenderStateEvaluator.BuildRenderSignature(
-                _excelInteropService,
-                new WorkbookContext(
-                    workbook,
-                    host.Window,
-                    WorkbookRole.Case,
-                    _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
-                    _excelInteropService.GetWorkbookFullName(workbook),
-                    _excelInteropService.GetActiveSheetCodeName(workbook)));
-            if (!TryShowHost(host, "RefreshCaseHostAfterAction"))
-            {
-                _logger.Warn("CASE pane refresh after action skipped because host could not be shown. workbook=" + (host.WorkbookFullName ?? string.Empty));
-                return;
-            }
-            _logger.Info("CASE pane refreshed after action. workbook=" + (host.WorkbookFullName ?? string.Empty));
         }
 
         internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)
@@ -1171,6 +1070,114 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal Func<string, string, bool> TryShowHost { get; set; }
 
             internal Action<string> OnCasePaneUpdatedNotification { get; set; }
+        }
+
+        private sealed class TaskPaneActionDispatcher
+        {
+            private readonly TaskPaneManager _owner;
+
+            internal TaskPaneActionDispatcher(TaskPaneManager owner)
+            {
+                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            }
+
+            internal void HandleCaseControlActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
+            {
+                if (string.IsNullOrWhiteSpace(windowKey) || control == null)
+                {
+                    _owner._logger.Warn("CaseControl_ActionInvoked skipped because host identity was not available.");
+                    return;
+                }
+
+                if (!_owner._hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+                {
+                    _owner._logger.Warn("CaseControl_ActionInvoked skipped because host was not found. windowKey=" + windowKey);
+                    return;
+                }
+
+                Excel.Workbook workbook = _owner._excelInteropService.FindOpenWorkbook(host.WorkbookFullName);
+                if (workbook == null)
+                {
+                    _owner._logger.Warn("CaseControl_ActionInvoked skipped because workbook was not found. windowKey=" + windowKey);
+                    control.Render(_owner._caseTaskPaneViewStateBuilder.BuildWorkbookNotFoundState());
+                    return;
+                }
+
+                try
+                {
+                    bool shouldContinue = _owner._taskPaneBusinessActionLauncher.TryExecute(workbook, e.ActionKind, e.Key);
+                    if (!shouldContinue)
+                    {
+                        return;
+                    }
+
+                    HandlePostActionRefresh(host, workbook, control, e.ActionKind);
+                }
+                catch (Exception ex)
+                {
+                    _owner._logger.Error("CaseControl_ActionInvoked failed.", ex);
+                    control.Render(_owner._caseTaskPaneViewStateBuilder.BuildActionFailedState());
+                    _owner._userErrorService.ShowUserError("CaseControl_ActionInvoked", ex);
+                }
+            }
+
+            private void HandlePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
+            {
+                TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide(actionKind);
+                if (decision == TaskPanePostActionRefreshDecision.SkipForForegroundPreservation)
+                {
+                    string reason = string.Equals(actionKind, "accounting", StringComparison.OrdinalIgnoreCase)
+                        ? "accounting set should keep the generated workbook in the foreground."
+                        : "document create should keep Word in the foreground.";
+                    _owner._logger.Info("CASE pane refresh after action skipped because " + reason);
+                    return;
+                }
+
+                if (decision == TaskPanePostActionRefreshDecision.DeferAndInvalidateSignature)
+                {
+                    _owner.InvalidateHostRenderStateForForcedRefresh(host);
+                    _owner._logger.Info("CASE pane refresh after case-list action was deferred so Kernel navigation can take the foreground.");
+                    return;
+                }
+
+                RefreshCaseHostAfterAction(host, workbook, control, actionKind);
+            }
+
+            private void RefreshCaseHostAfterAction(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
+            {
+                if (host == null || workbook == null || control == null)
+                {
+                    return;
+                }
+
+                if (_owner._addIn != null && host.Window != null)
+                {
+                    _owner._addIn.RequestTaskPaneDisplayForTargetWindow(
+                        TaskPaneDisplayRequest.ForPostActionRefresh(actionKind),
+                        workbook,
+                        host.Window);
+                    return;
+                }
+
+                _owner.InvalidateHostRenderStateForForcedRefresh(host);
+                _owner.RenderCaseHostAfterAction(control, workbook);
+                host.LastRenderSignature = TaskPaneRenderStateEvaluator.BuildRenderSignature(
+                    _owner._excelInteropService,
+                    new WorkbookContext(
+                        workbook,
+                        host.Window,
+                        WorkbookRole.Case,
+                        _owner._excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
+                        _owner._excelInteropService.GetWorkbookFullName(workbook),
+                        _owner._excelInteropService.GetActiveSheetCodeName(workbook)));
+                if (!_owner.TryShowHost(host, "RefreshCaseHostAfterAction"))
+                {
+                    _owner._logger.Warn("CASE pane refresh after action skipped because host could not be shown. workbook=" + (host.WorkbookFullName ?? string.Empty));
+                    return;
+                }
+
+                _owner._logger.Info("CASE pane refreshed after action. workbook=" + (host.WorkbookFullName ?? string.Empty));
+            }
         }
     }
 

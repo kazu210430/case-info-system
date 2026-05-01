@@ -238,6 +238,7 @@
     <Compile Include="App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="App\ICaseTaskPaneSnapshotReader.cs" />
     <Compile Include="App\TaskPaneDisplayCoordinator.cs" />
+    <Compile Include="App\TaskPaneActionDispatcher.cs" />
     <Compile Include="App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="App\TaskPaneManager.cs" />
     <Compile Include="App\TaskPaneRenderStateEvaluator.cs" />

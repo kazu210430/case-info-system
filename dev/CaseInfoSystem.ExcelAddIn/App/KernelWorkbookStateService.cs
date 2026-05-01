@@ -10,8 +10,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
     {
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
-        private readonly Logger _logger;
-        private readonly KernelOpenWorkbookLocator _kernelOpenWorkbookLocator;
+        private readonly KernelStartupContextInspector _kernelStartupContextInspector;
         private readonly Func<Excel.Workbook, bool> _hasOtherVisibleWorkbookOverride;
         private readonly Func<Excel.Workbook, bool> _hasOtherWorkbookOverride;
 
@@ -25,8 +24,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _application = application;
             _excelInteropService = excelInteropService;
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _kernelOpenWorkbookLocator = kernelOpenWorkbookLocator ?? throw new ArgumentNullException(nameof(kernelOpenWorkbookLocator));
+            if (logger == null)
+            {
+                throw new ArgumentNullException(nameof(logger));
+            }
+
+            if (kernelOpenWorkbookLocator == null)
+            {
+                throw new ArgumentNullException(nameof(kernelOpenWorkbookLocator));
+            }
+
+            _kernelStartupContextInspector = new KernelStartupContextInspector(
+                _application,
+                kernelOpenWorkbookLocator,
+                HasVisibleNonKernelWorkbook);
             _hasOtherVisibleWorkbookOverride = hasOtherVisibleWorkbookOverride;
             _hasOtherWorkbookOverride = hasOtherWorkbookOverride;
         }
@@ -38,10 +49,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool ShouldShowHomeOnStartup(Excel.Workbook startupWorkbook = null)
         {
-            bool hasExplicitKernelStartupContext = HasExplicitKernelStartupContext(startupWorkbook);
-            bool hasKernelWorkbookContext = hasExplicitKernelStartupContext && HasKernelWorkbookContext();
-            bool isStartupWorkbookKernel = hasExplicitKernelStartupContext && hasKernelWorkbookContext && IsKernelWorkbook(startupWorkbook);
-            bool hasVisibleNonKernelWorkbook = hasExplicitKernelStartupContext && hasKernelWorkbookContext && !isStartupWorkbookKernel && HasVisibleNonKernelWorkbook();
+            KernelStartupContext context = _kernelStartupContextInspector.Inspect(startupWorkbook);
+            bool hasExplicitKernelStartupContext = HasExplicitKernelStartupContext(context);
+            bool hasKernelWorkbookContext = false;
+            bool isStartupWorkbookKernel = false;
+            bool hasVisibleNonKernelWorkbook = false;
+
+            if (hasExplicitKernelStartupContext)
+            {
+                _kernelStartupContextInspector.PopulateOpenKernelWorkbookState(context);
+                hasKernelWorkbookContext = HasKernelWorkbookContext(context);
+                isStartupWorkbookKernel = hasKernelWorkbookContext && IsKernelWorkbook(context.StartupWorkbook);
+                if (hasKernelWorkbookContext && !isStartupWorkbookKernel)
+                {
+                    _kernelStartupContextInspector.PopulateVisibleNonKernelWorkbookState(context);
+                    hasVisibleNonKernelWorkbook = context.HasVisibleNonKernelWorkbook;
+                }
+            }
+
             return KernelWorkbookStartupDisplayPolicy.ShouldShowHomeOnStartup(
                 hasExplicitKernelStartupContext,
                 hasKernelWorkbookContext,
@@ -51,29 +76,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal string DescribeStartupState()
         {
-            string activeWorkbookName = "(null)";
-            bool activeIsKernel = false;
-            bool hasOpenKernelWorkbook = false;
-            bool hasVisibleNonKernelWorkbook = false;
+            KernelStartupContext context = _kernelStartupContextInspector.Inspect(startupWorkbook: null);
+            string activeWorkbookName = context.ActiveWorkbookAccessFailed
+                ? "(error)"
+                : context.ActiveWorkbook == null
+                    ? "(null)"
+                    : GetWorkbookNameCore(context.ActiveWorkbook);
+            bool activeIsKernel = context.ActiveWorkbook != null && IsKernelWorkbook(context.ActiveWorkbook);
 
             try
             {
-                Excel.Workbook activeWorkbook = _application.ActiveWorkbook;
-                if (activeWorkbook != null)
-                {
-                    activeWorkbookName = GetWorkbookNameCore(activeWorkbook);
-                    activeIsKernel = IsKernelWorkbook(activeWorkbook);
-                }
-            }
-            catch
-            {
-                activeWorkbookName = "(error)";
-            }
-
-            try
-            {
-                hasOpenKernelWorkbook = _kernelOpenWorkbookLocator.GetOpenKernelWorkbook() != null;
-                hasVisibleNonKernelWorkbook = HasVisibleNonKernelWorkbook();
+                _kernelStartupContextInspector.PopulateOpenKernelWorkbookState(context);
+                _kernelStartupContextInspector.PopulateVisibleNonKernelWorkbookState(context);
             }
             catch
             {
@@ -84,9 +98,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", activeIsKernel="
                 + activeIsKernel
                 + ", hasOpenKernelWorkbook="
-                + hasOpenKernelWorkbook
+                + context.HasOpenKernelWorkbook
                 + ", hasVisibleNonKernelWorkbook="
-                + hasVisibleNonKernelWorkbook;
+                + context.HasVisibleNonKernelWorkbook;
         }
 
         internal bool HasOtherVisibleWorkbook(Excel.Workbook workbookToIgnore)
@@ -150,44 +164,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return false;
         }
 
-        internal bool HasExplicitKernelStartupContext(Excel.Workbook startupWorkbook)
+        private bool HasExplicitKernelStartupContext(KernelStartupContext context)
         {
-            if (IsKernelWorkbook(startupWorkbook))
+            if (context == null)
+            {
+                return false;
+            }
+
+            if (IsKernelWorkbook(context.StartupWorkbook))
             {
                 return true;
             }
 
-            try
-            {
-                return IsKernelWorkbook(_application.ActiveWorkbook);
-            }
-            catch
-            {
-                return false;
-            }
+            return IsKernelWorkbook(context.ActiveWorkbook);
         }
 
-        internal bool HasKernelWorkbookContext()
+        private bool HasKernelWorkbookContext(KernelStartupContext context)
         {
-            try
-            {
-                if (IsKernelWorkbook(_application.ActiveWorkbook))
-                {
-                    return true;
-                }
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                return _kernelOpenWorkbookLocator.GetOpenKernelWorkbook() != null;
-            }
-            catch
-            {
-                return false;
-            }
+            return context != null
+                && (IsKernelWorkbook(context.ActiveWorkbook) || context.HasOpenKernelWorkbook);
         }
 
         private string GetWorkbookNameCore(Excel.Workbook workbook)

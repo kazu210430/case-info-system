@@ -55,6 +55,7 @@
     <Compile Include="KernelWorkbookHomeReleaseFallbackPolicyTests.cs" />
     <Compile Include="KernelWorkbookPromotionPolicyTests.cs" />
     <Compile Include="KernelWorkbookServicePolicyTests.cs" />
+    <Compile Include="KernelStartupContextInspectorTests.cs" />
     <Compile Include="KernelHomeWindowIndependencePolicyTests.cs" />
     <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
     <Compile Include="KernelWorkbookWindowRestorePolicyTests.cs" />
@@ -122,6 +123,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookService.cs" Link="Source\App\KernelWorkbookService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" Link="Source\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelOpenWorkbookLocator.cs" Link="Source\App\KernelOpenWorkbookLocator.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelStartupContext.cs" Link="Source\App\KernelStartupContext.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelStartupContextInspector.cs" Link="Source\App\KernelStartupContextInspector.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStartupDisplayPolicy.cs" Link="Source\App\KernelWorkbookStartupDisplayPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookPromotionPolicy.cs" Link="Source\App\KernelWorkbookPromotionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolutionPolicy.cs" Link="Source\App\KernelWorkbookResolutionPolicy.cs" />

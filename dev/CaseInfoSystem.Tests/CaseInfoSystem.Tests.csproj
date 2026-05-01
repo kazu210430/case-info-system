@@ -136,6 +136,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelAddInTraceLogWriter.cs" Link="Source\Infrastructure\ExcelAddInTraceLogWriter.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelProcessLaunchContextTracer.cs" Link="Source\Infrastructure\ExcelProcessLaunchContextTracer.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookOpenStrategy.cs" Link="Source\Infrastructure\CaseWorkbookOpenStrategy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ComObjectReleaseService.cs" Link="Source\Infrastructure\ComObjectReleaseService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\Logger.cs" Link="Source\Infrastructure\Logger.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\FolderWindowService.cs" Link="Source\Infrastructure\FolderWindowService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\PathCompatibilityService.cs" Link="Source\Infrastructure\PathCompatibilityService.cs" />

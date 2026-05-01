@@ -67,14 +67,12 @@ Base から CASE への昇格責務は 1 箇所に集約されていません。
 
 - [DocumentTemplateResolver](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateResolver.cs:9) は [IDocumentTemplateLookupReader](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\IDocumentTemplateLookupReader.cs:9) に依存する。
 - [Resolve](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateResolver.cs:32) は [TryResolveWithMasterFallback](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateResolver.cs:50) を呼ぶ。
-- [DocumentExecutionEligibilityService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:8) は [Evaluate](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:35) の中で:
-  - [BuildEligibleCacheKey](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:149) により `TASKPANE_MASTER_VERSION` を含む cache key を作る
-  - その後 [DocumentTemplateResolver.Resolve](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:71) を呼ぶ
+- [DocumentExecutionEligibilityService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:8) は [Evaluate](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:29) の中で毎回 [DocumentTemplateResolver.Resolve](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs:46) を呼ぶ。
 
 影響として確認できる事実:
 
 - document execution の template resolve は、CASE cache lookup の名目で CASE cache 昇格を伴い得る。
-- `Evaluate` は resolve 前に cache key を作っているため、resolve 中の `TASKPANE_MASTER_VERSION` 更新が eligibility cache の扱いに関係し得る構造になっている。
+- eligibility cache がなくなったため、document execution 側は resolve 前後で別メモリ cache の invalidation を考えなくてよい構造になっている。
 
 ### 3.3 TaskPane
 

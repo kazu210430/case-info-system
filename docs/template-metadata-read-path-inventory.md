@@ -37,7 +37,6 @@
 | Base 埋込 snapshot | 新規 CASE 初期表示用の派生 cache | `TASKPANE_BASE_SNAPSHOT_*` / `TASKPANE_BASE_MASTER_VERSION` |
 | CASE snapshot cache | 表示中 CASE と整合する派生 cache | `TASKPANE_SNAPSHOT_CACHE_*` / CASE 側 `TASKPANE_MASTER_VERSION` |
 | `MasterTemplateCatalogService` の一覧 cache | master sheet 読取結果のメモリ cache | Add-in プロセス内 |
-| `DocumentExecutionEligibilityService` の eligibility cache | 実行前判定結果のメモリ cache | Add-in プロセス内 |
 
 ### 2.3 責務境界
 
@@ -169,7 +168,7 @@
 補足:
 
 - この調査範囲で確認できた既存テストは `DocumentTemplateLookupServiceTests` に集中しており、prompt/resolver の責務分離と `TemplatePath` 導出は担保されている。
-- 一方で、`TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` の昇格条件、snapshot 互換性不一致 clear、`DocumentExecutionEligibilityService` の `TASKPANE_MASTER_VERSION` を含む eligibility cache key については、この調査範囲では専用テストを確認できていない。
+- 一方で、`TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` の昇格条件と snapshot 互換性不一致 clear については、この調査範囲では専用テストを確認できていない。
 
 ### 4.4 `DocumentNamePromptService` が使う情報
 
@@ -236,12 +235,11 @@
 | --- | --- | --- |
 | `TASKPANE_MASTER_VERSION` | Kernel | `KernelTemplateSyncService.IncrementTaskPaneMasterVersion` が更新する global master version の正本 |
 | `TASKPANE_MASTER_VERSION` | Base | Base 保存時に mirror される値。新規 CASE 作成時にコピーされうる |
-| `TASKPANE_MASTER_VERSION` | CASE | CASE cache / 表示系が最後に採用した master version。`TaskPaneSnapshotBuilderService` の stale 判定、`TaskPaneSnapshotCacheService` の promote 判定、`DocumentExecutionEligibilityService` の eligibility cache key に使われる |
+| `TASKPANE_MASTER_VERSION` | CASE | CASE cache / 表示系が最後に採用した master version。`TaskPaneSnapshotBuilderService` の stale 判定と `TaskPaneSnapshotCacheService` の promote 判定に使われる |
 | `TASKPANE_BASE_MASTER_VERSION` | Base と CASE 内の埋込 Base snapshot 領域 | Base snapshot 自体の provenance。Base snapshot を CASE cache へ promote / fallback するときの比較値 |
 
 補足:
 
-- `DocumentExecutionEligibilityService` は `workbook.FullName + TASKPANE_MASTER_VERSION + actionKind + key` を eligibility cache key に使います。
 - `CaseWorkbookInitializer` はいったん Kernel の `TASKPANE_MASTER_VERSION` を CASE に写しますが、その直後に `CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache` が `TASKPANE_BASE_MASTER_VERSION` を CASE 側 `TASKPANE_MASTER_VERSION` へ上書きします。したがって新規 CASE の実効 version は、最終的に埋込 Base snapshot 側へ揃います。
 
 #### 4.5.3 snapshot chunk helper の責務境界

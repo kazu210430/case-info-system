@@ -379,7 +379,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 _logger);
             var documentExecutionModeService = new DocumentExecutionModeService(_logger, excelInteropService);
             var documentExecutionEligibilityService = new DocumentExecutionEligibilityService(
-                excelInteropService,
                 documentTemplateResolver,
                 caseContextFactory,
                 documentOutputService,

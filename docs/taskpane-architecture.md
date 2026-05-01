@@ -78,8 +78,19 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 ### `TaskPaneManager`
 
-- snapshot を UI 表示用 state に変換して描画する
-- 文書ボタン押下を `DocumentNamePromptService` と `DocumentCommandService` へ接続する
+- host 管理、role 別 render 切替、render/show orchestration を担う
+- `TaskPaneHostRegistry` を内包し、VSTO `TaskPaneHost` の生成・差し替え・破棄境界を保持する
+
+### `TaskPaneActionDispatcher`
+
+- CASE pane の UIイベント受付を担う
+- `TaskPaneBusinessActionLauncher` を通して `doc` / `accounting` / `caselist` 実行へ接続する
+- `TaskPanePostActionRefreshPolicy` に従って post-action refresh の skip / defer / 即時再描画を調停する
+
+### `TaskPaneBusinessActionLauncher`
+
+- `doc` 実行前の `DocumentNamePromptService.TryPrepare(...)` 順序を固定する
+- prompt 準備後に `DocumentCommandService` を呼び出す
 
 ### `TaskPaneRefreshOrchestrationService` / `WindowActivatePaneHandlingService`
 
@@ -133,9 +144,9 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 ### 4. 文書ボタン押下時
 
-1. `TaskPaneManager` がボタン押下を受ける
-2. `DocumentNamePromptService` が CASE cache の `caption` だけを使って prompt 初期値を準備する
-3. `DocumentCommandService` が実行に進む
+1. `TaskPaneActionDispatcher` がボタン押下を受ける
+2. `TaskPaneBusinessActionLauncher` が `DocumentNamePromptService` を通して CASE cache の `caption` だけを使って prompt 初期値を準備する
+3. `TaskPaneBusinessActionLauncher` が `DocumentCommandService` 実行に進める
 4. `DocumentExecutionEligibilityService` が `DocumentTemplateResolver` を通して実行前確認を行う
 5. `DocumentTemplateResolver` は CASE cache 優先、miss 時のみ master fallback で `TemplateFileName` を解決する
 6. `DocumentCreateService` が文書生成する
@@ -144,6 +155,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 - prompt 初期値は表示中 CASE に整合する補助情報
 - 実行時解決は保存・生成判断に必要な正本確認入口
+- UIイベント dispatch と post-action refresh は `TaskPaneActionDispatcher` に分離済み
 
 ### 5. 案件一覧登録後
 
@@ -179,6 +191,16 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - snapshot / cache を正本扱いする変更
 - `WorkbookOpen` 直接依存の表示制御
 - `WorkbookOpen` を window 安定通知とみなす変更
+
+## 今後課題として残すもの
+
+- `TaskPaneHostRegistry`
+  - `TaskPaneManager` 内に残る host 生成、差し替え、破棄、workbook 単位掃除の責務です。
+  - `ThisAddIn` を通した VSTO `CustomTaskPane` 生成と action event 配線に関わるため、分離リスクが高い領域です。
+  - 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れない方針を維持します。
+- `ThisAddIn` 境界
+  - `ThisAddIn` は VSTO lifecycle、application event、custom task pane 生成、TaskPane 表示要求の入口です。
+  - `TaskPaneManager` / `TaskPaneHostRegistry` との依存境界を急に変えると起動、終了、pane 表示に波及するため、現時点では現状メモと依存関係棚卸しを優先します。
 
 ## 不明として残す事項
 

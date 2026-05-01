@@ -61,12 +61,12 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 ### `doc` の流れ
 
-1. `TaskPaneManager` が TaskPane の選択ボタンから `actionKind` と文書キーを受け取ります。
-2. `TaskPaneManager` は `doc` 実行前に `DocumentNamePromptService.TryPrepare` を呼び、文書名入力ダイアログの初期値を準備します。
+1. `TaskPaneActionDispatcher` が CASE pane の選択ボタンから `actionKind` と文書キーを受け取ります。
+2. `TaskPaneBusinessActionLauncher` が `doc` 実行前に `DocumentNamePromptService.TryPrepare` を呼び、文書名入力ダイアログの初期値を準備します。
 3. `DocumentNamePromptService` は `DocumentTemplateLookupService.TryResolveFromCaseCache` を通して CASE cache だけを参照し、`caption` を prompt 初期値に使います。
 4. CASE cache に対象 key が無い場合、文書名入力側では master catalog へフォールバックせず、空欄のまま prompt を開きます。
 5. prompt で確定した値は `DocumentNameOverrideScope` により一時 DocProperty として保持されます。
-6. `DocumentCommandService` が文書キーを受け取ります。
+6. `TaskPaneBusinessActionLauncher` が `DocumentCommandService` へ文書キーを渡します。
 7. `DocumentExecutionModeService` が `DocumentExecutionMode.txt` を読み込みます。
 8. `DocumentExecutionEligibilityService` が登録済みテンプレートを前提に `DocumentTemplateResolver` で `templateSpec` を解決し、テンプレート種別、マクロ有無、出力先、CASE コンテキストを確認します。
 9. `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を使い、まず CASE cache を参照し、解決できない場合だけ `MasterTemplateCatalogService` の master catalog にフォールバックします。

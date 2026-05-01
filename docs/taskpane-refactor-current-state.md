@@ -37,6 +37,19 @@
 - `DocumentNamePromptService` は CASE cache だけを参照し、master fallback しない。
 - `DocumentTemplateResolver` は CASE cache 優先で解決し、miss 時のみ master fallback する。
 
+### 1-2. TaskPaneManager リファクタの到達点
+
+- `TaskPaneManager` は、もはや TaskPane 側の全責務を抱える単一巨大クラスではありません。
+- 現在の `TaskPaneManager` は、主に host 管理、role 別 render 切替、render/show orchestration、host 再利用調停の中心です。
+- 次の主責務は分離済みとして固定します。
+  - 表示・非表示: `TaskPaneDisplayCoordinator`
+  - refresh 入口調停: `TaskPaneRefreshOrchestrationService` / `TaskPaneRefreshCoordinator`
+  - WindowActivate 境界処理: `WindowActivatePaneHandlingService`
+  - snapshot / view state: `CasePaneSnapshotRenderService`、`CaseTaskPaneViewStateBuilder`、`TaskPaneSnapshotParser`
+  - doc prompt / business action: `TaskPaneBusinessActionLauncher`
+  - render 後副作用: `CasePaneCacheRefreshNotificationService`
+  - CASE pane UIイベント dispatch: `TaskPaneActionDispatcher`
+
 ### 2. TaskPane 周辺で完了済みとして扱う bridge / 境界整理
 
 `docs/a-priority-service-responsibility-inventory.md` を基準に、現行 `main` で完了済みとして扱うのは次です。
@@ -71,7 +84,22 @@
 - `WorkbookLifecycleCoordinator`
   - `WorkbookActivate` 再入抑止の判定境界
 - `TaskPaneManager`
-  - host ライフサイクル、role 別描画、action 後 refresh を一体で持つ pane 制御本体
+  - host ライフサイクル、role 別描画、host 再利用、`TaskPaneHostRegistry` を含む pane 制御本体
+
+## 今後課題として固定する事項
+
+### `TaskPaneHostRegistry`
+
+- `TaskPaneManager` 周辺に残る主要責務です。
+- host 生成、差し替え、破棄、workbook 単位の掃除を担います。
+- VSTO `TaskPaneHost` 生成境界と action event 配線に関わるため、分離リスクが高いです。
+- 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れないほうが安全です。
+
+### `ThisAddIn` 境界
+
+- `ThisAddIn` は VSTO lifecycle、application event、custom task pane 生成、TaskPane 表示要求の入口です。
+- `TaskPaneManager` / `TaskPaneHostRegistry` との依存境界を急に変えると起動、終了、pane 表示に波及しやすいです。
+- `ThisAddIn` 整理は HostRegistry 分離よりさらに慎重に扱い、先に現状メモと依存関係棚卸しを行い、コード変更は後回しにする判断を固定します。
 
 これらは「未着手」または「保留」の扱いを維持し、今回の現在地文書で完了扱いへ動かしません。
 
@@ -91,9 +119,10 @@
 - snapshot / cache を保存・生成・実行判断の正本へ戻さない
 - ready-show / suppression / protection の順序を変える変更は、危険領域として別途確認してから扱う
 - host 再利用経路と visible pane early-complete を安易に単純化しない
+- `TaskPaneHostRegistry` と `ThisAddIn` 境界の変更は、安定化後に小単位で扱う
 
 ## 一言まとめ
 
-TaskPane 側の優先度Aは、設計正本・責務棚卸し・危険領域の事実整理までは `main` に固定済みです。
+TaskPane 側の優先度Aは、設計正本・責務棚卸し・危険領域の事実整理に加え、`TaskPaneManager` が orchestration / host 管理中心へ薄くなった現在地までは `main` に固定済みです。
 
-一方で、ready-show / protection / retry / host 再利用を含む本線ロジックは、まだ完了済みとは扱わず、未着手・保留として残します。
+一方で、ready-show / protection / retry / host 再利用を含む本線ロジックと、`TaskPaneHostRegistry` / `ThisAddIn` の VSTO 境界整理は、まだ完了済みとは扱わず、安定化後に慎重に進める課題として残します。

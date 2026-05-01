@@ -31,7 +31,7 @@
 
 - `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` は `WorkbookLifecycleCoordinator` と `WindowActivatePaneHandlingService` を入口にし、TaskPane refresh を直接 `TaskPaneManager` に渡さず、`TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` を経由する。
 - window 依存処理は `WorkbookOpen` 直後に確定させず、`ResolveWorkbookPaneWindow(...)` と `EnsurePaneWindowForWorkbook(...)` を通した後で `WorkbookContext` を確定させる。
-- `TaskPaneManager` は最終的な host 解決、role 別描画、既存 host 再利用、CASE pane action 後の再描画を担う。
+- `TaskPaneManager` は最終的な host 解決、role 別描画、既存 host 再利用、CASE pane render/show orchestration を担う。
 - `doc` 実行前の prompt 初期値準備は `TaskPaneBusinessActionLauncher` が `DocumentNamePromptService.TryPrepare(...)` を先に呼ぶ順序で固定されている。
 
 ## 危険度定義
@@ -51,7 +51,7 @@
 | Workbook / Window との対応管理 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`TaskPaneManager.SafeGetWindowKey(...)` | event 入口、window 解決、context 解決、windowKey 単位 host 管理に分散 | `A` | `WorkbookOpen` を window 安定境界にしない前提を壊しやすい |
 | TaskPane refresh 起動 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator` | `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` / ready-show / fallback timer の入口調停を担当 | `D` | refresh 起動責務は `TaskPaneManager` 本体から外へ出ている |
 | ViewState / Snapshot 関連 | `ICaseTaskPaneSnapshotReader`、`CasePaneSnapshotRenderService`、`CaseTaskPaneViewStateBuilder`、`TaskPaneSnapshotParser` | snapshot build / parse / view state build は分離済み。`TaskPaneManager` には通知と `Saved` 復元が残る | `B` | 主経路は切れている。残存責務は後処理として小さく切れる |
-| Document command / ボタン連携 | `TaskPaneBusinessActionLauncher`、`TaskPaneActionDispatcher`、`TaskPanePostActionRefreshPolicy` | prompt 準備順序は別サービス化済み。post-action refresh 調停は `TaskPaneManager.cs` 内に残る | `B` | button dispatch と post-action refresh は 1 責務として外出ししやすい |
+| Document command / ボタン連携 | `TaskPaneBusinessActionLauncher`、`TaskPaneActionDispatcher`、`TaskPanePostActionRefreshPolicy` | prompt 準備順序、CASE pane button dispatch、post-action refresh 調停は別サービス化済み | `D` | UIイベント起点処理は `TaskPaneManager` 本体から分離済み |
 | Excelイベント境界との関係 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator` | `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` の境界をまたいで動く | `A` | 今回の棚卸し対象ではあるが、次の分割単位にはしない方がよい |
 | ログ・診断 | `TaskPaneManager` と周辺 coordinator | `KernelFlickerTrace`、host/context/window descriptor 生成、可視 pane 判定ログ | `C` | まずは docs 上で意味を固定すれば足りる。挙動変更を伴う分離優先度は低い |
 
@@ -63,12 +63,12 @@
 - `doc` 実行前の prompt 初期値準備順序は `TaskPaneBusinessActionLauncher` に分離済み
 - CASE pane の snapshot build / parse / view state build は `CasePaneSnapshotRenderService` と関連 reader / builder に分離済み
 - CASE cache 更新後処理は `CasePaneCacheRefreshNotificationService` に分離済み
-- host reuse / post-action refresh / notification の一部は policy class に切り出されている
+- CASE pane の UIイベント dispatch と post-action refresh 調停は `TaskPaneActionDispatcher` に分離済み
+- host reuse / notification の一部は policy class に切り出されている
 
 ## まだ TaskPaneManager に残っているもの
 
 - nested class のまま残っている `TaskPaneHostRegistry`
-- nested class のまま残っている `TaskPaneActionDispatcher`
 - nested class のまま残っている `TaskPaneRefreshFlowCoordinator`
 - `RemoveStaleKernelHosts(...)` による Kernel host の掃除
 - `RenderHost(...)` から role 別 render を切り替える最終責務
@@ -95,25 +95,32 @@
 
 ### 候補2
 
-`TaskPaneActionDispatcher` の外出し
-
-- 対象は CASE pane button dispatch と post-action refresh 調停だけ
-- `TaskPaneBusinessActionLauncher` と `TaskPanePostActionRefreshPolicy` が既にあるため、責務境界を明示しやすい
-- `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` の境界を変えずに進められる
-
-### 候補3
-
 `TaskPaneHostRegistry` の外出し
 
 - 対象は host の生成、差し替え、破棄、workbook 単位の掃除だけ
 - VSTO `TaskPaneHost` 生成境界を 1 箇所へ固定しやすい
-- ただし `ThisAddIn` と action event 配線を持つため、候補1と候補2よりは慎重に扱う
+- ただし `ThisAddIn` と action event 配線を持つため、すでに分離済みの action dispatch より慎重に扱う
 
 ## 今回の結論
 
-- `TaskPaneManager` は「完全に未分離」ではなく、display / refresh entry / snapshot render / prompt prepare の主責務は既に周辺サービスへ逃がされている
-- ただし `TaskPaneManager.cs` には host registry、action dispatch、refresh flow coordinator、CASE cache 更新後処理がまだ残っている
-- 次の 1 手は event 境界や ready-show に触らず、render 後処理または action dispatch を小さく外へ出すのが安全
+- `TaskPaneManager` は「完全な巨大クラス」ではなく、display / refresh entry / snapshot render / prompt prepare / render 後副作用 / UIイベント dispatch の主責務は既に周辺サービスへ逃がされている
+- ただし `TaskPaneManager.cs` には host registry、refresh flow coordinator、host / workbook / window descriptor 群、role 別 render 最終切替が残っている
+- 次の 1 手は event 境界や ready-show に触らず、`TaskPaneHostRegistry` と `ThisAddIn` 境界の棚卸しを先に進め、実装変更は安定化後に慎重に扱うのが安全
+
+## 今後課題
+
+### `TaskPaneHostRegistry`
+
+- `TaskPaneManager` 周辺に残っている主要責務です。
+- host 生成、差し替え、破棄、workbook 単位の掃除を担います。
+- VSTO `TaskPaneHost` の生成と event 配線に関わるため、分離リスクが高い領域です。
+- 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れない方針を維持します。
+
+### `ThisAddIn` 境界
+
+- `ThisAddIn` は VSTO lifecycle、application event、custom task pane 生成、TaskPane 表示要求の入口です。
+- `TaskPaneManager` / `TaskPaneHostRegistry` との依存境界を急に変えると起動、終了、pane 表示に影響しやすいです。
+- `ThisAddIn` 整理は HostRegistry 分離よりさらに慎重に扱い、先に現状メモと依存関係棚卸しを行う段階とします。
 
 ## 不明点
 

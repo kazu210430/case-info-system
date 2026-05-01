@@ -387,10 +387,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class DocumentNamePromptService
     {
+        internal Func<Excel.Workbook, string, bool> OnTryPrepare { get; set; }
+
+        internal Func<Excel.Workbook, string, DocumentNameOverrideScope> OnCreateScope { get; set; }
+
         internal bool TryPrepare(Excel.Workbook workbook, string key, out DocumentNameOverrideScope scope)
         {
-            scope = null;
-            return true;
+            scope = OnCreateScope == null ? null : OnCreateScope(workbook, key);
+            return OnTryPrepare == null || OnTryPrepare(workbook, key);
         }
     }
 

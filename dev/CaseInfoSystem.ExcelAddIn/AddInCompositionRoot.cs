@@ -590,12 +590,14 @@ namespace CaseInfoSystem.ExcelAddIn
                 _isTaskPaneRefreshSucceeded);
             var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts);
             var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
+            var taskPaneBusinessActionLauncher = new TaskPaneBusinessActionLauncher(
+                documentCommandService,
+                documentNamePromptService);
             var taskPaneManager = new TaskPaneManager(
                 _addIn,
                 excelInteropService,
                 caseTaskPaneSnapshotReader,
-                documentCommandService,
-                documentNamePromptService,
+                taskPaneBusinessActionLauncher,
                 kernelCommandService,
                 accountingSheetCommandService,
                 caseTaskPaneViewStateBuilder,

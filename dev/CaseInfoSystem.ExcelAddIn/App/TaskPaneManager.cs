@@ -14,8 +14,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
         private readonly ICaseTaskPaneSnapshotReader _caseTaskPaneSnapshotReader;
-        private readonly DocumentCommandService _documentCommandService;
-        private readonly DocumentNamePromptService _documentNamePromptService;
+        private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
         private readonly KernelCommandService _kernelCommandService;
         private readonly AccountingSheetCommandService _accountingSheetCommandService;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
@@ -33,8 +32,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
             ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
-            DocumentCommandService documentCommandService,
-            DocumentNamePromptService documentNamePromptService,
+            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
             CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
@@ -46,8 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 addIn,
                 excelInteropService,
                 caseTaskPaneSnapshotReader,
-                documentCommandService,
-                documentNamePromptService,
+                taskPaneBusinessActionLauncher,
                 kernelCommandService,
                 accountingSheetCommandService,
                 caseTaskPaneViewStateBuilder,
@@ -63,8 +60,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
             ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
-            DocumentCommandService documentCommandService,
-            DocumentNamePromptService documentNamePromptService,
+            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
             CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
@@ -77,8 +73,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _caseTaskPaneSnapshotReader = caseTaskPaneSnapshotReader ?? throw new ArgumentNullException(nameof(caseTaskPaneSnapshotReader));
-            _documentCommandService = documentCommandService ?? throw new ArgumentNullException(nameof(documentCommandService));
-            _documentNamePromptService = documentNamePromptService ?? throw new ArgumentNullException(nameof(documentNamePromptService));
+            _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
             _kernelCommandService = kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService));
             _accountingSheetCommandService = accountingSheetCommandService ?? throw new ArgumentNullException(nameof(accountingSheetCommandService));
             _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
@@ -104,8 +99,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _addIn = null;
             _excelInteropService = null;
             _caseTaskPaneSnapshotReader = null;
-            _documentCommandService = null;
-            _documentNamePromptService = null;
+            _taskPaneBusinessActionLauncher = null;
             _kernelCommandService = null;
             _accountingSheetCommandService = null;
             _caseTaskPaneViewStateBuilder = null;
@@ -806,7 +800,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                bool shouldContinue = ExecuteCaseAction(workbook, e);
+                bool shouldContinue = _taskPaneBusinessActionLauncher.TryExecute(workbook, e.ActionKind, e.Key);
                 if (!shouldContinue)
                 {
                     return;
@@ -819,38 +813,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Error("CaseControl_ActionInvoked failed.", ex);
                 control.Render(_caseTaskPaneViewStateBuilder.BuildActionFailedState());
                 _userErrorService.ShowUserError("CaseControl_ActionInvoked", ex);
-            }
-        }
-
-        /// <summary>
-        /// メソッド: CASE pane アクション実行前準備・実行・後始末をまとめて行う。
-        /// 引数: workbook - 対象 workbook, e - 実行する action 引数。
-        /// 戻り値: 実行継続する場合 true。事前準備で中断する場合 false。
-        /// 副作用: 文書名上書き準備、文書コマンド実行、および一時的な上書き状態の解除を行う。
-        /// </summary>
-        private bool ExecuteCaseAction(Excel.Workbook workbook, TaskPaneActionEventArgs e)
-        {
-            DocumentNameOverrideScope documentNameOverrideScope = null;
-            try
-            {
-                if (string.Equals(e.ActionKind, "doc", StringComparison.OrdinalIgnoreCase))
-                {
-                    bool shouldContinue = _documentNamePromptService.TryPrepare(workbook, e.Key, out documentNameOverrideScope);
-                    if (!shouldContinue)
-                    {
-                        return false;
-                    }
-                }
-
-                _documentCommandService.Execute(workbook, e.ActionKind, e.Key);
-                return true;
-            }
-            finally
-            {
-                if (documentNameOverrideScope != null)
-                {
-                    documentNameOverrideScope.Dispose();
-                }
             }
         }
 

@@ -513,8 +513,9 @@ namespace CaseInfoSystem.Tests
                 new CaseInfoSystem.ExcelAddIn.ThisAddIn(),
                 new ExcelInteropService(),
                 snapshotBuilderService ?? new TaskPaneSnapshotBuilderService(),
-                CreateDocumentCommandService(),
-                new DocumentNamePromptService(),
+                new TaskPaneBusinessActionLauncher(
+                    CreateDocumentCommandService(),
+                    new DocumentNamePromptService()),
                 new KernelCommandService(),
                 new AccountingSheetCommandService(),
                 new CaseTaskPaneViewStateBuilder(),

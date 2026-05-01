@@ -250,6 +250,32 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 - Window 単位で管理され、再利用と再描画の判定があります。
 - 一時抑止、遅延再試行、WindowActivate 専用処理が実装されています。
 
+### WorkbookOpen と window 確定の境界
+
+- `WorkbookOpen` は workbook が開いた通知です。
+- `WorkbookOpen` 時点では `ActiveWorkbook` と `ActiveWindow` が未確定な場合があります。
+- `WorkbookOpen` 時点で workbook 自体は取得できても、対象 workbook の visible window や active window がまだ解決できないケースがあります。
+- `WorkbookActivate` は、対象 workbook が active workbook として前面系の文脈に乗った後続イベントです。
+- `WindowActivate` は、対象 window が実際に activate された後続イベントです。
+
+確認できた順序:
+
+1. `WorkbookOpen`
+2. `WorkbookActivate`
+3. `WindowActivate`
+
+扱いの原則:
+
+- workbook-only 処理は `WorkbookOpen` で扱ってよいです。
+- window-dependent 処理は `WorkbookActivate` 以降、必要なら `WindowActivate` 以降を安全境界として扱います。
+- `WorkbookOpen` 直後の `ActiveWorkbook` / `ActiveWindow` を前提に、window 解決・表示・前面化・pane 対象決定を確定させない方針を維持します。
+
+補足:
+
+- `ResolveWorkbookPaneWindow` が安全に成功する条件は、対象 workbook の visible window が取得できること、または active workbook が対象 workbook と一致し active window が取得できることです。
+- 単体生成 CASE の再オープン調査では、`WorkbookOpen` 時点で `ActiveWorkbook` / `ActiveWindow` が空のため window 解決に失敗し、その後 `WorkbookActivate` で回復するログが確認されました。
+- startup context 系の再分解を再開する前に、このイベント境界の安定化を優先する必要があります。
+
 ### CASE 文書ボタンパネル更新仕様
 
 #### 目的

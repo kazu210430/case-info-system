@@ -159,6 +159,15 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - 遅延表示、一時抑止、Window 単位の再利用を前提にします
 - `ScreenUpdating` を変更した場合は必ず復元します
 
+### WorkbookOpen と window 安全境界
+
+- `WorkbookOpen` は workbook が開いた通知であり、window 安定通知ではありません。
+- `WorkbookOpen` 時点では `ActiveWorkbook` / `ActiveWindow` が未確定な場合があります。
+- workbook-only 処理と window-dependent 処理を混ぜない方針を維持します。
+- pane 対象 window の確定、window key 依存の host 再利用、window 前提の表示調停は `WorkbookActivate` 以降、必要なら `WindowActivate` 以降を安全境界として扱います。
+- `ResolveWorkbookPaneWindow` が安全に成功する条件は、対象 workbook の visible window を取得できること、または active workbook が対象 workbook と一致し active window を取得できることです。
+- 単体生成 CASE 再オープン時の白 Excel 調査では、`WorkbookOpen` 時点の `ActiveWorkbook` / `ActiveWindow` 未確定が確認されました。startup context 系を再導入する前に、このイベント境界の安定化を優先します。
+
 ## 触ってはいけない固定点
 
 - `TASKPANE_MASTER_VERSION` の成功時無条件 `+1`
@@ -169,6 +178,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - `WorkbookActivate` / `WindowActivate` の host 再利用経路
 - snapshot / cache を正本扱いする変更
 - `WorkbookOpen` 直接依存の表示制御
+- `WorkbookOpen` を window 安定通知とみなす変更
 
 ## 不明として残す事項
 

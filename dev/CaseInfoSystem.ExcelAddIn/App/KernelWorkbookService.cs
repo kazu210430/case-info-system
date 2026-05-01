@@ -26,6 +26,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelWorkbookServiceTestHooks _testHooks;
         private readonly KernelWorkbookStateService _kernelWorkbookStateService;
         private readonly KernelWorkbookSettingsService _kernelWorkbookSettingsService;
+        private readonly KernelHomeSessionCloseCoordinator _homeSessionCloseCoordinator;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
         private bool _isHomeDisplayPrepared;
 
@@ -62,6 +63,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _testHooks = null;
             _kernelWorkbookStateService = new KernelWorkbookStateService(_application, _excelInteropService, _pathCompatibilityService, _logger);
             _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
+            _homeSessionCloseCoordinator = new KernelHomeSessionCloseCoordinator(this);
         }
 
         internal KernelWorkbookService(KernelCaseInteractionState kernelCaseInteractionState, Logger logger, KernelWorkbookServiceTestHooks testHooks)
@@ -84,6 +86,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 hasOtherVisibleWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherVisibleWorkbook,
                 hasOtherWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherWorkbook);
             _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
+            _homeSessionCloseCoordinator = new KernelHomeSessionCloseCoordinator(this);
         }
 
         internal Excel.Workbook GetOpenKernelWorkbook()
@@ -271,146 +274,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void CloseHomeSession(bool saveKernelWorkbook, string entryPoint)
         {
-            Excel.Workbook workbook = GetOpenKernelWorkbookCore();
-            bool otherVisibleWorkbookExists = HasOtherVisibleWorkbookCore(workbook);
-            bool otherWorkbookExists = HasOtherWorkbookCore(workbook);
-            bool skipDisplayRestoreForCaseCreation = KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(
-                saveKernelWorkbook,
-                _kernelCaseInteractionState.IsKernelCaseCreationFlowActive,
-                otherVisibleWorkbookExists,
-                otherWorkbookExists);
-            KernelHomeSessionCompletionAction completionAction = KernelHomeSessionDisplayPolicy.DecideCompletionAction(
-                skipDisplayRestoreForCaseCreation,
-                otherVisibleWorkbookExists,
-                otherWorkbookExists);
-            string caller = ResolveExternalCaller();
-            LogKernelFlickerTrace(
-                "source=KernelWorkbookService action=close-home-session-enter entryPoint="
-                + (entryPoint ?? string.Empty)
-                + ", caller="
-                + caller
-                + ", saveKernelWorkbook="
-                + saveKernelWorkbook.ToString()
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", activeState="
-                + FormatActiveExcelState()
-                + ", otherVisibleWorkbookExists="
-                + otherVisibleWorkbookExists.ToString()
-                + ", otherWorkbookExists="
-                + otherWorkbookExists.ToString()
-                + ", skipDisplayRestoreForCaseCreation="
-                + skipDisplayRestoreForCaseCreation.ToString()
-                + ", completionAction="
-                + completionAction.ToString()
-                + ", otherVisibleTargets="
-                + DescribeVisibleOtherWorkbookWindows(workbook));
-            _logger.Info(
-                "CloseHomeSession started. saveKernelWorkbook="
-                + saveKernelWorkbook.ToString()
-                + ", workbook="
-                + GetWorkbookFullNameCore(workbook)
-                + ", otherVisibleWorkbookExists="
-                + otherVisibleWorkbookExists.ToString()
-                + ", otherWorkbookExists="
-                + otherWorkbookExists.ToString()
-                + ", skipDisplayRestoreForCaseCreation="
-                + skipDisplayRestoreForCaseCreation.ToString());
-
-            if (workbook != null)
-            {
-                if (saveKernelWorkbook)
-                {
-                    LogKernelFlickerTrace(
-                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
-                        + (entryPoint ?? string.Empty)
-                        + ", branch=save-and-close, workbook="
-                        + FormatWorkbookDescriptor(workbook)
-                        + ", skipDisplayRestoreForCaseCreation="
-                        + skipDisplayRestoreForCaseCreation.ToString());
-                    // 処理ブロック: CASE 作成完了直後は Kernel シートが前景に出ないよう、閉じる直前に window を不可視化する。
-                    if (skipDisplayRestoreForCaseCreation)
-                    {
-                        ConcealKernelWorkbookWindowsForCaseCreationCloseCore(workbook);
-                    }
-
-                    SaveAndCloseKernelWorkbookCore(workbook);
-                }
-                else if (_kernelWorkbookLifecycleService != null)
-                {
-                    LogKernelFlickerTrace(
-                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
-                        + (entryPoint ?? string.Empty)
-                        + ", branch=request-managed-close, workbook="
-                        + FormatWorkbookDescriptor(workbook)
-                        + ", lifecycleAvailable=True, activeState="
-                        + FormatActiveExcelState());
-                    bool closeScheduled = RequestManagedCloseFromHomeExitCore(workbook);
-                    LogKernelFlickerTrace(
-                        "source=KernelWorkbookService action=close-home-session-branch-result entryPoint="
-                        + (entryPoint ?? string.Empty)
-                        + ", branch=request-managed-close, workbook="
-                        + FormatWorkbookDescriptor(workbook)
-                        + ", closeScheduled="
-                        + closeScheduled.ToString());
-                    if (!closeScheduled)
-                    {
-                        LogKernelFlickerTrace(
-                            "source=KernelWorkbookService action=close-home-session-end entryPoint="
-                            + (entryPoint ?? string.Empty)
-                            + ", result=canceled-before-managed-close, workbook="
-                            + FormatWorkbookDescriptor(workbook));
-                        _logger.Info("CloseHomeSession canceled before managed close was scheduled.");
-                        return;
-                    }
-                }
-                else
-                {
-                    LogKernelFlickerTrace(
-                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
-                        + (entryPoint ?? string.Empty)
-                        + ", branch=close-without-lifecycle, workbook="
-                        + FormatWorkbookDescriptor(workbook)
-                        + ", lifecycleAvailable=False");
-                    CloseKernelWorkbookWithoutLifecycleCore(workbook);
-                }
-            }
-
-            LogKernelFlickerTrace(
-                "source=KernelWorkbookService action=close-home-session-completion entryPoint="
-                + (entryPoint ?? string.Empty)
-                + ", completionAction="
-                + completionAction.ToString()
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", activeState="
-                + FormatActiveExcelState());
-            if (completionAction == KernelHomeSessionCompletionAction.ReleaseHomeDisplayWithoutShowingExcelAndQuit)
-            {
-                ReleaseHomeDisplayCore(false);
-                if (saveKernelWorkbook || _kernelWorkbookLifecycleService == null)
-                {
-                    QuitApplicationCore();
-                }
-            }
-            else if (completionAction == KernelHomeSessionCompletionAction.DismissPreparedHomeDisplayState)
-            {
-                // 処理ブロック: CASE 作成完了後は、既に表示中の CASE などの前景を維持し、Kernel 復帰を行わない。
-                DismissPreparedHomeDisplayStateCore("CloseHomeSession.CaseCreationSkipRestore");
-            }
-            else
-            {
-                ReleaseHomeDisplayCore(true);
-            }
-
-            LogKernelFlickerTrace(
-                "source=KernelWorkbookService action=close-home-session-end entryPoint="
-                + (entryPoint ?? string.Empty)
-                + ", result=completed, workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", activeState="
-                + FormatActiveExcelState());
-            _logger.Info("CloseHomeSession completed. saveKernelWorkbook=" + saveKernelWorkbook.ToString());
+            _homeSessionCloseCoordinator.Execute(saveKernelWorkbook, entryPoint);
         }
 
         private Excel.Workbook GetOpenKernelWorkbookCore()
@@ -1632,6 +1496,179 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return string.Empty;
+        }
+
+        private sealed class KernelHomeSessionCloseCoordinator
+        {
+            private readonly KernelWorkbookService _owner;
+
+            internal KernelHomeSessionCloseCoordinator(KernelWorkbookService owner)
+            {
+                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            }
+
+            internal void Execute(bool saveKernelWorkbook, string entryPoint)
+            {
+                Excel.Workbook workbook = _owner.GetOpenKernelWorkbookCore();
+                bool otherVisibleWorkbookExists = _owner.HasOtherVisibleWorkbookCore(workbook);
+                bool otherWorkbookExists = _owner.HasOtherWorkbookCore(workbook);
+                bool skipDisplayRestoreForCaseCreation = KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(
+                    saveKernelWorkbook,
+                    _owner._kernelCaseInteractionState.IsKernelCaseCreationFlowActive,
+                    otherVisibleWorkbookExists,
+                    otherWorkbookExists);
+                KernelHomeSessionCompletionAction completionAction = KernelHomeSessionDisplayPolicy.DecideCompletionAction(
+                    skipDisplayRestoreForCaseCreation,
+                    otherVisibleWorkbookExists,
+                    otherWorkbookExists);
+                string caller = ResolveExternalCaller();
+                _owner.LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=close-home-session-enter entryPoint="
+                    + (entryPoint ?? string.Empty)
+                    + ", caller="
+                    + caller
+                    + ", saveKernelWorkbook="
+                    + saveKernelWorkbook.ToString()
+                    + ", workbook="
+                    + _owner.FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + _owner.FormatActiveExcelState()
+                    + ", otherVisibleWorkbookExists="
+                    + otherVisibleWorkbookExists.ToString()
+                    + ", otherWorkbookExists="
+                    + otherWorkbookExists.ToString()
+                    + ", skipDisplayRestoreForCaseCreation="
+                    + skipDisplayRestoreForCaseCreation.ToString()
+                    + ", completionAction="
+                    + completionAction.ToString()
+                    + ", otherVisibleTargets="
+                    + _owner.DescribeVisibleOtherWorkbookWindows(workbook));
+                _owner._logger.Info(
+                    "CloseHomeSession started. saveKernelWorkbook="
+                    + saveKernelWorkbook.ToString()
+                    + ", workbook="
+                    + _owner.GetWorkbookFullNameCore(workbook)
+                    + ", otherVisibleWorkbookExists="
+                    + otherVisibleWorkbookExists.ToString()
+                    + ", otherWorkbookExists="
+                    + otherWorkbookExists.ToString()
+                    + ", skipDisplayRestoreForCaseCreation="
+                    + skipDisplayRestoreForCaseCreation.ToString());
+
+                if (workbook != null && !ExecuteCloseBranch(workbook, saveKernelWorkbook, skipDisplayRestoreForCaseCreation, entryPoint))
+                {
+                    return;
+                }
+
+                CompleteHomeSession(saveKernelWorkbook, completionAction, workbook, entryPoint);
+            }
+
+            private bool ExecuteCloseBranch(
+                Excel.Workbook workbook,
+                bool saveKernelWorkbook,
+                bool skipDisplayRestoreForCaseCreation,
+                string entryPoint)
+            {
+                if (saveKernelWorkbook)
+                {
+                    _owner.LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=save-and-close, workbook="
+                        + _owner.FormatWorkbookDescriptor(workbook)
+                        + ", skipDisplayRestoreForCaseCreation="
+                        + skipDisplayRestoreForCaseCreation.ToString());
+                    if (skipDisplayRestoreForCaseCreation)
+                    {
+                        _owner.ConcealKernelWorkbookWindowsForCaseCreationCloseCore(workbook);
+                    }
+
+                    _owner.SaveAndCloseKernelWorkbookCore(workbook);
+                    return true;
+                }
+
+                if (_owner._kernelWorkbookLifecycleService != null)
+                {
+                    _owner.LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=request-managed-close, workbook="
+                        + _owner.FormatWorkbookDescriptor(workbook)
+                        + ", lifecycleAvailable=True, activeState="
+                        + _owner.FormatActiveExcelState());
+                    bool closeScheduled = _owner.RequestManagedCloseFromHomeExitCore(workbook);
+                    _owner.LogKernelFlickerTrace(
+                        "source=KernelWorkbookService action=close-home-session-branch-result entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", branch=request-managed-close, workbook="
+                        + _owner.FormatWorkbookDescriptor(workbook)
+                        + ", closeScheduled="
+                        + closeScheduled.ToString());
+                    if (!closeScheduled)
+                    {
+                        _owner.LogKernelFlickerTrace(
+                            "source=KernelWorkbookService action=close-home-session-end entryPoint="
+                            + (entryPoint ?? string.Empty)
+                            + ", result=canceled-before-managed-close, workbook="
+                            + _owner.FormatWorkbookDescriptor(workbook));
+                        _owner._logger.Info("CloseHomeSession canceled before managed close was scheduled.");
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                _owner.LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=close-home-session-branch entryPoint="
+                    + (entryPoint ?? string.Empty)
+                    + ", branch=close-without-lifecycle, workbook="
+                    + _owner.FormatWorkbookDescriptor(workbook)
+                    + ", lifecycleAvailable=False");
+                _owner.CloseKernelWorkbookWithoutLifecycleCore(workbook);
+                return true;
+            }
+
+            private void CompleteHomeSession(
+                bool saveKernelWorkbook,
+                KernelHomeSessionCompletionAction completionAction,
+                Excel.Workbook workbook,
+                string entryPoint)
+            {
+                _owner.LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=close-home-session-completion entryPoint="
+                    + (entryPoint ?? string.Empty)
+                    + ", completionAction="
+                    + completionAction.ToString()
+                    + ", workbook="
+                    + _owner.FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + _owner.FormatActiveExcelState());
+                if (completionAction == KernelHomeSessionCompletionAction.ReleaseHomeDisplayWithoutShowingExcelAndQuit)
+                {
+                    _owner.ReleaseHomeDisplayCore(false);
+                    if (saveKernelWorkbook || _owner._kernelWorkbookLifecycleService == null)
+                    {
+                        _owner.QuitApplicationCore();
+                    }
+                }
+                else if (completionAction == KernelHomeSessionCompletionAction.DismissPreparedHomeDisplayState)
+                {
+                    _owner.DismissPreparedHomeDisplayStateCore("CloseHomeSession.CaseCreationSkipRestore");
+                }
+                else
+                {
+                    _owner.ReleaseHomeDisplayCore(true);
+                }
+
+                _owner.LogKernelFlickerTrace(
+                    "source=KernelWorkbookService action=close-home-session-end entryPoint="
+                    + (entryPoint ?? string.Empty)
+                    + ", result=completed, workbook="
+                    + _owner.FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + _owner.FormatActiveExcelState());
+                _owner._logger.Info("CloseHomeSession completed. saveKernelWorkbook=" + saveKernelWorkbook.ToString());
+            }
         }
 
         internal sealed class KernelWorkbookServiceTestHooks

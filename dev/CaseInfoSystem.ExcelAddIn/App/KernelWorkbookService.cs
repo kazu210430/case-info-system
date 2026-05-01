@@ -463,7 +463,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return workbook;
             }
 
-            string workbookPath = _kernelWorkbookStateService.ResolveKernelWorkbookPathFromAvailableSystemRoot();
+            string workbookPath = KernelWorkbookResolver.ResolveKernelWorkbookPathFromAvailableWorkbooks(
+                _application,
+                _excelInteropService,
+                _pathCompatibilityService,
+                _logger,
+                IsKernelWorkbook);
             if (string.IsNullOrWhiteSpace(workbookPath) || !File.Exists(workbookPath))
             {
                 return null;

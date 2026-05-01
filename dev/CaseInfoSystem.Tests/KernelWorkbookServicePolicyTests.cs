@@ -52,7 +52,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ResolveKernelWorkbookPathFromAvailableSystemRoot_UsesActiveKernelWorkbookDirectoryFallback()
+        public void ResolveKernelWorkbookPathFromAvailableWorkbooks_UsesActiveKernelWorkbookDirectoryFallback()
         {
             string tempDirectory = Path.Combine(Path.GetTempPath(), "KernelWorkbookStateServiceTests_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDirectory);
@@ -76,9 +76,13 @@ namespace CaseInfoSystem.Tests
                 var logger = OrchestrationTestSupport.CreateLogger(loggerMessages);
                 var pathCompatibilityService = new PathCompatibilityService();
                 var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
-                var service = new KernelWorkbookStateService(application, excelInteropService, pathCompatibilityService, logger);
 
-                string resolved = service.ResolveKernelWorkbookPathFromAvailableSystemRoot();
+                string resolved = KernelWorkbookResolver.ResolveKernelWorkbookPathFromAvailableWorkbooks(
+                    application,
+                    excelInteropService,
+                    pathCompatibilityService,
+                    logger,
+                    workbookCandidate => WorkbookFileNameResolver.IsKernelWorkbookName(workbookCandidate == null ? string.Empty : workbookCandidate.Name));
 
                 Assert.Equal(pathCompatibilityService.NormalizePath(kernelWorkbookPath), resolved);
             }

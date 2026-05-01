@@ -34,6 +34,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return string.Empty;
         }
 
+        internal static string ResolveKernelWorkbookPathFromAvailableWorkbooks(
+            Excel.Application application,
+            ExcelInteropService excelInteropService,
+            PathCompatibilityService pathCompatibilityService,
+            Logger logger,
+            Func<Excel.Workbook, bool> isKernelWorkbook)
+        {
+            string systemRoot = ResolveSystemRootFromAvailableWorkbooks(
+                application,
+                excelInteropService,
+                pathCompatibilityService,
+                logger,
+                isKernelWorkbook);
+            if (string.IsNullOrWhiteSpace(systemRoot))
+            {
+                return string.Empty;
+            }
+
+            return WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, pathCompatibilityService);
+        }
+
         internal static string GetSystemRootFromWorkbook(
             Excel.Workbook workbook,
             ExcelInteropService excelInteropService,

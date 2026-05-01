@@ -1,5 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.App;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
+using CaseInfoSystem.Tests.Fakes;
 using Xunit;
+using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.Tests
 {
@@ -43,6 +49,46 @@ namespace CaseInfoSystem.Tests
                 resolvePath: root => root + "\\案件情報System.xlsm");
 
             Assert.Equal("C:\\案件\\案件情報System.xlsm", result);
+        }
+
+        [Fact]
+        public void ResolveKernelWorkbookPathFromAvailableSystemRoot_UsesActiveKernelWorkbookDirectoryFallback()
+        {
+            string tempDirectory = Path.Combine(Path.GetTempPath(), "KernelWorkbookStateServiceTests_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDirectory);
+            try
+            {
+                string kernelWorkbookPath = Path.Combine(tempDirectory, WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"));
+                File.WriteAllText(kernelWorkbookPath, string.Empty);
+
+                var application = new Excel.Application();
+                var workbook = new Excel.Workbook
+                {
+                    Application = application,
+                    FullName = kernelWorkbookPath,
+                    Name = Path.GetFileName(kernelWorkbookPath),
+                    CustomDocumentProperties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                };
+                application.Workbooks.Add(workbook);
+                application.ActiveWorkbook = workbook;
+
+                var loggerMessages = new List<string>();
+                var logger = OrchestrationTestSupport.CreateLogger(loggerMessages);
+                var pathCompatibilityService = new PathCompatibilityService();
+                var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
+                var service = new KernelWorkbookStateService(application, excelInteropService, pathCompatibilityService, logger);
+
+                string resolved = service.ResolveKernelWorkbookPathFromAvailableSystemRoot();
+
+                Assert.Equal(pathCompatibilityService.NormalizePath(kernelWorkbookPath), resolved);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
         }
 
         [Fact]

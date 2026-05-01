@@ -91,6 +91,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return FindOpenWorkbookCore(kernelPath);
         }
 
+        internal string ResolveKernelWorkbookPathFromAvailableSystemRoot()
+        {
+            string systemRoot = KernelWorkbookResolver.ResolveSystemRootFromAvailableWorkbooks(
+                _application,
+                _excelInteropService,
+                _pathCompatibilityService,
+                _logger,
+                IsKernelWorkbook);
+            if (string.IsNullOrWhiteSpace(systemRoot))
+            {
+                return null;
+            }
+
+            return ResolveKernelWorkbookPathCore(systemRoot);
+        }
+
         internal bool ShouldShowHomeOnStartup(Excel.Workbook startupWorkbook = null)
         {
             bool hasExplicitKernelStartupContext = HasExplicitKernelStartupContext(startupWorkbook);

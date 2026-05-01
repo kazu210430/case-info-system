@@ -463,7 +463,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return workbook;
             }
 
-            string workbookPath = ResolveKernelWorkbookPathFromAvailableSystemRoot();
+            string workbookPath = _kernelWorkbookStateService.ResolveKernelWorkbookPathFromAvailableSystemRoot();
             if (string.IsNullOrWhiteSpace(workbookPath) || !File.Exists(workbookPath))
             {
                 return null;
@@ -494,17 +494,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 _application.EnableEvents = previousEnableEvents;
             }
-        }
-
-        private string ResolveKernelWorkbookPathFromAvailableSystemRoot()
-        {
-            string systemRoot = KernelWorkbookResolver.ResolveSystemRootFromAvailableWorkbooks(_application, _excelInteropService, _pathCompatibilityService, _logger, IsKernelWorkbook);
-            if (string.IsNullOrWhiteSpace(systemRoot))
-            {
-                return null;
-            }
-
-            return WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
         }
 
         private void SaveAndCloseKernelWorkbook(Excel.Workbook workbook)

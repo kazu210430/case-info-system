@@ -24,6 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly KernelWorkbookServiceTestHooks _testHooks;
+        private readonly KernelOpenWorkbookLocator _kernelOpenWorkbookLocator;
         private readonly KernelWorkbookStateService _kernelWorkbookStateService;
         private readonly KernelWorkbookSettingsService _kernelWorkbookSettingsService;
         private readonly KernelHomeSessionCloseCoordinator _homeSessionCloseCoordinator;
@@ -61,7 +62,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testHooks = null;
-            _kernelWorkbookStateService = new KernelWorkbookStateService(_application, _excelInteropService, _pathCompatibilityService, _logger);
+            _kernelOpenWorkbookLocator = new KernelOpenWorkbookLocator(_application, _excelInteropService, _pathCompatibilityService, _logger);
+            _kernelWorkbookStateService = new KernelWorkbookStateService(_application, _excelInteropService, _logger, _kernelOpenWorkbookLocator);
             _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
             _homeSessionCloseCoordinator = new KernelHomeSessionCloseCoordinator(this);
         }
@@ -75,14 +77,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testHooks = testHooks;
-            _kernelWorkbookStateService = new KernelWorkbookStateService(
+            _kernelOpenWorkbookLocator = new KernelOpenWorkbookLocator(
                 _application,
                 _excelInteropService,
                 _pathCompatibilityService,
                 _logger,
                 getOpenKernelWorkbookOverride: _testHooks == null ? null : _testHooks.GetOpenKernelWorkbook,
                 resolveKernelWorkbookPathOverride: _testHooks == null ? null : _testHooks.ResolveKernelWorkbookPath,
-                findOpenWorkbookOverride: _testHooks == null ? null : _testHooks.FindOpenWorkbook,
+                findOpenWorkbookOverride: _testHooks == null ? null : _testHooks.FindOpenWorkbook);
+            _kernelWorkbookStateService = new KernelWorkbookStateService(
+                _application,
+                _excelInteropService,
+                _logger,
+                _kernelOpenWorkbookLocator,
                 hasOtherVisibleWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherVisibleWorkbook,
                 hasOtherWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherWorkbook);
             _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
@@ -91,7 +98,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Excel.Workbook GetOpenKernelWorkbook()
         {
-            return _kernelWorkbookStateService.GetOpenKernelWorkbook();
+            return _kernelOpenWorkbookLocator.GetOpenKernelWorkbook();
         }
 
         internal bool IsKernelWorkbook(Excel.Workbook workbook)
@@ -101,7 +108,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Excel.Workbook ResolveKernelWorkbook(Domain.WorkbookContext context)
         {
-            return _kernelWorkbookStateService.ResolveKernelWorkbook(context);
+            return _kernelOpenWorkbookLocator.ResolveKernelWorkbook(context);
         }
 
         internal bool TryShowSheetByCodeName(Domain.WorkbookContext context, string sheetCodeName, string reason)

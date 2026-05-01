@@ -224,6 +224,7 @@
     <Compile Include="App\KernelHomeExternalClosePolicy.cs" />
     <Compile Include="App\KernelNamingService.cs" />
     <Compile Include="App\KernelWorkbookAvailabilityService.cs" />
+    <Compile Include="App\KernelOpenWorkbookLocator.cs" />
     <Compile Include="App\KernelWorkbookResolutionPolicy.cs" />
     <Compile Include="App\KernelWorkbookResolver.cs" />
     <Compile Include="App\KernelWorkbookSettingsService.cs" />

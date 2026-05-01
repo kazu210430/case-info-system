@@ -121,6 +121,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookService.cs" Link="Source\App\KernelWorkbookService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" Link="Source\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelOpenWorkbookLocator.cs" Link="Source\App\KernelOpenWorkbookLocator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStartupDisplayPolicy.cs" Link="Source\App\KernelWorkbookStartupDisplayPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookPromotionPolicy.cs" Link="Source\App\KernelWorkbookPromotionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolutionPolicy.cs" Link="Source\App\KernelWorkbookResolutionPolicy.cs" />

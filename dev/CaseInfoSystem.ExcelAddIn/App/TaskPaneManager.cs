@@ -153,17 +153,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool TryShowExistingPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
         {
-            EvaluateDisplayRequestPaneState(
+            TaskPaneDisplayRequestPaneState paneState = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+                _excelInteropService,
+                _hostsByWindowKey,
                 workbook,
-                window,
-                out bool hasExistingHost,
-                out bool isSameWorkbook,
-                out bool isRenderSignatureCurrent);
+                window);
 
             if (!TaskPaneShowExistingPolicy.ShouldShowExisting(
-                hasExistingHost: hasExistingHost,
-                isSameWorkbook: isSameWorkbook,
-                isRenderSignatureCurrent: isRenderSignatureCurrent))
+                hasExistingHost: paneState.HasExistingHost,
+                isSameWorkbook: paneState.IsSameWorkbook,
+                isRenderSignatureCurrent: paneState.IsRenderSignatureCurrent))
             {
                 return false;
             }
@@ -173,17 +172,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool ShouldShowWithRenderPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
         {
-            EvaluateDisplayRequestPaneState(
+            TaskPaneDisplayRequestPaneState paneState = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+                _excelInteropService,
+                _hostsByWindowKey,
                 workbook,
-                window,
-                out bool hasExistingHost,
-                out bool isSameWorkbook,
-                out bool isRenderSignatureCurrent);
+                window);
 
             return TaskPaneShowWithRenderPolicy.ShouldShowWithRender(
-                hasExistingHost,
-                isSameWorkbook,
-                isRenderSignatureCurrent);
+                paneState.HasExistingHost,
+                paneState.IsSameWorkbook,
+                paneState.IsRenderSignatureCurrent);
         }
 
         internal bool HasManagedPaneForWindow(Excel.Window window)
@@ -251,53 +249,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", hostVisible="
                 + host.IsVisible.ToString());
             return isVisibleCasePane;
-        }
-
-        private void EvaluateDisplayRequestPaneState(
-            Excel.Workbook workbook,
-            Excel.Window window,
-            out bool hasExistingHost,
-            out bool isSameWorkbook,
-            out bool isRenderSignatureCurrent)
-        {
-            hasExistingHost = false;
-            isSameWorkbook = false;
-            isRenderSignatureCurrent = false;
-
-            string windowKey = SafeGetWindowKey(window);
-            if (string.IsNullOrWhiteSpace(windowKey)
-                || !_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                return;
-            }
-
-            hasExistingHost = true;
-            string workbookFullName = workbook == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
-            isSameWorkbook =
-                !string.IsNullOrWhiteSpace(workbookFullName)
-                && string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase);
-            if (!isSameWorkbook)
-            {
-                return;
-            }
-
-            WorkbookRole role = GetHostedWorkbookRole(host);
-            if (role == WorkbookRole.Unknown)
-            {
-                return;
-            }
-
-            string renderSignature = BuildRenderSignature(
-                new WorkbookContext(
-                    workbook,
-                    window,
-                    role,
-                    _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
-                    workbookFullName,
-                    _excelInteropService.GetActiveSheetCodeName(workbook)));
-            isRenderSignatureCurrent =
-                !string.IsNullOrWhiteSpace(host.LastRenderSignature)
-                && string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
         }
 
         private bool TryAcceptRefreshPaneRequest(WorkbookContext context, string reason, int refreshPaneCallId, out WorkbookRole role, out string windowKey)
@@ -378,8 +329,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private bool RenderAndShowHostForRefresh(TaskPaneHost host, WorkbookContext context, string reason, string windowKey, int refreshPaneCallId)
         {
-            string renderSignature = BuildRenderSignature(context);
-            bool renderRequired = !string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
+            TaskPaneRenderStateEvaluation renderState = TaskPaneRenderStateEvaluator.EvaluateRenderState(
+                _excelInteropService,
+                host,
+                context);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneManager action=render-evaluate refreshPaneCallId="
@@ -387,11 +340,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", host="
                 + FormatHostDescriptor(host)
                 + ", renderRequired="
-                + renderRequired.ToString());
-            if (renderRequired)
+                + renderState.IsRenderRequired.ToString());
+            if (renderState.IsRenderRequired)
             {
                 RenderHost(host, context, reason);
-                host.LastRenderSignature = renderSignature;
+                host.LastRenderSignature = renderState.RenderSignature;
             }
             else
             {
@@ -862,7 +815,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             InvalidateHostRenderStateForForcedRefresh(host);
             RenderCaseHostAfterAction(control, workbook);
-            host.LastRenderSignature = BuildRenderSignature(
+            host.LastRenderSignature = TaskPaneRenderStateEvaluator.BuildRenderSignature(
+                _excelInteropService,
                 new WorkbookContext(
                     workbook,
                     host.Window,
@@ -1038,30 +992,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 // window key を取得できない場合は空文字へフォールバックする。
                 return string.Empty;
             }
-        }
-
-        private string BuildRenderSignature(WorkbookContext context)
-        {
-            if (context == null)
-            {
-                return string.Empty;
-            }
-
-            string caseListRegistered = string.Empty;
-            string snapshotCacheCount = string.Empty;
-            if (context.Role == WorkbookRole.Case && context.Workbook != null)
-            {
-                caseListRegistered = _excelInteropService.TryGetDocumentProperty(context.Workbook, "CASELIST_REGISTERED") ?? string.Empty;
-                snapshotCacheCount = _excelInteropService.TryGetDocumentProperty(context.Workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT") ?? string.Empty;
-            }
-
-            return string.Join(
-                "|",
-                context.Role.ToString(),
-                context.WorkbookFullName ?? string.Empty,
-                context.ActiveSheetCodeName ?? string.Empty,
-                caseListRegistered,
-                snapshotCacheCount);
         }
 
         private string FormatContextDescriptor(WorkbookContext context)

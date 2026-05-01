@@ -235,6 +235,7 @@
     <Compile Include="App\TaskPaneDisplayCoordinator.cs" />
     <Compile Include="App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="App\TaskPaneManager.cs" />
+    <Compile Include="App\TaskPaneRenderStateEvaluator.cs" />
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />
     <Compile Include="App\PaneDisplayPolicy.cs" />

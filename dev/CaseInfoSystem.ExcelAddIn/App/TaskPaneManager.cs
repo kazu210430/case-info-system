@@ -24,6 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
+        private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
         private readonly TaskPaneManagerTestHooks _testHooks;
         private const string ProductTitle = "案件情報System";
         private int _kernelFlickerTraceRefreshPaneSequence;
@@ -87,6 +88,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
+            _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
+                _hostsByWindowKey,
+                _kernelCaseInteractionState,
+                _logger,
+                _testHooks,
+                SafeGetWindowKey,
+                FormatHostDescriptor,
+                workbook => FormatWorkbookDescriptor(workbook),
+                RemoveHost);
         }
 
         internal TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
@@ -105,6 +115,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
+            _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
+                _hostsByWindowKey,
+                _kernelCaseInteractionState,
+                _logger,
+                _testHooks,
+                SafeGetWindowKey,
+                FormatHostDescriptor,
+                workbook => FormatWorkbookDescriptor(workbook),
+                RemoveHost);
         }
 
         // 表示調停責務: refresh の主経路で前提確認、host 解決、reuse、render/show を順序どおり調停する。
@@ -135,41 +154,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool TryShowExistingPane(Excel.Workbook workbook, Excel.Window window, string reason)
         {
-            string windowKey = SafeGetWindowKey(window);
-            if (string.IsNullOrWhiteSpace(windowKey))
-            {
-                return false;
-            }
-
-            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                return false;
-            }
-
-            string workbookFullName = workbook == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
-            if (!string.IsNullOrWhiteSpace(workbookFullName)
-                && !string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            PrepareHostsBeforeShow(host);
-            if (!TryShowHost(host, "TryShowExistingPane"))
-            {
-                _logger.Warn("TryShowExistingPane skipped because host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-                return false;
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=show-existing-pane reason="
-                + (reason ?? string.Empty)
-                + ", host="
-                + FormatHostDescriptor(host)
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook));
-            _logger.Info("TaskPane existing host shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-            return true;
+            return _taskPaneDisplayCoordinator.TryShowExistingPane(_excelInteropService, workbook, window, reason);
         }
 
         internal bool TryShowExistingPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
@@ -386,8 +371,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatHostDescriptor(host)
                 + ", reason="
                 + (reason ?? string.Empty));
-            PrepareHostsBeforeShow(host);
-            if (!TryShowHost(host, "RefreshPane.ReuseCaseHost"))
+            _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
+            if (!_taskPaneDisplayCoordinator.TryShowHost(host, "RefreshPane.ReuseCaseHost"))
             {
                 _logger.Warn("RefreshPane skipped because reused CASE host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
                 return false;
@@ -419,8 +404,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Debug(nameof(TaskPaneManager), "RefreshPane render skipped because the host state did not change. windowKey=" + windowKey + ", role=" + context.Role);
             }
 
-            PrepareHostsBeforeShow(host);
-            if (!TryShowHost(host, "RefreshPane"))
+            _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
+            if (!_taskPaneDisplayCoordinator.TryShowHost(host, "RefreshPane"))
             {
                 _logger.Warn("RefreshPane skipped because host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
                 return false;
@@ -440,32 +425,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
         // Host lifecycle 責務: windowKey 単位の host 集合を保持し、hide/dispose/create/remove を担う。
         internal void HideAll()
         {
-            foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
-            {
-                SafeHideHost(host, "HideAll");
-            }
+            _taskPaneDisplayCoordinator.HideAll();
         }
 
         internal void HideKernelPanes()
         {
-            foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
-            {
-                if (host.Control is KernelNavigationControl)
-                {
-                    SafeHideHost(host, "HideKernelPanes");
-                }
-            }
+            _taskPaneDisplayCoordinator.HideKernelPanes();
         }
 
         internal void HideAllExcept(string activeWindowKey)
         {
-            foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
-            {
-                if (!string.Equals(host.WindowKey, activeWindowKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    SafeHideHost(host, "HideAllExcept");
-                }
-            }
+            _taskPaneDisplayCoordinator.HideAllExcept(activeWindowKey);
         }
 
         /// <summary>
@@ -476,66 +446,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// </summary>
         internal void PrepareHostsBeforeShow(TaskPaneHost host)
         {
-            if (host == null)
-            {
-                return;
-            }
-
-            TaskPaneHostPreparationAction action = TaskPaneHostPreparationPolicy.Decide(
-                _kernelCaseInteractionState.IsKernelCaseCreationFlowActive,
-                host.Control is DocumentButtonsControl);
-
-            if (action == TaskPaneHostPreparationAction.None)
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=prepare-hosts decision=None"
-                    + ", host="
-                    + FormatHostDescriptor(host));
-                return;
-            }
-
-            if (action == TaskPaneHostPreparationAction.HideNonCaseHostsExceptActiveWindow)
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=prepare-hosts decision=HideNonCaseHostsExceptActiveWindow"
-                    + ", host="
-                    + FormatHostDescriptor(host));
-                HideNonCaseHostsExcept(host.WindowKey);
-                return;
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=prepare-hosts decision=HideAllExcept"
-                + ", host="
-                + FormatHostDescriptor(host));
-            HideAllExcept(host.WindowKey);
-        }
-
-        /// <summary>
-        /// メソッド: 指定 CASE window を残して、CASE 以外の pane だけを非表示にする。
-        /// 引数: activeWindowKey - 表示継続させる windowKey。
-        /// 戻り値: なし。
-        /// 副作用: CASE 以外の Host を非表示にする。
-        /// </summary>
-        private void HideNonCaseHostsExcept(string activeWindowKey)
-        {
-            foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
-            {
-                if (string.Equals(host.WindowKey, activeWindowKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (host.Control is DocumentButtonsControl)
-                {
-                    continue;
-                }
-
-                SafeHideHost(host, "HideNonCaseHostsExcept");
-            }
+            _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
         }
 
         /// <summary>
@@ -580,16 +491,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// </summary>
         internal void HidePaneForWindow(Excel.Window window)
         {
-            string windowKey = SafeGetWindowKey(window);
-            if (string.IsNullOrWhiteSpace(windowKey))
-            {
-                return;
-            }
-
-            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                SafeHideHost(host, "HidePaneForWindow");
-            }
+            _taskPaneDisplayCoordinator.HidePaneForWindow(window);
         }
 
         internal void DisposeAll()
@@ -1016,26 +918,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)
         {
-            string windowKey = SafeGetWindowKey(targetWindow);
-            if (string.IsNullOrWhiteSpace(windowKey))
-            {
-                return;
-            }
-
-            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                InvalidateHostRenderStateForForcedRefresh(host);
-            }
+            _taskPaneDisplayCoordinator.PrepareTargetWindowForForcedRefresh(targetWindow);
         }
 
-        private static void InvalidateHostRenderStateForForcedRefresh(TaskPaneHost host)
+        private void InvalidateHostRenderStateForForcedRefresh(TaskPaneHost host)
         {
-            if (host == null)
-            {
-                return;
-            }
-
-            host.LastRenderSignature = string.Empty;
+            _taskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(host);
         }
 
         /// <summary>
@@ -1053,66 +941,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             control.Render(viewState);
         }
 
-        private void SafeHideHost(TaskPaneHost host, string reason)
-        {
-            if (host == null)
-            {
-                return;
-            }
-
-            try
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-pane reason="
-                    + (reason ?? string.Empty)
-                    + ", host="
-                    + FormatHostDescriptor(host));
-                _testHooks?.OnHideHost?.Invoke(host.WindowKey, reason ?? string.Empty);
-                host.Hide();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("TaskPane host hide failed. reason=" + (reason ?? string.Empty) + ", windowKey=" + host.WindowKey, ex);
-                RemoveHost(host.WindowKey);
-            }
-        }
-
         private bool TryShowHost(TaskPaneHost host, string reason)
         {
-            if (host == null)
-            {
-                return false;
-            }
-
-            if (_testHooks != null && _testHooks.TryShowHost != null)
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=show-pane-test-hook reason="
-                    + (reason ?? string.Empty)
-                    + ", host="
-                    + FormatHostDescriptor(host));
-                return _testHooks.TryShowHost(host.WindowKey, reason ?? string.Empty);
-            }
-
-            try
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=show-pane reason="
-                    + (reason ?? string.Empty)
-                    + ", host="
-                    + FormatHostDescriptor(host));
-                host.Show();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("TaskPane host show failed. reason=" + (reason ?? string.Empty) + ", windowKey=" + host.WindowKey, ex);
-                RemoveHost(host.WindowKey);
-                return false;
-            }
+            return _taskPaneDisplayCoordinator.TryShowHost(host, reason);
         }
 
         private void RemoveHost(string windowKey)

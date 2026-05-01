@@ -230,6 +230,7 @@
     <Compile Include="App\NavigationService.cs" />
     <Compile Include="App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="App\ICaseTaskPaneSnapshotReader.cs" />
+    <Compile Include="App\TaskPaneDisplayCoordinator.cs" />
     <Compile Include="App\TaskPaneManager.cs" />
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />

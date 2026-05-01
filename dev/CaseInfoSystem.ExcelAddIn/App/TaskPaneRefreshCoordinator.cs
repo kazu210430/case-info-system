@@ -64,6 +64,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return TaskPaneRefreshAttemptResult.Skipped();
             }
 
+            if (ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshCoordinator action=end coordinatorAttemptId="
+                    + coordinatorAttemptId.ToString()
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", result=SkippedWorkbookOpenWindowDependentRefresh"
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", inputWindow="
+                    + FormatWindowDescriptor(window));
+                return TaskPaneRefreshAttemptResult.Skipped();
+            }
+
             // recovery は単なる UI 修復ではなく、後続の context 解決の前提調整。
             // ActiveWindow / 可視 window / UI 状態を「解決可能な状態」に整える段階であり、
             // ここでは対象 window も context もまだ決定しない。
@@ -183,6 +199,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return true;
+        }
+
+        private static bool ShouldSkipWorkbookOpenWindowDependentRefresh(string reason, Excel.Workbook workbook, Excel.Window window)
+        {
+            return string.Equals(reason, "WorkbookOpen", StringComparison.Ordinal)
+                && workbook != null
+                && window == null;
         }
 
         private Excel.Window EnsurePaneWindowForWorkbook(Excel.Workbook workbook, Excel.Window window, string reason, Stopwatch stopwatch)

@@ -68,6 +68,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", activeState="
                 + FormatActiveState());
+            if (ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=skip-workbook-open-window-dependent-refresh refreshAttemptId="
+                    + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", inputWindow="
+                    + FormatWindowDescriptor(window)
+                    + ", activeState="
+                    + FormatActiveState());
+                return TaskPaneRefreshAttemptResult.Skipped();
+            }
+
             if (Globals.ThisAddIn != null && Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
             {
                 _logger?.Info(
@@ -146,6 +163,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
         {
+            if (ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null))
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=skip-workbook-open-defer reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", activeState="
+                    + FormatActiveState());
+                return;
+            }
+
             _pendingPaneRefreshWorkbookFullName = _excelInteropService == null
                 ? string.Empty
                 : _excelInteropService.GetWorkbookFullName(workbook);
@@ -608,6 +638,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return _excelInteropService.FindOpenWorkbook(_pendingPaneRefreshWorkbookFullName);
+        }
+
+        private static bool ShouldSkipWorkbookOpenWindowDependentRefresh(string reason, Excel.Workbook workbook, Excel.Window window)
+        {
+            return string.Equals(reason, "WorkbookOpen", StringComparison.Ordinal)
+                && workbook != null
+                && window == null;
         }
 
         private void StopWaitReadyRetryTimers()

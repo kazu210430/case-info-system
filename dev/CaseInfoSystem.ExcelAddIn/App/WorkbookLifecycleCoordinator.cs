@@ -79,7 +79,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable("WorkbookOpen", workbook);
-            _refreshTaskPane?.Invoke("WorkbookOpen", workbook, null);
         }
 
         internal void OnWorkbookActivate(Excel.Workbook workbook)

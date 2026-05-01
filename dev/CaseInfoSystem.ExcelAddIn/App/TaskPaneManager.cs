@@ -24,6 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
+        private readonly TaskPaneHostRegistry _taskPaneHostRegistry;
         private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
         private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
         private readonly TaskPaneManagerTestHooks _testHooks;
@@ -118,6 +119,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
+            _taskPaneHostRegistry = new TaskPaneHostRegistry(
+                _hostsByWindowKey,
+                _addIn,
+                _logger,
+                FormatHostDescriptor,
+                KernelControl_ActionInvoked,
+                AccountingControl_ActionInvoked,
+                (windowKey, control, e) => _taskPaneActionDispatcher.HandleCaseControlActionInvoked(windowKey, control, e));
             _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 _hostsByWindowKey,
                 _kernelCaseInteractionState,
@@ -126,7 +135,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 SafeGetWindowKey,
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
-                RemoveHost);
+                windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
             _taskPaneActionDispatcher = new TaskPaneActionDispatcher(this);
         }
 
@@ -146,6 +155,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
+            _taskPaneHostRegistry = new TaskPaneHostRegistry(
+                _hostsByWindowKey,
+                _addIn,
+                _logger,
+                FormatHostDescriptor,
+                KernelControl_ActionInvoked,
+                AccountingControl_ActionInvoked,
+                (windowKey, control, e) => _taskPaneActionDispatcher.HandleCaseControlActionInvoked(windowKey, control, e));
             _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 _hostsByWindowKey,
                 _kernelCaseInteractionState,
@@ -154,7 +171,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 SafeGetWindowKey,
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
-                RemoveHost);
+                windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
             _taskPaneActionDispatcher = new TaskPaneActionDispatcher(this);
         }
 
@@ -453,19 +470,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            var targetKeys = new List<string>();
-            foreach (KeyValuePair<string, TaskPaneHost> pair in _hostsByWindowKey)
-            {
-                if (string.Equals(pair.Value.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
-                {
-                    targetKeys.Add(pair.Key);
-                }
-            }
-
-            foreach (string windowKey in targetKeys)
-            {
-                RemoveHost(windowKey);
-            }
+            _taskPaneHostRegistry.RemoveWorkbookPanes(workbookFullName);
         }
 
         /// <summary>
@@ -481,88 +486,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void DisposeAll()
         {
-            foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
-            {
-                host.Dispose();
-            }
-
-            _hostsByWindowKey.Clear();
+            _taskPaneHostRegistry.DisposeAll();
         }
 
         internal void RegisterHost(TaskPaneHost host)
         {
-            if (host == null)
-            {
-                throw new ArgumentNullException(nameof(host));
-            }
-
-            if (_hostsByWindowKey.TryGetValue(host.WindowKey, out TaskPaneHost existingHost)
-                && !ReferenceEquals(existingHost, host))
-            {
-                existingHost.Dispose();
-            }
-
-            _hostsByWindowKey[host.WindowKey] = host;
+            _taskPaneHostRegistry.RegisterHost(host);
         }
 
         private TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
         {
-            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost existingHost))
-            {
-                bool roleMatches =
-                    (role == WorkbookRole.Kernel && existingHost.Control is KernelNavigationControl)
-                    || (role == WorkbookRole.Case && existingHost.Control is DocumentButtonsControl)
-                    || (role == WorkbookRole.Accounting && existingHost.Control is AccountingNavigationControl);
-                if (roleMatches)
-                {
-                    return existingHost;
-                }
-
-                existingHost.Dispose();
-                _hostsByWindowKey.Remove(windowKey);
-            }
-
-            if (role == WorkbookRole.Kernel)
-            {
-                var kernelControl = new KernelNavigationControl();
-                kernelControl.ActionInvoked += (sender, e) => KernelControl_ActionInvoked(windowKey, e);
-                var host = new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey);
-                _hostsByWindowKey.Add(windowKey, host);
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=create-host host="
-                    + FormatHostDescriptor(host)
-                    + ", paneRole=Kernel");
-                _logger.Info("TaskPane host created. role=Kernel, windowKey=" + windowKey);
-                return host;
-            }
-
-            if (role == WorkbookRole.Accounting)
-            {
-                var accountingControl = new AccountingNavigationControl();
-                accountingControl.ActionInvoked += (sender, e) => AccountingControl_ActionInvoked(windowKey, e);
-                var host = new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey);
-                _hostsByWindowKey.Add(windowKey, host);
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=create-host host="
-                    + FormatHostDescriptor(host)
-                    + ", paneRole=Accounting");
-                _logger.Info("TaskPane host created. role=Accounting, windowKey=" + windowKey);
-                return host;
-            }
-
-            var caseControl = new DocumentButtonsControl();
-            var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey);
-            caseControl.ActionInvoked += (sender, e) => _taskPaneActionDispatcher.HandleCaseControlActionInvoked(windowKey, caseControl, e);
-            _hostsByWindowKey.Add(windowKey, caseHost);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=create-host host="
-                + FormatHostDescriptor(caseHost)
-                + ", paneRole=Case");
-            _logger.Info("TaskPane host created. role=Case, windowKey=" + windowKey);
-            return caseHost;
+            return _taskPaneHostRegistry.GetOrReplaceHost(windowKey, window, role);
         }
 
         private void RemoveStaleKernelHosts(WorkbookContext context, string activeWindowKey)
@@ -792,27 +726,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void RemoveHost(string windowKey)
         {
-            if (string.IsNullOrWhiteSpace(windowKey))
-            {
-                return;
-            }
-
-            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=remove-host host="
-                    + FormatHostDescriptor(host));
-                _hostsByWindowKey.Remove(windowKey);
-                try
-                {
-                    host.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error("TaskPane host dispose failed. windowKey=" + windowKey, ex);
-                }
-            }
+            _taskPaneHostRegistry.RemoveHost(windowKey);
         }
 
         private void KernelControl_ActionInvoked(string windowKey, KernelNavigationActionEventArgs e)
@@ -1070,6 +984,163 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal Func<string, string, bool> TryShowHost { get; set; }
 
             internal Action<string> OnCasePaneUpdatedNotification { get; set; }
+        }
+
+        private sealed class TaskPaneHostRegistry
+        {
+            private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
+            private readonly ThisAddIn _addIn;
+            private readonly Logger _logger;
+            private readonly Func<TaskPaneHost, string> _formatHostDescriptor;
+            private readonly Action<string, KernelNavigationActionEventArgs> _handleKernelActionInvoked;
+            private readonly Action<string, AccountingNavigationActionEventArgs> _handleAccountingActionInvoked;
+            private readonly Action<string, DocumentButtonsControl, TaskPaneActionEventArgs> _handleCaseActionInvoked;
+
+            internal TaskPaneHostRegistry(
+                Dictionary<string, TaskPaneHost> hostsByWindowKey,
+                ThisAddIn addIn,
+                Logger logger,
+                Func<TaskPaneHost, string> formatHostDescriptor,
+                Action<string, KernelNavigationActionEventArgs> handleKernelActionInvoked,
+                Action<string, AccountingNavigationActionEventArgs> handleAccountingActionInvoked,
+                Action<string, DocumentButtonsControl, TaskPaneActionEventArgs> handleCaseActionInvoked)
+            {
+                _hostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
+                _addIn = addIn;
+                _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+                _formatHostDescriptor = formatHostDescriptor ?? throw new ArgumentNullException(nameof(formatHostDescriptor));
+                _handleKernelActionInvoked = handleKernelActionInvoked ?? throw new ArgumentNullException(nameof(handleKernelActionInvoked));
+                _handleAccountingActionInvoked = handleAccountingActionInvoked ?? throw new ArgumentNullException(nameof(handleAccountingActionInvoked));
+                _handleCaseActionInvoked = handleCaseActionInvoked ?? throw new ArgumentNullException(nameof(handleCaseActionInvoked));
+            }
+
+            internal void RegisterHost(TaskPaneHost host)
+            {
+                if (host == null)
+                {
+                    throw new ArgumentNullException(nameof(host));
+                }
+
+                if (_hostsByWindowKey.TryGetValue(host.WindowKey, out TaskPaneHost existingHost)
+                    && !ReferenceEquals(existingHost, host))
+                {
+                    existingHost.Dispose();
+                }
+
+                _hostsByWindowKey[host.WindowKey] = host;
+            }
+
+            internal TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
+            {
+                if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost existingHost))
+                {
+                    bool roleMatches =
+                        (role == WorkbookRole.Kernel && existingHost.Control is KernelNavigationControl)
+                        || (role == WorkbookRole.Case && existingHost.Control is DocumentButtonsControl)
+                        || (role == WorkbookRole.Accounting && existingHost.Control is AccountingNavigationControl);
+                    if (roleMatches)
+                    {
+                        return existingHost;
+                    }
+
+                    existingHost.Dispose();
+                    _hostsByWindowKey.Remove(windowKey);
+                }
+
+                if (role == WorkbookRole.Kernel)
+                {
+                    var kernelControl = new KernelNavigationControl();
+                    kernelControl.ActionInvoked += (sender, e) => _handleKernelActionInvoked(windowKey, e);
+                    var host = new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey);
+                    _hostsByWindowKey.Add(windowKey, host);
+                    _logger?.Info(
+                        KernelFlickerTracePrefix
+                        + " source=TaskPaneManager action=create-host host="
+                        + _formatHostDescriptor(host)
+                        + ", paneRole=Kernel");
+                    _logger.Info("TaskPane host created. role=Kernel, windowKey=" + windowKey);
+                    return host;
+                }
+
+                if (role == WorkbookRole.Accounting)
+                {
+                    var accountingControl = new AccountingNavigationControl();
+                    accountingControl.ActionInvoked += (sender, e) => _handleAccountingActionInvoked(windowKey, e);
+                    var host = new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey);
+                    _hostsByWindowKey.Add(windowKey, host);
+                    _logger?.Info(
+                        KernelFlickerTracePrefix
+                        + " source=TaskPaneManager action=create-host host="
+                        + _formatHostDescriptor(host)
+                        + ", paneRole=Accounting");
+                    _logger.Info("TaskPane host created. role=Accounting, windowKey=" + windowKey);
+                    return host;
+                }
+
+                var caseControl = new DocumentButtonsControl();
+                var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey);
+                caseControl.ActionInvoked += (sender, e) => _handleCaseActionInvoked(windowKey, caseControl, e);
+                _hostsByWindowKey.Add(windowKey, caseHost);
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneManager action=create-host host="
+                    + _formatHostDescriptor(caseHost)
+                    + ", paneRole=Case");
+                _logger.Info("TaskPane host created. role=Case, windowKey=" + windowKey);
+                return caseHost;
+            }
+
+            internal void RemoveWorkbookPanes(string workbookFullName)
+            {
+                var targetKeys = new List<string>();
+                foreach (KeyValuePair<string, TaskPaneHost> pair in _hostsByWindowKey)
+                {
+                    if (string.Equals(pair.Value.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetKeys.Add(pair.Key);
+                    }
+                }
+
+                foreach (string windowKey in targetKeys)
+                {
+                    RemoveHost(windowKey);
+                }
+            }
+
+            internal void DisposeAll()
+            {
+                foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
+                {
+                    host.Dispose();
+                }
+
+                _hostsByWindowKey.Clear();
+            }
+
+            internal void RemoveHost(string windowKey)
+            {
+                if (string.IsNullOrWhiteSpace(windowKey))
+                {
+                    return;
+                }
+
+                if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+                {
+                    _logger?.Info(
+                        KernelFlickerTracePrefix
+                        + " source=TaskPaneManager action=remove-host host="
+                        + _formatHostDescriptor(host));
+                    _hostsByWindowKey.Remove(windowKey);
+                    try
+                    {
+                        host.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("TaskPane host dispose failed. windowKey=" + windowKey, ex);
+                    }
+                }
+            }
         }
 
         private sealed class TaskPaneActionDispatcher

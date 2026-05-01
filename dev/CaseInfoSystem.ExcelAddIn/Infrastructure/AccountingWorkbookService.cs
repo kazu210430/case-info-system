@@ -919,13 +919,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private static void ReleaseComObject (object comObject)
 		{
-			if (comObject == null) {
-				return;
-			}
-			try {
-				Marshal.ReleaseComObject (comObject);
-			} catch {
-			}
+			ComObjectReleaseService.Release (comObject);
 		}
 
 		private static XlFileFormat ResolveSaveAsFileFormat (string savePath)

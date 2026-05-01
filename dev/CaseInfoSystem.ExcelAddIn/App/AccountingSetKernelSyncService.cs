@@ -231,13 +231,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static void ReleaseComObject (object comObject)
 		{
-			if (comObject == null) {
-				return;
-			}
-			try {
-				Marshal.FinalReleaseComObject (comObject);
-			} catch {
-			}
+			// 同期用に所有した非表示 Excel 参照は完全解放の方針を維持する。
+			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (comObject);
 		}
 
 		private static string SafeApplicationHwnd (Application application)

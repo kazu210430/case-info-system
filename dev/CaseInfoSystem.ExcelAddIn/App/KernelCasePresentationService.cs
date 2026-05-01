@@ -298,7 +298,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			try {
 				range.Select ();
 			} finally {
-				Marshal.FinalReleaseComObject (range);
+				// 一時的に解決した初期カーソル Range はここで完全解放する既存方針を維持する。
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 

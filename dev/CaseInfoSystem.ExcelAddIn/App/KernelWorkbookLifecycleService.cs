@@ -738,18 +738,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null)
-            {
-                return;
-            }
-
-            try
-            {
-                Marshal.FinalReleaseComObject(comObject);
-            }
-            catch
-            {
-            }
+            // ライフサイクル管理で所有した COM 参照は完全解放の方針を維持する。
+            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(comObject);
         }
 
         /// <summary>

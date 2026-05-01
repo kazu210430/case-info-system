@@ -89,14 +89,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						}
 					} finally {
 						if (window != null && Marshal.IsComObject (window)) {
-							Marshal.ReleaseComObject (window);
+							ComObjectReleaseService.Release (window);
 						}
 					}
 				}
 			} catch {
 			} finally {
 				if (windows != null && Marshal.IsComObject (windows)) {
-					Marshal.ReleaseComObject (windows);
+					ComObjectReleaseService.Release (windows);
 				}
 			}
 		}

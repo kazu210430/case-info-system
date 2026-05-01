@@ -518,12 +518,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static void ReleaseWorkbookIterationObject (object comObject)
 		{
-			try {
-				if (comObject != null && Marshal.IsComObject (comObject)) {
-					Marshal.ReleaseComObject (comObject);
-				}
-			} catch {
-			}
+			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
 		}
 
 		private static string SafeAddress (Range range)

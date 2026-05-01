@@ -225,13 +225,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static void ReleaseComObject (object comObject)
 		{
-			if (comObject == null) {
-				return;
-			}
-			try {
-				Marshal.FinalReleaseComObject (comObject);
-			} catch {
-			}
+			// 保存専用に保持した COM 参照は完全解放の方針を維持する。
+			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (comObject);
 		}
 
 		private string[] GetCaseWorkbookCandidatePaths (string accountingFolderPath)
@@ -276,7 +271,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} finally {
 				if (worksheet != null) {
 					try {
-						Marshal.ReleaseComObject (worksheet);
+						CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 					} catch {
 					}
 				}

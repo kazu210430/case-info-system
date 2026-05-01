@@ -294,12 +294,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null || !Marshal.IsComObject(comObject))
-            {
-                return;
-            }
-
-            Marshal.ReleaseComObject(comObject);
+            ComObjectReleaseService.Release(comObject);
         }
     }
 }

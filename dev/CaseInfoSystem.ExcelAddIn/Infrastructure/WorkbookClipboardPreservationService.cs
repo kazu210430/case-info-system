@@ -172,13 +172,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private static void ReleaseComObject (object comObject)
 		{
-			if (comObject == null) {
-				return;
-			}
-			try {
-				Marshal.FinalReleaseComObject (comObject);
-			} catch {
-			}
+			// クリップボード保全用に所有した COM 参照は完全解放の方針を維持する。
+			ComObjectReleaseService.FinalRelease (comObject);
 		}
 	}
 }

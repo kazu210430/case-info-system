@@ -154,13 +154,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private static void ReleaseComObject (object comObject)
 		{
-			if (comObject == null || !Marshal.IsComObject (comObject)) {
-				return;
-			}
-			try {
-				Marshal.FinalReleaseComObject (comObject);
-			} catch {
-			}
+			// Shell COM 参照はこの service 側で寿命を完結させるため完全解放を維持する。
+			ComObjectReleaseService.FinalRelease (comObject);
 		}
 	}
 }

@@ -400,18 +400,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null)
-            {
-                return;
-            }
-
-            try
-            {
-                Marshal.FinalReleaseComObject(comObject);
-            }
-            catch
-            {
-            }
+            // VSTO 境界で保持した参照は完全解放の方針を維持する。
+            ComObjectReleaseService.FinalRelease(comObject);
         }
 
         private static string SafeWindowHwnd(Excel.Window window)

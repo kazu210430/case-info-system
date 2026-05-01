@@ -267,7 +267,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     {
                         if (window != null && Marshal.IsComObject(window))
                         {
-                            Marshal.ReleaseComObject(window);
+                            ComObjectReleaseService.Release(window);
                         }
                     }
                 }
@@ -280,7 +280,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 if (windows != null && Marshal.IsComObject(windows))
                 {
-                    Marshal.ReleaseComObject(windows);
+                    ComObjectReleaseService.Release(windows);
                 }
             }
         }
@@ -291,19 +291,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         // 副作用: COM 参照を解放する。
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null)
-            {
-                return;
-            }
-
-            try
-            {
-                Marshal.FinalReleaseComObject(comObject);
-            }
-            catch
-            {
-                // 例外処理: COM 解放失敗は致命ではないため握りつぶす。
-            }
+            // Master catalog 読み取りで所有した COM 参照は完全解放の方針を維持する。
+            ComObjectReleaseService.FinalRelease(comObject);
         }
 
         private static string NormalizeDocButtonKey(string key)

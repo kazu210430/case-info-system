@@ -558,12 +558,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static void ReleaseComObject (object comObject)
 		{
-			try {
-				if (comObject != null && Marshal.IsComObject (comObject)) {
-					Marshal.ReleaseComObject (comObject);
-				}
-			} catch {
-			}
+			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
 		}
 
 		private double ReadRequiredDouble (Workbook workbook, string sheetName, string address, string itemName, string procedureName)

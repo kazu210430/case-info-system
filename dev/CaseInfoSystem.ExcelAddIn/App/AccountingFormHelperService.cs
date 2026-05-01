@@ -572,15 +572,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static void ReleaseComObject (object comObject)
 		{
-			if (comObject == null) {
-				return;
-			}
-			try {
-				if (Marshal.IsComObject (comObject)) {
-					Marshal.ReleaseComObject (comObject);
-				}
-			} catch {
-			}
+			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
 		}
 	}
 }

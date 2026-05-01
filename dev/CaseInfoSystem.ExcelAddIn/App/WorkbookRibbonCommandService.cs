@@ -322,18 +322,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null)
-            {
-                return;
-            }
-
-            try
-            {
-                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(comObject);
-            }
-            catch
-            {
-            }
+            // Ribbon コマンドで所有した COM 参照は完全解放の方針を維持する。
+            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(comObject);
         }
     }
 }

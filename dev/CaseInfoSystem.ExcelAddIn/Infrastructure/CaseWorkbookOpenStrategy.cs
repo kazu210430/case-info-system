@@ -837,7 +837,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 if (Marshal.IsComObject(comObject))
                 {
-                    Marshal.FinalReleaseComObject(comObject);
+                    // Hidden Excel セッション由来の所有参照は完全解放の方針を維持する。
+                    ComObjectReleaseService.FinalRelease(comObject);
                 }
             }
             catch (Exception ex)
@@ -1010,7 +1011,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     {
                         if (window != null && Marshal.IsComObject(window))
                         {
-                            Marshal.ReleaseComObject(window);
+                            ComObjectReleaseService.Release(window);
                         }
                     }
                 }
@@ -1023,7 +1024,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 if (windows != null && Marshal.IsComObject(windows))
                 {
-                    Marshal.ReleaseComObject(windows);
+                    ComObjectReleaseService.Release(windows);
                 }
             }
         }

@@ -759,19 +759,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null || !Marshal.IsComObject(comObject))
-            {
-                return;
-            }
-
-            try
-            {
-                Marshal.ReleaseComObject(comObject);
-            }
-            catch
-            {
-                // COM 解放失敗は後続処理を止めない。
-            }
+            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(comObject);
         }
     }
 }

@@ -149,18 +149,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private static void ReleaseComObject(object comObject)
         {
-            if (comObject == null)
-            {
-                return;
-            }
-
-            try
-            {
-                Marshal.FinalReleaseComObject(comObject);
-            }
-            catch
-            {
-            }
+            // Master sheet 読み取りで所有した COM 参照は完全解放の方針を維持する。
+            ComObjectReleaseService.FinalRelease(comObject);
         }
     }
 }

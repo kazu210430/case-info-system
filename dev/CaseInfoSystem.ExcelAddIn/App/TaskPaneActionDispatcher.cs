@@ -75,6 +75,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            ExecuteRemainingCaseAction(windowKey, control, e);
+        }
+
+        private void ExecuteRemainingCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
+        {
             if (string.IsNullOrWhiteSpace(windowKey) || control == null)
             {
                 _logger.Warn("CaseControl_ActionInvoked skipped because host identity was not available.");

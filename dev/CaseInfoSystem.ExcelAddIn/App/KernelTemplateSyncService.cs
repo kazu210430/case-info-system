@@ -168,7 +168,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				string snapshotText = BuildTaskPaneSnapshot (worksheet, openKernelWorkbook, masterVersion);
 				string errorMessage;
 				bool baseSyncSucceeded = TrySyncTaskPaneSnapshotToBase (openKernelWorkbook, snapshotText, masterVersion, out errorMessage);
-				_masterTemplateCatalogService.InvalidateCache ();
+				_masterTemplateCatalogService.InvalidateCache (openKernelWorkbook);
 				_logger.Info ("Kernel template sync completed. updatedCount=" + updatedCount + ", detectedCount=" + templateRegistrationValidationSummary.DetectedFileCount + ", excludedCount=" + templateRegistrationValidationSummary.ExcludedTemplateCount + ", warningCount=" + templateRegistrationValidationSummary.WarningFileCount + ", masterVersion=" + masterVersion);
 				return new KernelTemplateSyncResult {
 					Success = true,

@@ -143,6 +143,92 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             Assert.Equal(DocumentTemplateResolutionSource.SnapshotCache, templateSpec.ResolutionSource);
         }
 
+        [Fact]
+        public void Resolve_WhenProcessHandlesMultipleSystemRoots_UsesMatchingMasterCatalogForEachRoot()
+        {
+            var application = new Excel.Application();
+            using var rootAScenario = SnapshotBuilderScenario.Create(
+                CreateRows("01_委任状A.docx", "委任状A"),
+                masterVersion: 42,
+                caseListRegistered: false,
+                application: application,
+                systemRoot: @"C:\SnapshotRegression\RootA",
+                caseWorkbookPath: @"C:\SnapshotRegression\RootA\Cases\案件情報_A.xlsx",
+                masterWorkbookPath: @"C:\SnapshotRegression\RootA\案件情報System_Kernel.xlsx");
+            using var rootBScenario = SnapshotBuilderScenario.Create(
+                CreateRows("01_委任状B.docx", "委任状B"),
+                masterVersion: 42,
+                caseListRegistered: false,
+                application: application,
+                systemRoot: @"C:\SnapshotRegression\RootB",
+                caseWorkbookPath: @"C:\SnapshotRegression\RootB\Cases\案件情報_B.xlsx",
+                masterWorkbookPath: @"C:\SnapshotRegression\RootB\案件情報System_Kernel.xlsx");
+            EnsureMasterWorkbookFileExists(rootAScenario.MasterWorkbook.FullName);
+            EnsureMasterWorkbookFileExists(rootBScenario.MasterWorkbook.FullName);
+
+            TestServices services = CreateServices(application);
+
+            DocumentTemplateSpec rootATemplate = services.Resolver.Resolve(rootAScenario.CaseWorkbook, "1");
+            DocumentTemplateSpec rootBTemplate = services.Resolver.Resolve(rootBScenario.CaseWorkbook, "1");
+
+            Assert.NotNull(rootATemplate);
+            Assert.Equal("委任状A", rootATemplate.DocumentName);
+            Assert.Equal("01_委任状A.docx", rootATemplate.TemplateFileName);
+            Assert.Equal(DocumentTemplateResolutionSource.MasterCatalog, rootATemplate.ResolutionSource);
+            Assert.NotNull(rootBTemplate);
+            Assert.Equal("委任状B", rootBTemplate.DocumentName);
+            Assert.Equal("01_委任状B.docx", rootBTemplate.TemplateFileName);
+            Assert.Equal(DocumentTemplateResolutionSource.MasterCatalog, rootBTemplate.ResolutionSource);
+        }
+
+        [Fact]
+        public void InvalidateCache_WhenWorkbookProvided_RefreshesOnlyMatchingMasterPath()
+        {
+            var application = new Excel.Application();
+            using var rootAScenario = SnapshotBuilderScenario.Create(
+                CreateRows("01_委任状A.docx", "委任状A"),
+                masterVersion: 42,
+                caseListRegistered: false,
+                application: application,
+                systemRoot: @"C:\SnapshotRegression\RootA",
+                caseWorkbookPath: @"C:\SnapshotRegression\RootA\Cases\案件情報_A.xlsx",
+                masterWorkbookPath: @"C:\SnapshotRegression\RootA\案件情報System_Kernel.xlsx");
+            using var rootBScenario = SnapshotBuilderScenario.Create(
+                CreateRows("01_委任状B.docx", "委任状B"),
+                masterVersion: 42,
+                caseListRegistered: false,
+                application: application,
+                systemRoot: @"C:\SnapshotRegression\RootB",
+                caseWorkbookPath: @"C:\SnapshotRegression\RootB\Cases\案件情報_B.xlsx",
+                masterWorkbookPath: @"C:\SnapshotRegression\RootB\案件情報System_Kernel.xlsx");
+            EnsureMasterWorkbookFileExists(rootAScenario.MasterWorkbook.FullName);
+            EnsureMasterWorkbookFileExists(rootBScenario.MasterWorkbook.FullName);
+
+            TestServices services = CreateServices(application);
+
+            DocumentTemplateSpec beforeInvalidateRootA = services.Resolver.Resolve(rootAScenario.CaseWorkbook, "1");
+            DocumentTemplateSpec beforeInvalidateRootB = services.Resolver.Resolve(rootBScenario.CaseWorkbook, "1");
+
+            UpdateMasterTemplateRow(rootAScenario.MasterWorkbook, "1", "01_委任状A_改訂.docx", "委任状A改訂");
+            UpdateMasterTemplateRow(rootBScenario.MasterWorkbook, "1", "01_委任状B_改訂.docx", "委任状B改訂");
+
+            services.MasterTemplateCatalogService.InvalidateCache(rootAScenario.CaseWorkbook);
+
+            DocumentTemplateSpec afterInvalidateRootA = services.Resolver.Resolve(rootAScenario.CaseWorkbook, "1");
+            DocumentTemplateSpec afterInvalidateRootB = services.Resolver.Resolve(rootBScenario.CaseWorkbook, "1");
+
+            Assert.NotNull(beforeInvalidateRootA);
+            Assert.Equal("委任状A", beforeInvalidateRootA.DocumentName);
+            Assert.NotNull(beforeInvalidateRootB);
+            Assert.Equal("委任状B", beforeInvalidateRootB.DocumentName);
+            Assert.NotNull(afterInvalidateRootA);
+            Assert.Equal("委任状A改訂", afterInvalidateRootA.DocumentName);
+            Assert.Equal("01_委任状A_改訂.docx", afterInvalidateRootA.TemplateFileName);
+            Assert.NotNull(afterInvalidateRootB);
+            Assert.Equal("委任状B", afterInvalidateRootB.DocumentName);
+            Assert.Equal("01_委任状B.docx", afterInvalidateRootB.TemplateFileName);
+        }
+
         private static TestServices CreateServices(Excel.Application application)
         {
             var logger = new Logger(_ => { });
@@ -155,6 +241,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
 
             return new TestServices(
                 excelInteropService,
+                masterTemplateCatalogService,
                 lookupService,
                 new DocumentTemplateResolver(excelInteropService, pathCompatibilityService, lookupService, logger),
                 new DocumentNamePromptService(excelInteropService, lookupService, logger));
@@ -162,18 +249,36 @@ namespace CaseInfoSystem.SnapshotRegressionTests
 
         private static SnapshotBuilderScenario.InputRow[] CreateRows()
         {
+            return CreateRows("01_委任状.docx", "委任状");
+        }
+
+        private static SnapshotBuilderScenario.InputRow[] CreateRows(string templateFileName, string caption)
+        {
             return new[]
             {
                 new SnapshotBuilderScenario.InputRow
                 {
                     Key = "1",
-                    TemplateFileName = "01_委任状.docx",
-                    Caption = "委任状",
+                    TemplateFileName = templateFileName,
+                    Caption = caption,
                     TabName = "申請手続",
                     FillColor = 1111,
                     TabBackColor = 2222
                 }
             };
+        }
+
+        private static void UpdateMasterTemplateRow(Excel.Workbook masterWorkbook, string key, string templateFileName, string caption)
+        {
+            Excel.Worksheet worksheet = masterWorkbook?.Worksheets["雛形一覧"];
+            if (worksheet == null)
+            {
+                return;
+            }
+
+            worksheet.Cells[3, "A"].Value2 = key;
+            worksheet.Cells[3, "B"].Value2 = templateFileName;
+            worksheet.Cells[3, "C"].Value2 = caption;
         }
 
         private static void EnsureMasterWorkbookFileExists(string workbookFullName)
@@ -200,17 +305,21 @@ namespace CaseInfoSystem.SnapshotRegressionTests
         {
             internal TestServices(
                 ExcelInteropService excelInteropService,
+                MasterTemplateCatalogService masterTemplateCatalogService,
                 ICaseCacheDocumentTemplateReader caseCacheReader,
                 DocumentTemplateResolver resolver,
                 DocumentNamePromptService promptService)
             {
                 ExcelInteropService = excelInteropService;
+                MasterTemplateCatalogService = masterTemplateCatalogService;
                 CaseCacheReader = caseCacheReader;
                 Resolver = resolver;
                 PromptService = promptService;
             }
 
             internal ExcelInteropService ExcelInteropService { get; }
+
+            internal MasterTemplateCatalogService MasterTemplateCatalogService { get; }
 
             internal ICaseCacheDocumentTemplateReader CaseCacheReader { get; }
 

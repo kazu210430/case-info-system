@@ -59,13 +59,16 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             TabBackColors = tabBackColors;
         }
 
-        internal static SnapshotBuilderScenario Create(IReadOnlyList<InputRow> rows, int masterVersion, bool caseListRegistered)
+        internal static SnapshotBuilderScenario Create(
+            IReadOnlyList<InputRow> rows,
+            int masterVersion,
+            bool caseListRegistered,
+            Excel.Application application = null,
+            string systemRoot = @"C:\SnapshotRegression\SystemRoot",
+            string caseWorkbookPath = @"C:\SnapshotRegression\Cases\案件情報_山田.xlsx",
+            string masterWorkbookPath = @"C:\SnapshotRegression\SystemRoot\案件情報System_Kernel.xlsx")
         {
-            const string systemRoot = @"C:\SnapshotRegression\SystemRoot";
-            const string caseWorkbookPath = @"C:\SnapshotRegression\Cases\案件情報_山田.xlsx";
-            const string masterWorkbookPath = @"C:\SnapshotRegression\SystemRoot\案件情報System_Kernel.xlsx";
-
-            var application = new Excel.Application();
+            application ??= new Excel.Application();
             var logger = new Logger(_ => { });
             var pathCompatibilityService = new PathCompatibilityService();
             var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);

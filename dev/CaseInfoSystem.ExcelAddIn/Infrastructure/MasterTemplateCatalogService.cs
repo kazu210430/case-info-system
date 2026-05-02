@@ -23,8 +23,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private readonly PathCompatibilityService _pathCompatibilityService;
         private readonly IMasterTemplateSheetReader _masterTemplateSheetReader;
         private readonly Logger _logger;
-        private List<MasterTemplateRecord> _cachedTemplates;
-        private bool _isCacheValid;
+        private readonly Dictionary<string, IReadOnlyList<MasterTemplateRecord>> _cachedTemplatesByMasterPath =
+            new Dictionary<string, IReadOnlyList<MasterTemplateRecord>>(StringComparer.OrdinalIgnoreCase);
 
         internal MasterTemplateCatalogService(
             Excel.Application application,
@@ -46,8 +46,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         // 副作用: 内部キャッシュ状態を初期化する。
         internal void InvalidateCache()
         {
-            _isCacheValid = false;
-            _cachedTemplates = null;
+            _cachedTemplatesByMasterPath.Clear();
+        }
+
+        internal void InvalidateCache(Excel.Workbook workbook)
+        {
+            string resolvedMasterPath = ResolveMasterPath(workbook);
+            if (resolvedMasterPath.Length == 0)
+            {
+                InvalidateCache();
+                return;
+            }
+
+            _cachedTemplatesByMasterPath.Remove(resolvedMasterPath);
         }
 
         public bool TryGetTemplateByKey(Excel.Workbook caseWorkbook, string key, out MasterTemplateRecord record)
@@ -75,19 +86,25 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private IReadOnlyList<MasterTemplateRecord> GetMasterTemplateList(Excel.Workbook caseWorkbook)
         {
-            if (_isCacheValid && _cachedTemplates != null)
+            string resolvedMasterPath = ResolveMasterPath(caseWorkbook);
+            if (resolvedMasterPath.Length == 0)
             {
-                return _cachedTemplates;
+                throw new InvalidOperationException("Master workbook path could not be resolved.");
+            }
+
+            if (_cachedTemplatesByMasterPath.TryGetValue(resolvedMasterPath, out IReadOnlyList<MasterTemplateRecord> cachedTemplates)
+                && cachedTemplates != null)
+            {
+                return cachedTemplates;
             }
 
             bool wasAlreadyOpen;
-            string resolvedMasterPath;
-            Excel.Workbook masterWorkbook = OpenMasterReadOnly(caseWorkbook, out wasAlreadyOpen, out resolvedMasterPath);
+            Excel.Workbook masterWorkbook = OpenMasterReadOnly(resolvedMasterPath, out wasAlreadyOpen);
             try
             {
-                _cachedTemplates = ReadMasterTemplateList(masterWorkbook);
-                _isCacheValid = true;
-                return _cachedTemplates;
+                IReadOnlyList<MasterTemplateRecord> templates = ReadMasterTemplateList(masterWorkbook);
+                _cachedTemplatesByMasterPath[resolvedMasterPath] = templates;
+                return templates;
             }
             finally
             {
@@ -98,9 +115,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private Excel.Workbook OpenMasterReadOnly(Excel.Workbook caseWorkbook, out bool wasAlreadyOpen, out string resolvedMasterPath)
+        private Excel.Workbook OpenMasterReadOnly(string resolvedMasterPath, out bool wasAlreadyOpen)
         {
-            resolvedMasterPath = ResolveMasterPath(caseWorkbook);
             wasAlreadyOpen = false;
 
             if (resolvedMasterPath.Length == 0)

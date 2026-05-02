@@ -69,7 +69,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 6. `TaskPaneBusinessActionLauncher` が `DocumentCommandService` へ文書キーを渡します。
 7. `DocumentExecutionModeService` が `DocumentExecutionMode.txt` を読み込みます。
 8. `DocumentExecutionEligibilityService` が登録済みテンプレートを前提に `DocumentTemplateResolver` で `templateSpec` を解決し、テンプレート種別、マクロ有無、出力先、CASE コンテキストを確認します。
-9. `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を使い、まず CASE cache を参照し、解決できない場合だけ `MasterTemplateCatalogService` の master catalog にフォールバックします。
+9. `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を使い、まず CASE cache を参照し、解決できない場合だけ CASE workbook から解決した `SYSTEM_ROOT` 文脈の `MasterTemplateCatalogService` master catalog にフォールバックします。
 10. `DocumentCommandService` は runtime の allowlist / review block を行わず、そのまま `DocumentCreateService` に進みます。
 11. `DocumentCreateService` が `templateSpec.DocumentName` と一時 override を使って文書名を解決し、`DocumentOutputService` が出力先を解決します。
 12. `MergeDataBuilder` が CASE データから差し込み用データを構築します。
@@ -125,7 +125,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 7. 登録除外理由と警告を結果メッセージに表示します。
 8. `TASKPANE_MASTER_VERSION` を更新します。
 9. Kernel 保存後に Base へ TaskPane 用 snapshot を更新します。
-10. `MasterTemplateCatalogService.InvalidateCache()` を実行してキャッシュを無効化します。
+10. `MasterTemplateCatalogService` の当該 `SYSTEM_ROOT` 文脈に対応する master catalog cache を無効化します。
 
 この登録前 validation が、現行実装における文書作成フローの主防御です。runtime 側の allowlist / review 判定は、登録済みテンプレートの実行可否を直接制御していません。
 
@@ -336,7 +336,7 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 - `DocumentNamePromptService` は実行可否判定や実体テンプレートファイル解決の正本ではありません。
 - `DocumentNamePromptService` は CASE cache miss 時に master fallback しません。文書名入力 UI は、表示中 Pane と整合する CASE cache 表示状態に従います。
 - `DocumentTemplateResolver` は、まず `TaskPaneSnapshotCacheService` を使って CASE cache から文書キーに対応する定義を解決します。
-- CASE cache に解決対象がない場合だけ `MasterTemplateCatalogService` の master catalog にフォールバックします。
+- CASE cache に解決対象がない場合だけ、対象 CASE workbook から解決した `SYSTEM_ROOT` 文脈の `MasterTemplateCatalogService` master catalog にフォールバックします。
 - master fallback は `DocumentTemplateResolver` 側の実行時解決責務として扱います。
 - そのため、開いている CASE では表示中 Pane と整合する CASE cache を使い続けてよく、master version だけを見ると stale に見える場合でも直ちに問題扱いしません。
 - 文書名入力 UI と文書実行は責務を分離し、前者は現在の CASE 表示状態、後者は実行可能なテンプレート解決を担います。

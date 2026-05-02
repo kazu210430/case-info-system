@@ -95,8 +95,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             if (bringToFront
-                && (ensureWindowVisible || window.Visible)
-                && (recoveredApplicationVisibility || recoveredScreenUpdating || recoveredWindowVisibility || recoveredWindowState))
+                && (ensureWindowVisible || window.Visible))
             {
                 PromoteExcelWindow(window, reason, workbookFullName);
             }

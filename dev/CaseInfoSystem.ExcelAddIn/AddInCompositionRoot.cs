@@ -606,6 +606,13 @@ namespace CaseInfoSystem.ExcelAddIn
             var casePaneSnapshotRenderService = new CasePaneSnapshotRenderService(
                 caseTaskPaneSnapshotReader,
                 caseTaskPaneViewStateBuilder);
+            var casePaneCacheRefreshNotificationService = new CasePaneCacheRefreshNotificationService(
+                _logger,
+                workbook => excelInteropService.GetWorkbookFullName(workbook));
+            var taskPaneRoleRenderService = new TaskPaneRoleRenderService(
+                casePaneSnapshotRenderService,
+                casePaneCacheRefreshNotificationService,
+                _logger);
             var workbookCaseTaskPaneRefreshCommandService = new WorkbookCaseTaskPaneRefreshCommandService(
                 workbookRoleResolver,
                 excelInteropService,
@@ -625,6 +632,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 accountingSheetCommandService,
                 caseTaskPaneViewStateBuilder,
                 casePaneSnapshotRenderService,
+                taskPaneRoleRenderService,
                 accountingInternalCommandService,
                 kernelCaseInteractionState,
                 userErrorService,

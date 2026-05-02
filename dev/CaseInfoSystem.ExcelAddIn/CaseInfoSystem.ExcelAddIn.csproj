@@ -249,6 +249,7 @@
     <Compile Include="App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="App\TaskPaneHostRegistry.cs" />
     <Compile Include="App\TaskPaneManager.cs" />
+    <Compile Include="App\TaskPaneRoleRenderService.cs" />
     <Compile Include="App\TaskPaneRenderStateEvaluator.cs" />
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />

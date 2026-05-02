@@ -4,6 +4,18 @@
 
 確認時点のコードでは、指定の `FolderWindowService.cs (line 80)` は `WaitForFolderWindow` の開始位置で、`Thread.Sleep` 自体は line 88 にあります。指定の `WorkbookClipboardPreservationService.cs (line 144)` は retry ループの開始位置で、`Thread.Sleep` 自体は line 156 にあります。
 
+## Kernel workbook 選択境界
+
+### KernelCommandService.cs:57 / KernelTemplateSyncService.cs:129 / KernelOpenWorkbookLocator.cs:36
+
+* 内容: 雛形登録・更新は `KernelCommandService.Execute(context, actionId)` の `reflect-template` 分岐から始まるが、`context` は `ExecuteReflectTemplate()` / `KernelTemplateSyncService.Execute()` へ渡されない。`KernelTemplateSyncService.Execute()` は `GetOpenKernelWorkbook()` に依存し、`KernelOpenWorkbookLocator.GetOpenKernelWorkbook()` は開いている workbook を列挙して Kernel と判定された最初の workbook を返す。
+* 見ていない文脈: active workbook、visible workbook、`WorkbookContext.SystemRoot`、表示中の CASE workbook。
+* 下流との関係: `MasterTemplateCatalogService.InvalidateCache(workbook)` は resolved master path 単位で cache を無効化するため、cache 境界自体は改善済み。残課題はその upstream にある「どの Kernel workbook を対象として処理するか」の境界。
+* 影響範囲: 雛形登録・更新、Base snapshot 更新、master catalog cache invalidate、複数 `SYSTEM_ROOT` 共存時の操作対象選択。
+* 危険度: 中
+* 現状: 単一 Kernel workbook 運用では問題化しにくいため未対応。複数 Kernel workbook や hidden workbook が同時に存在する場合は、利用者の意図と異なる root を操作対象にする余地がある。
+* 将来案: command / UI / CASE 文脈から `SYSTEM_ROOT` を明示的に渡し、その文脈で Kernel workbook を確定する。`GetOpenKernelWorkbook()` は単一 root 前提の convenience に限定し、複数 root を跨ぐ経路では使用範囲を絞る。
+
 ## Thread.Sleep 依存
 
 ### TaskPaneRefreshOrchestrationService.cs:300

@@ -20,6 +20,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
         private readonly ManagedCloseState _managedCloseState;
         private readonly CaseClosePromptService _caseClosePromptService;
+        private readonly CaseFolderOpenService _caseFolderOpenService;
         private readonly KernelNameRuleReader _kernelNameRuleReader;
         private readonly PostCloseFollowUpScheduler _postCloseFollowUpScheduler;
         private readonly Logger _logger;
@@ -36,6 +37,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TransientPaneSuppressionService transientPaneSuppressionService,
             ManagedCloseState managedCloseState,
             CaseClosePromptService caseClosePromptService,
+            CaseFolderOpenService caseFolderOpenService,
             KernelNameRuleReader kernelNameRuleReader,
             PostCloseFollowUpScheduler postCloseFollowUpScheduler,
             Logger logger)
@@ -46,6 +48,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException(nameof(transientPaneSuppressionService));
             _managedCloseState = managedCloseState ?? throw new ArgumentNullException(nameof(managedCloseState));
             _caseClosePromptService = caseClosePromptService ?? throw new ArgumentNullException(nameof(caseClosePromptService));
+            _caseFolderOpenService = caseFolderOpenService ?? throw new ArgumentNullException(nameof(caseFolderOpenService));
             _kernelNameRuleReader = kernelNameRuleReader ?? throw new ArgumentNullException(nameof(kernelNameRuleReader));
             _postCloseFollowUpScheduler = postCloseFollowUpScheduler ?? throw new ArgumentNullException(nameof(postCloseFollowUpScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -63,6 +66,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _transientPaneSuppressionService = null;
             _managedCloseState = new ManagedCloseState();
             _caseClosePromptService = null;
+            _caseFolderOpenService = null;
             _kernelNameRuleReader = null;
             _postCloseFollowUpScheduler = null;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -536,9 +540,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _testHooks.ResolveContainingFolder(workbook) ?? string.Empty;
             }
 
-            return _caseClosePromptService == null
+            return _caseFolderOpenService == null
                 ? string.Empty
-                : _caseClosePromptService.ResolveContainingFolder(workbook);
+                : _caseFolderOpenService.ResolveContainingFolder(workbook);
         }
 
         private bool DirectoryExistsSafe(string folderPath)
@@ -548,8 +552,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _testHooks.DirectoryExistsSafe(folderPath);
             }
 
-            return _caseClosePromptService != null
-                && _caseClosePromptService.DirectoryExistsSafe(folderPath);
+            return _caseFolderOpenService != null
+                && _caseFolderOpenService.DirectoryExistsSafe(folderPath);
         }
 
         private void PromptToOpenCreatedCaseFolderIfNeeded(string workbookKey, string folderPath)
@@ -577,39 +581,55 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void TryPromptToOpenCreatedCaseFolder(string folderPath)
         {
-            if (_testHooks != null && _testHooks.ShowCreatedCaseFolderOfferPrompt != null)
+            if (string.IsNullOrWhiteSpace(folderPath))
             {
-                if (string.IsNullOrWhiteSpace(folderPath))
-                {
-                    return;
-                }
-
-                if (!DirectoryExistsSafe(folderPath))
-                {
-                    _logger.Info("Created CASE folder offer prompt skipped because folder does not exist. folderPath=" + folderPath);
-                    return;
-                }
-
-                try
-                {
-                    DialogResult answer = _testHooks.ShowCreatedCaseFolderOfferPrompt(folderPath);
-                    if (answer != DialogResult.Yes)
-                    {
-                        _logger.Info("Created CASE folder offer prompt dismissed without opening folder. folderPath=" + folderPath + ", answer=" + answer.ToString());
-                        return;
-                    }
-
-                    _testHooks.OpenCreatedCaseFolder?.Invoke(folderPath, "CaseWorkbookLifecycleService.PostCloseCreatedCaseFolderOffer");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error("Created CASE folder offer prompt failed.", ex);
-                }
-
                 return;
             }
 
-            _caseClosePromptService?.TryPromptToOpenCreatedCaseFolder(folderPath);
+            if (!DirectoryExistsSafe(folderPath))
+            {
+                _logger.Info("Created CASE folder offer prompt skipped because folder does not exist. folderPath=" + folderPath);
+                return;
+            }
+
+            try
+            {
+                DialogResult answer = ShowCreatedCaseFolderOfferPromptCore(folderPath);
+                if (answer != DialogResult.Yes)
+                {
+                    _logger.Info("Created CASE folder offer prompt dismissed without opening folder. folderPath=" + folderPath + ", answer=" + answer.ToString());
+                    return;
+                }
+
+                OpenCreatedCaseFolderCore(folderPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Created CASE folder offer prompt failed.", ex);
+            }
+        }
+
+        private DialogResult ShowCreatedCaseFolderOfferPromptCore(string folderPath)
+        {
+            if (_testHooks != null && _testHooks.ShowCreatedCaseFolderOfferPrompt != null)
+            {
+                return _testHooks.ShowCreatedCaseFolderOfferPrompt(folderPath);
+            }
+
+            return _caseClosePromptService == null
+                ? DialogResult.None
+                : _caseClosePromptService.ShowCreatedCaseFolderOfferPrompt();
+        }
+
+        private void OpenCreatedCaseFolderCore(string folderPath)
+        {
+            if (_testHooks != null && _testHooks.OpenCreatedCaseFolder != null)
+            {
+                _testHooks.OpenCreatedCaseFolder(folderPath, "CaseWorkbookLifecycleService.PostCloseCreatedCaseFolderOffer");
+                return;
+            }
+
+            _caseFolderOpenService?.OpenCreatedCaseFolder(folderPath);
         }
 
         private Excel.Workbook FindOpenWorkbook(string workbookKey)

@@ -91,6 +91,7 @@
     <!-- CaseWorkbookLifecycleService policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookBeforeClosePolicy.cs" Link="Source\App\CaseWorkbookBeforeClosePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseClosePromptService.cs" Link="Source\App\CaseClosePromptService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseFolderOpenService.cs" Link="Source\App\CaseFolderOpenService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleInitializationPolicy.cs" Link="Source\App\CaseWorkbookLifecycleInitializationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookSheetChangePolicy.cs" Link="Source\App\CaseWorkbookSheetChangePolicy.cs" />
     <!-- DocumentCommandService policies -->

@@ -152,7 +152,8 @@ namespace CaseInfoSystem.ExcelAddIn
             var userErrorService = new UserErrorService(_logger);
             var folderWindowService = new FolderWindowService(pathCompatibilityService, _logger);
             var managedCloseState = new ManagedCloseState();
-            var caseClosePromptService = new CaseClosePromptService(ExcelInteropService, pathCompatibilityService, folderWindowService, _logger);
+            var caseFolderOpenService = new CaseFolderOpenService(ExcelInteropService, pathCompatibilityService, folderWindowService);
+            var caseClosePromptService = new CaseClosePromptService(ExcelInteropService);
             var kernelNameRuleReader = new KernelNameRuleReader(ExcelInteropService, pathCompatibilityService, _logger);
             var postCloseFollowUpScheduler = new PostCloseFollowUpScheduler(_application, ExcelInteropService, _logger);
             var caseWorkbookLifecycleService = new CaseWorkbookLifecycleService(
@@ -162,6 +163,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 transientPaneSuppressionService,
                 managedCloseState,
                 caseClosePromptService,
+                caseFolderOpenService,
                 kernelNameRuleReader,
                 postCloseFollowUpScheduler,
                 _logger);

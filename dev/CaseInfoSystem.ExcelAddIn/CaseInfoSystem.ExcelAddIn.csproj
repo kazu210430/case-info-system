@@ -184,6 +184,7 @@
     <Compile Include="App\CaseListRegistrationService.cs" />
     <Compile Include="App\CaseWorkbookBeforeClosePolicy.cs" />
     <Compile Include="App\CaseClosePromptService.cs" />
+    <Compile Include="App\CaseFolderOpenService.cs" />
     <Compile Include="App\CaseWorkbookLifecycleService.cs" />
     <Compile Include="App\CaseWorkbookLifecycleInitializationPolicy.cs" />
     <Compile Include="App\CaseWorkbookSheetChangePolicy.cs" />

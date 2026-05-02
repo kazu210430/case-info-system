@@ -151,7 +151,20 @@ namespace CaseInfoSystem.ExcelAddIn
             KernelWorkbookLifecycleService = kernelWorkbookCoreComposition.KernelWorkbookLifecycleService;
             var userErrorService = new UserErrorService(_logger);
             var folderWindowService = new FolderWindowService(pathCompatibilityService, _logger);
-            var caseWorkbookLifecycleService = new CaseWorkbookLifecycleService(WorkbookRoleResolver, _application, ExcelInteropService, pathCompatibilityService, transientPaneSuppressionService, folderWindowService, _logger);
+            var managedCloseState = new ManagedCloseState();
+            var caseClosePromptService = new CaseClosePromptService(ExcelInteropService, pathCompatibilityService, folderWindowService, _logger);
+            var kernelNameRuleReader = new KernelNameRuleReader(ExcelInteropService, pathCompatibilityService, _logger);
+            var postCloseFollowUpScheduler = new PostCloseFollowUpScheduler(_application, ExcelInteropService, _logger);
+            var caseWorkbookLifecycleService = new CaseWorkbookLifecycleService(
+                WorkbookRoleResolver,
+                _application,
+                ExcelInteropService,
+                transientPaneSuppressionService,
+                managedCloseState,
+                caseClosePromptService,
+                kernelNameRuleReader,
+                postCloseFollowUpScheduler,
+                _logger);
             var kernelCasePathService = new KernelCasePathService(pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(ExcelInteropService, _logger);
             var masterTemplateSheetReader = new MasterTemplateSheetReaderAdapter();

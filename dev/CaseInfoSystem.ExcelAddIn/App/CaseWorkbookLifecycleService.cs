@@ -1,11 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using System.Xml.Linq;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -15,94 +10,48 @@ namespace CaseInfoSystem.ExcelAddIn.App
     // 責務: 初期化、終了確認、管理対象クローズ、後追い終了処理を制御する。
     internal sealed class CaseWorkbookLifecycleService
     {
-        private const string RolePropertyName = "ROLE";
-        private const string CaseRoleName = "CASE";
-        private const string BaseRoleName = "BASE";
         private const string CaseHomeSheetCodeName = "shHOME";
-        private const string SystemRootPropertyName = "SYSTEM_ROOT";
         private const string NameRuleAPropertyName = "NAME_RULE_A";
         private const string NameRuleBPropertyName = "NAME_RULE_B";
-        private const string DefaultNameRuleA = "YYYY";
-        private const string DefaultNameRuleB = "DOC";
-        private const int ExcelBusyHResult = unchecked((int)0x800AC472);
-        private const int PostCloseRetryCount = 20;
-        private const int PostCloseRetryIntervalMs = 500;
-        private const uint GuiCaretBlinking = 0x00000001;
-        private const string CreatedCaseFolderOfferPromptTitle = "案件情報System (CASE)";
-        private const string CreatedCaseFolderOfferPromptMessage = "保存しました\r\n保存先フォルダを開きますか？";
-        private const string CreatedCaseFolderOfferOpenReason = "CaseWorkbookLifecycleService.PostCloseCreatedCaseFolderOffer";
-        private static readonly XNamespace CustomPropertiesNamespace = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
 
         private readonly WorkbookRoleResolver _workbookRoleResolver;
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
-        private readonly PathCompatibilityService _pathCompatibilityService;
         private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
-        private readonly FolderWindowService _folderWindowService;
+        private readonly ManagedCloseState _managedCloseState;
+        private readonly CaseClosePromptService _caseClosePromptService;
+        private readonly KernelNameRuleReader _kernelNameRuleReader;
+        private readonly PostCloseFollowUpScheduler _postCloseFollowUpScheduler;
         private readonly Logger _logger;
         private readonly HashSet<string> _initializedWorkbookKeys;
         private readonly HashSet<string> _sessionDirtyWorkbookKeys;
         private readonly HashSet<string> _createdCaseFolderOfferPendingWorkbookKeys;
-        private readonly Dictionary<string, int> _managedCloseCounts;
-        private readonly Queue<PostCloseFollowUpRequest> _pendingPostCloseQueue;
         private readonly CaseWorkbookLifecycleServiceTestHooks _testHooks;
         private Control _managedCloseDispatcher;
-        private bool _postClosePosted;
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetGUIThreadInfo(uint idThread, ref GuiThreadInfo lpgui);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct GuiThreadInfo
-        {
-            public uint cbSize;
-            public uint flags;
-            public IntPtr hwndActive;
-            public IntPtr hwndFocus;
-            public IntPtr hwndCapture;
-            public IntPtr hwndMenuOwner;
-            public IntPtr hwndMoveSize;
-            public IntPtr hwndCaret;
-            public NativeRect rcCaret;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct NativeRect
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
 
         internal CaseWorkbookLifecycleService(
             WorkbookRoleResolver workbookRoleResolver,
             Excel.Application application,
             ExcelInteropService excelInteropService,
-            PathCompatibilityService pathCompatibilityService,
             TransientPaneSuppressionService transientPaneSuppressionService,
-            FolderWindowService folderWindowService,
+            ManagedCloseState managedCloseState,
+            CaseClosePromptService caseClosePromptService,
+            KernelNameRuleReader kernelNameRuleReader,
+            PostCloseFollowUpScheduler postCloseFollowUpScheduler,
             Logger logger)
         {
             _workbookRoleResolver = workbookRoleResolver ?? throw new ArgumentNullException(nameof(workbookRoleResolver));
             _application = application ?? throw new ArgumentNullException(nameof(application));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
-            _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
             _transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException(nameof(transientPaneSuppressionService));
-            _folderWindowService = folderWindowService ?? throw new ArgumentNullException(nameof(folderWindowService));
+            _managedCloseState = managedCloseState ?? throw new ArgumentNullException(nameof(managedCloseState));
+            _caseClosePromptService = caseClosePromptService ?? throw new ArgumentNullException(nameof(caseClosePromptService));
+            _kernelNameRuleReader = kernelNameRuleReader ?? throw new ArgumentNullException(nameof(kernelNameRuleReader));
+            _postCloseFollowUpScheduler = postCloseFollowUpScheduler ?? throw new ArgumentNullException(nameof(postCloseFollowUpScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _initializedWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _sessionDirtyWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _createdCaseFolderOfferPendingWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
             _testHooks = null;
         }
 
@@ -111,15 +60,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _workbookRoleResolver = null;
             _application = null;
             _excelInteropService = null;
-            _pathCompatibilityService = null;
             _transientPaneSuppressionService = null;
-            _folderWindowService = null;
+            _managedCloseState = new ManagedCloseState();
+            _caseClosePromptService = null;
+            _kernelNameRuleReader = null;
+            _postCloseFollowUpScheduler = null;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _initializedWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _sessionDirtyWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _createdCaseFolderOfferPendingWorkbookKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
             _testHooks = testHooks;
         }
 
@@ -253,21 +202,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal IDisposable BeginManagedCloseScope(Excel.Workbook workbook)
         {
             string workbookKey = GetWorkbookKey(workbook);
-            if (string.IsNullOrWhiteSpace(workbookKey))
-            {
-                return NoOpDisposable.Instance;
-            }
-
-            if (_managedCloseCounts.ContainsKey(workbookKey))
-            {
-                _managedCloseCounts[workbookKey] = _managedCloseCounts[workbookKey] + 1;
-            }
-            else
-            {
-                _managedCloseCounts.Add(workbookKey, 1);
-            }
-
-            return new ManagedCloseScope(this, workbookKey);
+            return _managedCloseState.BeginScope(workbookKey);
         }
 
         internal void RemoveWorkbookState(Excel.Workbook workbook)
@@ -281,7 +216,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _initializedWorkbookKeys.Remove(workbookKey);
             _sessionDirtyWorkbookKeys.Remove(workbookKey);
             _createdCaseFolderOfferPendingWorkbookKeys.Remove(workbookKey);
-            _managedCloseCounts.Remove(workbookKey);
+            _managedCloseState.Remove(workbookKey);
             _workbookRoleResolver.RemoveKnownWorkbook(workbook);
         }
 
@@ -394,12 +329,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _testHooks.ShowClosePrompt(workbook);
             }
 
-            return MessageBox.Show(
-                "保存しますか？",
-                BuildCloseDialogTitle(workbook),
-                MessageBoxButtons.YesNoCancel,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button1);
+            return _caseClosePromptService == null
+                ? DialogResult.No
+                : _caseClosePromptService.ShowClosePrompt(workbook);
         }
 
         private void ScheduleManagedSessionCloseCore(string workbookKey, string folderPath, bool saveChanges)
@@ -498,26 +430,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private bool IsManagedClose(Excel.Workbook workbook)
         {
-            string workbookKey = GetWorkbookKey(workbook);
-            return workbookKey.Length > 0
-                && _managedCloseCounts.TryGetValue(workbookKey, out int count)
-                && count > 0;
-        }
-
-        private void ReleaseManagedClose(string workbookKey)
-        {
-            if (string.IsNullOrWhiteSpace(workbookKey) || !_managedCloseCounts.TryGetValue(workbookKey, out int count))
-            {
-                return;
-            }
-
-            if (count <= 1)
-            {
-                _managedCloseCounts.Remove(workbookKey);
-                return;
-            }
-
-            _managedCloseCounts[workbookKey] = count - 1;
+            return _managedCloseState.IsManagedClose(GetWorkbookKey(workbook));
         }
 
         private void SchedulePostCloseFollowUp(string workbookKey, string folderPath)
@@ -527,78 +440,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            _pendingPostCloseQueue.Enqueue(new PostCloseFollowUpRequest(workbookKey, folderPath, PostCloseRetryCount));
-            if (_postClosePosted)
-            {
-                return;
-            }
-
-            _postClosePosted = true;
-            EnsureManagedCloseDispatcher().BeginInvoke((MethodInvoker)ExecutePendingPostCloseQueue);
-        }
-
-        // メソッド: 終了後フォローアップの待機キューを順に処理する。
-        // 引数: なし。
-        // 戻り値: なし。
-        // 副作用: Excel 終了判定、再試行予約、ログ出力を行う。
-        private void ExecutePendingPostCloseQueue()
-        {
-            _postClosePosted = false;
-
-            while (_pendingPostCloseQueue.Count > 0)
-            {
-                PostCloseFollowUpRequest request = _pendingPostCloseQueue.Dequeue();
-                if (request == null)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    if (IsWorkbookStillOpen(request.WorkbookKey))
-                    {
-                        _logger.Info("Case workbook post-close follow-up skipped because workbook is still open. workbook=" + request.WorkbookKey);
-                        continue;
-                    }
-
-                    QuitExcelIfNoVisibleWorkbook();
-                }
-                catch (COMException ex) when (ex.ErrorCode == ExcelBusyHResult && request.AttemptsRemaining > 0)
-                {
-                    _logger.Info(
-                        "Case workbook post-close follow-up will retry because Excel is busy. workbook="
-                        + request.WorkbookKey
-                        + ", attemptsRemaining="
-                        + request.AttemptsRemaining.ToString());
-                    _pendingPostCloseQueue.Enqueue(request.NextAttempt());
-                    SchedulePendingPostCloseRetry();
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    // 例外処理: 後追いフォローアップは補助処理のため、失敗しても本体のクローズ結果を優先して継続する。
-                    _logger.Error("Case workbook post-close follow-up failed.", ex);
-                }
-            }
-        }
-
-        private void SchedulePendingPostCloseRetry()
-        {
-            if (_postClosePosted)
-            {
-                return;
-            }
-
-            _postClosePosted = true;
-            Timer retryTimer = new Timer();
-            retryTimer.Interval = PostCloseRetryIntervalMs;
-            retryTimer.Tick += (sender, args) =>
-            {
-                retryTimer.Stop();
-                retryTimer.Dispose();
-                ExecutePendingPostCloseQueue();
-            };
-            retryTimer.Start();
+            _postCloseFollowUpScheduler?.Schedule(workbookKey, folderPath);
         }
 
         private void ScheduleManagedSessionClose(string workbookKey, string folderPath, bool saveChanges)
@@ -647,7 +489,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Error("Case workbook managed session close failed.", ex);
                 MessageBox.Show(
                     "保存または終了に失敗しました。もう一度お試しください。",
-                    BuildCloseDialogTitle(workbook),
+                    _caseClosePromptService == null ? "案件情報System" : _caseClosePromptService.GetCloseDialogTitle(workbook),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
@@ -665,64 +507,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _managedCloseDispatcher;
         }
 
-        private void QuitExcelIfNoVisibleWorkbook()
-        {
-            bool hasVisibleWorkbook = false;
-            foreach (Excel.Workbook openWorkbook in _application.Workbooks)
-            {
-                if (openWorkbook == null)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    if (openWorkbook.Windows.Count > 0 && openWorkbook.Windows.Cast<Excel.Window>().Any(window => window.Visible))
-                    {
-                        hasVisibleWorkbook = true;
-                        break;
-                    }
-                }
-                catch
-                {
-                    // Closing workbook may already be tearing down. Ignore and keep scanning.
-                }
-            }
-
-            _logger.Info("Case post-close visible workbook check. hasVisibleWorkbook=" + hasVisibleWorkbook.ToString());
-            if (hasVisibleWorkbook)
-            {
-                return;
-            }
-
-            bool previousDisplayAlerts = _application.DisplayAlerts;
-            try
-            {
-                _application.DisplayAlerts = false;
-                _logger.Info("Case post-close quitting Excel because no visible workbook remains.");
-                _application.Quit();
-            }
-            finally
-            {
-                _application.DisplayAlerts = previousDisplayAlerts;
-            }
-        }
-
         private void SyncNameRulesFromKernelToCase(Excel.Workbook caseWorkbook)
         {
-            string kernelPath = ResolveKernelWorkbookPath(caseWorkbook);
-            if (string.IsNullOrWhiteSpace(kernelPath) || !_pathCompatibilityService.FileExistsSafe(kernelPath))
+            if (_kernelNameRuleReader == null
+                || !_kernelNameRuleReader.TryReadForCaseWorkbook(caseWorkbook, out string normalizedRuleA, out string normalizedRuleB))
             {
                 return;
             }
-
-            if (!TryGetKernelNameRules(kernelPath, out string kernelRuleA, out string kernelRuleB))
-            {
-                return;
-            }
-
-            string normalizedRuleA = KernelNamingService.NormalizeNameRuleA(kernelRuleA);
-            string normalizedRuleB = KernelNamingService.NormalizeNameRuleB(kernelRuleB);
 
             string currentRuleA = KernelNamingService.NormalizeNameRuleA(_excelInteropService.TryGetDocumentProperty(caseWorkbook, NameRuleAPropertyName));
             string currentRuleB = KernelNamingService.NormalizeNameRuleB(_excelInteropService.TryGetDocumentProperty(caseWorkbook, NameRuleBPropertyName));
@@ -738,87 +529,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private string ResolveKernelWorkbookPath(Excel.Workbook caseWorkbook)
-        {
-            string systemRoot = _pathCompatibilityService.NormalizePath(_excelInteropService.TryGetDocumentProperty(caseWorkbook, SystemRootPropertyName));
-            if (systemRoot.Length == 0)
-            {
-                return string.Empty;
-            }
-
-            return WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
-        }
-
-        private bool TryGetKernelNameRules(string kernelPath, out string ruleA, out string ruleB)
-        {
-            ruleA = DefaultNameRuleA;
-            ruleB = DefaultNameRuleB;
-
-            Excel.Workbook openKernelWorkbook = _excelInteropService.FindOpenWorkbook(kernelPath);
-            if (openKernelWorkbook != null)
-            {
-                ruleA = _excelInteropService.TryGetDocumentProperty(openKernelWorkbook, NameRuleAPropertyName);
-                ruleB = _excelInteropService.TryGetDocumentProperty(openKernelWorkbook, NameRuleBPropertyName);
-                return true;
-            }
-
-            return TryReadKernelNameRulesFromPackage(kernelPath, out ruleA, out ruleB);
-        }
-
-        private bool TryReadKernelNameRulesFromPackage(string kernelPath, out string ruleA, out string ruleB)
-        {
-            ruleA = DefaultNameRuleA;
-            ruleB = DefaultNameRuleB;
-
-            try
-            {
-                using (ZipArchive archive = ZipFile.OpenRead(kernelPath))
-                {
-                    ZipArchiveEntry customXmlEntry = archive.GetEntry("docProps/custom.xml");
-                    if (customXmlEntry == null)
-                    {
-                        return false;
-                    }
-
-                    using (Stream stream = customXmlEntry.Open())
-                    {
-                        XDocument document = XDocument.Load(stream);
-                        foreach (XElement propertyElement in document.Root == null ? Array.Empty<XElement>() : document.Root.Elements(CustomPropertiesNamespace + "property"))
-                        {
-                            XAttribute nameAttribute = propertyElement.Attribute("name");
-                            if (nameAttribute == null)
-                            {
-                                continue;
-                            }
-
-                            XElement valueElement = propertyElement.Elements().FirstOrDefault();
-                            if (valueElement == null)
-                            {
-                                continue;
-                            }
-
-                            string propertyValue = valueElement.Value ?? string.Empty;
-                            if (string.Equals(nameAttribute.Value, NameRuleAPropertyName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                ruleA = propertyValue;
-                            }
-                            else if (string.Equals(nameAttribute.Value, NameRuleBPropertyName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                ruleB = propertyValue;
-                            }
-                        }
-                    }
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Kernel package name-rule read failed. path=" + kernelPath, ex);
-                return false;
-            }
-        }
-
         private string ResolveContainingFolder(Excel.Workbook workbook)
         {
             if (_testHooks != null && _testHooks.ResolveContainingFolder != null)
@@ -826,13 +536,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _testHooks.ResolveContainingFolder(workbook) ?? string.Empty;
             }
 
-            string folderPath = _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookPath(workbook));
-            if (folderPath.Length == 0 || !_pathCompatibilityService.DirectoryExistsSafe(folderPath))
-            {
-                return string.Empty;
-            }
-
-            return folderPath;
+            return _caseClosePromptService == null
+                ? string.Empty
+                : _caseClosePromptService.ResolveContainingFolder(workbook);
         }
 
         private bool DirectoryExistsSafe(string folderPath)
@@ -842,9 +548,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _testHooks.DirectoryExistsSafe(folderPath);
             }
 
-            return _pathCompatibilityService != null
-                ? _pathCompatibilityService.DirectoryExistsSafe(folderPath)
-                : System.IO.Directory.Exists(folderPath);
+            return _caseClosePromptService != null
+                && _caseClosePromptService.DirectoryExistsSafe(folderPath);
         }
 
         private void PromptToOpenCreatedCaseFolderIfNeeded(string workbookKey, string folderPath)
@@ -872,58 +577,39 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void TryPromptToOpenCreatedCaseFolder(string folderPath)
         {
-            if (string.IsNullOrWhiteSpace(folderPath))
+            if (_testHooks != null && _testHooks.ShowCreatedCaseFolderOfferPrompt != null)
             {
-                return;
-            }
-
-            if (!DirectoryExistsSafe(folderPath))
-            {
-                _logger.Info("Created CASE folder offer prompt skipped because folder does not exist. folderPath=" + folderPath);
-                return;
-            }
-
-            try
-            {
-                DialogResult answer = ShowCreatedCaseFolderOfferPromptCore(folderPath);
-                if (answer != DialogResult.Yes)
+                if (string.IsNullOrWhiteSpace(folderPath))
                 {
-                    _logger.Info("Created CASE folder offer prompt dismissed without opening folder. folderPath=" + folderPath + ", answer=" + answer.ToString());
                     return;
                 }
 
-                OpenCreatedCaseFolderCore(folderPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Created CASE folder offer prompt failed.", ex);
-            }
-        }
+                if (!DirectoryExistsSafe(folderPath))
+                {
+                    _logger.Info("Created CASE folder offer prompt skipped because folder does not exist. folderPath=" + folderPath);
+                    return;
+                }
 
-        private DialogResult ShowCreatedCaseFolderOfferPromptCore(string folderPath)
-        {
-            if (_testHooks != null && _testHooks.ShowCreatedCaseFolderOfferPrompt != null)
-            {
-                return _testHooks.ShowCreatedCaseFolderOfferPrompt(folderPath);
-            }
+                try
+                {
+                    DialogResult answer = _testHooks.ShowCreatedCaseFolderOfferPrompt(folderPath);
+                    if (answer != DialogResult.Yes)
+                    {
+                        _logger.Info("Created CASE folder offer prompt dismissed without opening folder. folderPath=" + folderPath + ", answer=" + answer.ToString());
+                        return;
+                    }
 
-            return MessageBox.Show(
-                CreatedCaseFolderOfferPromptMessage,
-                CreatedCaseFolderOfferPromptTitle,
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button1);
-        }
+                    _testHooks.OpenCreatedCaseFolder?.Invoke(folderPath, "CaseWorkbookLifecycleService.PostCloseCreatedCaseFolderOffer");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("Created CASE folder offer prompt failed.", ex);
+                }
 
-        private void OpenCreatedCaseFolderCore(string folderPath)
-        {
-            if (_testHooks != null && _testHooks.OpenCreatedCaseFolder != null)
-            {
-                _testHooks.OpenCreatedCaseFolder(folderPath, CreatedCaseFolderOfferOpenReason);
                 return;
             }
 
-            _folderWindowService?.OpenFolder(folderPath, CreatedCaseFolderOfferOpenReason);
+            _caseClosePromptService?.TryPromptToOpenCreatedCaseFolder(folderPath);
         }
 
         private Excel.Workbook FindOpenWorkbook(string workbookKey)
@@ -944,22 +630,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return null;
         }
 
-        private string BuildCloseDialogTitle(Excel.Workbook workbook)
-        {
-            string role = (_excelInteropService.TryGetDocumentProperty(workbook, RolePropertyName) ?? string.Empty).Trim().ToUpperInvariant();
-            if (role == CaseRoleName)
-            {
-                return "案件情報System (CASE)";
-            }
-
-            if (role == BaseRoleName)
-            {
-                return "案件情報System (BASE)";
-            }
-
-            return "案件情報System";
-        }
-
         private string GetWorkbookKey(Excel.Workbook workbook)
         {
             if (_testHooks != null && _testHooks.GetWorkbookKey != null)
@@ -978,29 +648,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 : fullName;
         }
 
-        private bool IsWorkbookStillOpen(string workbookKey)
-        {
-            if (string.IsNullOrWhiteSpace(workbookKey))
-            {
-                return false;
-            }
-
-            foreach (Excel.Workbook openWorkbook in _application.Workbooks)
-            {
-                if (openWorkbook == null)
-                {
-                    continue;
-                }
-
-                if (string.Equals(GetWorkbookKey(openWorkbook), workbookKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         private bool IsMacroEnabledWorkbook(Excel.Workbook workbook)
         {
             if (workbook == null)
@@ -1015,60 +662,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch
             {
                 return false;
-            }
-        }
-
-        private sealed class ManagedCloseScope : IDisposable
-        {
-            private readonly CaseWorkbookLifecycleService _owner;
-            private readonly string _workbookKey;
-            private bool _disposed;
-
-            internal ManagedCloseScope(CaseWorkbookLifecycleService owner, string workbookKey)
-            {
-                _owner = owner;
-                _workbookKey = workbookKey;
-            }
-
-            public void Dispose()
-            {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                _disposed = true;
-                _owner.ReleaseManagedClose(_workbookKey);
-            }
-        }
-
-        private sealed class PostCloseFollowUpRequest
-        {
-            internal PostCloseFollowUpRequest(string workbookKey, string folderPath, int attemptsRemaining = 3)
-            {
-                WorkbookKey = workbookKey ?? string.Empty;
-                FolderPath = folderPath ?? string.Empty;
-                AttemptsRemaining = attemptsRemaining;
-            }
-
-            internal string WorkbookKey { get; }
-
-            internal string FolderPath { get; }
-
-            internal int AttemptsRemaining { get; }
-
-            internal PostCloseFollowUpRequest NextAttempt()
-            {
-                return new PostCloseFollowUpRequest(WorkbookKey, FolderPath, AttemptsRemaining - 1);
-            }
-        }
-
-        private sealed class NoOpDisposable : IDisposable
-        {
-            internal static readonly NoOpDisposable Instance = new NoOpDisposable();
-
-            public void Dispose()
-            {
             }
         }
 

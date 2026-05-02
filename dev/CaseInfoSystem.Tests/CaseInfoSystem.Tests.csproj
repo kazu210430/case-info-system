@@ -45,6 +45,7 @@
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
     <Compile Include="CaseWorkbookLifecycleServiceThinOrchestrationTests.cs" />
+    <Compile Include="ManagedCloseStateTests.cs" />
     <Compile Include="KernelWorkbookServiceThinOrchestrationTests.cs" />
     <Compile Include="Fakes\OfficeInteropShims.cs" />
     <Compile Include="Fakes\OrchestrationDependencyPlaceholders.cs" />
@@ -89,6 +90,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshPreconditionPolicy.cs" Link="Source\App\TaskPaneRefreshPreconditionPolicy.cs" />
     <!-- CaseWorkbookLifecycleService policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookBeforeClosePolicy.cs" Link="Source\App\CaseWorkbookBeforeClosePolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseClosePromptService.cs" Link="Source\App\CaseClosePromptService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleInitializationPolicy.cs" Link="Source\App\CaseWorkbookLifecycleInitializationPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookSheetChangePolicy.cs" Link="Source\App\CaseWorkbookSheetChangePolicy.cs" />
     <!-- DocumentCommandService policies -->
@@ -116,7 +118,10 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveService.cs" Link="Source\App\DocumentSaveService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\EventBoundaryGuard.cs" Link="Source\App\EventBoundaryGuard.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseCreationService.cs" Link="Source\App\KernelCaseCreationService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNameRuleReader.cs" Link="Source\App\KernelNameRuleReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ManagedCloseState.cs" Link="Source\App\ManagedCloseState.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\NavigationService.cs" Link="Source\App\NavigationService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\PostCloseFollowUpScheduler.cs" Link="Source\App\PostCloseFollowUpScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WordTemplateRegistrationValidationService.cs" Link="Source\App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />

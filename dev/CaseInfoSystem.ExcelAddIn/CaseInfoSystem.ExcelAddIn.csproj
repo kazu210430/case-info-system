@@ -183,6 +183,7 @@
     <Compile Include="App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="App\CaseListRegistrationService.cs" />
     <Compile Include="App\CaseWorkbookBeforeClosePolicy.cs" />
+    <Compile Include="App\CaseClosePromptService.cs" />
     <Compile Include="App\CaseWorkbookLifecycleService.cs" />
     <Compile Include="App\CaseWorkbookLifecycleInitializationPolicy.cs" />
     <Compile Include="App\CaseWorkbookSheetChangePolicy.cs" />
@@ -216,6 +217,7 @@
     <Compile Include="App\KernelCaseInteractionState.cs" />
     <Compile Include="App\KernelCasePathService.cs" />
     <Compile Include="App\KernelCasePresentationService.cs" />
+    <Compile Include="App\KernelNameRuleReader.cs" />
     <Compile Include="App\KernelTemplateSyncService.cs" />
     <Compile Include="App\KernelUserDataReflectionService.cs" />
     <Compile Include="App\KernelWorkbookLifecycleService.cs" />
@@ -236,7 +238,9 @@
     <Compile Include="App\KernelWorkbookStateService.cs" />
     <Compile Include="App\KernelWorkbookService.cs" />
     <Compile Include="App\MergeDataBuilder.cs" />
+    <Compile Include="App\ManagedCloseState.cs" />
     <Compile Include="App\NavigationService.cs" />
+    <Compile Include="App\PostCloseFollowUpScheduler.cs" />
     <Compile Include="App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="App\ICaseTaskPaneSnapshotReader.cs" />
     <Compile Include="App\TaskPaneDisplayCoordinator.cs" />

@@ -112,12 +112,31 @@ namespace CaseInfoSystem.ExcelAddIn
         // VSTO ライフサイクル
         private void ThisAddIn_Startup(object sender, EventArgs e)
         {
+            InitializeStartupDiagnostics();
+
+            var compositionRoot = CreateStartupCompositionRoot();
+            compositionRoot.Compose();
+            ApplyCompositionRoot(compositionRoot);
+            InitializeApplicationEventSubscriptionService();
+
+            // 順序維持: event hook の後に startup 時の HOME 表示判定と初回 pane refresh を行う。
+            _logger.Info("ThisAddIn_Startup fired.");
+            HookApplicationEvents();
+            TryShowKernelHomeFormOnStartup();
+            RefreshTaskPane("Startup", null, null);
+        }
+
+        private void InitializeStartupDiagnostics()
+        {
             _logger = new Logger(ExcelAddInTraceLogWriter.Write);
             ExcelProcessLaunchContextTracer.Trace(_logger);
             AddInDeploymentDiagnosticsTracer.Trace(_logger);
+        }
 
+        private AddInCompositionRoot CreateStartupCompositionRoot()
+        {
             // Composition Root から VSTO 境界で使う依存と delegate を受け取る。
-            var compositionRoot = new AddInCompositionRoot(
+            return new AddInCompositionRoot(
                 this,
                 Application,
                 _logger,
@@ -140,14 +159,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 TaskPaneRefreshOrchestrationService.PendingPaneRefreshMaxAttempts,
                 KernelSheetCommandSheetCodeName,
                 KernelSheetCommandCellAddress);
-            compositionRoot.Compose();
-            ApplyCompositionRoot(compositionRoot);
-            InitializeApplicationEventSubscriptionService();
-
-            _logger.Info("ThisAddIn_Startup fired.");
-            HookApplicationEvents();
-            TryShowKernelHomeFormOnStartup();
-            RefreshTaskPane("Startup", null, null);
         }
 
         private void ApplyCompositionRoot(AddInCompositionRoot compositionRoot)

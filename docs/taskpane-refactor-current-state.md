@@ -99,6 +99,7 @@
 
 - `ThisAddIn` は VSTO lifecycle、application event、custom task pane 生成、TaskPane 表示要求の入口です。
 - application event wiring / unwiring は `ApplicationEventSubscriptionService` へ分離済みだが、handler 本体と lifecycle 呼び出し位置は `ThisAddIn` に残しています。
+- Startup 周辺は呼び出し順を変えずに private helper で見通し整理するに留め、`HookApplicationEvents()`、`TryShowKernelHomeFormOnStartup()`、`RefreshTaskPane("Startup", null, null)` の位置は維持します。
 - `TaskPaneManager` / `TaskPaneHostRegistry` との依存境界を急に変えると起動、終了、pane 表示に波及しやすいです。
 - `ThisAddIn` 整理は HostRegistry 分離よりさらに慎重に扱い、先に現状メモと依存関係棚卸しを行い、コード変更は後回しにする判断を固定します。
 - 詳細な棚卸しは `docs/thisaddin-boundary-inventory.md` を参照します。

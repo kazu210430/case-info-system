@@ -24,6 +24,7 @@
 ### Startup / Shutdown lifecycle
 
 - `ThisAddIn_Startup(...)` が logger 初期化、診断 trace、`AddInCompositionRoot` compose、依存 field の適用を行う
+- Startup 周辺は private helper で呼び出しの見通しだけ整理済みだが、`logger 初期化 -> trace -> compose -> 依存適用 -> event 初期化 -> hook -> Kernel HOME -> startup refresh` の順序と lifecycle 責務は `ThisAddIn` に残す
 - startup 時に Excel application event を購読する
 - startup 時に `TryShowKernelHomeFormOnStartup()` と `RefreshTaskPane("Startup", null, null)` を起動する
 - `ThisAddIn_Shutdown(...)` が event unhook、pending pane refresh timer 停止、Kernel HOME form close、`TaskPaneManager.DisposeAll()`、word warm-up timer 停止、legacy hidden Excel shutdown を行う
@@ -200,8 +201,8 @@
 
 ### 候補4: Startup 初期化順序の読みやすさ改善
 
-- `ThisAddIn_Startup(...)` の読みやすさ向上余地はある
-- ただし compose、event hook、startup 表示、startup refresh の順序を触るため、最初の切り出し候補にはしない
+- 現行 branch では constructor 引数塊の private helper 抽出まで適用済みで、呼び出し順の見通しだけを改善している
+- ただし compose、event hook、startup 表示、startup refresh の順序を動かす分離は引き続き危険であり、次の候補としては扱わない
 
 ## 6. 今回は切り出さないもの
 

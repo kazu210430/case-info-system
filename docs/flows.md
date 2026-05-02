@@ -242,6 +242,9 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 
 `TaskPaneRefreshOrchestrationService` が更新を調停し、`TaskPaneRefreshCoordinator` と `TaskPaneManager` が TaskPane の表示内容をスナップショットとして組み立てます。
 
+- `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` が `WorkbookOpen` 直後の window-dependent refresh skip 境界を定義します。
+- `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy を利用する側であり、skip 条件を個別に重複保持しません。
+
 - 特別ボタン
   - `案件一覧登録`
   - `会計書類セット`
@@ -281,11 +284,13 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 - workbook-only 処理は `WorkbookOpen` で扱ってよいです。
 - window-dependent 処理は `WorkbookActivate` 以降、必要なら `WindowActivate` 以降を安全境界として扱います。
 - `WorkbookOpen` 直後の `ActiveWorkbook` / `ActiveWindow` を前提に、window 解決・表示・前面化・pane 対象決定を確定させない方針を維持します。
+- `WorkbookOpen` 直後に workbook は取得できても window が未解決な refresh は、`TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` により skip し、後続の `WorkbookActivate` / `WindowActivate` 側へ委ねます。
 
 補足:
 
 - `ResolveWorkbookPaneWindow` が安全に成功する条件は、対象 workbook の visible window が取得できること、または active workbook が対象 workbook と一致し active window が取得できることです。
 - 単体生成 CASE の再オープン調査では、`WorkbookOpen` 時点で `ActiveWorkbook` / `ActiveWindow` が空のため window 解決に失敗し、その後 `WorkbookActivate` で回復するログが確認されました。
+- `TaskPaneManagerOrchestrationPolicyTests` は、この skip 境界を `TaskPaneRefreshPreconditionPolicy` に対して直接検証します。
 - startup context 系の再分解を再開する前に、このイベント境界の安定化を優先する必要があります。
 
 ### CASE 文書ボタンパネル更新仕様

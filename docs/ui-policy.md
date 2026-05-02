@@ -11,10 +11,18 @@
 - ScreenUpdating は必ず復元する
 - Window 状態は復旧処理を前提とする
 - TaskPane は遅延表示を前提とする
+- `WorkbookOpen` 直後の window-dependent refresh は shared policy で skip 判定する
 
 ## 禁止事項
 
 - WorkbookOpen 直後に直接 UI 表示制御を行う実装は禁止する
+
+## WorkbookOpen 直後の shared policy
+
+- `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` を、`WorkbookOpen` 直後の window-dependent refresh skip 判定の正本とします。
+- `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy の利用者であり、同じ skip 条件を個別に持ちません。
+- この policy は pure 判定のみを持ち、ログ出力・状態変更・COMメンバーアクセス・UI操作を含めません。
+- 目的は、`WorkbookOpen` 直後に直接 UI 表示制御を行わないという重要ルールをコード上でも 1 か所に集約し、将来のドリフトを防ぐことです。
 
 ## 待機 UI
 
@@ -36,6 +44,7 @@
 - TaskPane は左ドックに配置されます。
 - Workbook と Window の状態に応じて、既存 Pane の再利用または再描画が行われます。
 - 一時抑止、遅延再試行、準備完了後の表示予約が実装されています。
+- `WorkbookOpen` 直後に workbook は取得できても window が未解決な refresh は確定させず skip し、後続イベントへ委ねます。
 - TaskPane で使う snapshot / cache は表示補助です。保存・生成・実行判断の正本として扱わない方針を維持します。
 
 ### 不明点

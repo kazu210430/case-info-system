@@ -97,6 +97,12 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - TaskPane 再描画要求、遅延表示、Window 単位の表示調停を担う
 - host 再利用と再表示の方針を維持する
 
+### `TaskPaneRefreshPreconditionPolicy`
+
+- `ShouldSkipWorkbookOpenWindowDependentRefresh(...)` を `WorkbookOpen` 直後の window-dependent refresh skip 判定の正本として持つ
+- `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy を利用し、skip 条件を重複保持しない
+- 判定は pure であり、ログ出力・状態変更・COMメンバーアクセス・UI操作を持たない
+
 ### `DocumentNamePromptService`
 
 - CASE cache から `caption` を引けた場合だけ prompt 初期値へ使う
@@ -176,9 +182,11 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - `WorkbookOpen` は workbook が開いた通知であり、window 安定通知ではありません。
 - `WorkbookOpen` 時点では `ActiveWorkbook` / `ActiveWindow` が未確定な場合があります。
 - workbook-only 処理と window-dependent 処理を混ぜない方針を維持します。
+- `WorkbookOpen` 直後に workbook は取得できても window が未解決な refresh は、`TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` で skip し、後続イベントへ委ねます。
 - pane 対象 window の確定、window key 依存の host 再利用、window 前提の表示調停は `WorkbookActivate` 以降、必要なら `WindowActivate` 以降を安全境界として扱います。
 - `ResolveWorkbookPaneWindow` が安全に成功する条件は、対象 workbook の visible window を取得できること、または active workbook が対象 workbook と一致し active window を取得できることです。
 - 単体生成 CASE 再オープン時の白 Excel 調査では、`WorkbookOpen` 時点の `ActiveWorkbook` / `ActiveWindow` 未確定が確認されました。startup context 系を再導入する前に、このイベント境界の安定化を優先します。
+- `TaskPaneManagerOrchestrationPolicyTests` は、この skip 境界を `TaskPaneRefreshPreconditionPolicy` に対して直接検証します。
 
 ## 触ってはいけない固定点
 

@@ -80,6 +80,13 @@
 
 これらは `WorkbookActivate` 以降、必要なら `WindowActivate` 以降を安全境界として扱います。
 
+### WorkbookOpen 直後の shared skip 境界
+
+- `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` が、`WorkbookOpen` 直後の window-dependent refresh skip 判定の正本です。
+- 条件は `reason == WorkbookOpen` かつ `workbook != null` かつ `window == null` です。
+- `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy を利用し、同じ skip 条件を個別に持ちません。
+- `TaskPaneManagerOrchestrationPolicyTests` は、この境界を policy 正本に対して直接検証します。
+
 ## 先に安定化すべきこと
 
 - startup context 系の再導入や再分解より前に、`WorkbookOpen` と `WorkbookActivate` の境界を整理すること

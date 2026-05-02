@@ -30,11 +30,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneActionDispatcher(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
             UserErrorService userErrorService,
             Logger logger,
-            Func<string, TaskPaneHost> resolveHost,
+            TaskPaneCaseFallbackActionExecutor taskPaneCaseFallbackActionExecutor,
+            TaskPaneCaseActionTargetResolver caseActionTargetResolver,
+            TaskPaneCaseAccountingActionHandler taskPaneCaseAccountingActionHandler,
+            TaskPaneCaseDocumentActionHandler taskPaneCaseDocumentActionHandler,
             Action<TaskPaneHost> invalidateHostRenderStateForForcedRefresh,
             Action<DocumentButtonsControl, Excel.Workbook> renderCaseHostAfterAction,
             Func<TaskPaneHost, string, bool> tryShowHost)
@@ -44,38 +46,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            if (taskPaneBusinessActionLauncher == null)
-            {
-                throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
-            }
-
-            if (resolveHost == null)
-            {
-                throw new ArgumentNullException(nameof(resolveHost));
-            }
-
-            _taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(taskPaneBusinessActionLauncher);
-            _caseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
-                _excelInteropService,
-                _logger,
-                resolveHost);
+            _taskPaneCaseFallbackActionExecutor = taskPaneCaseFallbackActionExecutor ?? throw new ArgumentNullException(nameof(taskPaneCaseFallbackActionExecutor));
+            _caseActionTargetResolver = caseActionTargetResolver ?? throw new ArgumentNullException(nameof(caseActionTargetResolver));
+            _taskPaneCaseAccountingActionHandler = taskPaneCaseAccountingActionHandler ?? throw new ArgumentNullException(nameof(taskPaneCaseAccountingActionHandler));
+            _taskPaneCaseDocumentActionHandler = taskPaneCaseDocumentActionHandler ?? throw new ArgumentNullException(nameof(taskPaneCaseDocumentActionHandler));
             _invalidateHostRenderStateForForcedRefresh = invalidateHostRenderStateForForcedRefresh ?? throw new ArgumentNullException(nameof(invalidateHostRenderStateForForcedRefresh));
             _renderCaseHostAfterAction = renderCaseHostAfterAction ?? throw new ArgumentNullException(nameof(renderCaseHostAfterAction));
             _tryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
-            _taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
-                _caseActionTargetResolver,
-                _taskPaneCaseFallbackActionExecutor,
-                _caseTaskPaneViewStateBuilder,
-                _userErrorService,
-                _logger,
-                HandlePostActionRefresh);
-            _taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
-                _caseActionTargetResolver,
-                _taskPaneCaseFallbackActionExecutor,
-                _caseTaskPaneViewStateBuilder,
-                _userErrorService,
-                _logger,
-                HandlePostActionRefresh);
         }
 
         internal void HandleCaseControlActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
@@ -145,7 +122,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         // Preserve the existing post-action refresh/render/show ordering for the frozen fallback path.
-        private void HandlePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
+        internal void HandlePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
         {
             TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide(actionKind);
             if (decision == TaskPanePostActionRefreshDecision.SkipForForegroundPreservation)

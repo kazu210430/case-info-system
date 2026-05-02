@@ -154,14 +154,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 windowKey => _hostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null,
                 RenderHost,
                 (host, reason) => _taskPaneDisplayCoordinator.TryShowHost(host, reason));
-            _taskPaneActionDispatcher = new TaskPaneActionDispatcher(
-                _addIn,
+            Func<string, TaskPaneHost> resolveHost = windowKey => _hostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null;
+            var taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(_taskPaneBusinessActionLauncher);
+            var taskPaneCaseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
                 _excelInteropService,
-                _taskPaneBusinessActionLauncher,
+                _logger,
+                resolveHost);
+            Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> handlePostActionRefresh =
+                (host, workbook, control, actionKind) => _taskPaneActionDispatcher.HandlePostActionRefresh(host, workbook, control, actionKind);
+            var taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
+                taskPaneCaseActionTargetResolver,
+                taskPaneCaseFallbackActionExecutor,
                 _caseTaskPaneViewStateBuilder,
                 _userErrorService,
                 _logger,
-                windowKey => _hostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null,
+                handlePostActionRefresh);
+            var taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
+                taskPaneCaseActionTargetResolver,
+                taskPaneCaseFallbackActionExecutor,
+                _caseTaskPaneViewStateBuilder,
+                _userErrorService,
+                _logger,
+                handlePostActionRefresh);
+            _taskPaneActionDispatcher = new TaskPaneActionDispatcher(
+                _addIn,
+                _excelInteropService,
+                _caseTaskPaneViewStateBuilder,
+                _userErrorService,
+                _logger,
+                taskPaneCaseFallbackActionExecutor,
+                taskPaneCaseActionTargetResolver,
+                taskPaneCaseAccountingActionHandler,
+                taskPaneCaseDocumentActionHandler,
                 host => _taskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(host),
                 (control, workbook) => _casePaneSnapshotRenderService.RenderAfterAction(control, workbook),
                 (host, reason) => _taskPaneDisplayCoordinator.TryShowHost(host, reason));

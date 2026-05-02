@@ -28,7 +28,7 @@ namespace CaseInfoSystem.Tests
             int requestCalls = 0;
             addIn.RequestTaskPaneDisplayForTargetWindowHandler = (request, targetWorkbook, targetWindow) => requestCalls++;
 
-            var dispatcher = new TaskPaneActionDispatcher(
+            var dispatcher = CreateDispatcher(
                 addIn,
                 excelInteropService,
                 CreateBusinessActionLauncher(
@@ -75,7 +75,7 @@ namespace CaseInfoSystem.Tests
             int requestCalls = 0;
             addIn.RequestTaskPaneDisplayForTargetWindowHandler = (request, targetWorkbook, targetWindow) => requestCalls++;
 
-            var dispatcher = new TaskPaneActionDispatcher(
+            var dispatcher = CreateDispatcher(
                 addIn,
                 excelInteropService,
                 CreateBusinessActionLauncher(
@@ -123,7 +123,7 @@ namespace CaseInfoSystem.Tests
             int requestCalls = 0;
             addIn.RequestTaskPaneDisplayForTargetWindowHandler = (request, targetWorkbook, targetWindow) => requestCalls++;
 
-            var dispatcher = new TaskPaneActionDispatcher(
+            var dispatcher = CreateDispatcher(
                 addIn,
                 excelInteropService,
                 CreateBusinessActionLauncher(
@@ -170,7 +170,7 @@ namespace CaseInfoSystem.Tests
             int requestCalls = 0;
             addIn.RequestTaskPaneDisplayForTargetWindowHandler = (request, targetWorkbook, targetWindow) => requestCalls++;
 
-            var dispatcher = new TaskPaneActionDispatcher(
+            var dispatcher = CreateDispatcher(
                 addIn,
                 excelInteropService,
                 CreateBusinessActionLauncher(
@@ -273,6 +273,56 @@ namespace CaseInfoSystem.Tests
                     new ExcelInteropService(),
                     OrchestrationTestSupport.CreateLogger(new List<string>())),
                 promptService);
+        }
+
+        private static TaskPaneActionDispatcher CreateDispatcher(
+            CaseInfoSystem.ExcelAddIn.ThisAddIn addIn,
+            ExcelInteropService excelInteropService,
+            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
+            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
+            UserErrorService userErrorService,
+            Logger logger,
+            System.Func<string, TaskPaneHost> resolveHost,
+            System.Action<TaskPaneHost> invalidateHostRenderStateForForcedRefresh,
+            System.Action<DocumentButtonsControl, Excel.Workbook> renderCaseHostAfterAction,
+            System.Func<TaskPaneHost, string, bool> tryShowHost)
+        {
+            var taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(taskPaneBusinessActionLauncher);
+            var taskPaneCaseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
+                excelInteropService,
+                logger,
+                resolveHost);
+            TaskPaneActionDispatcher dispatcher = null;
+            System.Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> handlePostActionRefresh =
+                (host, workbook, control, actionKind) => dispatcher.HandlePostActionRefresh(host, workbook, control, actionKind);
+            var taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
+                taskPaneCaseActionTargetResolver,
+                taskPaneCaseFallbackActionExecutor,
+                caseTaskPaneViewStateBuilder,
+                userErrorService,
+                logger,
+                handlePostActionRefresh);
+            var taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
+                taskPaneCaseActionTargetResolver,
+                taskPaneCaseFallbackActionExecutor,
+                caseTaskPaneViewStateBuilder,
+                userErrorService,
+                logger,
+                handlePostActionRefresh);
+            dispatcher = new TaskPaneActionDispatcher(
+                addIn,
+                excelInteropService,
+                caseTaskPaneViewStateBuilder,
+                userErrorService,
+                logger,
+                taskPaneCaseFallbackActionExecutor,
+                taskPaneCaseActionTargetResolver,
+                taskPaneCaseAccountingActionHandler,
+                taskPaneCaseDocumentActionHandler,
+                invalidateHostRenderStateForForcedRefresh,
+                renderCaseHostAfterAction,
+                tryShowHost);
+            return dispatcher;
         }
 
         private sealed class InlineScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge

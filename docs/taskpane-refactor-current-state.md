@@ -8,6 +8,7 @@
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
+- Startup / TaskPane 初期表示の実機チェック: `docs/thisaddin-startup-test-checklist.md`
 - 優先度A棚卸し: `docs/a-priority-service-responsibility-inventory.md`
 - protection / ready-show 危険領域の補足:
   - `docs/taskpane-protection-ready-show-investigation.md`

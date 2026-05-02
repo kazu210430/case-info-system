@@ -9,6 +9,7 @@
 - UI 制御の前提: `docs/ui-policy.md`
 - TaskPane 現行設計の前提: `docs/taskpane-architecture.md`
 - TaskPane 現在地の補足: `docs/taskpane-refactor-current-state.md`
+- 実機テスト観点: `docs/thisaddin-startup-test-checklist.md`
 
 この文書の目的は、`ThisAddIn` を今すぐ分割することではありません。振る舞い不変を前提に、どの責務が add-in 境界に残っているか、どこが高危険度か、どの単位なら次に小さく切れるかを明確にすることです。
 

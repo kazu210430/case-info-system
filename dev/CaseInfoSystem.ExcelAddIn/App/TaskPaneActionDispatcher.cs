@@ -11,6 +11,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
         private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
+        private readonly TaskPaneCaseDocActionHandler _taskPaneCaseDocActionHandler;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly UserErrorService _userErrorService;
         private readonly Logger _logger;
@@ -41,10 +42,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _invalidateHostRenderStateForForcedRefresh = invalidateHostRenderStateForForcedRefresh ?? throw new ArgumentNullException(nameof(invalidateHostRenderStateForForcedRefresh));
             _renderCaseHostAfterAction = renderCaseHostAfterAction ?? throw new ArgumentNullException(nameof(renderCaseHostAfterAction));
             _tryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
+            _taskPaneCaseDocActionHandler = new TaskPaneCaseDocActionHandler(
+                _excelInteropService,
+                _taskPaneBusinessActionLauncher,
+                _caseTaskPaneViewStateBuilder,
+                _userErrorService,
+                _logger,
+                _resolveHost,
+                HandlePostActionRefresh);
         }
 
         internal void HandleCaseControlActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
+            if (string.Equals(e?.ActionKind, "doc", StringComparison.OrdinalIgnoreCase))
+            {
+                _taskPaneCaseDocActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(windowKey) || control == null)
             {
                 _logger.Warn("CaseControl_ActionInvoked skipped because host identity was not available.");

@@ -207,23 +207,46 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 - 会計書類セットで各シートや各セルに反映する値の業務上の意味は、コードだけでは確定しません。
 
-## CASE クローズ
+## CASE ライフサイクル
 
-CASE クローズは `WorkbookLifecycleCoordinator` を起点として処理されます。CASE / Base 側では `CaseWorkbookLifecycleService` が処理します。
+CASE / Base の lifecycle は `WorkbookLifecycleCoordinator` を入口にし、主調停は `CaseWorkbookLifecycleService` が担います。
 
-### 確認できる処理
+### 初回初期化
 
-1. `CaseWorkbookLifecycleService` が Workbook ライフサイクル調停に入ります。
-2. `CaseWorkbookLifecycleService` が対象 Workbook が CASE / Base かどうかを確認します。
-3. `CaseWorkbookLifecycleService` が managed close 中かどうかを確認します。
-4. `CaseWorkbookLifecycleService` が dirty 状態であれば保存確認を表示します。
-5. `CaseWorkbookLifecycleService` がクローズ後の後続処理を必要に応じて予約します。
-6. `CaseWorkbookLifecycleService` が Workbook 状態や TaskPane 状態を片付けます。
+1. `WorkbookOpen` / `WorkbookActivate` で `CaseWorkbookLifecycleService.HandleWorkbookOpenedOrActivated(...)` が呼ばれます。
+2. `CaseWorkbookLifecycleInitializationPolicy` が対象外 / 既初期化 / Base / CASE を判定します。
+3. CASE の初回初期化では `WorkbookRoleResolver.RegisterKnownCaseWorkbook(...)` と `KernelNameRuleReader.TryReadForCaseWorkbook(...)` による `NAME_RULE_A` / `NAME_RULE_B` 同期が行われます。
+4. Base は初期化済みマークだけを更新します。
 
-### 確認できるダイアログ
+### dirty 状態
 
-- dirty 状態の保存確認として `保存しますか？` の Yes / No / Cancel が使われます。
-- 新規作成直後の CASE には、保存後に保存先フォルダを開くか確認する後続導線があります。
+1. `SheetChange` では `CaseWorkbookSheetChangePolicy` が対象外 / managed close 中 / transient pane suppression 中を除外します。
+2. 対象 workbook だけ session dirty として記録します。
+
+### クローズ
+
+1. `WorkbookBeforeClose` では `CaseWorkbookBeforeClosePolicy` が `Ignore` / `SuppressPromptForManagedClose` / `PromptForDirtySession` / `SchedulePostCloseFollowUp` を判定します。
+2. dirty session では `CaseClosePromptService` が `保存しますか？` の Yes / No / Cancel を表示します。
+3. `KernelCaseCreationCommandService` から pending が付与されていた workbook では、保存先フォルダが解決できる場合だけ folder offer を出し、`CaseFolderOpenService` が必要に応じて Explorer を起動します。
+4. dirty close は `CaseWorkbookLifecycleService` が managed close を dispatcher 経由で予約し、`ManagedCloseState` のスコープ内で save 有無を処理して `workbook.Close(SaveChanges: false)` へ進めます。
+5. managed close の内部、または clean close の before-close 処理では `PostCloseFollowUpScheduler` が予約されます。
+6. `PostCloseFollowUpScheduler` は close 後に対象 workbook が残っていないことを確認し、Excel busy なら retry し、visible workbook が 1 つも無い場合だけ Excel 終了を試みます。
+7. close 継続時の workbook state / accounting state / TaskPane pane の片付けは `WorkbookLifecycleCoordinator` 側が後続で行います。
+
+dirty path の大まかな順序は `before-close -> dirty prompt -> folder offer -> managed close -> post-close follow-up` です。
+
+### 補助サービス
+
+- `CaseClosePromptService`
+  - dirty prompt のタイトル解決と `保存しますか？` ダイアログ、created case folder offer prompt を担当します。
+- `CaseFolderOpenService`
+  - 保存先フォルダ解決、存在確認、Explorer 起動を担当します。
+- `KernelNameRuleReader`
+  - open 中 Kernel workbook または package `docProps/custom.xml` から name rule を読み取ります。
+- `ManagedCloseState`
+  - managed close の入れ子状態を workbook key 単位で管理します。
+- `PostCloseFollowUpScheduler`
+  - close 後 follow-up、Excel busy retry、no visible workbook 時の Excel 終了判定を担当します。
 
 ## TaskPane 更新
 

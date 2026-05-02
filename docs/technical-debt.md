@@ -16,6 +16,15 @@
 * 現状: 単一 Kernel workbook 運用では問題化しにくいため未対応。複数 Kernel workbook や hidden workbook が同時に存在する場合は、利用者の意図と異なる root を操作対象にする余地がある。
 * 将来案: command / UI / CASE 文脈から `SYSTEM_ROOT` を明示的に渡し、その文脈で Kernel workbook を確定する。`GetOpenKernelWorkbook()` は単一 root 前提の convenience に限定し、複数 root を跨ぐ経路では使用範囲を絞る。
 
+## CASE workbook lifecycle orchestration 境界
+
+### CaseWorkbookLifecycleService.cs:143 / CaseWorkbookLifecycleService.cs:455 / WorkbookLifecycleCoordinator.cs:154
+
+* 内容: `CaseWorkbookLifecycleService` は分割後も lifecycle orchestration の中心であり、dirty session 管理、created case folder offer pending、managed close scheduling、post-close follow-up 予約、CASE HOME 表示補正の順序依存を抱える。prompt UI、folder open、name rule 読取、managed close 入れ子管理、post-close scheduler は別サービスへ分離済みだが、close 契約自体は複数クラスに跨って維持されている。
+* 影響範囲: UI / Office操作 / lifecycle
+* 危険度: 中
+* 現状: 現行 `main` はこの分割後構成を現在地として固定するが、追加 refactor では `before-close -> dirty prompt -> folder offer -> managed close -> post-close follow-up` の順序保持が必要。
+
 ## Thread.Sleep 依存
 
 ### TaskPaneRefreshOrchestrationService.cs:300
@@ -230,15 +239,15 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### CaseWorkbookLifecycleService.cs:397
+### CaseClosePromptService.cs:24
 
-* 内容: `ShowClosePromptCore` で、「保存しますか？」のダイアログを直接表示している。
+* 内容: `ShowClosePrompt` で、「保存しますか？」のダイアログを直接表示している。
 * 呼び出し箇所の役割: CASE workbook クローズ時の保存確認。
 * 影響範囲: UI / Office操作
 * 危険度: 中
 * 現状: 実機では安定動作しているため未対応
 
-### CaseWorkbookLifecycleService.cs:648
+### CaseWorkbookLifecycleService.cs:494
 
 * 内容: `ExecuteManagedSessionClose` で、保存または終了失敗時の警告ダイアログを直接表示している。
 * 呼び出し箇所の役割: CASE workbook 管理クローズ処理の例外通知。
@@ -246,9 +255,9 @@
 * 危険度: 中
 * 現状: 実機では安定動作しているため未対応
 
-### CaseWorkbookLifecycleService.cs:910
+### CaseClosePromptService.cs:39
 
-* 内容: `ShowCreatedCaseFolderOfferPromptCore` で、作成済み案件フォルダを開くか確認するダイアログを直接表示している。
+* 内容: `ShowCreatedCaseFolderOfferPrompt` で、作成済み案件フォルダを開くか確認するダイアログを直接表示している。
 * 呼び出し箇所の役割: 案件作成完了後のフォルダオファー確認。
 * 影響範囲: UI / Office操作
 * 危険度: 中

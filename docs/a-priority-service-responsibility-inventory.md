@@ -182,22 +182,34 @@
 
 ### 現在担っている責務
 
-- CASE / Base 初回初期化
+- CASE / Base 初回初期化の orchestration
 - dirty 判定と session 状態管理
-- before-close prompt / managed close
-- post-close follow-up
-- created case folder offer
+- before-close / managed close / post-close follow-up の orchestration
+- created case folder offer pending 状態管理
 - CASE HOME 表示補正
-- Kernel name rule 参照と package 読取
+
+### 分離済み補助責務
+
+- `CaseClosePromptService`
+  - dirty prompt と created case folder offer prompt
+- `CaseFolderOpenService`
+  - 保存先フォルダ解決、存在確認、Explorer 起動
+- `KernelNameRuleReader`
+  - Kernel name rule 参照と package 読取
+- `ManagedCloseState`
+  - managed close の入れ子状態
+- `PostCloseFollowUpScheduler`
+  - close 後 follow-up、retry、Excel 終了判定
 
 ### 責務が集中している箇所
 
-- workbook lifecycle と folder follow-up UI が同じサービスに集中している。
-- dirty 判定、managed close、Excel 終了判定、CASE HOME 表示補正、Kernel doc property 同期が同居している。
+- `CaseWorkbookLifecycleService` 自体は orchestration hub のままで、before-close、session dirty、created case folder offer pending、CASE HOME 表示補正の順序依存を抱える。
+- close 本線と CASE HOME 表示補正が同じサービスに同居している。
 
 ### 分割時に守るべき既存挙動
 
 - dirty prompt は `保存しますか？` の Yes / No / Cancel を維持する。
+- dirty path の `before-close -> dirty prompt -> folder offer -> managed close -> post-close follow-up` 順序を崩さない。
 - managed close 中は before-close prompt を抑止する。
 - created CASE folder offer は pending マーク済み workbook だけに出す。
 - no visible workbook 時だけ Excel を終了する。

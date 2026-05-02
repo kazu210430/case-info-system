@@ -16,6 +16,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
         private readonly TaskPaneCaseAccountingActionHandler _taskPaneCaseAccountingActionHandler;
         private readonly TaskPaneCaseDocumentActionHandler _taskPaneCaseDocumentActionHandler;
+        private readonly TaskPaneCaseResidualActionExecutor _taskPaneCaseResidualActionExecutor;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly UserErrorService _userErrorService;
         private readonly Logger _logger;
@@ -40,6 +41,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _addIn = addIn;
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
+            _taskPaneCaseResidualActionExecutor = new TaskPaneCaseResidualActionExecutor(_taskPaneBusinessActionLauncher);
             _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -119,7 +121,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                bool shouldContinue = _taskPaneBusinessActionLauncher.TryExecute(workbook, e.ActionKind, e.Key);
+                bool shouldContinue = _taskPaneCaseResidualActionExecutor.Execute(workbook, e);
                 if (!shouldContinue)
                 {
                     return;

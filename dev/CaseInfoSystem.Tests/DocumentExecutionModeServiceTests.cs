@@ -117,5 +117,47 @@ namespace CaseInfoSystem.Tests
 
             Assert.True(service.CanAttemptVstoExecution());
         }
+
+        [Fact]
+        public void EvaluateWordWarmupExecution_WhenModeIsDisabled_ReturnsRuntimeModeSkip()
+        {
+            var service = new DocumentExecutionModeService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new ExcelInteropService(),
+                new DocumentExecutionModeService.DocumentExecutionModeServiceTestHooks
+                {
+                    GetModeFileLastWriteTimeUtc = path => new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc),
+                    ModeFileExists = path => true,
+                    ReadModeFileLines = path => new[] { "Disabled" },
+                    ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
+                });
+
+            DocumentExecutionModeService.WordWarmupExecutionDecision decision = service.EvaluateWordWarmupExecution();
+
+            Assert.False(decision.CanSchedule);
+            Assert.Equal(DocumentExecutionMode.Disabled, decision.Mode);
+            Assert.Equal(DocumentExecutionModeService.WordWarmupSkipReason.DisabledByRuntimeMode, decision.SkipReason);
+        }
+
+        [Fact]
+        public void EvaluateWordWarmupExecution_WhenModeIsPilotOnly_ReturnsAllowed()
+        {
+            var service = new DocumentExecutionModeService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new ExcelInteropService(),
+                new DocumentExecutionModeService.DocumentExecutionModeServiceTestHooks
+                {
+                    GetModeFileLastWriteTimeUtc = path => new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc),
+                    ModeFileExists = path => true,
+                    ReadModeFileLines = path => new[] { "PilotOnly" },
+                    ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
+                });
+
+            DocumentExecutionModeService.WordWarmupExecutionDecision decision = service.EvaluateWordWarmupExecution();
+
+            Assert.True(decision.CanSchedule);
+            Assert.Equal(DocumentExecutionMode.PilotOnly, decision.Mode);
+            Assert.Equal(DocumentExecutionModeService.WordWarmupSkipReason.None, decision.SkipReason);
+        }
     }
 }

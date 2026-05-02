@@ -25,7 +25,6 @@ namespace CaseInfoSystem.ExcelAddIn
         private static readonly bool DisableSheetActivateForFreezeIsolation = false;
         private static readonly bool DisableSheetSelectionChangeForFreezeIsolation = false;
         private static readonly bool DisableSheetChangeForFreezeIsolation = false;
-        private static readonly bool DisableCaseWordWarmupForFreezeIsolation = true;
         private const string KernelSheetCommandSheetCodeName = "shCaseList";
         private const string KernelSheetCommandCellAddress = "AT1";
         private const string ProductTitle = "案件情報System";
@@ -1147,12 +1146,6 @@ namespace CaseInfoSystem.ExcelAddIn
         // Word warm-up
         private void ScheduleWordWarmup()
         {
-            if (DisableCaseWordWarmupForFreezeIsolation)
-            {
-                _logger?.Info("Word warm-up skipped for freeze isolation.");
-                return;
-            }
-
             if (_wordInteropService == null)
             {
                 return;
@@ -1163,8 +1156,22 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
-            if (_documentExecutionModeService == null || !_documentExecutionModeService.CanAttemptVstoExecution())
+            if (_documentExecutionModeService == null)
             {
+                _logger?.Info("Word warm-up skipped. skipReason=ExecutionModeServiceUnavailable");
+                return;
+            }
+
+            DocumentExecutionModeService.WordWarmupExecutionDecision warmupDecision = _documentExecutionModeService.EvaluateWordWarmupExecution();
+            if (!warmupDecision.CanSchedule)
+            {
+                _logger?.Info(
+                    "Word warm-up skipped. skipReason="
+                    + warmupDecision.SkipReason.ToString()
+                    + ", mode="
+                    + warmupDecision.Mode.ToString()
+                    + ", detail="
+                    + warmupDecision.SkipDetail);
                 return;
             }
 

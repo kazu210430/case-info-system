@@ -52,9 +52,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// <summary>
         internal bool CanAttemptVstoExecution()
         {
+            return EvaluateWordWarmupExecution().CanSchedule;
+        }
+
+        internal WordWarmupExecutionDecision EvaluateWordWarmupExecution()
+        {
             DocumentExecutionMode currentMode = GetMode();
-            return currentMode == DocumentExecutionMode.PilotOnly
-                || currentMode == DocumentExecutionMode.AllowlistedOnly;
+            if (currentMode == DocumentExecutionMode.PilotOnly
+                || currentMode == DocumentExecutionMode.AllowlistedOnly)
+            {
+                return WordWarmupExecutionDecision.Allow(currentMode);
+            }
+
+            return WordWarmupExecutionDecision.Skip(
+                currentMode,
+                WordWarmupSkipReason.DisabledByRuntimeMode,
+                "Word warm-up is disabled by the runtime document execution mode.");
         }
 
         /// <summary>
@@ -225,6 +238,57 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal Func<string, IEnumerable<string>> ReadModeFileLines { get; set; }
 
             internal Func<string, DateTime?> GetModeFileLastWriteTimeUtc { get; set; }
+        }
+
+        internal enum WordWarmupSkipReason
+        {
+            None = 0,
+            DisabledByRuntimeMode = 1,
+            BlockedBySafetyProtection = 2
+        }
+
+        internal sealed class WordWarmupExecutionDecision
+        {
+            private WordWarmupExecutionDecision(
+                bool canSchedule,
+                DocumentExecutionMode mode,
+                WordWarmupSkipReason skipReason,
+                string skipDetail)
+            {
+                CanSchedule = canSchedule;
+                Mode = mode;
+                SkipReason = skipReason;
+                SkipDetail = skipDetail ?? string.Empty;
+            }
+
+            internal bool CanSchedule { get; }
+
+            internal DocumentExecutionMode Mode { get; }
+
+            internal WordWarmupSkipReason SkipReason { get; }
+
+            internal string SkipDetail { get; }
+
+            internal static WordWarmupExecutionDecision Allow(DocumentExecutionMode mode)
+            {
+                return new WordWarmupExecutionDecision(
+                    canSchedule: true,
+                    mode,
+                    WordWarmupSkipReason.None,
+                    string.Empty);
+            }
+
+            internal static WordWarmupExecutionDecision Skip(
+                DocumentExecutionMode mode,
+                WordWarmupSkipReason skipReason,
+                string skipDetail)
+            {
+                return new WordWarmupExecutionDecision(
+                    canSchedule: false,
+                    mode,
+                    skipReason,
+                    skipDetail);
+            }
         }
     }
 }

@@ -25,6 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneRefreshCoordinator _taskPaneRefreshCoordinator;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
+        private readonly ICasePaneHostBridge _casePaneHostBridge;
 
         private System.Windows.Forms.Timer _pendingPaneRefreshTimer;
         private readonly List<System.Windows.Forms.Timer> _waitReadyRetryTimers = new List<System.Windows.Forms.Timer>();
@@ -41,7 +42,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             WorkbookTaskPaneDisplayAttemptCoordinator workbookTaskPaneDisplayAttemptCoordinator,
             TaskPaneRefreshCoordinator taskPaneRefreshCoordinator,
             Func<KernelHomeForm> getKernelHomeForm,
-            Func<int> getTaskPaneRefreshSuppressionCount)
+            Func<int> getTaskPaneRefreshSuppressionCount,
+            ICasePaneHostBridge casePaneHostBridge)
         {
             _excelInteropService = excelInteropService;
             _workbookSessionService = workbookSessionService;
@@ -51,6 +53,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneRefreshCoordinator = taskPaneRefreshCoordinator;
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
+            _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
         }
 
         internal TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -85,7 +88,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return TaskPaneRefreshAttemptResult.Skipped();
             }
 
-            if (Globals.ThisAddIn != null && Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
+            if (_casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
@@ -379,8 +382,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     EnsureWorkbookWindowVisibleForTaskPaneDisplay(targetWorkbook, targetReason, attemptNumber);
                     Excel.Window resolvedWindow = ResolveWorkbookPaneWindow(targetWorkbook, targetReason, activateWorkbook: true);
                     visibleCasePaneAlreadyShown = resolvedWindow != null
-                        && Globals.ThisAddIn != null
-                        && Globals.ThisAddIn.HasVisibleCasePaneForWorkbookWindow(targetWorkbook, resolvedWindow);
+                        && _casePaneHostBridge.HasVisibleCasePaneForWorkbookWindow(targetWorkbook, resolvedWindow);
                     if (visibleCasePaneAlreadyShown)
                     {
                         _logger?.Info("TaskPane wait-ready early-complete because visible CASE pane is already shown. reason=" + (targetReason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(targetWorkbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(resolvedWindow));

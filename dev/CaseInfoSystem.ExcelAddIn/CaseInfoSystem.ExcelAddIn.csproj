@@ -187,6 +187,7 @@
     <Compile Include="App\CaseWorkbookLifecycleInitializationPolicy.cs" />
     <Compile Include="App\CaseWorkbookSheetChangePolicy.cs" />
     <Compile Include="App\CaseContextFactory.cs" />
+    <Compile Include="App\CasePaneHostBridge.cs" />
     <Compile Include="App\CasePaneSnapshotRenderService.cs" />
     <Compile Include="App\CaseTaskPaneViewStateBuilder.cs" />
     <Compile Include="App\DocumentCommandActionRoutePolicy.cs" />

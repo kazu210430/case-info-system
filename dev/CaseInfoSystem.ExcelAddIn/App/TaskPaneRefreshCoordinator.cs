@@ -16,6 +16,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Logger _logger;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
         private readonly Action _scheduleWordWarmup;
+        private readonly ICasePaneHostBridge _casePaneHostBridge;
         private int _kernelFlickerTraceCoordinatorAttemptSequence;
 
         internal TaskPaneRefreshCoordinator(
@@ -24,7 +25,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelWindowRecoveryService excelWindowRecoveryService,
             Logger logger,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
-            Action scheduleWordWarmup)
+            Action scheduleWordWarmup,
+            ICasePaneHostBridge casePaneHostBridge)
         {
             _workbookSessionService = workbookSessionService;
             _taskPaneManager = taskPaneManager;
@@ -32,6 +34,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger = logger;
             _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow;
             _scheduleWordWarmup = scheduleWordWarmup;
+            _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
         }
 
         internal TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window, KernelHomeForm kernelHomeForm, int taskPaneRefreshSuppressionCount)
@@ -340,7 +343,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Window protectedWindow = context == null ? null : context.Window;
             if (context != null && context.Role == WorkbookRole.Case && protectedWorkbook != null && protectedWindow != null)
             {
-                Globals.ThisAddIn.BeginCaseWorkbookActivateProtection(
+                _casePaneHostBridge.BeginCaseWorkbookActivateProtection(
                     protectedWorkbook,
                     protectedWindow,
                     "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty));

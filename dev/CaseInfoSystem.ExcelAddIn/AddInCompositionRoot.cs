@@ -236,7 +236,8 @@ namespace CaseInfoSystem.ExcelAddIn
             var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy(_application, WorkbookRoleResolver, _logger);
             CaseWorkbookOpenStrategy = caseWorkbookOpenStrategy;
             var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
-            var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, excelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, transientPaneSuppressionService, _logger);
+            var casePaneHostBridge = new ThisAddInCasePaneHostBridge(_addIn);
+            var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, excelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, transientPaneSuppressionService, casePaneHostBridge, _logger);
             var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, transientPaneSuppressionService, caseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCasePresentationWaitService, caseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelUserDataReflectionService = new KernelUserDataReflectionService(
@@ -302,6 +303,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _scheduleWordWarmup,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount,
+                casePaneHostBridge,
                 _pendingPaneRefreshMaxAttempts)
                 .Compose(
                     pathCompatibilityService,
@@ -340,7 +342,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 KernelHomeCoordinator,
                 _handleExternalWorkbookDetected,
                 _refreshTaskPaneByReason,
-                _shouldSuppressCasePaneRefresh);
+                _shouldSuppressCasePaneRefresh,
+                casePaneHostBridge);
         }
     }
 
@@ -529,6 +532,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Action _scheduleWordWarmup;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
+        private readonly ICasePaneHostBridge _casePaneHostBridge;
         private readonly int _pendingPaneRefreshMaxAttempts;
 
         internal AddInTaskPaneCompositionFactory(
@@ -543,6 +547,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Action scheduleWordWarmup,
             Func<KernelHomeForm> getKernelHomeForm,
             Func<int> getTaskPaneRefreshSuppressionCount,
+            ICasePaneHostBridge casePaneHostBridge,
             int pendingPaneRefreshMaxAttempts)
         {
             _addIn = addIn;
@@ -556,6 +561,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _scheduleWordWarmup = scheduleWordWarmup;
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
+            _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
             _pendingPaneRefreshMaxAttempts = pendingPaneRefreshMaxAttempts;
         }
 
@@ -622,7 +628,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 excelWindowRecoveryService,
                 _logger,
                 _resolveWorkbookPaneWindow,
-                _scheduleWordWarmup);
+                _scheduleWordWarmup,
+                _casePaneHostBridge);
             var taskPaneRefreshOrchestrationService = new TaskPaneRefreshOrchestrationService(
                 excelInteropService,
                 workbookSessionService,
@@ -631,7 +638,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 workbookTaskPaneDisplayAttemptCoordinator,
                 taskPaneRefreshCoordinator,
                 _getKernelHomeForm,
-                _getTaskPaneRefreshSuppressionCount);
+                _getTaskPaneRefreshSuppressionCount,
+                _casePaneHostBridge);
             return new AddInTaskPaneComposition(
                 workbookCaseTaskPaneRefreshCommandService,
                 taskPaneManager,

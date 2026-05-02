@@ -46,6 +46,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly TransientPaneSuppressionService _transientPaneSuppressionService;
 
+		private readonly ICasePaneHostBridge _casePaneHostBridge;
+
 		private readonly Logger _logger;
 
 		[DllImport ("user32.dll")]
@@ -57,7 +59,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		[DllImport ("user32.dll")]
 		private static extern bool SetWindowPos (IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
-		internal KernelCasePresentationService (Application application, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, ExcelInteropService excelInteropService, ExcelWindowRecoveryService excelWindowRecoveryService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, FolderWindowService folderWindowService, CreatedCasePresentationWaitService createdCasePresentationWaitService, TransientPaneSuppressionService transientPaneSuppressionService, Logger logger)
+		internal KernelCasePresentationService (Application application, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, ExcelInteropService excelInteropService, ExcelWindowRecoveryService excelWindowRecoveryService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, FolderWindowService folderWindowService, CreatedCasePresentationWaitService createdCasePresentationWaitService, TransientPaneSuppressionService transientPaneSuppressionService, ICasePaneHostBridge casePaneHostBridge, Logger logger)
 		{
 			_application = application ?? throw new ArgumentNullException ("application");
 			_caseWorkbookOpenStrategy = caseWorkbookOpenStrategy ?? throw new ArgumentNullException ("caseWorkbookOpenStrategy");
@@ -68,6 +70,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_folderWindowService = folderWindowService ?? throw new ArgumentNullException ("folderWindowService");
 			_createdCasePresentationWaitService = createdCasePresentationWaitService ?? throw new ArgumentNullException ("createdCasePresentationWaitService");
 			_transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException ("transientPaneSuppressionService");
+			_casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException ("casePaneHostBridge");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
@@ -189,10 +192,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					waitSession?.UpdateStage (CreatedCasePresentationWaitService.ShowingScreenStageTitle);
 					EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
 					NewCaseDefaultTimingLogHelper.LogDetail (_logger, _excelInteropService.GetWorkbookFullName (workbook), "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeReadyShow", stopwatch2.ElapsedMilliseconds);
-					Globals.ThisAddIn.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
+					_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("ShowCreatedCase post-release activation suppression prepared. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				NewCaseDefaultTimingLogHelper.StartTaskPaneReadyWait (_excelInteropService.GetWorkbookFullName (workbook));
-				Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady (workbook, "KernelCasePresentationService.ShowCreatedCase.PostRelease");
+				_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady (workbook, "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=ReadyShowRequested, workbook=" + _excelInteropService.GetWorkbookFullName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("ShowCreatedCase task pane ready-show requested. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				try {

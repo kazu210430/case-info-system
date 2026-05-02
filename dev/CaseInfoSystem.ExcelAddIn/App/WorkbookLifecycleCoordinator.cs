@@ -21,6 +21,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Action<Excel.Workbook, string> _handleExternalWorkbookDetected;
         private readonly Action<string, Excel.Workbook, Excel.Window> _refreshTaskPane;
         private readonly Func<string, Excel.Workbook, bool> _shouldSuppressCasePaneRefresh;
+        private readonly ICasePaneHostBridge _casePaneHostBridge;
 
         internal WorkbookLifecycleCoordinator(
             Logger logger,
@@ -34,7 +35,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             KernelHomeCoordinator kernelHomeCoordinator,
             Action<Excel.Workbook, string> handleExternalWorkbookDetected,
             Action<string, Excel.Workbook, Excel.Window> refreshTaskPane,
-            Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh)
+            Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh,
+            ICasePaneHostBridge casePaneHostBridge)
         {
             _logger = logger;
             _excelInteropService = excelInteropService;
@@ -48,6 +50,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _handleExternalWorkbookDetected = handleExternalWorkbookDetected;
             _refreshTaskPane = refreshTaskPane;
             _shouldSuppressCasePaneRefresh = shouldSuppressCasePaneRefresh;
+            _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
         }
 
         internal void OnWorkbookOpen(Excel.Workbook workbook)
@@ -104,7 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", activeWindowHwnd="
                 + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
 
-            if (Globals.ThisAddIn != null && Globals.ThisAddIn.ShouldIgnoreWorkbookActivateDuringCaseProtection(workbook))
+            if (_casePaneHostBridge.ShouldIgnoreWorkbookActivateDuringCaseProtection(workbook))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix

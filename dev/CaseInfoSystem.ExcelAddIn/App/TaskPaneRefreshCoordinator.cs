@@ -67,7 +67,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return TaskPaneRefreshAttemptResult.Skipped();
             }
 
-            if (ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
+            if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
@@ -202,13 +202,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return true;
-        }
-
-        private static bool ShouldSkipWorkbookOpenWindowDependentRefresh(string reason, Excel.Workbook workbook, Excel.Window window)
-        {
-            return string.Equals(reason, "WorkbookOpen", StringComparison.Ordinal)
-                && workbook != null
-                && window == null;
         }
 
         private Excel.Window EnsurePaneWindowForWorkbook(Excel.Workbook workbook, Excel.Window window, string reason, Stopwatch stopwatch)

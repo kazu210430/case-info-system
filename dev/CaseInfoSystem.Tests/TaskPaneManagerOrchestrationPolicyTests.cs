@@ -86,6 +86,25 @@ namespace CaseInfoSystem.Tests
         }
 
         [Theory]
+        [InlineData("WorkbookOpen", true, false, true)]
+        [InlineData("WorkbookOpen", true, true, false)]
+        [InlineData("WorkbookActivate", true, false, false)]
+        [InlineData("WorkbookOpen", false, false, false)]
+        public void ShouldSkip_UsesWorkbookOpenWindowDependencyBoundary(
+            string reason,
+            bool hasWorkbook,
+            bool hasWindow,
+            bool expected)
+        {
+            Excel.Workbook workbook = hasWorkbook ? new Excel.Workbook() : null;
+            Excel.Window window = hasWindow ? new Excel.Window { Hwnd = 101 } : null;
+
+            bool result = TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Theory]
         [InlineData(true, false, false)]
         [InlineData(false, true, false)]
         [InlineData(false, false, true)]

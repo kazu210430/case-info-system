@@ -71,7 +71,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", activeState="
                 + FormatActiveState());
-            if (ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
+            if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
@@ -166,7 +166,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
         {
-            if (ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null))
+            if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
@@ -640,13 +640,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return _excelInteropService.FindOpenWorkbook(_pendingPaneRefreshWorkbookFullName);
-        }
-
-        private static bool ShouldSkipWorkbookOpenWindowDependentRefresh(string reason, Excel.Workbook workbook, Excel.Window window)
-        {
-            return string.Equals(reason, "WorkbookOpen", StringComparison.Ordinal)
-                && workbook != null
-                && window == null;
         }
 
         private void StopWaitReadyRetryTimers()

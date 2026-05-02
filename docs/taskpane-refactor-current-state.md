@@ -92,7 +92,7 @@
 
 - `TaskPaneManager` 周辺に残る主要責務です。
 - host 生成、差し替え、破棄、workbook 単位の掃除を担います。
-- VSTO `TaskPaneHost` 生成境界と action event 配線に関わるため、分離リスクが高いです。
+- 独立クラス化済みだが、VSTO `TaskPaneHost` 生成境界と action event 配線に関わるため、引き続き分離リスクが高いです。
 - 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れないほうが安全です。
 
 ### `ThisAddIn` 境界

@@ -195,7 +195,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 ## 今後課題として残すもの
 
 - `TaskPaneHostRegistry`
-  - `TaskPaneManager` 内に残る host 生成、差し替え、破棄、workbook 単位掃除の責務です。
+  - 独立クラスとして host 生成、差し替え、破棄、workbook 単位掃除を担います。
   - `ThisAddIn` を通した VSTO `CustomTaskPane` 生成と action event 配線に関わるため、分離リスクが高い領域です。
   - 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れない方針を維持します。
 - `ThisAddIn` 境界

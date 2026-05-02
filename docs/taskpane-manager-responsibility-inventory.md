@@ -4,7 +4,7 @@
 
 `TaskPaneManager` の現行責務を、`main` に反映済みの実装と既存 docs を前提に棚卸しする。
 
-今回は調査と記録だけを行い、production code は変更しない。
+現時点では `TaskPaneHostRegistry` の外出しまで反映済みとし、inventory は現コードを前提に整理する。
 
 ## 参照した docs
 
@@ -19,6 +19,7 @@
 ## 調査対象コード
 
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneManager.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneHostRegistry.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneDisplayCoordinator.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneRefreshCoordinator.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneRefreshOrchestrationService.cs`
@@ -45,7 +46,7 @@
 
 | 分類 | 現在の主担当 | 現状 | 危険度 | 判断 |
 | --- | --- | --- | --- | --- |
-| Pane生成 | `TaskPaneHostRegistry` | `TaskPaneManager.cs` 内の nested class が `RegisterHost` / `GetOrReplaceHost` / `RemoveHost` / `RemoveWorkbookPanes` / `DisposeAll` を持つ | `B` | VSTO `TaskPaneHost` 生成と action event 配線を 1 箇所に寄せている。責務は閉じているが、まだ `TaskPaneManager.cs` からは分離されていない |
+| Pane生成 | `TaskPaneHostRegistry` | `App/TaskPaneHostRegistry.cs` が `RegisterHost` / `GetOrReplaceHost` / `RemoveHost` / `RemoveWorkbookPanes` / `DisposeAll` を持つ | `B` | VSTO `TaskPaneHost` 生成と action event 配線を 1 箇所に寄せている。外出し済みだが、`ThisAddIn` をまたぐ VSTO 境界としては引き続き慎重に扱う |
 | Pane表示・非表示 | `TaskPaneDisplayCoordinator` | `HideAll` / `HideKernelPanes` / `HideAllExcept` / `HidePaneForWindow` / `TryShowHost` / `PrepareHostsBeforeShow` を担当 | `D` | 主責務は既に別サービスへ分離済み。`TaskPaneManager` 側は薄い委譲のみ |
 | Pane再利用 | `TaskPaneDisplayCoordinator`、`TaskPaneRenderStateEvaluator`、`TaskPaneHostReusePolicy`、`TaskPaneManager.TryReuseCaseHostForRefresh(...)` | 既存 host 再表示、render signature 判定、`WorkbookActivate` / `WindowActivate` 時の CASE host 再利用が混在 | `A` | visible pane early-complete と activate 時の再利用が ready-show / protection に直結している |
 | Workbook / Window との対応管理 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`TaskPaneManager.SafeGetWindowKey(...)` | event 入口、window 解決、context 解決、windowKey 単位 host 管理に分散 | `A` | `WorkbookOpen` を window 安定境界にしない前提を壊しやすい |
@@ -68,7 +69,6 @@
 
 ## まだ TaskPaneManager に残っているもの
 
-- nested class のまま残っている `TaskPaneHostRegistry`
 - nested class のまま残っている `TaskPaneRefreshFlowCoordinator`
 - `RemoveStaleKernelHosts(...)` による Kernel host の掃除
 - `RenderHost(...)` から role 別 render を切り替える最終責務
@@ -100,18 +100,19 @@
 - 対象は host の生成、差し替え、破棄、workbook 単位の掃除だけ
 - VSTO `TaskPaneHost` 生成境界を 1 箇所へ固定しやすい
 - ただし `ThisAddIn` と action event 配線を持つため、すでに分離済みの action dispatch より慎重に扱う
+- 実施済み。refresh 本線、window 解決、render/show 順序には触れず、`TaskPaneManager` から独立クラスへ外出しした
 
 ## 今回の結論
 
 - `TaskPaneManager` は「完全な巨大クラス」ではなく、display / refresh entry / snapshot render / prompt prepare / render 後副作用 / UIイベント dispatch の主責務は既に周辺サービスへ逃がされている
-- ただし `TaskPaneManager.cs` には host registry、refresh flow coordinator、host / workbook / window descriptor 群、role 別 render 最終切替が残っている
-- 次の 1 手は event 境界や ready-show に触らず、`TaskPaneHostRegistry` と `ThisAddIn` 境界の棚卸しを先に進め、実装変更は安定化後に慎重に扱うのが安全
+- `TaskPaneHostRegistry` は外出し済みだが、`ThisAddIn` を通した VSTO `CustomTaskPane` 生成・破棄境界と action event 配線は引き続き同領域に残る
+- 次の 1 手は event 境界や ready-show に触らず、`TaskPaneHostRegistry` と `ThisAddIn` 境界の安定化確認を優先し、実装変更は小単位で進めるのが安全
 
 ## 今後課題
 
 ### `TaskPaneHostRegistry`
 
-- `TaskPaneManager` 周辺に残っている主要責務です。
+- `TaskPaneManager` 周辺の主要責務として独立クラス化済みです。
 - host 生成、差し替え、破棄、workbook 単位の掃除を担います。
 - VSTO `TaskPaneHost` の生成と event 配線に関わるため、分離リスクが高い領域です。
 - 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れない方針を維持します。

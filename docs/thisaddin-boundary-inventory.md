@@ -24,12 +24,33 @@
 ### Startup / Shutdown lifecycle
 
 - `ThisAddIn_Startup(...)` が logger 初期化、診断 trace、`AddInCompositionRoot` compose、依存 field の適用を行う
-- Startup 周辺は private helper で呼び出しの見通しだけ整理済みだが、`logger 初期化 -> trace -> compose -> 依存適用 -> event 初期化 -> hook -> Kernel HOME -> startup refresh` の順序と lifecycle 責務は `ThisAddIn` に残す
+- Startup 周辺は private helper で呼び出しの見通しだけ整理済みだが、`logger 初期化 -> trace -> compose -> 依存適用 -> event 初期化 -> hook -> startup context 判定 / Kernel HOME 表示判定 -> startup refresh` の順序と lifecycle 責務は `ThisAddIn` に残す
 - startup 時に Excel application event を購読する
 - startup 時に `TryShowKernelHomeFormOnStartup()` と `RefreshTaskPane("Startup", null, null)` を起動する
 - `ThisAddIn_Shutdown(...)` が event unhook、pending pane refresh timer 停止、Kernel HOME form close、`TaskPaneManager.DisposeAll()`、word warm-up timer 停止、legacy hidden Excel shutdown を行う
 - `InternalStartup()` が VSTO `Startup` / `Shutdown` への接続を保持する
 - `CreateRibbonExtensibilityObject()` が Ribbon 作成の VSTO 境界を保持する
+
+#### Startup 順序固定メモ
+
+以下は現行 `main` の `dev/CaseInfoSystem.ExcelAddIn/ThisAddIn.cs` と関連 service を基準にした Startup 上位順序です。docs 側はこの実コード順序を正として扱います。
+
+1. 起動診断・trace 初期化
+   - `InitializeStartupDiagnostics()`
+2. composition root / service 群の構成
+   - `CreateStartupCompositionRoot()` -> `Compose()` -> `ApplyCompositionRoot()`
+3. application event subscription service 初期化
+   - `InitializeApplicationEventSubscriptionService()`
+4. application event hook
+   - `HookApplicationEvents()`
+5. startup context 判定
+   - `TryShowKernelHomeFormOnStartup()` の中で `KernelWorkbookService.ShouldShowHomeOnStartup()` が `KernelWorkbookStateService`、`KernelStartupContextInspector`、`KernelWorkbookStartupDisplayPolicy` を使って判定する
+6. Kernel HOME 表示判定
+   - `TryShowKernelHomeFormOnStartup()` が `shouldShow` を確定し、`true` のときだけ `ShowKernelHomePlaceholder()` を呼ぶ
+7. 初回 TaskPane refresh
+   - `RefreshTaskPane("Startup", null, null)`
+
+private helper 化や読みやすさ改善を行っても、この上位順序は動かさない前提で扱います。
 
 ### Application event wiring / unwiring
 
@@ -159,6 +180,9 @@
 
 ## 4. 絶対に守る境界
 
+- `HookApplicationEvents()` より前に `InitializeApplicationEventSubscriptionService()` を済ませる
+- `TryShowKernelHomeFormOnStartup()` では、Kernel HOME 表示判定より前に `KernelStartupContextInspector` / `KernelWorkbookStartupDisplayPolicy` を通る startup context 判定を済ませる
+- 初回 `RefreshTaskPane("Startup", null, null)` は `TryShowKernelHomeFormOnStartup()` の後に置く
 - `WorkbookOpen` は window 安定境界ではない
 - window 依存処理は `WorkbookActivate` / `WindowActivate` 以降で扱う
 - `ActiveWorkbook` は null になりうる前提を維持する
@@ -205,6 +229,14 @@
 - ただし compose、event hook、startup 表示、startup refresh の順序を動かす分離は引き続き危険であり、次の候補としては扱わない
 
 ## 6. 今回は切り出さないもの
+
+### Startup 順序固定メモで今回やらないこと
+
+- lifecycle 分離はしない
+- event handler 本体移動はしない
+- application event 順序変更はしない
+- TaskPane refresh / render / show 順序変更はしない
+- Kernel HOME 表示制御の意味変更はしない
 
 ### `WorkbookOpen`
 

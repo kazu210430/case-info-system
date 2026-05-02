@@ -247,7 +247,7 @@
     <Compile Include="App\TaskPaneDisplayCoordinator.cs" />
     <Compile Include="App\TaskPaneActionDispatcher.cs" />
     <Compile Include="App\TaskPaneCaseActionTargetResolver.cs" />
-    <Compile Include="App\TaskPaneCaseResidualActionExecutor.cs" />
+    <Compile Include="App\TaskPaneCaseFallbackActionExecutor.cs" />
     <Compile Include="App\TaskPaneCaseAccountingActionHandler.cs" />
     <Compile Include="App\TaskPaneCaseDocumentActionHandler.cs" />
     <Compile Include="App\TaskPaneNonCaseActionHandler.cs" />

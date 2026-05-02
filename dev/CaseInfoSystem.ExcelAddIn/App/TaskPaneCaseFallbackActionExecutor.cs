@@ -4,16 +4,17 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-    internal sealed class TaskPaneCaseResidualActionExecutor
+    // Executes the non-routed case-action path that still flows through TaskPaneBusinessActionLauncher.
+    internal sealed class TaskPaneCaseFallbackActionExecutor
     {
         private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
 
-        internal TaskPaneCaseResidualActionExecutor(TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher)
+        internal TaskPaneCaseFallbackActionExecutor(TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher)
         {
             _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
         }
 
-        internal bool Execute(Excel.Workbook workbook, TaskPaneActionEventArgs e)
+        internal bool TryExecute(Excel.Workbook workbook, TaskPaneActionEventArgs e)
         {
             return _taskPaneBusinessActionLauncher.TryExecute(workbook, e.ActionKind, e.Key);
         }

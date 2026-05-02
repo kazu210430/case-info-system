@@ -6,6 +6,9 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    // Thin shell responsibilities:
+    // 1. Route separated action kinds to dedicated handlers.
+    // 2. Keep a single entry point into the frozen fallback path.
     internal sealed class TaskPaneActionDispatcher
     {
         private const string DocumentActionKind = "doc";
@@ -16,7 +19,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
         private readonly TaskPaneCaseAccountingActionHandler _taskPaneCaseAccountingActionHandler;
         private readonly TaskPaneCaseDocumentActionHandler _taskPaneCaseDocumentActionHandler;
-        private readonly TaskPaneCaseResidualActionExecutor _taskPaneCaseResidualActionExecutor;
+        private readonly TaskPaneCaseFallbackActionExecutor _taskPaneCaseFallbackActionExecutor;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly UserErrorService _userErrorService;
         private readonly Logger _logger;
@@ -41,7 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _addIn = addIn;
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
-            _taskPaneCaseResidualActionExecutor = new TaskPaneCaseResidualActionExecutor(_taskPaneBusinessActionLauncher);
+            _taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(_taskPaneBusinessActionLauncher);
             _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -73,15 +76,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void HandleCaseControlActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
-            if (TryDispatchSeparatedCaseAction(windowKey, control, e))
+            if (TryRouteSeparatedActionKind(windowKey, control, e))
             {
                 return;
             }
 
-            HandleFrozenRemainingCaseAction(windowKey, control, e);
+            HandleFrozenFallbackActionEntry(windowKey, control, e);
         }
 
-        private bool TryDispatchSeparatedCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
+        private bool TryRouteSeparatedActionKind(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
             string actionKind = e?.ActionKind;
             if (string.Equals(actionKind, DocumentActionKind, StringComparison.OrdinalIgnoreCase))
@@ -99,9 +102,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return false;
         }
 
-        // Keep the residual case-action path frozen until it is intentionally split.
-        // New case-action responsibilities should be delegated to a dedicated handler instead.
-        private void HandleFrozenRemainingCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
+        // Keep target resolution, exception handling, and refresh ordering behind one
+        // frozen fallback entry until this path is intentionally split further.
+        private void HandleFrozenFallbackActionEntry(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
             if (control == null)
             {
@@ -121,7 +124,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                bool shouldContinue = _taskPaneCaseResidualActionExecutor.Execute(workbook, e);
+                bool shouldContinue = _taskPaneCaseFallbackActionExecutor.TryExecute(workbook, e);
                 if (!shouldContinue)
                 {
                     return;
@@ -137,7 +140,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        // Preserve the existing post-action refresh/render/show ordering on this frozen path.
+        // Preserve the existing post-action refresh/render/show ordering for the frozen fallback path.
         private void HandlePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
         {
             TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide(actionKind);

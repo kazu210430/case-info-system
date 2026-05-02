@@ -2,7 +2,6 @@
 # Allowed values:
 #   Disabled
 #   PilotOnly
-#   AllowlistedOnly
 #
-# Keep Disabled until VBA parity review is complete.
-AllowlistedOnly
+# Set Disabled to stop VSTO execution and Word warm-up.
+PilotOnly

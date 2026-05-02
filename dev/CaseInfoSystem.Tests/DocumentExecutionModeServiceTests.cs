@@ -31,9 +31,9 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(DocumentExecutionMode.PilotOnly, service.GetMode());
 
             currentTimestamp = updatedTimestamp;
-            currentValue = "AllowlistedOnly";
+            currentValue = "Disabled";
 
-            Assert.Equal(DocumentExecutionMode.AllowlistedOnly, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.Disabled, service.GetMode());
         }
 
         [Fact]
@@ -102,7 +102,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void CanAttemptVstoExecution_WhenModeIsAllowlistedOnly_ReturnsTrue()
+        public void CanAttemptVstoExecution_WhenModeIsPilotOnly_ReturnsTrue()
         {
             var service = new DocumentExecutionModeService(
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
@@ -111,11 +111,28 @@ namespace CaseInfoSystem.Tests
                 {
                     GetModeFileLastWriteTimeUtc = path => new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc),
                     ModeFileExists = path => true,
-                    ReadModeFileLines = path => new[] { "AllowlistedOnly" },
+                    ReadModeFileLines = path => new[] { "PilotOnly" },
                     ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
                 });
 
             Assert.True(service.CanAttemptVstoExecution());
+        }
+
+        [Fact]
+        public void GetMode_WhenValueIsUnknown_FallsBackToDisabled()
+        {
+            var service = new DocumentExecutionModeService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new ExcelInteropService(),
+                new DocumentExecutionModeService.DocumentExecutionModeServiceTestHooks
+                {
+                    GetModeFileLastWriteTimeUtc = path => new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc),
+                    ModeFileExists = path => true,
+                    ReadModeFileLines = path => new[] { "UnexpectedMode" },
+                    ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
+                });
+
+            Assert.Equal(DocumentExecutionMode.Disabled, service.GetMode());
         }
     }
 }

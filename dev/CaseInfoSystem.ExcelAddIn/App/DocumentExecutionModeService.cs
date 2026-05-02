@@ -13,7 +13,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string ModeFileName = "DocumentExecutionMode.txt";
         private const string DisabledModeName = "Disabled";
         private const string PilotOnlyModeName = "PilotOnly";
-        private const string AllowlistedOnlyModeName = "AllowlistedOnly";
         private const string DefaultSystemRootFolderName = "\u6848\u4EF6\u60C5\u5831System";
         private const string AddInsFolderName = "Addins";
         private const string RuntimeAddInFolderName = "CaseInfoSystem.ExcelAddIn";
@@ -53,8 +52,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal bool CanAttemptVstoExecution()
         {
             DocumentExecutionMode currentMode = GetMode();
-            return currentMode == DocumentExecutionMode.PilotOnly
-                || currentMode == DocumentExecutionMode.AllowlistedOnly;
+            return currentMode == DocumentExecutionMode.PilotOnly;
         }
 
         /// <summary>
@@ -174,13 +172,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 {
                     _logger.Info("Document execution mode loaded. path=" + modePath + ", mode=PilotOnly");
                     loadedMode = DocumentExecutionMode.PilotOnly;
-                    return true;
-                }
-
-                if (string.Equals(rawValue, AllowlistedOnlyModeName, StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.Info("Document execution mode loaded. path=" + modePath + ", mode=AllowlistedOnly");
-                    loadedMode = DocumentExecutionMode.AllowlistedOnly;
                     return true;
                 }
 

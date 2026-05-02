@@ -7,9 +7,6 @@
         Disabled = 0,
 
         /// <summary>
-        PilotOnly = 1,
-
-        /// <summary>
-        AllowlistedOnly = 2
+        PilotOnly = 1
     }
 }

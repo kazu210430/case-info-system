@@ -620,8 +620,7 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
     internal enum DocumentExecutionMode
     {
         Disabled = 0,
-        PilotOnly = 1,
-        AllowlistedOnly = 2
+        PilotOnly = 1
     }
 
     internal sealed class DocumentExecutionEligibility

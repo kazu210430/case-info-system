@@ -8,11 +8,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class TaskPaneActionDispatcher
     {
+        private const string DocumentActionKind = "doc";
+        private const string AccountingActionKind = "accounting";
+
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
         private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
         private readonly TaskPaneCaseAccountingActionHandler _taskPaneCaseAccountingActionHandler;
-        private readonly TaskPaneCaseDocActionHandler _taskPaneCaseDocActionHandler;
+        private readonly TaskPaneCaseDocumentActionHandler _taskPaneCaseDocumentActionHandler;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly UserErrorService _userErrorService;
         private readonly Logger _logger;
@@ -51,7 +54,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger,
                 _resolveHost,
                 HandlePostActionRefresh);
-            _taskPaneCaseDocActionHandler = new TaskPaneCaseDocActionHandler(
+            _taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
                 _excelInteropService,
                 _taskPaneBusinessActionLauncher,
                 _caseTaskPaneViewStateBuilder,
@@ -63,22 +66,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void HandleCaseControlActionInvoked(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
-            if (string.Equals(e?.ActionKind, "doc", StringComparison.OrdinalIgnoreCase))
+            if (TryDispatchSeparatedCaseAction(windowKey, control, e))
             {
-                _taskPaneCaseDocActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
                 return;
             }
 
-            if (string.Equals(e?.ActionKind, "accounting", StringComparison.OrdinalIgnoreCase))
-            {
-                _taskPaneCaseAccountingActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
-                return;
-            }
-
-            ExecuteRemainingCaseAction(windowKey, control, e);
+            HandleFrozenRemainingCaseAction(windowKey, control, e);
         }
 
-        private void ExecuteRemainingCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
+        private bool TryDispatchSeparatedCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
+        {
+            string actionKind = e?.ActionKind;
+            if (string.Equals(actionKind, DocumentActionKind, StringComparison.OrdinalIgnoreCase))
+            {
+                _taskPaneCaseDocumentActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
+                return true;
+            }
+
+            if (string.Equals(actionKind, AccountingActionKind, StringComparison.OrdinalIgnoreCase))
+            {
+                _taskPaneCaseAccountingActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
+                return true;
+            }
+
+            return false;
+        }
+
+        // Keep the residual case-action path frozen until it is intentionally split.
+        // New case-action responsibilities should be delegated to a dedicated handler instead.
+        private void HandleFrozenRemainingCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(windowKey) || control == null)
             {
@@ -119,6 +135,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
+        // Preserve the existing post-action refresh/render/show ordering on this frozen path.
         private void HandlePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
         {
             TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide(actionKind);

@@ -5,7 +5,7 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-    internal sealed class TaskPaneCaseDocActionHandler
+    internal sealed class TaskPaneCaseDocumentActionHandler
     {
         private const string DocumentActionKind = "doc";
 
@@ -17,7 +17,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<string, TaskPaneHost> _resolveHost;
         private readonly Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> _handlePostActionRefresh;
 
-        internal TaskPaneCaseDocActionHandler(
+        internal TaskPaneCaseDocumentActionHandler(
             ExcelInteropService excelInteropService,
             TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,

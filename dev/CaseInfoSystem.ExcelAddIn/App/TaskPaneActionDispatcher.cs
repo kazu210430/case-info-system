@@ -11,6 +11,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
         private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
+        private readonly TaskPaneCaseAccountingActionHandler _taskPaneCaseAccountingActionHandler;
         private readonly TaskPaneCaseDocActionHandler _taskPaneCaseDocActionHandler;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly UserErrorService _userErrorService;
@@ -42,6 +43,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _invalidateHostRenderStateForForcedRefresh = invalidateHostRenderStateForForcedRefresh ?? throw new ArgumentNullException(nameof(invalidateHostRenderStateForForcedRefresh));
             _renderCaseHostAfterAction = renderCaseHostAfterAction ?? throw new ArgumentNullException(nameof(renderCaseHostAfterAction));
             _tryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
+            _taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
+                _excelInteropService,
+                _taskPaneBusinessActionLauncher,
+                _caseTaskPaneViewStateBuilder,
+                _userErrorService,
+                _logger,
+                _resolveHost,
+                HandlePostActionRefresh);
             _taskPaneCaseDocActionHandler = new TaskPaneCaseDocActionHandler(
                 _excelInteropService,
                 _taskPaneBusinessActionLauncher,
@@ -57,6 +66,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (string.Equals(e?.ActionKind, "doc", StringComparison.OrdinalIgnoreCase))
             {
                 _taskPaneCaseDocActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
+                return;
+            }
+
+            if (string.Equals(e?.ActionKind, "accounting", StringComparison.OrdinalIgnoreCase))
+            {
+                _taskPaneCaseAccountingActionHandler.HandleCaseControlActionInvoked(windowKey, control, e.Key);
                 return;
             }
 

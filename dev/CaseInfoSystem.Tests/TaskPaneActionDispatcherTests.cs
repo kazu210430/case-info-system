@@ -106,6 +106,54 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void HandleCaseControlActionInvoked_WhenAccountingActionRuns_SkipsPostActionRefresh()
+        {
+            var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();
+            var excelInteropService = new ExcelInteropService();
+            Excel.Workbook workbook = CreateWorkbook(@"C:\cases\case.xlsx");
+            excelInteropService.OnFindOpenWorkbook = _ => workbook;
+
+            var control = new DocumentButtonsControl();
+            TaskPaneHost host = OrchestrationTestSupport.CreateTaskPaneHost(control, "252");
+            host.WorkbookFullName = workbook.FullName;
+            bool accountingExecuted = false;
+            int invalidateCalls = 0;
+            int renderAfterActionCalls = 0;
+            int showCalls = 0;
+            int requestCalls = 0;
+            addIn.RequestTaskPaneDisplayForTargetWindowHandler = (request, targetWorkbook, targetWindow) => requestCalls++;
+
+            var dispatcher = new TaskPaneActionDispatcher(
+                addIn,
+                excelInteropService,
+                CreateBusinessActionLauncher(
+                    promptAccepted: true,
+                    onDocumentCreate: null,
+                    onAccountingExecute: _ => accountingExecuted = true,
+                    caseListResultFactory: null,
+                    caseListContextFactory: null),
+                new CaseTaskPaneViewStateBuilder(),
+                new UserErrorService(),
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                windowKey => host,
+                _ => invalidateCalls++,
+                (targetControl, targetWorkbook) => renderAfterActionCalls++,
+                (targetHost, reason) =>
+                {
+                    showCalls++;
+                    return true;
+                });
+
+            dispatcher.HandleCaseControlActionInvoked("252", control, new TaskPaneActionEventArgs("accounting", string.Empty));
+
+            Assert.True(accountingExecuted);
+            Assert.Equal(0, requestCalls);
+            Assert.Equal(0, invalidateCalls);
+            Assert.Equal(0, renderAfterActionCalls);
+            Assert.Equal(0, showCalls);
+        }
+
+        [Fact]
         public void HandleCaseControlActionInvoked_WhenCaseListActionRuns_DefersRefreshAndInvalidatesSignature()
         {
             var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();

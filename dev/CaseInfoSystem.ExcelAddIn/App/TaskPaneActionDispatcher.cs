@@ -16,14 +16,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
-        private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
         private readonly TaskPaneCaseAccountingActionHandler _taskPaneCaseAccountingActionHandler;
         private readonly TaskPaneCaseDocumentActionHandler _taskPaneCaseDocumentActionHandler;
         private readonly TaskPaneCaseFallbackActionExecutor _taskPaneCaseFallbackActionExecutor;
         private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly UserErrorService _userErrorService;
         private readonly Logger _logger;
-        private readonly Func<string, TaskPaneHost> _resolveHost;
         private readonly TaskPaneCaseActionTargetResolver _caseActionTargetResolver;
         private readonly Action<TaskPaneHost> _invalidateHostRenderStateForForcedRefresh;
         private readonly Action<DocumentButtonsControl, Excel.Workbook> _renderCaseHostAfterAction;
@@ -43,34 +41,40 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _addIn = addIn;
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
-            _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
-            _taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(_taskPaneBusinessActionLauncher);
             _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _resolveHost = resolveHost ?? throw new ArgumentNullException(nameof(resolveHost));
+            if (taskPaneBusinessActionLauncher == null)
+            {
+                throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
+            }
+
+            if (resolveHost == null)
+            {
+                throw new ArgumentNullException(nameof(resolveHost));
+            }
+
+            _taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(taskPaneBusinessActionLauncher);
             _caseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
                 _excelInteropService,
                 _logger,
-                _resolveHost);
+                resolveHost);
             _invalidateHostRenderStateForForcedRefresh = invalidateHostRenderStateForForcedRefresh ?? throw new ArgumentNullException(nameof(invalidateHostRenderStateForForcedRefresh));
             _renderCaseHostAfterAction = renderCaseHostAfterAction ?? throw new ArgumentNullException(nameof(renderCaseHostAfterAction));
             _tryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
             _taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
-                _excelInteropService,
-                _taskPaneBusinessActionLauncher,
+                _caseActionTargetResolver,
+                _taskPaneCaseFallbackActionExecutor,
                 _caseTaskPaneViewStateBuilder,
                 _userErrorService,
                 _logger,
-                _resolveHost,
                 HandlePostActionRefresh);
             _taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
-                _excelInteropService,
-                _taskPaneBusinessActionLauncher,
+                _caseActionTargetResolver,
+                _taskPaneCaseFallbackActionExecutor,
                 _caseTaskPaneViewStateBuilder,
                 _userErrorService,
                 _logger,
-                _resolveHost,
                 HandlePostActionRefresh);
         }
 

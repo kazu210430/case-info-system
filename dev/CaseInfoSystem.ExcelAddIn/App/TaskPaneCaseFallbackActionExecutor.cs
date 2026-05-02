@@ -14,9 +14,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
         }
 
+        internal bool TryExecute(Excel.Workbook workbook, string actionKind, string key)
+        {
+            return _taskPaneBusinessActionLauncher.TryExecute(workbook, actionKind, key);
+        }
+
         internal bool TryExecute(Excel.Workbook workbook, TaskPaneActionEventArgs e)
         {
-            return _taskPaneBusinessActionLauncher.TryExecute(workbook, e.ActionKind, e.Key);
+            return TryExecute(workbook, e.ActionKind, e.Key);
         }
     }
 }

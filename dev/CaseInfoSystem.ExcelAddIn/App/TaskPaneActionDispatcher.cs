@@ -20,6 +20,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly UserErrorService _userErrorService;
         private readonly Logger _logger;
         private readonly Func<string, TaskPaneHost> _resolveHost;
+        private readonly TaskPaneCaseActionTargetResolver _caseActionTargetResolver;
         private readonly Action<TaskPaneHost> _invalidateHostRenderStateForForcedRefresh;
         private readonly Action<DocumentButtonsControl, Excel.Workbook> _renderCaseHostAfterAction;
         private readonly Func<TaskPaneHost, string, bool> _tryShowHost;
@@ -43,6 +44,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _resolveHost = resolveHost ?? throw new ArgumentNullException(nameof(resolveHost));
+            _caseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
+                _excelInteropService,
+                _logger,
+                _resolveHost);
             _invalidateHostRenderStateForForcedRefresh = invalidateHostRenderStateForForcedRefresh ?? throw new ArgumentNullException(nameof(invalidateHostRenderStateForForcedRefresh));
             _renderCaseHostAfterAction = renderCaseHostAfterAction ?? throw new ArgumentNullException(nameof(renderCaseHostAfterAction));
             _tryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
@@ -96,24 +101,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
         // New case-action responsibilities should be delegated to a dedicated handler instead.
         private void HandleFrozenRemainingCaseAction(string windowKey, DocumentButtonsControl control, TaskPaneActionEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(windowKey) || control == null)
+            if (control == null)
             {
                 _logger.Warn("CaseControl_ActionInvoked skipped because host identity was not available.");
                 return;
             }
 
-            TaskPaneHost host = _resolveHost(windowKey);
-            if (host == null)
+            if (!_caseActionTargetResolver.TryResolve(windowKey, out TaskPaneHost host, out Excel.Workbook workbook))
             {
-                _logger.Warn("CaseControl_ActionInvoked skipped because host was not found. windowKey=" + windowKey);
-                return;
-            }
+                if (host != null && workbook == null)
+                {
+                    control.Render(_caseTaskPaneViewStateBuilder.BuildWorkbookNotFoundState());
+                }
 
-            Excel.Workbook workbook = _excelInteropService.FindOpenWorkbook(host.WorkbookFullName);
-            if (workbook == null)
-            {
-                _logger.Warn("CaseControl_ActionInvoked skipped because workbook was not found. windowKey=" + windowKey);
-                control.Render(_caseTaskPaneViewStateBuilder.BuildWorkbookNotFoundState());
                 return;
             }
 

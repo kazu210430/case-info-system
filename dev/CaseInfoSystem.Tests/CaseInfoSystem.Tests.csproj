@@ -109,6 +109,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneSnapshotRenderService.cs" Link="Source\App\CasePaneSnapshotRenderService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayCoordinator.cs" Link="Source\App\TaskPaneDisplayCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneActionDispatcher.cs" Link="Source\App\TaskPaneActionDispatcher.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneCaseActionTargetResolver.cs" Link="Source\App\TaskPaneCaseActionTargetResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneCaseAccountingActionHandler.cs" Link="Source\App\TaskPaneCaseAccountingActionHandler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneCaseDocumentActionHandler.cs" Link="Source\App\TaskPaneCaseDocumentActionHandler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneNonCaseActionHandler.cs" Link="Source\App\TaskPaneNonCaseActionHandler.cs" />

@@ -43,6 +43,7 @@ namespace CaseInfoSystem.ExcelAddIn
         // workbook ライフサイクル
         private KernelWorkbookService _kernelWorkbookService;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
+        private ApplicationEventSubscriptionService _applicationEventSubscriptionService;
         private SheetEventCoordinator _sheetEventCoordinator;
         private WorkbookLifecycleCoordinator _workbookLifecycleCoordinator;
 
@@ -141,6 +142,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 KernelSheetCommandCellAddress);
             compositionRoot.Compose();
             ApplyCompositionRoot(compositionRoot);
+            InitializeApplicationEventSubscriptionService();
 
             _logger.Info("ThisAddIn_Startup fired.");
             HookApplicationEvents();
@@ -181,6 +183,24 @@ namespace CaseInfoSystem.ExcelAddIn
             _taskPaneRefreshOrchestrationService = compositionRoot.TaskPaneRefreshOrchestrationService;
             _taskPaneManager = compositionRoot.TaskPaneManager;
             _kernelCaseInteractionState = compositionRoot.KernelCaseInteractionState;
+        }
+
+        private void InitializeApplicationEventSubscriptionService()
+        {
+            _applicationEventSubscriptionService = new ApplicationEventSubscriptionService(
+                Application,
+                Application_WorkbookOpen,
+                Application_WorkbookActivate,
+                Application_WorkbookBeforeSave,
+                Application_WorkbookBeforeClose,
+                Application_WindowActivate,
+                Application_SheetActivate,
+                Application_SheetSelectionChange,
+                Application_SheetChange,
+                Application_AfterCalculate,
+                !DisableSheetActivateForFreezeIsolation,
+                !DisableSheetSelectionChangeForFreezeIsolation,
+                !DisableSheetChangeForFreezeIsolation);
         }
 
         private void ThisAddIn_Shutdown(object sender, EventArgs e)
@@ -228,46 +248,12 @@ namespace CaseInfoSystem.ExcelAddIn
         // Excel application event の購読順は既存挙動維持のため変更しない。
         private void HookApplicationEvents()
         {
-            ((Excel.AppEvents_Event)Application).WorkbookOpen += Application_WorkbookOpen;
-            ((Excel.AppEvents_Event)Application).WorkbookActivate += Application_WorkbookActivate;
-            ((Excel.AppEvents_Event)Application).WorkbookBeforeSave += Application_WorkbookBeforeSave;
-            ((Excel.AppEvents_Event)Application).WorkbookBeforeClose += Application_WorkbookBeforeClose;
-            ((Excel.AppEvents_Event)Application).WindowActivate += Application_WindowActivate;
-            if (!DisableSheetActivateForFreezeIsolation)
-            {
-                ((Excel.AppEvents_Event)Application).SheetActivate += Application_SheetActivate;
-            }
-            if (!DisableSheetSelectionChangeForFreezeIsolation)
-            {
-                ((Excel.AppEvents_Event)Application).SheetSelectionChange += Application_SheetSelectionChange;
-            }
-            if (!DisableSheetChangeForFreezeIsolation)
-            {
-                ((Excel.AppEvents_Event)Application).SheetChange += Application_SheetChange;
-            }
-            ((Excel.AppEvents_Event)Application).AfterCalculate += Application_AfterCalculate;
+            _applicationEventSubscriptionService?.Subscribe();
         }
 
         private void UnhookApplicationEvents()
         {
-            ((Excel.AppEvents_Event)Application).WorkbookOpen -= Application_WorkbookOpen;
-            ((Excel.AppEvents_Event)Application).WorkbookActivate -= Application_WorkbookActivate;
-            ((Excel.AppEvents_Event)Application).WorkbookBeforeSave -= Application_WorkbookBeforeSave;
-            ((Excel.AppEvents_Event)Application).WorkbookBeforeClose -= Application_WorkbookBeforeClose;
-            ((Excel.AppEvents_Event)Application).WindowActivate -= Application_WindowActivate;
-            if (!DisableSheetActivateForFreezeIsolation)
-            {
-                ((Excel.AppEvents_Event)Application).SheetActivate -= Application_SheetActivate;
-            }
-            if (!DisableSheetSelectionChangeForFreezeIsolation)
-            {
-                ((Excel.AppEvents_Event)Application).SheetSelectionChange -= Application_SheetSelectionChange;
-            }
-            if (!DisableSheetChangeForFreezeIsolation)
-            {
-                ((Excel.AppEvents_Event)Application).SheetChange -= Application_SheetChange;
-            }
-            ((Excel.AppEvents_Event)Application).AfterCalculate -= Application_AfterCalculate;
+            _applicationEventSubscriptionService?.Unsubscribe();
         }
 
         // Excel application event handler

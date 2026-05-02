@@ -32,7 +32,7 @@
 
 ### Application event wiring / unwiring
 
-- `HookApplicationEvents()` が次の Excel event を既存順序で購読する
+- `HookApplicationEvents()` は `ApplicationEventSubscriptionService.Subscribe()` を呼び、次の Excel event を既存順序で購読する
   - `WorkbookOpen`
   - `WorkbookActivate`
   - `WorkbookBeforeSave`
@@ -42,7 +42,8 @@
   - `SheetSelectionChange`
   - `SheetChange`
   - `AfterCalculate`
-- `UnhookApplicationEvents()` が同じ event を解除する
+- `UnhookApplicationEvents()` は `ApplicationEventSubscriptionService.Unsubscribe()` を呼び、同じ event を解除する
+- event handler 本体は引き続き `ThisAddIn` に残し、wiring / unwiring だけを薄い専用 service に分離する
 - event の順序と対象集合は lifecycle 挙動に影響するため、単なる配線でも add-in 境界の一部になっている
 
 ### WorkbookOpen
@@ -171,6 +172,8 @@
 ### 推奨: Application event wiring / unwiring の薄いサービス化
 
 最初に切るなら、`HookApplicationEvents()` / `UnhookApplicationEvents()` だけを薄い registrar へ外出しするのが最も安全です。
+
+現行 branch ではこの候補を `ApplicationEventSubscriptionService` として適用済みです。`ThisAddIn` には startup / shutdown の呼び出し位置と既存 handler 本体を残し、実際の event wiring / unwiring だけを専用 service へ委譲しています。
 
 理由:
 

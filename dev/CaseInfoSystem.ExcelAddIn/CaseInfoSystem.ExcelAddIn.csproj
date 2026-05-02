@@ -246,6 +246,7 @@
     <Compile Include="App\ICaseTaskPaneSnapshotReader.cs" />
     <Compile Include="App\TaskPaneDisplayCoordinator.cs" />
     <Compile Include="App\TaskPaneActionDispatcher.cs" />
+    <Compile Include="App\TaskPaneNonCaseActionHandler.cs" />
     <Compile Include="App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="App\TaskPaneHostFactory.cs" />
     <Compile Include="App\TaskPaneHostRegistry.cs" />

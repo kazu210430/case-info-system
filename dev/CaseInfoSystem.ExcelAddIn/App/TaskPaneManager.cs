@@ -25,6 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
         private readonly TaskPaneHostRegistry _taskPaneHostRegistry;
         private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
+        private readonly TaskPaneNonCaseActionHandler _taskPaneNonCaseActionHandler;
         private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
         private readonly TaskPaneRefreshFlowCoordinator _taskPaneRefreshFlowCoordinator;
         private readonly CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
@@ -143,6 +144,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook => FormatWorkbookDescriptor(workbook),
                 FormatWindowDescriptor,
                 windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
+            _taskPaneNonCaseActionHandler = new TaskPaneNonCaseActionHandler(
+                _excelInteropService,
+                _kernelCommandService,
+                _accountingSheetCommandService,
+                _accountingInternalCommandService,
+                _userErrorService,
+                _logger,
+                windowKey => _hostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null,
+                RenderHost,
+                (host, reason) => _taskPaneDisplayCoordinator.TryShowHost(host, reason));
             _taskPaneActionDispatcher = new TaskPaneActionDispatcher(
                 _addIn,
                 _excelInteropService,
@@ -197,6 +208,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook => FormatWorkbookDescriptor(workbook),
                 FormatWindowDescriptor,
                 windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
+            _taskPaneNonCaseActionHandler = null;
             _taskPaneActionDispatcher = null;
             _taskPaneRefreshFlowCoordinator = new TaskPaneRefreshFlowCoordinator(this);
         }
@@ -552,27 +564,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void KernelControl_ActionInvoked(string windowKey, KernelNavigationActionEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(windowKey))
-            {
-                _logger.Warn("KernelControl_ActionInvoked skipped because windowKey was empty.");
-                return;
-            }
-
-            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                _logger.Warn("KernelControl_ActionInvoked skipped because host was not found. windowKey=" + windowKey);
-                return;
-            }
-
-            Excel.Workbook workbook = _excelInteropService.FindOpenWorkbook(host.WorkbookFullName);
-            if (workbook == null)
-            {
-                _logger.Warn("KernelControl_ActionInvoked skipped because workbook was not found. windowKey=" + windowKey);
-                return;
-            }
-
-            WorkbookContext context = BuildWorkbookContext(host, workbook, WorkbookRole.Kernel, _excelInteropService.GetActiveSheetCodeName(workbook));
-            _kernelCommandService.Execute(context, e.ActionId);
+            _taskPaneNonCaseActionHandler?.HandleKernelActionInvoked(windowKey, e);
         }
 
         /// <summary>
@@ -583,65 +575,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// </summary>
         private void AccountingControl_ActionInvoked(string windowKey, AccountingNavigationActionEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(windowKey))
-            {
-                _logger.Warn("AccountingControl_ActionInvoked skipped because windowKey was empty.");
-                return;
-            }
-
-            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
-            {
-                _logger.Warn("AccountingControl_ActionInvoked skipped because host was not found. windowKey=" + windowKey);
-                return;
-            }
-
-            Excel.Workbook workbook = _excelInteropService.FindOpenWorkbook(host.WorkbookFullName);
-            if (workbook == null)
-            {
-                _logger.Warn("AccountingControl_ActionInvoked skipped because workbook was not found. windowKey=" + windowKey);
-                return;
-            }
-
-            try
-            {
-                WorkbookContext context = BuildWorkbookContext(host, workbook, WorkbookRole.Accounting, TryGetWorksheetCodeName(workbook));
-                _accountingSheetCommandService.Execute(context, e.ActionId);
-                _accountingInternalCommandService.Execute(context, e.ActionId);
-
-                WorkbookContext refreshedContext = BuildWorkbookContext(host, workbook, WorkbookRole.Accounting, _excelInteropService.GetActiveSheetCodeName(workbook));
-                RenderHost(host, refreshedContext, "AccountingControl_ActionInvoked");
-                TryShowHost(host, "AccountingControl_ActionInvoked");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("AccountingControl_ActionInvoked failed.", ex);
-                _userErrorService.ShowUserError("AccountingControl_ActionInvoked", ex);
-            }
-        }
-
-        private WorkbookContext BuildWorkbookContext(TaskPaneHost host, Excel.Workbook workbook, WorkbookRole role, string activeSheetCodeName)
-        {
-            return new WorkbookContext(
-                workbook,
-                host.Window,
-                role,
-                _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
-                _excelInteropService.GetWorkbookFullName(workbook),
-                activeSheetCodeName);
-        }
-
-        private static string TryGetWorksheetCodeName(Excel.Workbook workbook)
-        {
-            try
-            {
-                Excel.Worksheet worksheet = workbook.ActiveSheet as Excel.Worksheet;
-                return worksheet == null ? string.Empty : worksheet.CodeName ?? string.Empty;
-            }
-            catch
-            {
-                // 会計 pane の再描画判定で CodeName を取得できない場合は安全側で空文字へフォールバックする。
-                return string.Empty;
-            }
+            _taskPaneNonCaseActionHandler?.HandleAccountingActionInvoked(windowKey, e);
         }
 
         private static string SafeGetWindowKey(Excel.Window window)

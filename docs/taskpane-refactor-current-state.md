@@ -100,6 +100,7 @@
 - `ThisAddIn` は VSTO lifecycle、application event、custom task pane 生成、TaskPane 表示要求の入口です。
 - `TaskPaneManager` / `TaskPaneHostRegistry` との依存境界を急に変えると起動、終了、pane 表示に波及しやすいです。
 - `ThisAddIn` 整理は HostRegistry 分離よりさらに慎重に扱い、先に現状メモと依存関係棚卸しを行い、コード変更は後回しにする判断を固定します。
+- 詳細な棚卸しは `docs/thisaddin-boundary-inventory.md` を参照します。
 
 これらは「未着手」または「保留」の扱いを維持し、今回の現在地文書で完了扱いへ動かしません。
 

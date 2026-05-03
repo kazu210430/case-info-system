@@ -200,6 +200,8 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 ### 補足
 
+- `AccountingSetCreateService.Execute()` は `AccountingTemplateResolver`・`DocumentOutputService`・`AccountingSetNamingService` で template path / output folder / output path を決めてから `File.Copy(...)` に進む。
+- `File.Copy(...)` が最初の実副作用ポイントで、その後に `SuppressPath(...)`・workbook open・failure cleanup delete が接続されるため、副作用境界として扱う。
 - Kernel 側から会計関連の同期フローに入る分岐もあります。
 - 会計補助フォームや支払履歴取込などの関連機能は存在しますが、詳細仕様はこの文書では扱いません。
 - `AccountingWorkbookService.BeginInitializationScope()` は、初期化中だけ `Application.ScreenUpdating` と `Application.EnableEvents` の現在値を退避し、両方を `false` に設定する。

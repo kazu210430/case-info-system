@@ -425,6 +425,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool ShowSheetByCodeName(string codeName)
         {
+            Excel.Workbook displayedWorkbook;
+            return ShowSheetByCodeName(codeName, out displayedWorkbook);
+        }
+
+        internal bool ShowSheetByCodeName(string codeName, out Excel.Workbook displayedWorkbook)
+        {
+            displayedWorkbook = null;
             Excel.Workbook workbook = GetOrOpenKernelWorkbook();
             if (workbook == null)
             {
@@ -444,6 +451,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 workbook.Activate();
                 worksheet.Activate();
+                displayedWorkbook = workbook;
                 return true;
             }
             finally

@@ -639,14 +639,14 @@ namespace CaseInfoSystem.ExcelAddIn
                 + FormatActiveExcelState());
             // 処理ブロック: 次に来る activate 系イベントに備えて、Kernel HOME 抑止要求を発行する。
             SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
-            bool shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName);
+            Excel.Workbook displayedWorkbook;
+            bool shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName, out displayedWorkbook);
             if (!shown)
             {
                 return false;
             }
 
-            Excel.Workbook displayedWorkbook;
-            if (TryGetDisplayedKernelWorkbookForPaneRefresh(reason, sheetCodeName, out displayedWorkbook))
+            if (displayedWorkbook != null)
             {
                 RefreshTaskPane(reason, displayedWorkbook, null);
             }
@@ -692,7 +692,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 // 処理ブロック: sheet 表示前の内部 cleanup として、表示中の HOME UI を退避する。
                 HideKernelHomePlaceholder();
                 // 処理ブロック: 表示実行そのものではなく、対象 sheet の表示要求を発行し、その結果を受けて続行可否を判定する。
-                shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName);
+                shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName, out resolvedDisplayedWorkbook);
                 _logger?.Info("[Transition] sheet shown=" + shown + ", sheet=" + sheetCodeName);
                 if (!shown)
                 {
@@ -700,8 +700,13 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 // 処理ブロック: pane 同期の実行ではなく、表示後の pane 同期要求を発行する。
-                if (!TryGetDisplayedKernelWorkbookForPaneRefresh(reason, sheetCodeName, out resolvedDisplayedWorkbook))
+                if (resolvedDisplayedWorkbook == null)
                 {
+                    _logger?.Warn(
+                        "Kernel pane refresh skipped because displayed workbook was unavailable after sheet navigation. reason="
+                        + (reason ?? string.Empty)
+                        + ", sheetCodeName="
+                        + (sheetCodeName ?? string.Empty));
                     return;
                 }
 
@@ -740,35 +745,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(resolvedDisplayedWorkbook))
                 + ", activeWorkbookAfter="
                 + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(activeWorkbookAfter)));
-            return true;
-        }
-
-        private bool TryGetDisplayedKernelWorkbookForPaneRefresh(string reason, string sheetCodeName, out Excel.Workbook displayedWorkbook)
-        {
-            displayedWorkbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
-            if (displayedWorkbook == null)
-            {
-                _logger?.Warn(
-                    "Kernel pane refresh skipped because displayed workbook was unavailable after sheet navigation. reason="
-                    + (reason ?? string.Empty)
-                    + ", sheetCodeName="
-                    + (sheetCodeName ?? string.Empty));
-                return false;
-            }
-
-            if (!_kernelWorkbookService.IsKernelWorkbook(displayedWorkbook))
-            {
-                _logger?.Warn(
-                    "Kernel pane refresh skipped because active workbook after sheet navigation was not Kernel. reason="
-                    + (reason ?? string.Empty)
-                    + ", sheetCodeName="
-                    + (sheetCodeName ?? string.Empty)
-                    + ", workbook="
-                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(displayedWorkbook)));
-                displayedWorkbook = null;
-                return false;
-            }
-
             return true;
         }
 

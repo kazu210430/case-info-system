@@ -125,6 +125,64 @@ fallback path の route、post-action refresh、display request の順序を別 
 - `dev/CaseInfoSystem.Tests/TaskPaneActionDispatcherTests.cs`
 - `dev/CaseInfoSystem.Tests/TaskPaneBusinessActionLauncherTests.cs`
 
+## dispatcher / handler 例外分岐テスト棚卸しの固定
+
+### 概要
+`TaskPaneActionDispatcher` 周辺の 3 つの `try/catch` について、専用テストの有無だけを read-only で棚卸しした。結論として、dispatcher fallback、`doc` handler、`accounting` handler のいずれにも exception-only path を直接固定する専用テストは確認できなかった。
+
+### 対象
+- `TaskPaneActionDispatcher.HandleFrozenFallbackActionEntry(...)`
+- `TaskPaneCaseDocumentActionHandler.HandleCaseControlActionInvoked(...)`
+- `TaskPaneCaseAccountingActionHandler.HandleCaseControlActionInvoked(...)`
+
+### 確認できた既存テスト
+- `TaskPaneActionDispatcherTests`
+  - `WhenDocumentPromptIsCancelled_DoesNotRefresh`
+    - `doc` 経路で prompt cancel 時に post-action refresh が走らないことを確認している。
+  - `WhenDocumentActionRuns_SkipsPostActionRefresh`
+    - `doc` 正常系で document create が実行され、post-action refresh が skip されることを確認している。
+  - `WhenAccountingActionRuns_SkipsPostActionRefresh`
+    - `accounting` 正常系で accounting action が実行され、post-action refresh が skip されることを確認している。
+  - `WhenCaseListActionRuns_DefersRefreshAndInvalidatesSignature`
+    - fallback 経路の `caselist` 正常系で defer / invalidate が走ることを確認している。
+- `TaskPaneBusinessActionLauncherTests`
+  - `WhenDocumentNamePromptIsCancelled_ReturnsFalseAndSkipsCommandExecution`
+    - `TaskPaneBusinessActionLauncher` の prompt cancel を確認している。
+  - `WhenDocumentNamePromptIsAccepted_ExecutesDocumentCommand`
+    - `TaskPaneBusinessActionLauncher` の正常系を確認している。
+- `DocumentCommandServiceTests`
+  - `caselist` 下流 service の成功 / 失敗を確認しているが、dispatcher / handler の `catch` 挙動は確認していない。
+
+### 固定しておく観測事実
+- `TaskPaneActionDispatcherTests` で `HandleCaseControlActionInvoked(...)` を呼んでいるのは、prompt cancel、`doc` 正常系、`accounting` 正常系、`caselist` 正常系の 4 ケースだけである。
+- `TaskPaneCaseDocumentActionHandler`、`TaskPaneCaseAccountingActionHandler`、`TaskPaneCaseFallbackActionExecutor` を個別に new して exception path を確認する専用 test file は見つからなかった。
+- `TaskPaneActionDispatcherTests` には `Exception`、`InvalidOperationException`、`throw new ...` を使って exception path を明示的に起こす記述は確認できなかった。
+- test 側の `UserErrorService` は no-op placeholder であり、`ShowUserError(...)` 呼び出し回数や引数を assert している箇所は確認できなかった。
+- test 側では `Logger` に収集先 `List<string>` を渡せるが、`TaskPaneActionDispatcherTests` / `TaskPaneBusinessActionLauncherTests` では dispatcher / handler の exception path に対する log 内容の assert は確認できなかった。
+- `BuildActionFailedState()`、failed state render、`control.Render(...)` の実行有無を dispatcher / handler exception path に対して確認する test は見つからなかった。
+
+### 未カバーとして固定する項目
+- dispatcher fallback の `catch (Exception)` に入ったときに `logger.Error(...)` が呼ばれるか
+- dispatcher fallback の `catch (Exception)` に入ったときに failed state が render されるか
+- dispatcher fallback の `catch (Exception)` に入ったときに `ShowUserError(...)` が呼ばれるか
+- `doc` handler の `catch (Exception)` に入ったときに `logger.Error(...)` が呼ばれるか
+- `doc` handler の `catch (Exception)` に入ったときに failed state が render されるか
+- `doc` handler の `catch (Exception)` に入ったときに `ShowUserError(...)` が呼ばれるか
+- `accounting` handler の `catch (Exception)` に入ったときに `logger.Error(...)` が呼ばれるか
+- `accounting` handler の `catch (Exception)` に入ったときに failed state が render されるか
+- `accounting` handler の `catch (Exception)` に入ったときに `ShowUserError(...)` が呼ばれるか
+
+### 関連箇所
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneActionDispatcher.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseDocumentActionHandler.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseAccountingActionHandler.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseFallbackActionExecutor.cs`
+- `dev/CaseInfoSystem.Tests/TaskPaneActionDispatcherTests.cs`
+- `dev/CaseInfoSystem.Tests/TaskPaneBusinessActionLauncherTests.cs`
+- `dev/CaseInfoSystem.Tests/DocumentCommandServiceTests.cs`
+- `dev/CaseInfoSystem.Tests/Fakes/OrchestrationDependencyPlaceholders.cs`
+- `dev/CaseInfoSystem.Tests/Fakes/OrchestrationTestSupport.cs`
+
 ## TaskPaneManager 本体の追加分割
 
 ### 概要

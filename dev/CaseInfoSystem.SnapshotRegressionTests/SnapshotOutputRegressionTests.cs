@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Xunit;
 
@@ -60,6 +61,35 @@ namespace CaseInfoSystem.SnapshotRegressionTests
                 projection.ToJson());
         }
 
+        [Fact]
+        public void BuildSnapshotText_WhenMasterWorkbookAlreadyOpen_DoesNotChangeWindowVisibility()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+
+            scenario.MasterWorkbook.Windows[1].Visible = true;
+
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult result = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+
+            Assert.True(result.UpdatedCaseSnapshotCache);
+            Assert.True(scenario.MasterWorkbook.Windows[1].Visible);
+        }
+
+        [Fact]
+        public void BuildSnapshotText_WhenMasterWorkbookOpenedForRead_HidesOnlyOpenedWorkbook()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
+            scenario.Application.Workbooks.Remove(scenario.MasterWorkbook);
+            scenario.MasterWorkbook.Windows[1].Visible = true;
+            scenario.Application.Workbooks.OpenBehavior = (_, __, ___) => scenario.MasterWorkbook;
+
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult result = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+
+            Assert.True(result.UpdatedCaseSnapshotCache);
+            Assert.False(scenario.MasterWorkbook.Windows[1].Visible);
+            Assert.DoesNotContain(scenario.MasterWorkbook, scenario.Application.Workbooks);
+        }
+
         private static IReadOnlyList<SnapshotBuilderScenario.InputRow> CreateRows()
         {
             return new[]
@@ -111,6 +141,26 @@ namespace CaseInfoSystem.SnapshotRegressionTests
                     TabBackColor = 9999
                 }
             };
+        }
+
+        private static void EnsureMasterWorkbookFileExists(string workbookFullName)
+        {
+            string path = workbookFullName ?? string.Empty;
+            if (path.Length == 0)
+            {
+                return;
+            }
+
+            string directory = Path.GetDirectoryName(path) ?? string.Empty;
+            if (directory.Length > 0)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            if (!File.Exists(path))
+            {
+                File.WriteAllText(path, string.Empty);
+            }
         }
     }
 }

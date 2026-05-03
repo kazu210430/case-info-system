@@ -124,14 +124,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 throw new InvalidOperationException("Master workbook path could not be resolved.");
             }
 
-            foreach (Excel.Workbook workbook in _application.Workbooks)
+            Excel.Workbook openWorkbook = FindOpenMasterWorkbook(resolvedMasterPath);
+            if (openWorkbook != null)
             {
-                if (string.Equals(_pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookFullName(workbook)), resolvedMasterPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    wasAlreadyOpen = true;
-                    HideWorkbookWindows(workbook);
-                    return workbook;
-                }
+                wasAlreadyOpen = true;
+                return openWorkbook;
             }
 
             if (!_pathCompatibilityService.FileExistsSafe(resolvedMasterPath))
@@ -151,6 +148,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 _application.EnableEvents = previousEnableEvents;
             }
+        }
+
+        private Excel.Workbook FindOpenMasterWorkbook(string resolvedMasterPath)
+        {
+            foreach (Excel.Workbook workbook in _application.Workbooks)
+            {
+                if (string.Equals(_pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookFullName(workbook)), resolvedMasterPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return workbook;
+                }
+            }
+
+            return null;
         }
 
         private string ResolveMasterPath(Excel.Workbook caseWorkbook)

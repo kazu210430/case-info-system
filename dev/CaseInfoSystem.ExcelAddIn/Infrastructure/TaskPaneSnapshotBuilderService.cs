@@ -304,7 +304,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			Workbook workbook = FindOpenMasterWorkbook (text);
 			if (workbook != null) {
-				HideWorkbookWindows (workbook);
 				return workbook;
 			}
 			if (!_pathCompatibilityService.FileExistsSafe (text)) {

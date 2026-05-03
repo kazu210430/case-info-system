@@ -82,6 +82,40 @@ namespace CaseInfoSystem.SnapshotRegressionTests
         }
 
         [Fact]
+        public void Resolve_WhenMasterWorkbookAlreadyOpen_DoesNotChangeWindowVisibility()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+
+            TestServices services = CreateServices(scenario.Application);
+            scenario.MasterWorkbook.Windows[1].Visible = true;
+
+            DocumentTemplateSpec templateSpec = services.Resolver.Resolve(scenario.CaseWorkbook, "1");
+
+            Assert.NotNull(templateSpec);
+            Assert.Equal(DocumentTemplateResolutionSource.MasterCatalog, templateSpec.ResolutionSource);
+            Assert.True(scenario.MasterWorkbook.Windows[1].Visible);
+        }
+
+        [Fact]
+        public void Resolve_WhenMasterWorkbookOpenedForRead_HidesOnlyOpenedWorkbook()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
+            scenario.Application.Workbooks.Remove(scenario.MasterWorkbook);
+            scenario.MasterWorkbook.Windows[1].Visible = true;
+            scenario.Application.Workbooks.OpenBehavior = (_, __, ___) => scenario.MasterWorkbook;
+
+            TestServices services = CreateServices(scenario.Application);
+
+            DocumentTemplateSpec templateSpec = services.Resolver.Resolve(scenario.CaseWorkbook, "1");
+
+            Assert.NotNull(templateSpec);
+            Assert.Equal(DocumentTemplateResolutionSource.MasterCatalog, templateSpec.ResolutionSource);
+            Assert.False(scenario.MasterWorkbook.Windows[1].Visible);
+            Assert.DoesNotContain(scenario.MasterWorkbook, scenario.Application.Workbooks);
+        }
+
+        [Fact]
         public void Resolve_WhenKeyIsMissing_ReturnsNullAndPromptStartsBlank()
         {
             using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);

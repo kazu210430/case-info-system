@@ -4,6 +4,8 @@
 
 案件情報System では、CASE 作成後の表示、文書作成中の表示、会計書類セット表示、TaskPane 表示、Excel ウィンドウ復旧を個別に制御しています。この文書では、コードから確認できる表示制御の方針を整理します。
 
+- TaskPane refresh の retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` です。
+
 ## UI制御の原則
 
 - WorkbookOpen 直接依存の表示制御を行わない
@@ -46,6 +48,7 @@
 - 一時抑止、遅延再試行、準備完了後の表示予約が実装されています。
 - `WorkbookOpen` 直後に workbook は取得できても window が未解決な refresh は確定させず skip し、後続イベントへ委ねます。
 - TaskPane で使う snapshot / cache は表示補助です。保存・生成・実行判断の正本として扱わない方針を維持します。
+- retry / protection / ready-show の詳細 policy は `docs/taskpane-refresh-policy.md` を参照します。
 
 ### 不明点
 

@@ -10,6 +10,7 @@
 - UI 制御の前提: `docs/ui-policy.md`
 - Startup / TaskPane 初期表示の実機チェック: `docs/thisaddin-startup-test-checklist.md`
 - 優先度A棚卸し: `docs/a-priority-service-responsibility-inventory.md`
+- TaskPane refresh policy 正本: `docs/taskpane-refresh-policy.md`
 - protection / ready-show 危険領域の補足:
   - `docs/taskpane-protection-ready-show-investigation.md`
   - `docs/taskpane-protection-baseline.md`
@@ -24,7 +25,7 @@
 1. TaskPane の runtime 設計正本は `docs/taskpane-architecture.md` とする。
 2. 文書ボタン定義の正本、Base 埋込 snapshot、CASE cache、prompt / resolver の責務分離は、`docs/taskpane-architecture.md` の記述を現行到達点として扱う。
 3. 優先度Aのうち、production code 変更なしで完了確認できた棚卸し結果は `docs/a-priority-service-responsibility-inventory.md` を基準に読む。
-4. protection / ready-show / retry / suppression を含む危険領域は、未着手・保留として扱い、完了済みとはみなさない。
+4. protection / ready-show / retry / suppression を含む危険領域は、policy 正本を `docs/taskpane-refresh-policy.md` に固定した上で、なお未着手・保留として扱い、完了済みとはみなさない。
 5. 実機観測が必要な論点は未確定のまま残し、コードだけでは断定しない。
 
 ## 完了済みとして固定する事項

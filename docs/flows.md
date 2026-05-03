@@ -4,6 +4,8 @@
 
 この文書では、コードから確認できる主要フローのみを扱います。帳票ごとの差し込み詳細や業務ルールは対象外です。
 
+- TaskPane refresh の policy 正本: `docs/taskpane-refresh-policy.md`
+
 ## 新規 CASE 作成
 
 新規 CASE 作成は `KernelCaseCreationService` を起点として処理されます。コード上では少なくとも次のモードが存在します。
@@ -54,6 +56,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 - CASE 表示には待機 UI が使われます。
 - 画面ちらつき抑止や一時的な pane 抑止が入るため、通常の WorkbookOpen だけではなく表示専用の補助処理があります。
+- ready-show / retry / protection の詳しい policy は `docs/taskpane-refresh-policy.md` を正本とします。
 
 ## 文書作成ボタン
 
@@ -264,6 +267,8 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 ## TaskPane 更新
 
 TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService` を起点として処理されます。
+
+- retry / protection / ready-show の詳細 policy は `docs/taskpane-refresh-policy.md` を参照します。
 
 ### 更新の入口
 

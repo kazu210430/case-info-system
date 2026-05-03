@@ -14,6 +14,7 @@
 - `docs/architecture.md`
 - `docs/flows.md`
 - `docs/ui-policy.md`
+- `docs/taskpane-refresh-policy.md`
 
 ## 今回の対象と非対象
 
@@ -323,6 +324,7 @@
 
 - `AccountingSetCreateService`、`DocumentCreateService`、`DocumentCommandService`、`WindowActivatePaneHandlingService` は未着手候補ではなく、完了済みとして扱うべきである。
 - `KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` は protection / ready-show / suppression の危険領域として別途調査対象に残る。
+- retry / protection / ready-show の確定 policy と未確定事項の切り分けは `docs/taskpane-refresh-policy.md` を正本として読む。
 - `TaskPaneManager` と `TaskPaneHost` は `ThisAddIn` による VSTO `CustomTaskPane` 作成境界を持つため、ここは単純な `Globals.ThisAddIn` 排除より一段重い。
 
 ## 3. TaskPane suppression 周辺の追加確認

@@ -4,6 +4,8 @@
 
 この文書は、TaskPane 表示まわりの危険領域について、実装変更前の事実整理を行うための調査メモです。
 
+- policy 正本は `docs/taskpane-refresh-policy.md` とし、この文書は調査メモとして位置づけます。
+
 今回の対象は次の論点です。
 
 - protection 5 秒失効
@@ -18,6 +20,7 @@
 - `docs/architecture.md`
 - `docs/flows.md`
 - `docs/ui-policy.md`
+- `docs/taskpane-refresh-policy.md`
 - `docs/a-priority-service-responsibility-inventory.md`
 
 ## 参照したコード

@@ -7,6 +7,7 @@
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
+- TaskPane refresh policy: `docs/taskpane-refresh-policy.md`
 - 優先度A現在地の補足: `docs/taskpane-refactor-current-state.md`
 - metadata / cache / snapshot の補足: `docs/template-metadata-inventory.md`
 - 読取経路の補足: `docs/template-metadata-read-path-inventory.md`
@@ -95,6 +96,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 ### `TaskPaneRefreshOrchestrationService` / `WindowActivatePaneHandlingService`
 
 - TaskPane 再描画要求、遅延表示、Window 単位の表示調停を担う
+- retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` を参照する
 - host 再利用と再表示の方針を維持する
 
 ### `TaskPaneRefreshPreconditionPolicy`

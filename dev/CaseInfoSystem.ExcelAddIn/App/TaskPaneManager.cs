@@ -139,10 +139,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _kernelCaseInteractionState,
                 _logger,
                 _testHooks,
-                SafeGetWindowKey,
+                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
-                FormatWindowDescriptor,
+                TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor,
                 windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
             _taskPaneNonCaseActionHandler = new TaskPaneNonCaseActionHandler(
                 _excelInteropService,
@@ -227,10 +227,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _kernelCaseInteractionState,
                 _logger,
                 _testHooks,
-                SafeGetWindowKey,
+                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
-                FormatWindowDescriptor,
+                TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor,
                 windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
             _taskPaneNonCaseActionHandler = null;
             _taskPaneActionDispatcher = null;
@@ -284,7 +284,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            windowKey = SafeGetWindowKey(context.Window);
+            windowKey = TaskPaneManagerDiagnosticHelper.SafeGetWindowKey(context.Window);
             if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey))
             {
                 _logger?.Info(
@@ -479,7 +479,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 TaskPaneHost host = pair.Value;
-                if (!(host.Control is KernelNavigationControl))
+                if (!TaskPaneManagerDiagnosticHelper.IsKernelHost(host))
                 {
                     continue;
                 }
@@ -514,7 +514,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             return TaskPaneHostReusePolicy.ShouldReuseCaseHostWithoutRender(
                 context.Role,
-                host.Control is DocumentButtonsControl,
+                TaskPaneManagerDiagnosticHelper.IsCaseHost(host),
                 !string.IsNullOrWhiteSpace(host.LastRenderSignature),
                 string.Equals(host.WorkbookFullName, context.WorkbookFullName, StringComparison.OrdinalIgnoreCase),
                 reason);
@@ -602,77 +602,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneNonCaseActionHandler?.HandleAccountingActionInvoked(windowKey, e);
         }
 
-        private static string SafeGetWindowKey(Excel.Window window)
-        {
-            try
-            {
-                return window == null ? string.Empty : Convert.ToString(window.Hwnd) ?? string.Empty;
-            }
-            catch
-            {
-                // window key を取得できない場合は空文字へフォールバックする。
-                return string.Empty;
-            }
-        }
-
         private string FormatContextDescriptor(WorkbookContext context)
         {
-            if (context == null)
-            {
-                return "null";
-            }
-
-            return "role=\""
-                + context.Role.ToString()
-                + "\",workbook="
-                + FormatWorkbookDescriptor(context.Workbook, context.WorkbookFullName)
-                + ",window="
-                + FormatWindowDescriptor(context.Window)
-                + ",activeSheet=\""
-                + (context.ActiveSheetCodeName ?? string.Empty)
-                + "\"";
+            return TaskPaneManagerDiagnosticHelper.FormatContextDescriptor(
+                context,
+                context == null ? string.Empty : FormatWorkbookDescriptor(context.Workbook, context.WorkbookFullName),
+                context == null ? string.Empty : TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(context.Window));
         }
 
         private string FormatHostDescriptor(TaskPaneHost host)
         {
-            if (host == null)
-            {
-                return "null";
-            }
-
-            return "paneRole=\""
-                + GetPaneRoleName(host)
-                + "\",windowKey=\""
-                + (host.WindowKey ?? string.Empty)
-                + "\",workbookFullName=\""
-                + (host.WorkbookFullName ?? string.Empty)
-                + "\",window="
-                + FormatWindowDescriptor(host.Window);
-        }
-
-        private string GetPaneRoleName(TaskPaneHost host)
-        {
-            if (host == null || host.Control == null)
-            {
-                return "Unknown";
-            }
-
-            if (host.Control is DocumentButtonsControl)
-            {
-                return "Case";
-            }
-
-            if (host.Control is KernelNavigationControl)
-            {
-                return "Kernel";
-            }
-
-            if (host.Control is AccountingNavigationControl)
-            {
-                return "Accounting";
-            }
-
-            return host.Control.GetType().Name;
+            return TaskPaneManagerDiagnosticHelper.FormatHostDescriptor(
+                host,
+                TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(host == null ? null : host.Window));
         }
 
         private string FormatWorkbookDescriptor(Excel.Workbook workbook)
@@ -704,30 +646,115 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 : (_excelInteropService.GetWorkbookName(workbook) ?? string.Empty);
         }
 
-        private static string FormatWindowDescriptor(Excel.Window window)
+        private static class TaskPaneManagerDiagnosticHelper
         {
-            return "hwnd=\""
-                + SafeGetWindowKey(window)
-                + "\",caption=\""
-                + SafeWindowCaption(window)
-                + "\"";
-        }
-
-        private static string SafeWindowCaption(Excel.Window window)
-        {
-            try
+            internal static bool IsCaseHost(TaskPaneHost host)
             {
-                if (window == null)
+                return host != null && host.Control is DocumentButtonsControl;
+            }
+
+            internal static bool IsKernelHost(TaskPaneHost host)
+            {
+                return host != null && host.Control is KernelNavigationControl;
+            }
+
+            internal static string SafeGetWindowKey(Excel.Window window)
+            {
+                try
+                {
+                    return window == null ? string.Empty : Convert.ToString(window.Hwnd) ?? string.Empty;
+                }
+                catch
                 {
                     return string.Empty;
                 }
-
-                dynamic lateBoundWindow = window;
-                return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
             }
-            catch
+
+            internal static string FormatContextDescriptor(WorkbookContext context, string workbookDescriptor, string windowDescriptor)
             {
-                return string.Empty;
+                if (context == null)
+                {
+                    return "null";
+                }
+
+                return "role=\""
+                    + context.Role.ToString()
+                    + "\",workbook="
+                    + (workbookDescriptor ?? string.Empty)
+                    + ",window="
+                    + (windowDescriptor ?? string.Empty)
+                    + ",activeSheet=\""
+                    + (context.ActiveSheetCodeName ?? string.Empty)
+                    + "\"";
+            }
+
+            internal static string FormatHostDescriptor(TaskPaneHost host, string windowDescriptor)
+            {
+                if (host == null)
+                {
+                    return "null";
+                }
+
+                return "paneRole=\""
+                    + GetPaneRoleName(host)
+                    + "\",windowKey=\""
+                    + (host.WindowKey ?? string.Empty)
+                    + "\",workbookFullName=\""
+                    + (host.WorkbookFullName ?? string.Empty)
+                    + "\",window="
+                    + (windowDescriptor ?? string.Empty);
+            }
+
+            internal static string FormatWindowDescriptor(Excel.Window window)
+            {
+                return "hwnd=\""
+                    + SafeGetWindowKey(window)
+                    + "\",caption=\""
+                    + SafeWindowCaption(window)
+                    + "\"";
+            }
+
+            private static string GetPaneRoleName(TaskPaneHost host)
+            {
+                if (host == null || host.Control == null)
+                {
+                    return "Unknown";
+                }
+
+                if (IsCaseHost(host))
+                {
+                    return "Case";
+                }
+
+                if (IsKernelHost(host))
+                {
+                    return "Kernel";
+                }
+
+                if (host.Control is AccountingNavigationControl)
+                {
+                    return "Accounting";
+                }
+
+                return host.Control.GetType().Name;
+            }
+
+            private static string SafeWindowCaption(Excel.Window window)
+            {
+                try
+                {
+                    if (window == null)
+                    {
+                        return string.Empty;
+                    }
+
+                    dynamic lateBoundWindow = window;
+                    return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
+                }
+                catch
+                {
+                    return string.Empty;
+                }
             }
         }
 

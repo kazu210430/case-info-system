@@ -262,11 +262,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			_sheetNavigationHandled = true;
 			StopForegroundRetry ();
 			Hide ();
-			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPane (codeName, "KernelHomeForm.OpenSheet")) {
+			Microsoft.Office.Interop.Excel.Workbook displayedWorkbook = null;
+			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPane (codeName, "KernelHomeForm.OpenSheet", out displayedWorkbook)) {
 				MessageBox.Show ("シートを開けませんでした。" + ThisAddIn.GetPrimaryTraceLogRelativePath () + " を確認してください。", "案件情報System");
 			} else {
-				if (Globals.ThisAddIn != null) {
-					Globals.ThisAddIn.ScheduleWorkbookTaskPaneRefresh (_kernelWorkbookService.GetOpenKernelWorkbook (), "KernelHomeForm.OpenSheet.PostClose");
+				if (Globals.ThisAddIn != null && displayedWorkbook != null) {
+					Globals.ThisAddIn.ScheduleWorkbookTaskPaneRefresh (displayedWorkbook, "KernelHomeForm.OpenSheet.PostClose");
 				}
 			}
 			Close ();

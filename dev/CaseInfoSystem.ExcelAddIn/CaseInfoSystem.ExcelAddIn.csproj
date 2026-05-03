@@ -337,6 +337,7 @@
     <Compile Include="Infrastructure\FolderWindowService.cs" />
     <Compile Include="Infrastructure\KernelWorkbookResolverService.cs" />
     <Compile Include="Infrastructure\Logger.cs" />
+    <Compile Include="Infrastructure\MasterWorkbookReadAccessService.cs" />
     <Compile Include="Infrastructure\MasterTemplateCatalogService.cs" />
     <Compile Include="Infrastructure\IMasterTemplateCatalogReader.cs" />
     <Compile Include="Infrastructure\MasterTemplateSheetReaderAdapter.cs" />

@@ -72,8 +72,9 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             var logger = new Logger(_ => { });
             var pathCompatibilityService = new PathCompatibilityService();
             var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
+            var masterWorkbookReadAccessService = new MasterWorkbookReadAccessService(application, excelInteropService, pathCompatibilityService);
             var masterTemplateSheetReader = new MasterTemplateSheetReaderAdapter();
-            var builder = new TaskPaneSnapshotBuilderService(application, excelInteropService, pathCompatibilityService, masterTemplateSheetReader, logger);
+            var builder = new TaskPaneSnapshotBuilderService(excelInteropService, pathCompatibilityService, masterWorkbookReadAccessService, masterTemplateSheetReader, logger);
 
             var caseWorkbook = new Excel.Workbook
             {

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -16,26 +15,21 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         private const string MasterSheetName = "雛形一覧";
         private const string MasterSheetCodeName = "shMasterList";
-        private const string SystemRootPropertyName = "SYSTEM_ROOT";
-
-        private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
-        private readonly PathCompatibilityService _pathCompatibilityService;
+        private readonly MasterWorkbookReadAccessService _masterWorkbookReadAccessService;
         private readonly IMasterTemplateSheetReader _masterTemplateSheetReader;
         private readonly Logger _logger;
         private readonly Dictionary<string, IReadOnlyList<MasterTemplateRecord>> _cachedTemplatesByMasterPath =
             new Dictionary<string, IReadOnlyList<MasterTemplateRecord>>(StringComparer.OrdinalIgnoreCase);
 
         internal MasterTemplateCatalogService(
-            Excel.Application application,
             ExcelInteropService excelInteropService,
-            PathCompatibilityService pathCompatibilityService,
+            MasterWorkbookReadAccessService masterWorkbookReadAccessService,
             IMasterTemplateSheetReader masterTemplateSheetReader,
             Logger logger)
         {
-            _application = application ?? throw new ArgumentNullException(nameof(application));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
-            _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
+            _masterWorkbookReadAccessService = masterWorkbookReadAccessService ?? throw new ArgumentNullException(nameof(masterWorkbookReadAccessService));
             _masterTemplateSheetReader = masterTemplateSheetReader ?? throw new ArgumentNullException(nameof(masterTemplateSheetReader));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -51,7 +45,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal void InvalidateCache(Excel.Workbook workbook)
         {
-            string resolvedMasterPath = ResolveMasterPath(workbook);
+            string resolvedMasterPath = _masterWorkbookReadAccessService.ResolveMasterPath(workbook, MasterWorkbookPathResolutionMode.MasterTemplateCatalog);
             if (resolvedMasterPath.Length == 0)
             {
                 InvalidateCache();
@@ -86,7 +80,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private IReadOnlyList<MasterTemplateRecord> GetMasterTemplateList(Excel.Workbook caseWorkbook)
         {
-            string resolvedMasterPath = ResolveMasterPath(caseWorkbook);
+            string resolvedMasterPath = _masterWorkbookReadAccessService.ResolveMasterPath(caseWorkbook, MasterWorkbookPathResolutionMode.MasterTemplateCatalog);
             if (resolvedMasterPath.Length == 0)
             {
                 throw new InvalidOperationException("Master workbook path could not be resolved.");
@@ -98,100 +92,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return cachedTemplates;
             }
 
-            bool wasAlreadyOpen;
-            Excel.Workbook masterWorkbook = OpenMasterReadOnly(resolvedMasterPath, out wasAlreadyOpen);
+            MasterWorkbookReadAccessResult readAccess = _masterWorkbookReadAccessService.OpenReadOnly(
+                resolvedMasterPath,
+                MasterWorkbookOpenSearchMode.StrictFullPathOnly,
+                path => new InvalidOperationException("Masterブックが見つかりません。 path=" + path));
             try
             {
-                IReadOnlyList<MasterTemplateRecord> templates = ReadMasterTemplateList(masterWorkbook);
+                IReadOnlyList<MasterTemplateRecord> templates = ReadMasterTemplateList(readAccess.Workbook);
                 _cachedTemplatesByMasterPath[resolvedMasterPath] = templates;
                 return templates;
             }
             finally
             {
-                if (!wasAlreadyOpen && masterWorkbook != null)
-                {
-                    masterWorkbook.Close(false);
-                }
+                readAccess.CloseIfOwned();
             }
-        }
-
-        private Excel.Workbook OpenMasterReadOnly(string resolvedMasterPath, out bool wasAlreadyOpen)
-        {
-            wasAlreadyOpen = false;
-
-            if (resolvedMasterPath.Length == 0)
-            {
-                throw new InvalidOperationException("Master workbook path could not be resolved.");
-            }
-
-            Excel.Workbook openWorkbook = FindOpenMasterWorkbook(resolvedMasterPath);
-            if (openWorkbook != null)
-            {
-                wasAlreadyOpen = true;
-                return openWorkbook;
-            }
-
-            if (!_pathCompatibilityService.FileExistsSafe(resolvedMasterPath))
-            {
-                throw new InvalidOperationException("Masterブックが見つかりません。 path=" + resolvedMasterPath);
-            }
-
-            bool previousEnableEvents = _application.EnableEvents;
-            try
-            {
-                _application.EnableEvents = false;
-                Excel.Workbook workbook = _application.Workbooks.Open(resolvedMasterPath, ReadOnly: true, AddToMru: false, IgnoreReadOnlyRecommended: true, UpdateLinks: 0);
-                HideWorkbookWindows(workbook);
-                return workbook;
-            }
-            finally
-            {
-                _application.EnableEvents = previousEnableEvents;
-            }
-        }
-
-        private Excel.Workbook FindOpenMasterWorkbook(string resolvedMasterPath)
-        {
-            foreach (Excel.Workbook workbook in _application.Workbooks)
-            {
-                if (string.Equals(_pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookFullName(workbook)), resolvedMasterPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    return workbook;
-                }
-            }
-
-            return null;
-        }
-
-        private string ResolveMasterPath(Excel.Workbook caseWorkbook)
-        {
-            string systemRoot = GetSystemRootFromBook(caseWorkbook);
-            return systemRoot.Length == 0
-                ? string.Empty
-                : WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(systemRoot, _pathCompatibilityService);
-        }
-
-        private string GetSystemRootFromBook(Excel.Workbook workbook)
-        {
-            string root = _pathCompatibilityService.NormalizePath(_excelInteropService.TryGetDocumentProperty(workbook, SystemRootPropertyName));
-            if (root.Length > 0 && _pathCompatibilityService.FileExistsSafe(WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(root, _pathCompatibilityService)))
-            {
-                return root;
-            }
-
-            root = _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookPath(workbook));
-            if (root.Length > 0 && _pathCompatibilityService.FileExistsSafe(WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(root, _pathCompatibilityService)))
-            {
-                return root;
-            }
-
-            string parentRoot = _pathCompatibilityService.NormalizePath(_pathCompatibilityService.GetParentFolderPath(_excelInteropService.GetWorkbookPath(workbook)));
-            if (parentRoot.Length > 0 && _pathCompatibilityService.FileExistsSafe(WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath(parentRoot, _pathCompatibilityService)))
-            {
-                return parentRoot;
-            }
-
-            return root;
         }
 
         // メソッド: MasterList の内容をテンプレート一覧へ変換する。
@@ -264,61 +178,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _logger.Error("MasterTemplateCatalogService.GetMasterListWorksheet failed.", ex);
                 return null;
             }
-        }
-
-        private static void HideWorkbookWindows(Excel.Workbook workbook)
-        {
-            if (workbook == null)
-            {
-                return;
-            }
-
-            Excel.Windows windows = null;
-            try
-            {
-                windows = workbook.Windows;
-                int windowCount = windows == null ? 0 : windows.Count;
-                for (int index = 1; index <= windowCount; index++)
-                {
-                    Excel.Window window = null;
-                    try
-                    {
-                        window = windows[index];
-                        if (window != null)
-                        {
-                            window.Visible = false;
-                        }
-                    }
-                    finally
-                    {
-                        if (window != null && Marshal.IsComObject(window))
-                        {
-                            ComObjectReleaseService.Release(window);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // 非表示化に失敗しても、Master 読み取り自体は継続する。
-            }
-            finally
-            {
-                if (windows != null && Marshal.IsComObject(windows))
-                {
-                    ComObjectReleaseService.Release(windows);
-                }
-            }
-        }
-
-        // メソッド: COM オブジェクトを解放する。
-        // 引数: comObject - 解放対象。
-        // 戻り値: なし。
-        // 副作用: COM 参照を解放する。
-        private static void ReleaseComObject(object comObject)
-        {
-            // Master catalog 読み取りで所有した COM 参照は完全解放の方針を維持する。
-            ComObjectReleaseService.FinalRelease(comObject);
         }
 
         private static string NormalizeDocButtonKey(string key)

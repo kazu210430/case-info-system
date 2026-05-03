@@ -170,7 +170,8 @@ namespace CaseInfoSystem.ExcelAddIn
             var kernelCasePathService = new KernelCasePathService(pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(ExcelInteropService, _logger);
             var masterTemplateSheetReader = new MasterTemplateSheetReaderAdapter();
-            var masterTemplateCatalogService = new MasterTemplateCatalogService(_application, ExcelInteropService, pathCompatibilityService, masterTemplateSheetReader, _logger);
+            var masterWorkbookReadAccessService = new MasterWorkbookReadAccessService(_application, ExcelInteropService, pathCompatibilityService);
+            var masterTemplateCatalogService = new MasterTemplateCatalogService(ExcelInteropService, masterWorkbookReadAccessService, masterTemplateSheetReader, _logger);
             var wordTemplateContentControlInspectionService = new WordTemplateContentControlInspectionService();
             var wordTemplateRegistrationValidationService = new WordTemplateRegistrationValidationService(wordTemplateContentControlInspectionService, _logger);
             var documentOutputService = new DocumentOutputService(ExcelInteropService, pathCompatibilityService, _logger);
@@ -323,6 +324,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 .Compose(
                     pathCompatibilityService,
                     ExcelInteropService,
+                    masterWorkbookReadAccessService,
                     masterTemplateSheetReader,
                     WorkbookRoleResolver,
                     documentCommandService,
@@ -583,6 +585,7 @@ namespace CaseInfoSystem.ExcelAddIn
         internal AddInTaskPaneComposition Compose(
             PathCompatibilityService pathCompatibilityService,
             ExcelInteropService excelInteropService,
+            MasterWorkbookReadAccessService masterWorkbookReadAccessService,
             IMasterTemplateSheetReader masterTemplateSheetReader,
             WorkbookRoleResolver workbookRoleResolver,
             DocumentCommandService documentCommandService,
@@ -597,9 +600,9 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             var caseTaskPaneViewStateBuilder = new CaseTaskPaneViewStateBuilder();
             var taskPaneSnapshotBuilderService = new TaskPaneSnapshotBuilderService(
-                _application,
                 excelInteropService,
                 pathCompatibilityService,
+                masterWorkbookReadAccessService,
                 masterTemplateSheetReader,
                 _logger);
             ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader = taskPaneSnapshotBuilderService;

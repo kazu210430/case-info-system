@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Xml.Linq;
 using Microsoft.Office.Core;
@@ -64,21 +63,21 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private static readonly XNamespace CustomPropertiesNamespace = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
 
-		private readonly Application _application;
-
 		private readonly ExcelInteropService _excelInteropService;
 
 		private readonly PathCompatibilityService _pathCompatibilityService;
+
+		private readonly MasterWorkbookReadAccessService _masterWorkbookReadAccessService;
 
 		private readonly IMasterTemplateSheetReader _masterTemplateSheetReader;
 
 		private readonly Logger _logger;
 
-		internal TaskPaneSnapshotBuilderService (Application application, ExcelInteropService excelInteropService, PathCompatibilityService pathCompatibilityService, IMasterTemplateSheetReader masterTemplateSheetReader, Logger logger)
+		internal TaskPaneSnapshotBuilderService (ExcelInteropService excelInteropService, PathCompatibilityService pathCompatibilityService, MasterWorkbookReadAccessService masterWorkbookReadAccessService, IMasterTemplateSheetReader masterTemplateSheetReader, Logger logger)
 		{
-			_application = application ?? throw new ArgumentNullException ("application");
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
+			_masterWorkbookReadAccessService = masterWorkbookReadAccessService ?? throw new ArgumentNullException ("masterWorkbookReadAccessService");
 			_masterTemplateSheetReader = masterTemplateSheetReader ?? throw new ArgumentNullException ("masterTemplateSheetReader");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
@@ -89,8 +88,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				return new TaskPaneBuildResult (string.Empty, updatedCaseSnapshotCache: false);
 			}
 			long num = 0L;
-			bool openedNow = false;
-			Workbook workbook2 = null;
+			MasterWorkbookReadAccessResult readAccess = null;
 			try {
 				long masterVersion = 0L;
 				num = 5L;
@@ -147,15 +145,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					}
 				}
 				num = 20L;
-				if (workbook2 == null) {
-					workbook2 = OpenMasterReadOnly (workbook, out openedNow);
+				if (readAccess == null) {
+					string resolvedMasterPath = _masterWorkbookReadAccessService.ResolveMasterPath (workbook, MasterWorkbookPathResolutionMode.TaskPaneSnapshotBuilder);
+					readAccess = _masterWorkbookReadAccessService.OpenReadOnly (
+						resolvedMasterPath,
+						MasterWorkbookOpenSearchMode.FullPathOrFileName,
+						path => new FileNotFoundException ("Masterブックが見つかりません。", path));
 				}
-				Worksheet masterListWorksheet = GetMasterListWorksheet (workbook2);
+				Worksheet masterListWorksheet = GetMasterListWorksheet (readAccess.Workbook);
 				if (masterListWorksheet == null) {
 					throw new InvalidOperationException ("雛形一覧シートが見つかりません。");
 				}
 				num = 30L;
-				long documentPropertyLong2 = GetDocumentPropertyLong (workbook2, "TASKPANE_MASTER_VERSION", 0L);
+				long documentPropertyLong2 = GetDocumentPropertyLong (readAccess.Workbook, "TASKPANE_MASTER_VERSION", 0L);
 				_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", documentPropertyLong2.ToString ());
 				List<string> list = new List<string> ();
 				Dictionary<string, int> tabOrder = new Dictionary<string, int> (StringComparer.OrdinalIgnoreCase);
@@ -175,9 +177,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Error ("TaskPaneSnapshotBuilderService.BuildSnapshotText failed. step=" + num, ex);
 				return new TaskPaneBuildResult (JoinFields ("META", "2", "ERROR", "step=" + num + " / " + ex.Message), updatedCaseSnapshotCache: false);
 			} finally {
-				if (openedNow && workbook2 != null) {
+				if (readAccess != null) {
 					try {
-						workbook2.Close (false, Type.Missing, Type.Missing);
+						readAccess.CloseIfOwned ();
 					} catch (Exception exception) {
 						_logger.Error ("TaskPaneSnapshotBuilderService.BuildSnapshotText close failed.", exception);
 					}
@@ -193,11 +195,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				return false;
 			}
 			try {
-				string text = ResolveMasterPath (caseWorkbook);
+				string text = _masterWorkbookReadAccessService.ResolveMasterPath (caseWorkbook, MasterWorkbookPathResolutionMode.TaskPaneSnapshotBuilder);
 				if (string.IsNullOrWhiteSpace (text) || !_pathCompatibilityService.FileExistsSafe (text)) {
 					return false;
 				}
-				Workbook workbook = FindOpenMasterWorkbook (text);
+				Workbook workbook = _masterWorkbookReadAccessService.FindOpenMasterWorkbook (text, MasterWorkbookOpenSearchMode.FullPathOrFileName);
 				if (workbook != null) {
 					masterVersion = GetDocumentPropertyLong (workbook, "TASKPANE_MASTER_VERSION", 0L);
 					return true;
@@ -295,74 +297,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		private Workbook OpenMasterReadOnly (Workbook caseWorkbook, out bool openedNow)
-		{
-			openedNow = false;
-			string text = ResolveMasterPath (caseWorkbook);
-			if (string.IsNullOrWhiteSpace (text)) {
-				throw new InvalidOperationException ("Masterブックのパスを解決できませんでした。");
-			}
-			Workbook workbook = FindOpenMasterWorkbook (text);
-			if (workbook != null) {
-				return workbook;
-			}
-			if (!_pathCompatibilityService.FileExistsSafe (text)) {
-				throw new FileNotFoundException ("Masterブックが見つかりません。", text);
-			}
-			bool enableEvents = _application.EnableEvents;
-			try {
-				_application.EnableEvents = false;
-				Workbook workbook2 = _application.Workbooks.Open (text, 0, true, Type.Missing, Type.Missing, Type.Missing, true, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, false, Type.Missing, Type.Missing);
-				HideWorkbookWindows (workbook2);
-				openedNow = true;
-				return workbook2;
-			} finally {
-				_application.EnableEvents = enableEvents;
-			}
-		}
-
-		private Workbook FindOpenMasterWorkbook (string masterPath)
-		{
-			if (string.IsNullOrWhiteSpace (masterPath)) {
-				return null;
-			}
-			Workbook workbook = _excelInteropService.FindOpenWorkbook (masterPath);
-			if (workbook != null) {
-				return workbook;
-			}
-			string fileNameFromPath = _pathCompatibilityService.GetFileNameFromPath (masterPath);
-			if (string.IsNullOrWhiteSpace (fileNameFromPath)) {
-				return null;
-			}
-			foreach (Workbook workbook2 in _application.Workbooks) {
-				string workbookName = _excelInteropService.GetWorkbookName (workbook2);
-				if (string.Equals (workbookName, fileNameFromPath, StringComparison.OrdinalIgnoreCase)) {
-					return workbook2;
-				}
-			}
-			return null;
-		}
-
-		private string ResolveMasterPath (Workbook caseWorkbook)
-		{
-			string text = _pathCompatibilityService.NormalizePath (_excelInteropService.TryGetDocumentProperty (caseWorkbook, "SYSTEM_ROOT"));
-			if (text.Length > 0) {
-				return WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath (text, _pathCompatibilityService);
-			}
-			string text2 = _pathCompatibilityService.NormalizePath (_excelInteropService.GetWorkbookPath (caseWorkbook));
-			if (text2.Length > 0) {
-				string text3 = WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath (text2, _pathCompatibilityService);
-				if (_pathCompatibilityService.FileExistsSafe (text3)) {
-					return text3;
-				}
-				string text4 = _pathCompatibilityService.NormalizePath (_pathCompatibilityService.GetParentFolderPath (text2));
-				if (text4.Length > 0) {
-					return WorkbookFileNameResolver.ResolveExistingKernelWorkbookPath (text4, _pathCompatibilityService);
-				}
-			}
-			return string.Empty;
-		}
-
 		private Worksheet GetMasterListWorksheet (Workbook masterWorkbook)
 		{
 			Worksheet worksheet = _excelInteropService.FindWorksheetByCodeName (masterWorkbook, "shMasterList");
@@ -374,36 +308,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception exception) {
 				_logger.Error ("TaskPaneSnapshotBuilderService.GetMasterListWorksheet failed.", exception);
 				return null;
-			}
-		}
-
-		private static void HideWorkbookWindows (Workbook workbook)
-		{
-			if (workbook == null) {
-				return;
-			}
-			Windows windows = null;
-			try {
-				windows = workbook.Windows;
-				int windowCount = (windows == null) ? 0 : windows.Count;
-				for (int index = 1; index <= windowCount; index++) {
-					Window window = null;
-					try {
-						window = windows [index];
-						if (window != null) {
-							window.Visible = false;
-						}
-					} finally {
-						if (window != null && Marshal.IsComObject (window)) {
-							ComObjectReleaseService.Release (window);
-						}
-					}
-				}
-			} catch {
-			} finally {
-				if (windows != null && Marshal.IsComObject (windows)) {
-					ComObjectReleaseService.Release (windows);
-				}
 			}
 		}
 
@@ -476,12 +380,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			long value;
 			return tabBackColors.TryGetValue (tabName, out value) ? value : 0L;
-		}
-
-		private static void ReleaseComObject (object comObject)
-		{
-			// Snapshot 構築中に所有した COM 参照は完全解放の方針を維持する。
-			ComObjectReleaseService.FinalRelease (comObject);
 		}
 
 		private string LoadSnapshotCache (Workbook workbook, string countPropName, string partPropPrefix)

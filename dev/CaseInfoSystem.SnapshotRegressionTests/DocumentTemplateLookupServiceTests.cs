@@ -270,7 +270,8 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(excelInteropService, logger);
             var masterTemplateSheetReader = new MasterTemplateSheetReaderAdapter();
-            var masterTemplateCatalogService = new MasterTemplateCatalogService(application, excelInteropService, pathCompatibilityService, masterTemplateSheetReader, logger);
+            var masterWorkbookReadAccessService = new MasterWorkbookReadAccessService(application, excelInteropService, pathCompatibilityService);
+            var masterTemplateCatalogService = new MasterTemplateCatalogService(excelInteropService, masterWorkbookReadAccessService, masterTemplateSheetReader, logger);
             var lookupService = new DocumentTemplateLookupService(taskPaneSnapshotCacheService, masterTemplateCatalogService);
 
             return new TestServices(

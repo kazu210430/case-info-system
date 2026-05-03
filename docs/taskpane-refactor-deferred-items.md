@@ -172,6 +172,12 @@ fallback path の route、post-action refresh、display request の順序を別 
 - `doc` handler の `catch (Exception)` に入ったときに `ShowUserError(...)` が呼ばれるか
 - `accounting` handler の `catch (Exception)` に入ったときに failed state が render されるか
 
+### フェーズ完了として固定する判断
+- `accounting` handler の exception-only path には `WhenAccountingActionThrows_LogsErrorAndSkipsPostActionRefresh` を追加済みである。
+- `doc` handler と dispatcher fallback の exception-only path については、追加しない判断で止める。
+- 理由は、`doc` では prompt / cleanup を含む周辺フロー、dispatcher fallback では frozen route / refresh order を早期に固定しやすく、追加価値より固定化リスクが大きいからである。
+- このため、TaskPaneActionDispatcher 周辺の例外処理フェーズは現時点で完了扱いとする。
+
 ### 関連箇所
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneActionDispatcher.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseDocumentActionHandler.cs`

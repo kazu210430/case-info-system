@@ -285,6 +285,8 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 
 - `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` が `WorkbookOpen` 直後の window-dependent refresh skip 境界を定義します。
 - `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy を利用する側であり、skip 条件を個別に重複保持しません。
+- `TaskPaneRefreshOrchestrationService` は `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` に helper split 済みで、現在は順序調停寄りに整理されています。
+- `TaskPaneRefreshCoordinator` は `KernelFlickerTrace` の structured trace を維持し、`04150a7` で obsolete route に付随していた duplicate plain log を削除済みです。
 
 - 特別ボタン
   - `案件一覧登録`
@@ -360,6 +362,7 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 
 - 現在の実装では、この `openKernelWorkbook` 自体が `GetOpenKernelWorkbook()` の探索順に依存して選ばれます。
 - したがって cache invalidate の境界は root 単位に改善済みですが、その upstream にある Kernel workbook 選択境界は将来課題として残ります。
+- `MasterTemplateCatalogService` と `TaskPaneSnapshotBuilderService` は、どちらも `MasterWorkbookReadAccessService` を共有して Master path 解決と read-only open を揃えています。
 
 #### 新規 CASE 作成時の流れ
 

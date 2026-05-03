@@ -7,7 +7,7 @@
 1. 巨大サービスの責務集中の整理
 2. App 層からの `ThisAddIn` / `Globals.ThisAddIn` 直接依存の整理
 
-今回の更新では、現行 `main` に取り込み済みの bridge 化を完了済みとして反映し、未着手・保留の領域と別途調査対象を切り分けます。
+今回の更新では、現行 `main` に取り込み済みの bridge 化を完了済みとして反映し、未確定・実機未確認の領域と別途調査対象を切り分けます。
 
 ## 参照した前提 docs
 
@@ -228,6 +228,7 @@
 - `ThisAddInActiveTaskPaneRefreshBridge`
 - `ThisAddInKernelSheetPaneRefreshBridge`
 - `ThisAddInWindowActivatePanePredicateBridge`
+- `ThisAddInCasePaneHostBridge`
 
 このため、App 層から `ThisAddIn` の機能へ寄せる既存方式自体は存在する。
 
@@ -301,29 +302,50 @@
   - `Handle(...)` の分岐順は `protection 判定 -> external workbook 検出 -> suppression 判定 -> refresh` のまま維持されている。
   - この bridge 化は現行 `main` に取り込み済みである。
 
-## 2-3. 残っている依存箇所一覧
+### `KernelCasePresentationService` / `TaskPaneRefreshOrchestrationService` / `TaskPaneRefreshCoordinator` / `WorkbookLifecycleCoordinator`
+
+- 追加済み bridge
+  - `ICasePaneHostBridge`
+  - `ThisAddInCasePaneHostBridge`
+- bridge 経由へ寄った主な機能
+  - `SuppressUpcomingCasePaneActivationRefresh(...)`
+  - `ShowWorkbookTaskPaneWhenReady(...)`
+  - `ShouldIgnoreWorkbookActivateDuringCaseProtection(...)`
+  - `ShouldIgnoreTaskPaneRefreshDuringCaseProtection(...)`
+  - `HasVisibleCasePaneForWorkbookWindow(...)`
+  - `BeginCaseWorkbookActivateProtection(...)`
+- 現在の呼び出し先
+  - `_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh(...)`
+  - `_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady(...)`
+  - `_casePaneHostBridge.ShouldIgnoreWorkbookActivateDuringCaseProtection(...)`
+  - `_casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(...)`
+  - `_casePaneHostBridge.HasVisibleCasePaneForWorkbookWindow(...)`
+  - `_casePaneHostBridge.BeginCaseWorkbookActivateProtection(...)`
+- 現行コードで確認できること
+  - `AddInCompositionRoot` が `ThisAddInCasePaneHostBridge` を 1 回生成し、上記 4 サービスへ注入している。
+  - suppression / ready-show / protection / visible pane 判定の呼び出し順自体を変えず、境界だけ bridge 化している。
+  - したがって、これら 4 サービスは「直依存が残る候補」ではなく、「bridge 化は完了済みだが危険領域の挙動は別途調査対象」の扱いに更新する。
+
+## 2-3. 直依存が主論点として残る production 境界
 
 | ファイル | 箇所 | 何のために触れているか | 既存 bridge へ寄せやすさ | 主な注意点 |
 | --- | --- | --- | --- | --- |
-| `KernelCasePresentationService.cs` | `SuppressUpcomingCasePaneActivationRefresh` / `ShowWorkbookTaskPaneWhenReady` 呼出 | CASE 表示直後の suppression と ready-show 予約 | 中程度 | suppression と ready-show の順序を壊さないこと |
-| `TaskPaneRefreshOrchestrationService.cs` | `Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection` / `HasVisibleCasePaneForWorkbookWindow` | protection 判定と visible pane 早期完了判定 | 中程度 | retry 系の最上流条件なので位置ずれが危険 |
-| `TaskPaneRefreshCoordinator.cs` | `Globals.ThisAddIn.BeginCaseWorkbookActivateProtection` | CASE refresh 成功後の protection 開始 | 低い | protection 3入口との組み合わせを崩さないこと |
-| `WorkbookLifecycleCoordinator.cs` | `Globals.ThisAddIn.ShouldIgnoreWorkbookActivateDuringCaseProtection` | WorkbookActivate 再入抑止 | 中程度 | activate protection 判定の入口なので timing ずれが危険 |
 | `TaskPaneManager.cs` | `TaskPaneHost` 生成時の `ThisAddIn` 注入 / `RequestTaskPaneDisplayForTargetWindow` | host の VSTO 境界と post-action refresh 再表示経路 | 低い | host 管理と表示調停が密結合 |
+| `TaskPaneHost.cs` | `CreateTaskPane(...)` / `RemoveTaskPane(...)` | VSTO `CustomTaskPane` の生成・破棄境界 | 低い | 表示ロジックではなく VSTO 実体境界として残る |
 
 ## 2-4. AddInCompositionRoot から見える境界
 
 ### 確認できたこと
 
 - `AccountingSetCreateService`、`DocumentCreateService`、`DocumentCommandService`、`WindowActivatePaneHandlingService` は bridge 経由の境界を現行 `main` に持つ。
+- `KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` も `ThisAddInCasePaneHostBridge` 経由の境界を現行 `main` に持つ。
 - `TaskPaneManager` には `ThisAddIn` 本体を直接渡している。
-- `WindowActivatePaneHandlingService` と `TaskPaneRefreshOrchestrationService` には delegate 群を注入しているが、実処理の一部では依然 `Globals.ThisAddIn` に戻る。
 - `TaskPaneDisplayRetryCoordinator` と `WorkbookTaskPaneDisplayAttemptCoordinator` は `AddInTaskPaneCompositionFactory` で生成され、`TaskPaneRefreshOrchestrationService` に注入される。
 
 ### 整理上の示唆
 
-- `AccountingSetCreateService`、`DocumentCreateService`、`DocumentCommandService`、`WindowActivatePaneHandlingService` は未着手候補ではなく、完了済みとして扱うべきである。
-- `KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` は protection / ready-show / suppression の危険領域として別途調査対象に残る。
+- `AccountingSetCreateService`、`DocumentCreateService`、`DocumentCommandService`、`WindowActivatePaneHandlingService`、`KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` は、bridge 実装と `AddInCompositionRoot` の配線まで main に反映済みとして扱うべきである。
+- `KernelCasePresentationService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`WorkbookLifecycleCoordinator` は、直依存の問題よりも protection / ready-show / suppression の危険領域として別途調査対象に残る。
 - retry / protection / ready-show の確定 policy と未確定事項の切り分けは `docs/taskpane-refresh-policy.md` を正本として読む。
 - `TaskPaneManager` と `TaskPaneHost` は `ThisAddIn` による VSTO `CustomTaskPane` 作成境界を持つため、ここは単純な `Globals.ThisAddIn` 排除より一段重い。
 
@@ -469,7 +491,7 @@
 
 ### refresh 抑止・再試行・表示安定化との関係
 
-- `TryRefreshTaskPane(...)` の最上流で `Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(...)` を見ており、retry 中でも protection が優先される。
+- `TryRefreshTaskPane(...)` の最上流では `RefreshPreconditionEvaluator` が `_casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(...)` を見ており、retry 中でも protection が優先される。
 - `ResolveWorkbookPaneWindow(...)` は 2 回まで同期的に window 解決を試し、それでも駄目なら retry coordinator 側へ委譲する。
 - `ShowWorkbookTaskPaneWhenReady(...)` の ready-show attempt は、初回だけ workbook window を visible に補助する。
 - fallback の `_pendingPaneRefreshTimer` は workbook object を見失っても active CASE context が残っていれば active refresh を継続する。
@@ -498,10 +520,14 @@
 - `DocumentCreateService`
 - `DocumentCommandService`
 - `WindowActivatePaneHandlingService`
+- `KernelCasePresentationService`
+- `TaskPaneRefreshOrchestrationService`
+- `TaskPaneRefreshCoordinator`
+- `WorkbookLifecycleCoordinator`
 
-上記 4 本は、現行 `main` では bridge 実装と `AddInCompositionRoot` の配線を確認できるため、未着手候補ではなく完了済みとして扱う。
+上記 8 本は、現行 `main` では bridge 実装と `AddInCompositionRoot` の配線を確認できるため、未着手候補ではなく完了済みとして扱う。
 
-### 未着手・保留として残す対象
+### 挙動変更未着手・実機未確認として残す対象
 
 - `KernelCasePresentationService`
 - `TaskPaneRefreshOrchestrationService`
@@ -510,7 +536,7 @@
 - `TaskPaneManager`
 - `KernelWorkbookService`
 
-上記は、ready-show / suppression / protection / VSTO 境界の危険領域を含むため、今回の docs 更新では完了扱いへ移さず、未着手・保留として残す。
+上記は、bridge 化の完了とは別に、ready-show / suppression / protection / VSTO 境界の危険領域を含むため、今回の docs 更新では挙動変更の完了扱いへ移さない。
 
 ### 別途調査対象として残す事項
 

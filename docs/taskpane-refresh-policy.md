@@ -27,12 +27,19 @@
 
 - `KernelCasePresentationService`
 - `TaskPaneRefreshOrchestrationService`
+- `TaskPaneRefreshPreconditionPolicy`
 - `TaskPaneDisplayRetryCoordinator`
 - `WorkbookTaskPaneDisplayAttemptCoordinator`
 - `TaskPaneRefreshCoordinator`
 - `WorkbookLifecycleCoordinator`
 - `WindowActivatePaneHandlingService`
 - `KernelHomeCasePaneSuppressionCoordinator`
+
+## 現在地
+
+- `TaskPaneRefreshOrchestrationService` は、現在の `main` では refresh 本線の順序調停に寄っており、`RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` への helper split が main に反映済みです。
+- protection / visible pane 判定 / ready-show 要求に関わる case-pane 系 `ThisAddIn` 依存は `ICasePaneHostBridge` 経由へ整理済みです。
+- `TaskPaneRefreshCoordinator` は `KernelFlickerTrace` の structured trace を維持し、`04150a7` で obsolete route に付随していた duplicate plain log を削除済みです。
 
 ## WorkbookOpen 境界
 
@@ -150,6 +157,7 @@
 
 ### docs 上で整理候補として残すもの
 
+- `ScheduleActiveTaskPaneRefresh` が production route か dead route 候補かの整理
 - `80ms` / `400ms` / `3 attempts` / `5秒` を「正式仕様値」として固定するか、「現行実装値」として扱い続けるかの整理
 - active target / workbook target を分けている pending retry state の必要性
 - active CASE context fallback の必要条件

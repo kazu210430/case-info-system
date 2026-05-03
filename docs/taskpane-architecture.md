@@ -71,6 +71,11 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - 優先順は `CASE cache -> Base cache -> Master rebuild`
 - 必要時に CASE cache を更新する
 
+### `MasterWorkbookReadAccessService`
+
+- `MasterTemplateCatalogService` と `TaskPaneSnapshotBuilderService` が共有する Master 読み取り境界である
+- Master path 解決、read-only open、所有 workbook の close、hidden window 化を一元化する
+
 ### `TaskPaneSnapshotCacheService`
 
 - 文書ボタン実行時の CASE cache lookup を担う
@@ -81,6 +86,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 - host 管理、role 別 render 切替、render/show orchestration を担う
 - `TaskPaneHostRegistry` を内包し、VSTO `TaskPaneHost` の生成・差し替え・破棄境界を保持する
+- `TaskPaneRefreshFlowCoordinator`、`TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` で lightweight helper / policy split 済みである
 
 ### `TaskPaneActionDispatcher`
 
@@ -96,6 +102,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 ### `TaskPaneRefreshOrchestrationService` / `WindowActivatePaneHandlingService`
 
 - TaskPane 再描画要求、遅延表示、Window 単位の表示調停を担う
+- `TaskPaneRefreshOrchestrationService` は `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` を使う順序調停寄りの構造になっている
 - retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` を参照する
 - host 再利用と再表示の方針を維持する
 

@@ -4,7 +4,7 @@
 
 `TaskPaneManager` の現行責務を、`main` に反映済みの実装と既存 docs を前提に棚卸しする。
 
-現時点では `TaskPaneHostRegistry` の外出しまで反映済みとし、inventory は現コードを前提に整理する。
+現時点では `TaskPaneHostRegistry` の外出しと、`TaskPaneManager` 周辺の lightweight helper / policy split まで反映済みとし、inventory は現コードを前提に整理する。
 
 ## 参照した docs
 
@@ -65,7 +65,9 @@
 - CASE pane の snapshot build / parse / view state build は `CasePaneSnapshotRenderService` と関連 reader / builder に分離済み
 - CASE cache 更新後処理は `CasePaneCacheRefreshNotificationService` に分離済み
 - CASE pane の UIイベント dispatch と post-action refresh 調停は `TaskPaneActionDispatcher` に分離済み
-- host reuse / notification の一部は policy class に切り出されている
+- `TaskPaneRefreshFlowCoordinator` により `RefreshPane(...)` 主経路の調停責務は helper 化済み
+- `TaskPaneManagerDiagnosticHelper` により descriptor / trace 補助は helper 化済み
+- `TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` により reuse / render 判定の lightweight helper split が main に反映済み
 
 ## まだ TaskPaneManager に残っているもの
 

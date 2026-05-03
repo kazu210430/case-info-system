@@ -49,15 +49,15 @@
 - CASE pane activation suppression は `KernelCasePresentationService.ExecuteDeferredPresentationEnhancements(...)` で、次の順に設定される。
   - `_transientPaneSuppressionService.ReleaseWorkbook(...)`
   - `EnsureWorkbookWindowVisibleBeforeReadyShow(...)`
-  - `Globals.ThisAddIn.SuppressUpcomingCasePaneActivationRefresh(...)`
-  - `Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady(...)`
+  - `_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh(...)`
+  - `_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady(...)`
 - この順序は `docs/a-priority-service-responsibility-inventory.md` の既存記述とも一致している。
 - suppression の有効期限は `KernelHomeCasePaneSuppressionCoordinator` の `SuppressionDuration = TimeSpan.FromSeconds(5)` を使用する。
 - CASE pane activation suppression は対象 workbook の `FullName` を記録し、`WorkbookActivate` 用 1 回、`WindowActivate` 用 1 回のカウントを持つ。
 - suppression は次のいずれかで解除される。
   - `WorkbookActivate` と `WindowActivate` の両カウント消費後
   - 5 秒失効時
-- CASE foreground protection は `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` で、CASE refresh 成功後に `Globals.ThisAddIn.BeginCaseWorkbookActivateProtection(...)` を呼ぶことで開始される。
+- CASE foreground protection は `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` で、CASE refresh 成功後に `_casePaneHostBridge.BeginCaseWorkbookActivateProtection(...)` を呼ぶことで開始される。
 - foreground protection も `SuppressionDuration` を使い、5 秒後に期限切れとなる。
 - protection の期限切れ時は `KernelHomeCasePaneSuppressionCoordinator.ClearCaseWorkbookActivateProtection("Expired")` が呼ばれる。
 
@@ -75,12 +75,13 @@
   - `PendingPaneRefreshMaxAttempts = 3`
   - `WorkbookPaneWindowResolveDelayMs = 80`
   - `WorkbookPaneWindowResolveAttempts = 2`
-- `KernelCasePresentationService` の `Globals.ThisAddIn.ShowWorkbookTaskPaneWhenReady(...)` は、`ThisAddIn` を経由して `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` に到達する。
+- `KernelCasePresentationService` の `_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady(...)` は、`ThisAddInCasePaneHostBridge` を経由して `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` に到達する。
 - `ShowWorkbookTaskPaneWhenReady(...)` は `TaskPaneDisplayRetryCoordinator.ShowWhenReady(...)` を呼び、次を渡す。
   - `TryShowWorkbookTaskPaneOnce`
   - `ScheduleTaskPaneReadyRetry`
   - `StopPendingPaneRefreshTimer`
   - `ScheduleWorkbookTaskPaneRefresh`
+- 現行 `main` の `TaskPaneRefreshOrchestrationService` では、`RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` への helper split が main に反映済みである。
 - `TaskPaneDisplayRetryCoordinator.ShowWhenReady(...)` は次の順に動く。
   - attempt 1 を即時実行
   - 失敗したら attempt 2 以降を `scheduleRetry` で予約
@@ -102,8 +103,7 @@
 - `TaskPaneRefreshOrchestrationService.TryShowWorkbookTaskPaneOnce(...)` では、window 解決後に `visibleCasePaneAlreadyShown` を判定する。
 - 条件は次のとおりである。
   - `resolvedWindow != null`
-  - `Globals.ThisAddIn != null`
-  - `Globals.ThisAddIn.HasVisibleCasePaneForWorkbookWindow(targetWorkbook, resolvedWindow)`
+  - `_casePaneHostBridge.HasVisibleCasePaneForWorkbookWindow(targetWorkbook, resolvedWindow)`
 - `TaskPaneManager.HasVisibleCasePaneForWorkbookWindow(...)` 側では、さらに次を確認する。
   - `windowKey` が取得できること
   - その `windowKey` に対応する host が存在すること
@@ -138,9 +138,9 @@
 
 ### 確認できた事実
 
-- `WorkbookLifecycleCoordinator.OnWorkbookActivate(...)` は入口直後に `Globals.ThisAddIn.ShouldIgnoreWorkbookActivateDuringCaseProtection(workbook)` を確認し、真なら後続処理へ進まない。
+- `WorkbookLifecycleCoordinator.OnWorkbookActivate(...)` は入口直後に `_casePaneHostBridge.ShouldIgnoreWorkbookActivateDuringCaseProtection(workbook)` を確認し、真なら後続処理へ進まない。
 - `WindowActivatePaneHandlingService.Handle(...)` は最初の分岐で `_windowActivatePanePredicateBridge.ShouldIgnoreDuringCaseProtection(workbook, window)` を確認し、真なら後続処理へ進まない。
-- `TaskPaneRefreshOrchestrationService.TryRefreshTaskPane(...)` は最上流で `Globals.ThisAddIn.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window)` を確認し、真なら `TaskPaneRefreshAttemptResult.Skipped()` を返す。
+- `TaskPaneRefreshOrchestrationService.TryRefreshTaskPane(...)` は最上流の `RefreshPreconditionEvaluator` で `_casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window)` を確認し、真なら `TaskPaneRefreshAttemptResult.Skipped()` を返す。
 - `KernelHomeCasePaneSuppressionCoordinator` 側の挙動は次のとおりである。
   - `ShouldIgnoreWorkbookActivateDuringProtection(...)` は、対象 workbook と active window が protected target と一致する場合に無視する。
   - `ShouldIgnoreWindowActivateDuringProtection(...)` は、対象 workbook と対象 window が protected target と一致する場合に無視する。
@@ -159,6 +159,7 @@
 - `KernelCasePresentationService` の実装断面も、少なくとも deferred presentation 部分ではこの順序と整合している。
 - `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` は ready-show を即時 1 回で完了させず、`TaskPaneDisplayRetryCoordinator` と `WorkbookTaskPaneDisplayAttemptCoordinator` を通して段階的に待ち合わせる。
 - `TryShowWorkbookTaskPaneOnce(...)` では attempt 1 の時だけ `EnsureWorkbookWindowVisibleForTaskPaneDisplay(...)` を呼び、Workbook Window を visible に補助する。
+- `TaskPaneRefreshCoordinator` は `KernelFlickerTrace` の structured trace を維持し、`04150a7` で context-resolved / window-resolved / refresh-completed の duplicate plain log が削除済みである。
 
 ### 補足
 

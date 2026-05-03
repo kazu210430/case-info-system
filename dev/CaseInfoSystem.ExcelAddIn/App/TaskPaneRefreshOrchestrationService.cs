@@ -96,12 +96,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return TaskPaneRefreshAttemptResult.Skipped();
             }
 
-            TaskPaneRefreshAttemptResult result = _taskPaneRefreshCoordinator.TryRefreshTaskPane(
+            RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(
+                _taskPaneRefreshCoordinator,
                 reason,
                 workbook,
                 window,
-                _getKernelHomeForm == null ? null : _getKernelHomeForm(),
-                _getTaskPaneRefreshSuppressionCount == null ? 0 : _getTaskPaneRefreshSuppressionCount());
+                _getKernelHomeForm,
+                _getTaskPaneRefreshSuppressionCount);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshOrchestrationService action=try-refresh-end refreshAttemptId="
@@ -113,8 +114,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", inputWindow="
                 + FormatWindowDescriptor(window)
                 + ", result="
-                + (result == null ? "null" : result.IsRefreshSucceeded.ToString()));
-            return result;
+                + dispatchExecutionResult.ResultText);
+            return dispatchExecutionResult.AttemptResult;
         }
 
         internal bool IsTaskPaneRefreshSucceeded(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -569,6 +570,46 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 return RefreshPreconditionEvaluationResult.Proceed();
+            }
+        }
+
+        private static class RefreshDispatchShell
+        {
+            internal static RefreshDispatchExecutionResult Dispatch(
+                TaskPaneRefreshCoordinator taskPaneRefreshCoordinator,
+                string reason,
+                Excel.Workbook workbook,
+                Excel.Window window,
+                Func<KernelHomeForm> getKernelHomeForm,
+                Func<int> getTaskPaneRefreshSuppressionCount)
+            {
+                TaskPaneRefreshAttemptResult attemptResult = taskPaneRefreshCoordinator.TryRefreshTaskPane(
+                    reason,
+                    workbook,
+                    window,
+                    getKernelHomeForm == null ? null : getKernelHomeForm(),
+                    getTaskPaneRefreshSuppressionCount == null ? 0 : getTaskPaneRefreshSuppressionCount());
+                return RefreshDispatchExecutionResult.FromAttemptResult(attemptResult);
+            }
+        }
+
+        private sealed class RefreshDispatchExecutionResult
+        {
+            private RefreshDispatchExecutionResult(TaskPaneRefreshAttemptResult attemptResult, string resultText)
+            {
+                AttemptResult = attemptResult;
+                ResultText = resultText ?? string.Empty;
+            }
+
+            internal TaskPaneRefreshAttemptResult AttemptResult { get; }
+
+            internal string ResultText { get; }
+
+            internal static RefreshDispatchExecutionResult FromAttemptResult(TaskPaneRefreshAttemptResult attemptResult)
+            {
+                return new RefreshDispatchExecutionResult(
+                    attemptResult,
+                    attemptResult == null ? "null" : attemptResult.IsRefreshSucceeded.ToString());
             }
         }
 

@@ -52,50 +52,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 throw new ArgumentNullException(nameof(host));
             }
 
-            if (_hostsByWindowKey.TryGetValue(host.WindowKey, out TaskPaneHost existingHost)
-                && !ReferenceEquals(existingHost, host))
+            if (TryGetDifferentRegisteredHost(host, out TaskPaneHost existingHost))
             {
-                existingHost.Dispose();
+                DisposeHostForReplacement(existingHost);
             }
 
-            _hostsByWindowKey[host.WindowKey] = host;
+            StoreRegisteredHost(host);
         }
 
         internal TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
         {
-            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost existingHost))
+            if (TryGetReusableHost(windowKey, role, out TaskPaneHost existingHost))
             {
-                bool roleMatches =
-                    (role == WorkbookRole.Kernel && existingHost.Control is KernelNavigationControl)
-                    || (role == WorkbookRole.Case && existingHost.Control is DocumentButtonsControl)
-                    || (role == WorkbookRole.Accounting && existingHost.Control is AccountingNavigationControl);
-                if (roleMatches)
-                {
-                    return existingHost;
-                }
-
-                existingHost.Dispose();
-                _hostsByWindowKey.Remove(windowKey);
+                return existingHost;
             }
 
-            TaskPaneHost host = _taskPaneHostFactory.CreateHost(windowKey, window, role, out string paneRoleName);
-            _hostsByWindowKey.Add(windowKey, host);
-            _logger.Debug(nameof(TaskPaneHostRegistry), "TaskPane host registered. role=" + paneRoleName + ", windowKey=" + windowKey);
-            return host;
+            RemoveExistingHostForReplacement(windowKey);
+            return CreateAndRegisterHost(windowKey, window, role);
         }
 
         internal void RemoveWorkbookPanes(string workbookFullName)
         {
-            var targetKeys = new List<string>();
-            foreach (KeyValuePair<string, TaskPaneHost> pair in _hostsByWindowKey)
-            {
-                if (string.Equals(pair.Value.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
-                {
-                    targetKeys.Add(pair.Key);
-                }
-            }
-
-            foreach (string windowKey in targetKeys)
+            foreach (string windowKey in CollectWindowKeysForWorkbook(workbookFullName))
             {
                 RemoveHost(windowKey);
             }
@@ -103,9 +81,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void DisposeAll()
         {
-            foreach (TaskPaneHost host in new List<TaskPaneHost>(_hostsByWindowKey.Values))
+            foreach (TaskPaneHost host in SnapshotHosts())
             {
-                host.Dispose();
+                DisposeHostForReplacement(host);
             }
 
             _hostsByWindowKey.Clear();
@@ -118,22 +96,109 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            if (_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=remove-host host="
-                    + _formatHostDescriptor(host));
-                _hostsByWindowKey.Remove(windowKey);
-                try
+                return;
+            }
+
+            LogHostRemoval(host);
+            _hostsByWindowKey.Remove(windowKey);
+            DisposeHostAfterRemoval(windowKey, host);
+        }
+
+        private bool TryGetDifferentRegisteredHost(TaskPaneHost host, out TaskPaneHost existingHost)
+        {
+            if (_hostsByWindowKey.TryGetValue(host.WindowKey, out existingHost))
+            {
+                return !ReferenceEquals(existingHost, host);
+            }
+
+            return false;
+        }
+
+        private void StoreRegisteredHost(TaskPaneHost host)
+        {
+            _hostsByWindowKey[host.WindowKey] = host;
+        }
+
+        private bool TryGetReusableHost(string windowKey, WorkbookRole role, out TaskPaneHost host)
+        {
+            if (_hostsByWindowKey.TryGetValue(windowKey, out host))
+            {
+                return IsHostCompatibleWithRole(host, role);
+            }
+
+            return false;
+        }
+
+        private static bool IsHostCompatibleWithRole(TaskPaneHost host, WorkbookRole role)
+        {
+            return (role == WorkbookRole.Kernel && host.Control is KernelNavigationControl)
+                || (role == WorkbookRole.Case && host.Control is DocumentButtonsControl)
+                || (role == WorkbookRole.Accounting && host.Control is AccountingNavigationControl);
+        }
+
+        private void RemoveExistingHostForReplacement(string windowKey)
+        {
+            if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost existingHost))
+            {
+                return;
+            }
+
+            DisposeHostForReplacement(existingHost);
+            _hostsByWindowKey.Remove(windowKey);
+        }
+
+        private TaskPaneHost CreateAndRegisterHost(string windowKey, Excel.Window window, WorkbookRole role)
+        {
+            TaskPaneHost host = _taskPaneHostFactory.CreateHost(windowKey, window, role, out string paneRoleName);
+            _hostsByWindowKey.Add(windowKey, host);
+            _logger.Debug(nameof(TaskPaneHostRegistry), "TaskPane host registered. role=" + paneRoleName + ", windowKey=" + windowKey);
+            return host;
+        }
+
+        private List<string> CollectWindowKeysForWorkbook(string workbookFullName)
+        {
+            var targetKeys = new List<string>();
+            foreach (KeyValuePair<string, TaskPaneHost> pair in _hostsByWindowKey)
+            {
+                if (string.Equals(pair.Value.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
                 {
-                    host.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error("TaskPane host dispose failed. windowKey=" + windowKey, ex);
+                    targetKeys.Add(pair.Key);
                 }
             }
+
+            return targetKeys;
+        }
+
+        private List<TaskPaneHost> SnapshotHosts()
+        {
+            return new List<TaskPaneHost>(_hostsByWindowKey.Values);
+        }
+
+        private static void DisposeHostForReplacement(TaskPaneHost host)
+        {
+            host.Dispose();
+        }
+
+        private void DisposeHostAfterRemoval(string windowKey, TaskPaneHost host)
+        {
+            try
+            {
+                host.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("TaskPane host dispose failed. windowKey=" + windowKey, ex);
+            }
+        }
+
+        private void LogHostRemoval(TaskPaneHost host)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=remove-host host="
+                + _formatHostDescriptor(host));
         }
     }
 }

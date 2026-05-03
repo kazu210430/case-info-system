@@ -122,7 +122,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
-            _logger?.Info("TryRefreshTaskPane context resolved. reason=" + (reason ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString() + ", role=" + (context == null ? string.Empty : context.Role.ToString()));
 
             // ここでは生成済み context を pane 対象として採用するかを調停する。
             // 対象外なら context を使わず、必要に応じて hide もここで判断する。
@@ -222,7 +221,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + FormatWindowDescriptor(window)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
-                _logger?.Info("TryRefreshTaskPane window resolved. reason=" + (reason ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString() + ", hasWindow=" + (window != null).ToString());
             }
 
             return window;
@@ -289,7 +287,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + (refreshed && context != null && context.Role == WorkbookRole.Case).ToString()
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
-            _logger?.Info("TryRefreshTaskPane refresh completed. reason=" + (reason ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString() + ", refreshed=" + refreshed.ToString());
             if (refreshed && context != null && context.Role == WorkbookRole.Case)
             {
                 _scheduleWordWarmup();

@@ -78,6 +78,53 @@ fallback path の route、post-action refresh、display request の順序を別 
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPanePostActionRefreshPolicy.cs`
 - `dev/CaseInfoSystem.Tests/TaskPaneActionDispatcherTests.cs`
 
+## dispatcher / handler 例外処理棚卸しの固定
+
+### 概要
+`TaskPaneActionDispatcher` 周辺の error handling は見た目には同型の `try/catch` が 3 か所あるが、実際には business action、post-action refresh、fallback、error UI 描画が同じ catch 境界に乗っている。現時点では共通化や責務分離よりも、現在の境界を設計ログとして固定することを優先する。
+
+### 現状
+- `TaskPaneCaseDocumentActionHandler.HandleCaseControlActionInvoked(...)`
+  - target 解決後に `TaskPaneCaseFallbackActionExecutor.TryExecute(workbook, "doc", key)` と `_handlePostActionRefresh(...)` を同じ `try/catch` で囲む。
+  - `catch (Exception)` では `logger.Error`、`BuildActionFailedState()` による state 描画、`UserErrorService.ShowUserError(...)` を行う。
+- `TaskPaneCaseAccountingActionHandler.HandleCaseControlActionInvoked(...)`
+  - `doc` handler と同型で、差分は action kind 定数だけである。
+- `TaskPaneActionDispatcher.HandleFrozenFallbackActionEntry(...)`
+  - fallback path でも target 解決後に `TaskPaneCaseFallbackActionExecutor.TryExecute(workbook, e)` と `HandlePostActionRefresh(...)` を同じ `try/catch` で囲む。
+  - `catch (Exception)` の処理内容は separated handler と同型である。
+- `TaskPaneBusinessActionLauncher`
+  - `try/finally` で `DocumentNameOverrideScope` の cleanup を担うが、catch は持たず例外は outer handler / dispatcher 側へ伝播する。
+- `TaskPaneCaseFallbackActionExecutor`
+  - `TaskPaneBusinessActionLauncher` への薄い委譲のみで、独自の error policy は持たない。
+
+### 固定しておく観測事実
+- `TryResolve(...)` は `TaskPaneCaseDocumentActionHandler`、`TaskPaneCaseAccountingActionHandler`、`TaskPaneActionDispatcher` のいずれでも `try/catch` の外にある。
+- そのため host 解決や workbook 解決で例外が発生した場合、`BuildActionFailedState()` による描画や `ShowUserError(...)` は実行されない。
+- business action 本体と post-action refresh は同じ catch 境界にある。したがって post-action refresh 側で例外が発生しても、利用者向けには action 実行失敗と同じ扱いになる。
+- separated handler と fallback path は、異なる action route を通っていても、catch 後のログ文言、error state 描画、user error 表示が同じである。
+- catch 本文の `control.Render(...)` と `_userErrorService.ShowUserError(...)` 自体は追加の保護を持たない。
+- `doc` 経路の下流には `DocumentNameOverrideScope.Dispose()` があり、cleanup 失敗時は debug log のみで継続する。
+- `TaskPaneActionDispatcherTests` と `TaskPaneBusinessActionLauncherTests` は prompt cancel、success、post-action refresh policy の分岐を確認しているが、dispatcher / handler の exception-only path を直接固定する専用テストは持たない。
+
+### 見送った理由
+- 3 か所の `catch` は表面的には重複して見えるが、実際には route ごとの target resolution 前後、fallback 継続判定、post-action refresh、error state 描画が結び付いた境界になっている。
+- この境界を先に共通化すると、action failure と refresh failure の扱い、fallback path の順序、error UI の発火条件が一緒に変わる危険がある。
+- `docs/taskpane-architecture.md` と本書の既存記述では、dispatcher / fallback は既存順序を保ったまま薄い shell として固定することを前提にしている。
+
+### 将来やる条件
+- `TryResolve` 失敗、business action 失敗、post-action refresh 失敗、error UI 失敗を別々に観測できるテストを先に固定できる場合に限り再検討する。
+- fallback path の route と post-action refresh の順序契約を、別 service へ分離しても崩れない形で明文化できる場合に限り再検討する。
+
+### 関連箇所
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneActionDispatcher.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseDocumentActionHandler.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseAccountingActionHandler.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneCaseFallbackActionExecutor.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneBusinessActionLauncher.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/DocumentNameOverrideScope.cs`
+- `dev/CaseInfoSystem.Tests/TaskPaneActionDispatcherTests.cs`
+- `dev/CaseInfoSystem.Tests/TaskPaneBusinessActionLauncherTests.cs`
+
 ## TaskPaneManager 本体の追加分割
 
 ### 概要

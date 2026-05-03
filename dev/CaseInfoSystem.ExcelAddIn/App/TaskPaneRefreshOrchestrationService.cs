@@ -76,28 +76,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", activeState="
                 + FormatActiveState());
-            if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
+            RefreshPreconditionEvaluationResult preconditionEvaluationResult = RefreshPreconditionEvaluator.Evaluate(reason, workbook, window, _casePaneHostBridge);
+            if (!preconditionEvaluationResult.CanRefresh)
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=skip-workbook-open-window-dependent-refresh refreshAttemptId="
-                    + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
-                    + ", reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", inputWindow="
-                    + FormatWindowDescriptor(window)
-                    + ", activeState="
-                    + FormatActiveState());
-                return TaskPaneRefreshAttemptResult.Skipped();
-            }
-
-            if (_casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=ignore-during-protection refreshAttemptId="
+                    + " source=TaskPaneRefreshOrchestrationService action="
+                    + preconditionEvaluationResult.SkipActionName
+                    + " refreshAttemptId="
                     + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
                     + ", reason="
                     + (reason ?? string.Empty)
@@ -566,6 +552,52 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private string SafeWorkbookFullName(Excel.Workbook workbook)
         {
             return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+        }
+
+        private static class RefreshPreconditionEvaluator
+        {
+            internal static RefreshPreconditionEvaluationResult Evaluate(string reason, Excel.Workbook workbook, Excel.Window window, ICasePaneHostBridge casePaneHostBridge)
+            {
+                if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
+                {
+                    return RefreshPreconditionEvaluationResult.SkipWorkbookOpenWindowDependentRefresh();
+                }
+
+                if (casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
+                {
+                    return RefreshPreconditionEvaluationResult.IgnoreDuringProtection();
+                }
+
+                return RefreshPreconditionEvaluationResult.Proceed();
+            }
+        }
+
+        private sealed class RefreshPreconditionEvaluationResult
+        {
+            private RefreshPreconditionEvaluationResult(bool canRefresh, string skipActionName)
+            {
+                CanRefresh = canRefresh;
+                SkipActionName = skipActionName ?? string.Empty;
+            }
+
+            internal bool CanRefresh { get; }
+
+            internal string SkipActionName { get; }
+
+            internal static RefreshPreconditionEvaluationResult Proceed()
+            {
+                return new RefreshPreconditionEvaluationResult(true, string.Empty);
+            }
+
+            internal static RefreshPreconditionEvaluationResult SkipWorkbookOpenWindowDependentRefresh()
+            {
+                return new RefreshPreconditionEvaluationResult(false, "skip-workbook-open-window-dependent-refresh");
+            }
+
+            internal static RefreshPreconditionEvaluationResult IgnoreDuringProtection()
+            {
+                return new RefreshPreconditionEvaluationResult(false, "ignore-during-protection");
+            }
         }
 
         private sealed class PendingPaneRefreshRetryState

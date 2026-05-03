@@ -208,6 +208,9 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 会計系の save-as は `AccountingSaveAsService` から `AccountingWorkbookService.SaveAsMacroEnabled()` を呼び出す。
 - `SaveAsMacroEnabled()` は save-as 専用境界として `Application.DisplayAlerts`、`Application.EnableEvents`、`Application.ScreenUpdating` の現在値を退避し、`SaveAs` 実行中だけ 3 つとも `false` に設定する。
 - `SaveAsMacroEnabled()` は `try/finally` で `SaveAs` 後に 3 つの Application 状態を元値へ戻す。
+- `AccountingWorkbookService` の cell write / range 操作には、`WriteCell`、`WriteSameValueToSheets`、range copy、named range write / clear、print area / alignment / sort などが含まれる。
+- 現行テストで呼び出し観測が確認できる会計 workbook 書込は、`AccountingSetCreateService` と `AccountingSetKernelSyncService` が使う `WriteCell` と `WriteSameValueToSheets` が中心である。
+- named range / copy / clear / format / print area / sort 系の操作は、現行テストから直接の観測点を確認できない。
 
 ### 不明点
 

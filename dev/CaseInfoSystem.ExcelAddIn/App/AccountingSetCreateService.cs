@@ -98,20 +98,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new InvalidOperationException ("案件名を取得できませんでした。");
 			}
 			string valueText = BuildCustomerDisplayName (text, ReadCaseValue (caseContext, CustomerHonorificKey));
-			string text2 = _accountingTemplateResolver.ResolveTemplatePath (caseWorkbook);
-			string text3 = _documentOutputService.ResolveWorkbookFolder (caseWorkbook);
-			string text4 = _accountingSetNamingService.BuildCaseOutputPath (caseWorkbook, text3, text, text2);
+			string templatePath = _accountingTemplateResolver.ResolveTemplatePath (caseWorkbook);
+			string outputFolderPath = _documentOutputService.ResolveWorkbookFolder (caseWorkbook);
+			string outputPath = _accountingSetNamingService.BuildCaseOutputPath (caseWorkbook, outputFolderPath, text, templatePath);
 			string workbookFullName = _excelInteropService.GetWorkbookFullName (caseWorkbook);
-			_logger.Info ("Accounting set CASE create start. caseWorkbook=" + workbookFullName + ", customer=" + text + ", outputFolder=" + text3 + ", template=" + text2 + ", output=" + text4);
+			_logger.Info ("Accounting set CASE create start. caseWorkbook=" + workbookFullName + ", customer=" + text + ", outputFolder=" + outputFolderPath + ", template=" + templatePath + ", output=" + outputPath);
 			AccountingSetPresentationWaitService.WaitSession waitSession = null;
 			Workbook workbook = null;
 			try {
 				waitSession = _accountingSetPresentationWaitService.ShowWaiting (Stopwatch.StartNew ());
 				waitSession?.UpdateStage (AccountingSetPresentationWaitService.CreatingStageTitle);
-				File.Copy (text2, text4, overwrite: false);
+				File.Copy (templatePath, outputPath, overwrite: false);
 				_logger.Debug ("AccountingSetCreateService", "Template copied to output path.");
-				_transientPaneSuppressionService.SuppressPath (text4, "AccountingSetCreateService.Execute");
-				workbook = _accountingWorkbookService.OpenInCurrentApplication (text4);
+				_transientPaneSuppressionService.SuppressPath (outputPath, "AccountingSetCreateService.Execute");
+				workbook = _accountingWorkbookService.OpenInCurrentApplication (outputPath);
 				waitSession?.UpdateStage (AccountingSetPresentationWaitService.OpeningWorkbookStageTitle);
 				_accountingWorkbookService.SetWorkbookWindowsVisible (workbook, visible: true);
 				AccountingLawyerMappingResult accountingLawyerMappingResult;
@@ -144,9 +144,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (accountingLawyerMappingResult.OverflowCount > 0) {
 					MessageBox.Show ("入力できなかった代理人がいます。", "会計書類セット", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 				}
-				_logger.Info ("Accounting set CASE create completed. output=" + text4 + ", missingMatch=" + accountingLawyerMappingResult.MissingMatchCount + ", overflow=" + accountingLawyerMappingResult.OverflowCount);
+				_logger.Info ("Accounting set CASE create completed. output=" + outputPath + ", missingMatch=" + accountingLawyerMappingResult.MissingMatchCount + ", overflow=" + accountingLawyerMappingResult.OverflowCount);
 			} catch (Exception exception) {
-				_logger.Error ("Accounting set CASE create failed. caseWorkbook=" + workbookFullName + ", template=" + text2 + ", output=" + text4, exception);
+				_logger.Error ("Accounting set CASE create failed. caseWorkbook=" + workbookFullName + ", template=" + templatePath + ", output=" + outputPath, exception);
 				if (workbook != null) {
 					try {
 						workbook.Close (false, Type.Missing, Type.Missing);
@@ -154,11 +154,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						_logger.Warn ("Accounting set CASE create cleanup close failed: " + ex.Message);
 					}
 				}
-				_transientPaneSuppressionService.ReleasePath (text4, "AccountingSetCreateService.CleanupAfterFailure");
+				_transientPaneSuppressionService.ReleasePath (outputPath, "AccountingSetCreateService.CleanupAfterFailure");
 				try {
-					if (_pathCompatibilityService.FileExistsSafe (text4)) {
-						File.Delete (text4);
-						_logger.Warn ("Accounting set CASE create cleanup deleted output: " + text4);
+					if (_pathCompatibilityService.FileExistsSafe (outputPath)) {
+						File.Delete (outputPath);
+						_logger.Warn ("Accounting set CASE create cleanup deleted output: " + outputPath);
 					}
 				} catch (Exception ex2) {
 					_logger.Warn ("Accounting set CASE create cleanup delete failed: " + ex2.Message);

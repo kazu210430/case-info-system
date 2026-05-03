@@ -128,7 +128,7 @@ fallback path の route、post-action refresh、display request の順序を別 
 ## dispatcher / handler 例外分岐テスト棚卸しの固定
 
 ### 概要
-`TaskPaneActionDispatcher` 周辺の 3 つの `try/catch` について、専用テストの有無だけを read-only で棚卸しした。結論として、dispatcher fallback、`doc` handler、`accounting` handler のいずれにも exception-only path を直接固定する専用テストは確認できなかった。
+`TaskPaneActionDispatcher` 周辺の 3 つの `try/catch` について、専用テストの有無だけを read-only で棚卸しした。その後、`accounting` handler の exception-only path については専用テストが追加された。現時点で未カバーなのは dispatcher fallback と `doc` handler の exception-only path である。
 
 ### 対象
 - `TaskPaneActionDispatcher.HandleFrozenFallbackActionEntry(...)`
@@ -143,6 +143,8 @@ fallback path の route、post-action refresh、display request の順序を別 
     - `doc` 正常系で document create が実行され、post-action refresh が skip されることを確認している。
   - `WhenAccountingActionRuns_SkipsPostActionRefresh`
     - `accounting` 正常系で accounting action が実行され、post-action refresh が skip されることを確認している。
+  - `WhenAccountingActionThrows_LogsErrorAndSkipsPostActionRefresh`
+    - `accounting` 例外経路で `logger.Error(...)`、`ShowUserError(...)`、post-action refresh 未実行を確認している。
   - `WhenCaseListActionRuns_DefersRefreshAndInvalidatesSignature`
     - fallback 経路の `caselist` 正常系で defer / invalidate が走ることを確認している。
 - `TaskPaneBusinessActionLauncherTests`
@@ -154,11 +156,11 @@ fallback path の route、post-action refresh、display request の順序を別 
   - `caselist` 下流 service の成功 / 失敗を確認しているが、dispatcher / handler の `catch` 挙動は確認していない。
 
 ### 固定しておく観測事実
-- `TaskPaneActionDispatcherTests` で `HandleCaseControlActionInvoked(...)` を呼んでいるのは、prompt cancel、`doc` 正常系、`accounting` 正常系、`caselist` 正常系の 4 ケースだけである。
+- `TaskPaneActionDispatcherTests` で `HandleCaseControlActionInvoked(...)` を呼んでいるのは、prompt cancel、`doc` 正常系、`accounting` 正常系、`accounting` 例外系、`caselist` 正常系の 5 ケースである。
 - `TaskPaneCaseDocumentActionHandler`、`TaskPaneCaseAccountingActionHandler`、`TaskPaneCaseFallbackActionExecutor` を個別に new して exception path を確認する専用 test file は見つからなかった。
-- `TaskPaneActionDispatcherTests` には `Exception`、`InvalidOperationException`、`throw new ...` を使って exception path を明示的に起こす記述は確認できなかった。
-- test 側の `UserErrorService` は no-op placeholder であり、`ShowUserError(...)` 呼び出し回数や引数を assert している箇所は確認できなかった。
-- test 側では `Logger` に収集先 `List<string>` を渡せるが、`TaskPaneActionDispatcherTests` / `TaskPaneBusinessActionLauncherTests` では dispatcher / handler の exception path に対する log 内容の assert は確認できなかった。
+- `TaskPaneActionDispatcherTests` には `accounting` 例外系で `InvalidOperationException` を明示的に起こす記述が追加されているが、`doc` handler と dispatcher fallback の exception path を明示的に起こす記述は確認できなかった。
+- test 側の `UserErrorService` は callback を差し込める placeholder になっており、`accounting` 例外系では `ShowUserError(...)` 呼び出しの context と例外引数が assert されている。
+- test 側では `Logger` に収集先 `List<string>` を渡せる。`accounting` 例外系では dispatcher / handler の exception path に対する log 内容の assert が追加されている。
 - `BuildActionFailedState()`、failed state render、`control.Render(...)` の実行有無を dispatcher / handler exception path に対して確認する test は見つからなかった。
 
 ### 未カバーとして固定する項目
@@ -168,9 +170,7 @@ fallback path の route、post-action refresh、display request の順序を別 
 - `doc` handler の `catch (Exception)` に入ったときに `logger.Error(...)` が呼ばれるか
 - `doc` handler の `catch (Exception)` に入ったときに failed state が render されるか
 - `doc` handler の `catch (Exception)` に入ったときに `ShowUserError(...)` が呼ばれるか
-- `accounting` handler の `catch (Exception)` に入ったときに `logger.Error(...)` が呼ばれるか
 - `accounting` handler の `catch (Exception)` に入ったときに failed state が render されるか
-- `accounting` handler の `catch (Exception)` に入ったときに `ShowUserError(...)` が呼ばれるか
 
 ### 関連箇所
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneActionDispatcher.cs`

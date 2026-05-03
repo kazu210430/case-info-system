@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -62,16 +63,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (context == null)
             {
-                return GetOpenKernelWorkbook();
+                return null;
+            }
+
+            string normalizedContextSystemRoot = _pathCompatibilityService.NormalizePath(context.SystemRoot);
+            if (string.IsNullOrWhiteSpace(normalizedContextSystemRoot))
+            {
+                return null;
             }
 
             Excel.Workbook contextWorkbook = context.Workbook;
             if (IsKernelWorkbook(contextWorkbook))
             {
-                return contextWorkbook;
+                string workbookSystemRoot = GetWorkbookSystemRootCore(contextWorkbook);
+                return string.Equals(workbookSystemRoot, normalizedContextSystemRoot, StringComparison.OrdinalIgnoreCase)
+                    ? contextWorkbook
+                    : null;
             }
 
-            return ResolveKernelWorkbook(context.SystemRoot);
+            return ResolveKernelWorkbook(normalizedContextSystemRoot);
         }
 
         internal Excel.Workbook ResolveKernelWorkbook(string systemRoot)
@@ -126,6 +136,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 return string.Empty;
             }
+        }
+
+        private string GetWorkbookSystemRootCore(Excel.Workbook workbook)
+        {
+            if (_excelInteropService != null)
+            {
+                return _pathCompatibilityService.NormalizePath(_excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"));
+            }
+
+            try
+            {
+                if (workbook?.CustomDocumentProperties is IDictionary<string, string> properties
+                    && properties.TryGetValue("SYSTEM_ROOT", out string systemRoot))
+                {
+                    return _pathCompatibilityService.NormalizePath(systemRoot);
+                }
+            }
+            catch
+            {
+            }
+
+            return string.Empty;
         }
     }
 }

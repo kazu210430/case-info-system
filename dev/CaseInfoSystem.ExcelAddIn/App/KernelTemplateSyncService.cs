@@ -124,9 +124,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal KernelTemplateSyncResult Execute ()
+		internal KernelTemplateSyncResult Execute (WorkbookContext context)
 		{
-			Workbook openKernelWorkbook = _kernelWorkbookService.GetOpenKernelWorkbook ();
+			if (context == null) {
+				throw new InvalidOperationException ("WorkbookContext is required for template sync.");
+			}
+			Workbook openKernelWorkbook = _kernelWorkbookService.ResolveKernelWorkbook (context);
 			if (openKernelWorkbook == null) {
 				throw new InvalidOperationException ("Kernel ブックを開いてから実行してください。");
 			}

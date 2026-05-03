@@ -60,17 +60,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Excel.Workbook ResolveKernelWorkbook(WorkbookContext context)
         {
-            Excel.Workbook openKernelWorkbook = GetOpenKernelWorkbook();
-            string kernelPath = KernelWorkbookResolutionPolicy.ResolveKernelWorkbookPath(
-                hasOpenKernelWorkbook: openKernelWorkbook != null,
-                systemRoot: context == null ? string.Empty : context.SystemRoot,
-                resolvePath: root => ResolveKernelWorkbookPathCore(root));
-
-            if (openKernelWorkbook != null)
+            if (context == null)
             {
-                return openKernelWorkbook;
+                return GetOpenKernelWorkbook();
             }
 
+            Excel.Workbook contextWorkbook = context.Workbook;
+            if (IsKernelWorkbook(contextWorkbook))
+            {
+                return contextWorkbook;
+            }
+
+            return ResolveKernelWorkbook(context.SystemRoot);
+        }
+
+        internal Excel.Workbook ResolveKernelWorkbook(string systemRoot)
+        {
+            string normalizedSystemRoot = _pathCompatibilityService.NormalizePath(systemRoot);
+            string kernelPath = KernelWorkbookResolutionPolicy.ResolveKernelWorkbookPath(
+                hasOpenKernelWorkbook: false,
+                systemRoot: normalizedSystemRoot,
+                resolvePath: root => ResolveKernelWorkbookPathCore(root));
             if (string.IsNullOrWhiteSpace(kernelPath))
             {
                 return null;

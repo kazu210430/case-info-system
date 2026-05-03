@@ -111,6 +111,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _kernelOpenWorkbookLocator.ResolveKernelWorkbook(context);
         }
 
+        internal Excel.Workbook ResolveKernelWorkbook(string systemRoot)
+        {
+            return _kernelOpenWorkbookLocator.ResolveKernelWorkbook(systemRoot);
+        }
+
         internal bool TryShowSheetByCodeName(Domain.WorkbookContext context, string sheetCodeName, string reason)
         {
             Excel.Workbook kernelWorkbook = ResolveKernelWorkbook(context);

@@ -54,7 +54,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					ExecuteRegisterUserInfo ();
 					break;
 				case "reflect-template":
-					ExecuteReflectTemplate ();
+					ExecuteReflectTemplate (context);
 					break;
 				default:
 					MessageBox.Show ("未対応の操作です。actionId=" + actionId, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
@@ -103,10 +103,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void ExecuteReflectTemplate ()
+		private void ExecuteReflectTemplate (WorkbookContext context)
 		{
 			try {
-				KernelTemplateSyncResult kernelTemplateSyncResult = _kernelTemplateSyncService.Execute ();
+				KernelTemplateSyncResult kernelTemplateSyncResult = _kernelTemplateSyncService.Execute (context);
 				TemplateRegistrationResultForm.ShowNotice ("案件情報System", kernelTemplateSyncResult.Message);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectTemplate failed.", exception);

@@ -119,7 +119,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 ### フロー
 
-1. `KernelTemplateSyncService` が `GetOpenKernelWorkbook()` により Kernel ブックを取得し、`SYSTEM_ROOT\雛形` を登録対象フォルダとして解決します。
+1. `KernelCommandService` が Kernel pane 由来の `WorkbookContext` を `KernelTemplateSyncService` へ渡し、`KernelTemplateSyncService` がその文脈の Kernel workbook または `WorkbookContext.SystemRoot` に対応する open Kernel workbook を解決します。
 2. `KernelTemplateSyncService` が Kernel の管理シート `CaseList_FieldInventory` を読み取り、定義済み Tag 一覧を構築します。
 3. `WordTemplateRegistrationValidationService` が雛形フォルダ直下の候補ファイルを走査します。
 4. 各ファイルに対して登録前チェックを実施します。
@@ -132,17 +132,13 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 この登録前 validation が、現行実装における文書作成フローの主防御です。runtime 側の allowlist / review 判定は、登録済みテンプレートの実行可否を直接制御していません。
 
-### 現状の Kernel workbook 選択仕様
+### Kernel workbook 選択仕様
 
-- `KernelCommandService.Execute(context, actionId)` は `reflect-template` 分岐で `ExecuteReflectTemplate()` を呼びますが、`context` 自体は `KernelTemplateSyncService.Execute()` へ渡しません。
-- `KernelTemplateSyncService.Execute()` は CASE workbook context を受け取らず、`_kernelWorkbookService.GetOpenKernelWorkbook()` の戻り値をそのまま雛形登録・更新対象の Kernel workbook として扱います。
-- `KernelOpenWorkbookLocator.GetOpenKernelWorkbook()` は `_application.Workbooks` を先頭から列挙し、Kernel と判定された最初の workbook を返します。
-- この経路では active workbook、visible workbook、`WorkbookContext.SystemRoot`、表示中の CASE workbook は判定材料に使われません。
-- そのため、`MasterTemplateCatalogService` の cache 境界が resolved master path 単位に改善された後も、「どの root の Kernel workbook に対して雛形登録・更新を行うか」は upstream で探索順依存のまま残ります。
-- 通常の単一 Kernel workbook 運用では問題化しにくいですが、複数 Kernel workbook や hidden workbook が同時にある場合は、利用者の意図と異なる Kernel workbook を操作対象にする余地があります。
-- これは今回の cache 修正で混入した問題ではなく、既存の Kernel workbook 選択仕様の設計課題です。
-- 将来は command / UI / CASE 文脈から `SYSTEM_ROOT` を明示的に渡し、その文脈で Kernel workbook を確定する改善を検討します。
-- `GetOpenKernelWorkbook()` は便利関数として残す場合でも、複数 root を跨ぐ経路では使用範囲を限定する前提で扱います。
+- `KernelCommandService.Execute(context, actionId)` は `reflect-template` 分岐で `ExecuteReflectTemplate(context)` を呼び、`WorkbookContext` を `KernelTemplateSyncService.Execute(context)` へ引き渡します。
+- `KernelTemplateSyncService.Execute(context)` は `WorkbookContext` を必須入力として扱い、対象 Kernel workbook を `_kernelWorkbookService.ResolveKernelWorkbook(context)` で確定します。
+- `KernelOpenWorkbookLocator.ResolveKernelWorkbook(context)` は、まず `context.Workbook` が Kernel ならその workbook を使い、それ以外は `WorkbookContext.SystemRoot` に対応する Kernel workbook path を解決して open workbook を特定します。
+- この経路では、複数 Kernel workbook や hidden workbook が同時に存在しても、雛形登録・更新、snapshot 反映、cache invalidate は要求元の `SYSTEM_ROOT` 文脈に対応する Kernel workbook へ閉じます。
+- `GetOpenKernelWorkbook()` は単一 root 前提の便利関数として残りますが、雛形登録・更新フローでは使いません。
 
 ### 登録前チェック
 

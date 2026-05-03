@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.Tests.Fakes;
 using Xunit;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -11,7 +12,7 @@ namespace CaseInfoSystem.Tests
     public class KernelWorkbookServiceThinOrchestrationTests
     {
         [Fact]
-        public void ResolveKernelWorkbook_WhenOpenKernelExists_ReturnsPrimaryWithoutFallbackLookup()
+        public void ResolveKernelWorkbook_WhenContextIsNull_ReturnsPrimaryWithoutFallbackLookup()
         {
             int fallbackResolveCalls = 0;
             int fallbackFindCalls = 0;
@@ -32,7 +33,7 @@ namespace CaseInfoSystem.Tests
                     }
                 });
 
-            Excel.Workbook resolved = service.ResolveKernelWorkbook(new WorkbookContext(null, null, WorkbookRole.Case, @"C:\root", "case.xlsx", "shHOME"));
+            Excel.Workbook resolved = service.ResolveKernelWorkbook((WorkbookContext)null);
 
             Assert.Same(primary, resolved);
             Assert.Equal(0, fallbackResolveCalls);
@@ -40,13 +41,50 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ResolveKernelWorkbook_WhenFallbackPathExists_ReturnsFallbackWorkbook()
+        public void ResolveKernelWorkbook_WhenContextContainsKernelWorkbook_ReturnsContextWorkbookWithoutFallbackLookup()
+        {
+            int openKernelCalls = 0;
+            int fallbackResolveCalls = 0;
+            int fallbackFindCalls = 0;
+            Excel.Workbook primary = new Excel.Workbook();
+            Excel.Workbook contextKernelWorkbook = new Excel.Workbook { Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm") };
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return primary;
+                    },
+                    ResolveKernelWorkbookPath = root =>
+                    {
+                        fallbackResolveCalls++;
+                        return root + "\\kernel.xlsm";
+                    },
+                    FindOpenWorkbook = path =>
+                    {
+                        fallbackFindCalls++;
+                        return null;
+                    }
+                });
+
+            Excel.Workbook resolved = service.ResolveKernelWorkbook(
+                new WorkbookContext(contextKernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", "kernel.xlsm", "shMasterList"));
+
+            Assert.Same(contextKernelWorkbook, resolved);
+            Assert.Equal(0, openKernelCalls);
+            Assert.Equal(0, fallbackResolveCalls);
+            Assert.Equal(0, fallbackFindCalls);
+        }
+
+        [Fact]
+        public void ResolveKernelWorkbook_WhenMatchingRootWorkbookExists_ReturnsFallbackWorkbook()
         {
             Excel.Workbook fallback = new Excel.Workbook();
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => null,
+                    GetOpenKernelWorkbook = () => new Excel.Workbook(),
                     ResolveKernelWorkbookPath = root => root + "\\kernel.xlsm",
                     FindOpenWorkbook = path => path == @"C:\root\kernel.xlsm" ? fallback : null
                 });
@@ -57,13 +95,18 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ResolveKernelWorkbook_WhenNoPrimaryOrFallbackExists_ReturnsNull()
+        public void ResolveKernelWorkbook_WhenMatchingRootWorkbookDoesNotExist_ReturnsNull()
         {
+            int openKernelCalls = 0;
             int fallbackFindCalls = 0;
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => null,
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    },
                     ResolveKernelWorkbookPath = root => string.Empty,
                     FindOpenWorkbook = path =>
                     {
@@ -75,6 +118,7 @@ namespace CaseInfoSystem.Tests
             Excel.Workbook resolved = service.ResolveKernelWorkbook(new WorkbookContext(null, null, WorkbookRole.Case, @"C:\root", "case.xlsx", "shHOME"));
 
             Assert.Null(resolved);
+            Assert.Equal(0, openKernelCalls);
             Assert.Equal(0, fallbackFindCalls);
         }
 
@@ -173,7 +217,7 @@ namespace CaseInfoSystem.Tests
                 });
             var context = new WorkbookContext(null, null, WorkbookRole.Case, @"C:\root", "case.xlsx", "shHOME");
 
-            Excel.Workbook first = service.ResolveKernelWorkbook(context);
+            Excel.Workbook first = service.ResolveKernelWorkbook((WorkbookContext)null);
             phase = 1;
             Excel.Workbook second = service.ResolveKernelWorkbook(context);
             phase = 2;
@@ -186,10 +230,8 @@ namespace CaseInfoSystem.Tests
                 new[]
                 {
                     "get:0",
-                    "get:1",
                     "resolve:1",
                     "find:1",
-                    "get:2",
                     "resolve:2"
                 },
                 callLog);

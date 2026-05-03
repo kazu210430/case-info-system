@@ -205,6 +205,9 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - `AccountingWorkbookService.BeginInitializationScope()` は、初期化中だけ `Application.ScreenUpdating` と `Application.EnableEvents` の現在値を退避し、両方を `false` に設定する。
 - 同 scope は `AccountingSetCreateService` では `using` で使われ、DocProperty 設定、初期セル反映、代理人反映の範囲だけを囲う。
 - scope 終了時は `ApplicationStateScope.Dispose()` により、退避した `ScreenUpdating` と `EnableEvents` を元値へ戻す。
+- 会計系の save-as は `AccountingSaveAsService` から `AccountingWorkbookService.SaveAsMacroEnabled()` を呼び出す。
+- `SaveAsMacroEnabled()` は save-as 専用境界として `Application.DisplayAlerts`、`Application.EnableEvents`、`Application.ScreenUpdating` の現在値を退避し、`SaveAs` 実行中だけ 3 つとも `false` に設定する。
+- `SaveAsMacroEnabled()` は `try/finally` で `SaveAs` 後に 3 つの Application 状態を元値へ戻す。
 
 ### 不明点
 

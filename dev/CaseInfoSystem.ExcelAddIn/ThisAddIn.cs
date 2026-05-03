@@ -554,7 +554,7 @@ namespace CaseInfoSystem.ExcelAddIn
         }
 
         // Kernel HOME / sheet 遷移
-        private void ShowKernelHomePlaceholder()
+        private void ShowKernelHomePlaceholder(bool clearBindingOnNewSession = false)
         {
             _kernelHomeCasePaneSuppressionCoordinator?.ResetKernelHomeExternalCloseRequested();
 
@@ -576,6 +576,11 @@ namespace CaseInfoSystem.ExcelAddIn
 
             if (_kernelHomeForm == null || _kernelHomeForm.IsDisposed)
             {
+                if (clearBindingOnNewSession)
+                {
+                    _kernelWorkbookService?.ClearHomeWorkbookBinding("ThisAddIn.ShowKernelHomePlaceholder.NewSession");
+                }
+
                 _kernelHomeForm = new KernelHomeForm(_kernelWorkbookService, _kernelCaseCreationCommandService, _logger);
             }
 
@@ -755,8 +760,7 @@ namespace CaseInfoSystem.ExcelAddIn
             {
             ExcelAddInTraceLogWriter.Write("Kernel home requested from COM automation.");
             }
-            _kernelWorkbookService?.ClearHomeWorkbookBinding("ThisAddIn.ShowKernelHomeFromAutomation");
-            ShowKernelHomePlaceholderWithExternalWorkbookSuppression("KernelAutomationService.ShowHome");
+            ShowKernelHomePlaceholderWithExternalWorkbookSuppressionForNewSession("KernelAutomationService.ShowHome");
         }
 
         private void ShowKernelHomeFromKernelCommand()
@@ -783,10 +787,20 @@ namespace CaseInfoSystem.ExcelAddIn
         // Kernel HOME の明示表示直後だけ activate 系イベントの自動クローズを抑止する。
         private void ShowKernelHomePlaceholderWithExternalWorkbookSuppression(string reason)
         {
+            ShowKernelHomePlaceholderWithExternalWorkbookSuppressionCore(reason, clearBindingOnNewSession: false);
+        }
+
+        private void ShowKernelHomePlaceholderWithExternalWorkbookSuppressionForNewSession(string reason)
+        {
+            ShowKernelHomePlaceholderWithExternalWorkbookSuppressionCore(reason, clearBindingOnNewSession: true);
+        }
+
+        private void ShowKernelHomePlaceholderWithExternalWorkbookSuppressionCore(string reason, bool clearBindingOnNewSession)
+        {
             // 処理ブロック: HOME を明示表示した直後だけ WorkbookActivate/WindowActivate を抑止する。
             // ここでは将来の activate 系イベントに効く Kernel HOME 抑止要求を発行する。
             SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
-            ShowKernelHomePlaceholder();
+            ShowKernelHomePlaceholder(clearBindingOnNewSession);
         }
 
         public void ReflectKernelUserDataToAccountingSet()

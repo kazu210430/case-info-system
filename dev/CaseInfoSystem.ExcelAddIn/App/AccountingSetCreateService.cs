@@ -93,7 +93,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (caseContext == null || caseContext.CaseValues == null || caseContext.CaseValues.Count == 0) {
 				throw new InvalidOperationException ("会計書類セット作成に必要な案件データを取得できませんでした。");
 			}
-			string text = ResolveCustomerName (caseContext);
+			string text = ReadCustomerNameFromCase (caseContext);
 			if (text.Length == 0) {
 				throw new InvalidOperationException ("案件名を取得できませんでした。");
 			}
@@ -180,7 +180,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return (value ?? string.Empty).Trim ();
 		}
 
-		private static string ResolveCustomerName (CaseContext caseContext)
+		private static string ReadCustomerNameFromCase (CaseContext caseContext)
 		{
 			return ReadCaseValue (caseContext, CustomerNameKey);
 		}

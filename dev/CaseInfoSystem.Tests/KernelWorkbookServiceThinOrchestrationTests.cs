@@ -178,6 +178,104 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void CloseHomeSession_WhenValidHomeBindingExists_UsesBoundWorkbookWithoutFallbackLookup()
+        {
+            int openKernelCalls = 0;
+            Excel.Workbook observedCloseWorkbook = null;
+            Excel.Workbook boundWorkbook = new Excel.Workbook
+            {
+                Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"),
+                FullName = @"C:\root\kernel.xlsm",
+                CustomDocumentProperties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["SYSTEM_ROOT"] = @"C:\root"
+                }
+            };
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    },
+                    HasOtherVisibleWorkbook = _ => false,
+                    HasOtherWorkbook = _ => false,
+                    CloseKernelWorkbookWithoutLifecycle = workbook => observedCloseWorkbook = workbook,
+                    ReleaseHomeDisplay = showExcel => { },
+                    QuitApplication = () => { }
+                });
+
+            bool bound = service.BindHomeWorkbook(
+                new WorkbookContext(boundWorkbook, null, WorkbookRole.Kernel, @"C:\root", boundWorkbook.FullName, "shHOME"));
+
+            Assert.True(bound);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+
+            service.CloseHomeSession();
+
+            Assert.Same(boundWorkbook, observedCloseWorkbook);
+            Assert.Equal(0, openKernelCalls);
+            Assert.False(service.HasValidHomeWorkbookBinding());
+        }
+
+        [Fact]
+        public void LoadSettings_WhenHomeBindingBecomesInvalid_ReturnsDefaultStateWithoutFallbackLookup()
+        {
+            int openKernelCalls = 0;
+            var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SYSTEM_ROOT"] = @"C:\root"
+            };
+            Excel.Workbook boundWorkbook = new Excel.Workbook
+            {
+                Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"),
+                FullName = @"C:\root\kernel.xlsm",
+                CustomDocumentProperties = properties
+            };
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(boundWorkbook, null, WorkbookRole.Kernel, @"C:\root", boundWorkbook.FullName, "shHOME")));
+
+            properties["SYSTEM_ROOT"] = @"C:\other-root";
+
+            KernelSettingsState state = service.LoadSettings();
+
+            Assert.Equal(string.Empty, state.SystemRoot);
+            Assert.Equal(string.Empty, state.DefaultRoot);
+            Assert.Equal(0, openKernelCalls);
+        }
+
+        [Fact]
+        public void SelectAndSaveDefaultRoot_WhenHomeBindingIsMissing_FailsClosedWithoutFallbackLookup()
+        {
+            int openKernelCalls = 0;
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+
+            string selectedRoot = service.SelectAndSaveDefaultRoot();
+
+            Assert.Null(selectedRoot);
+            Assert.Equal(0, openKernelCalls);
+        }
+
+        [Fact]
         public void CloseHomeSession_WhenNoOtherWorkbookExists_QuitsWithoutRestore()
         {
             int quitCalls = 0;

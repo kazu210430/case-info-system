@@ -30,6 +30,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelHomeSessionCloseCoordinator _homeSessionCloseCoordinator;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
         private bool _isHomeDisplayPrepared;
+        private KernelHomeBinding _homeBinding;
 
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -116,6 +117,52 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _kernelOpenWorkbookLocator.ResolveKernelWorkbook(systemRoot);
         }
 
+        internal bool BindHomeWorkbook(Domain.WorkbookContext context)
+        {
+            KernelHomeBinding binding = CreateHomeBinding(context);
+            if (binding == null)
+            {
+                ClearHomeWorkbookBinding("BindHomeWorkbook.Invalid");
+                _logger.Warn(
+                    "Kernel HOME binding was not created from context. workbook="
+                    + GetWorkbookFullNameCore(context == null ? null : context.Workbook)
+                    + ", contextSystemRoot="
+                    + (context == null ? string.Empty : context.SystemRoot ?? string.Empty));
+                return false;
+            }
+
+            _homeBinding = binding;
+            _logger.Info(
+                "Kernel HOME binding created. workbook="
+                + GetWorkbookFullNameCore(binding.Workbook)
+                + ", systemRoot="
+                + binding.SystemRoot);
+            return true;
+        }
+
+        internal void ClearHomeWorkbookBinding(string reason)
+        {
+            if (_homeBinding == null)
+            {
+                return;
+            }
+
+            _logger.Info(
+                "Kernel HOME binding cleared. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + GetWorkbookFullNameCore(_homeBinding.Workbook)
+                + ", systemRoot="
+                + (_homeBinding.SystemRoot ?? string.Empty));
+            _homeBinding = null;
+        }
+
+        internal bool HasValidHomeWorkbookBinding()
+        {
+            Excel.Workbook workbook;
+            return ResolveHomeBindingStatus("HasValidHomeWorkbookBinding", out workbook) == KernelHomeBindingStatus.Valid;
+        }
+
         internal bool TryShowSheetByCodeName(Domain.WorkbookContext context, string sheetCodeName, string reason)
         {
             Excel.Workbook kernelWorkbook = ResolveKernelWorkbook(context);
@@ -146,7 +193,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal KernelSettingsState LoadSettings()
         {
-            Excel.Workbook workbook = GetOrOpenKernelWorkbook();
+            Excel.Workbook workbook;
+            KernelHomeBindingStatus bindingStatus = ResolveHomeBindingStatus("LoadSettings", out workbook);
+            if (bindingStatus == KernelHomeBindingStatus.Invalid)
+            {
+                _logger.Warn("Kernel settings load failed closed because HOME binding was invalid.");
+                return new KernelSettingsState();
+            }
+
+            if (bindingStatus == KernelHomeBindingStatus.None)
+            {
+                workbook = GetOrOpenKernelWorkbook();
+            }
+
             if (workbook == null)
             {
                 _logger.Warn("Kernel settings load skipped because kernel workbook was not available.");
@@ -232,33 +291,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatActiveExcelState());
         }
 
-        internal void SaveNameRuleA(string ruleA)
+        internal bool SaveNameRuleA(string ruleA)
         {
-            Excel.Workbook workbook = GetOrOpenKernelWorkbook();
+            Excel.Workbook workbook = ResolveWorkbookForBoundHomeMutation("SaveNameRuleA");
             if (workbook == null)
             {
-                return;
+                return false;
             }
 
             _kernelWorkbookSettingsService.SaveNameRuleA(workbook, ruleA);
             workbook.Save();
+            return true;
         }
 
-        internal void SaveNameRuleB(string ruleB)
+        internal bool SaveNameRuleB(string ruleB)
         {
-            Excel.Workbook workbook = GetOrOpenKernelWorkbook();
+            Excel.Workbook workbook = ResolveWorkbookForBoundHomeMutation("SaveNameRuleB");
             if (workbook == null)
             {
-                return;
+                return false;
             }
 
             _kernelWorkbookSettingsService.SaveNameRuleB(workbook, ruleB);
             workbook.Save();
+            return true;
         }
 
         internal string SelectAndSaveDefaultRoot()
         {
-            Excel.Workbook workbook = GetOrOpenKernelWorkbook();
+            Excel.Workbook workbook = ResolveWorkbookForBoundHomeMutation("SelectAndSaveDefaultRoot");
             if (workbook == null)
             {
                 return null;
@@ -295,6 +356,140 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _testHooks != null && _testHooks.GetOpenKernelWorkbook != null
                 ? _testHooks.GetOpenKernelWorkbook()
                 : GetOpenKernelWorkbook();
+        }
+
+        private KernelHomeBinding CreateHomeBinding(Domain.WorkbookContext context)
+        {
+            if (context == null)
+            {
+                return null;
+            }
+
+            Excel.Workbook workbook = context.Workbook;
+            if (!IsKernelWorkbook(workbook))
+            {
+                return null;
+            }
+
+            string normalizedContextSystemRoot = _pathCompatibilityService.NormalizePath(context.SystemRoot);
+            if (string.IsNullOrWhiteSpace(normalizedContextSystemRoot))
+            {
+                return null;
+            }
+
+            string workbookSystemRoot = GetWorkbookSystemRootForHomeBinding(workbook);
+            if (!string.Equals(workbookSystemRoot, normalizedContextSystemRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return new KernelHomeBinding(workbook, normalizedContextSystemRoot);
+        }
+
+        private KernelHomeBindingStatus ResolveHomeBindingStatus(string operationName, out Excel.Workbook workbook)
+        {
+            workbook = null;
+            if (_homeBinding == null)
+            {
+                return KernelHomeBindingStatus.None;
+            }
+
+            Excel.Workbook boundWorkbook = _homeBinding.Workbook;
+            if (!IsKernelWorkbook(boundWorkbook))
+            {
+                _logger.Warn(
+                    "Kernel HOME binding became invalid because workbook was not kernel. operation="
+                    + (operationName ?? string.Empty)
+                    + ", workbook="
+                    + GetWorkbookFullNameCore(boundWorkbook));
+                return KernelHomeBindingStatus.Invalid;
+            }
+
+            string currentSystemRoot = GetWorkbookSystemRootForHomeBinding(boundWorkbook);
+            if (string.IsNullOrWhiteSpace(currentSystemRoot)
+                || !string.Equals(currentSystemRoot, _homeBinding.SystemRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.Warn(
+                    "Kernel HOME binding became invalid because system root mismatched. operation="
+                    + (operationName ?? string.Empty)
+                    + ", workbook="
+                    + GetWorkbookFullNameCore(boundWorkbook)
+                    + ", boundSystemRoot="
+                    + (_homeBinding.SystemRoot ?? string.Empty)
+                    + ", currentSystemRoot="
+                    + (currentSystemRoot ?? string.Empty));
+                return KernelHomeBindingStatus.Invalid;
+            }
+
+            workbook = boundWorkbook;
+            return KernelHomeBindingStatus.Valid;
+        }
+
+        private Excel.Workbook ResolveWorkbookForBoundHomeMutation(string operationName)
+        {
+            Excel.Workbook workbook;
+            KernelHomeBindingStatus bindingStatus = ResolveHomeBindingStatus(operationName, out workbook);
+            if (bindingStatus != KernelHomeBindingStatus.Valid)
+            {
+                _logger.Warn(
+                    "Kernel HOME mutation failed closed because valid binding was not available. operation="
+                    + (operationName ?? string.Empty)
+                    + ", bindingStatus="
+                    + bindingStatus.ToString());
+                return null;
+            }
+
+            return workbook;
+        }
+
+        private Excel.Workbook ResolveWorkbookForHomeDisplayOrClose(string operationName)
+        {
+            Excel.Workbook workbook;
+            KernelHomeBindingStatus bindingStatus = ResolveHomeBindingStatus(operationName, out workbook);
+            if (bindingStatus == KernelHomeBindingStatus.Valid)
+            {
+                return workbook;
+            }
+
+            if (bindingStatus == KernelHomeBindingStatus.Invalid)
+            {
+                return null;
+            }
+
+            return GetOpenKernelWorkbookCore();
+        }
+
+        private string GetWorkbookSystemRootForHomeBinding(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return string.Empty;
+            }
+
+            if (_excelInteropService != null)
+            {
+                return _pathCompatibilityService.NormalizePath(
+                    KernelWorkbookResolver.GetSystemRootFromWorkbook(
+                        workbook,
+                        _excelInteropService,
+                        _pathCompatibilityService,
+                        _logger,
+                        IsKernelWorkbook));
+            }
+
+            try
+            {
+                if (workbook.CustomDocumentProperties is IDictionary<string, string> properties
+                    && properties.TryGetValue("SYSTEM_ROOT", out string systemRoot))
+                {
+                    return _pathCompatibilityService.NormalizePath(systemRoot);
+                }
+            }
+            catch
+            {
+            }
+
+            return string.Empty;
         }
 
         private bool HasOtherVisibleWorkbookCore(Excel.Workbook workbook)
@@ -708,7 +903,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void ApplyHomeDisplayVisibility(string triggerReason)
         {
-            Excel.Workbook kernelWorkbook = GetOpenKernelWorkbookCore();
+            Excel.Workbook kernelWorkbook = ResolveWorkbookForHomeDisplayOrClose("ApplyHomeDisplayVisibility");
             bool hasVisibleNonKernelWorkbook = HasVisibleNonKernelWorkbook();
             bool preserveOtherWorkbookWindowLayout = ShouldPreserveOtherWorkbookWindowLayout();
             string visibleNonKernelWindows = DescribeVisibleNonKernelWorkbookWindows();
@@ -1524,7 +1719,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal void Execute(bool saveKernelWorkbook, string entryPoint, string caller)
             {
-                Excel.Workbook workbook = _owner.GetOpenKernelWorkbookCore();
+                Excel.Workbook workbook = _owner.ResolveWorkbookForHomeDisplayOrClose("CloseHomeSession");
                 bool otherVisibleWorkbookExists = _owner.HasOtherVisibleWorkbookCore(workbook);
                 bool otherWorkbookExists = _owner.HasOtherWorkbookCore(workbook);
                 bool skipDisplayRestoreForCaseCreation = KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(
@@ -1681,8 +1876,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + _owner.FormatWorkbookDescriptor(workbook)
                     + ", activeState="
                     + _owner.FormatActiveExcelState());
+                _owner.ClearHomeWorkbookBinding("CloseHomeSession.Completed");
                 _owner._logger.Info("CloseHomeSession completed. saveKernelWorkbook=" + saveKernelWorkbook.ToString());
             }
+        }
+
+        private sealed class KernelHomeBinding
+        {
+            internal KernelHomeBinding(Excel.Workbook workbook, string systemRoot)
+            {
+                Workbook = workbook;
+                SystemRoot = systemRoot ?? string.Empty;
+            }
+
+            internal Excel.Workbook Workbook { get; }
+
+            internal string SystemRoot { get; }
+        }
+
+        private enum KernelHomeBindingStatus
+        {
+            None = 0,
+            Valid = 1,
+            Invalid = 2
         }
 
         internal sealed class KernelWorkbookServiceTestHooks

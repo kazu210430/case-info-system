@@ -39,6 +39,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Kernel pane action requested. actionId=" + actionId);
 				switch (actionId) {
 				case "open-home":
+					_kernelWorkbookService.BindHomeWorkbook (context);
 					_showKernelHomeAction ();
 					break;
 				case "open-user-info":
@@ -69,6 +70,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Kernel sheet command requested. commandId=" + commandId);
 				switch (commandId.Trim ()) {
 				case "open-home":
+					_kernelWorkbookService.ClearHomeWorkbookBinding ("KernelCommandService.ExecuteSheetCommand.OpenHome");
 					_showKernelHomeAction ();
 					break;
 				case "reflect-accounting-set":

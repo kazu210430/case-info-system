@@ -237,6 +237,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				MessageBox.Show ("顧客名を入力してください。", "案件情報System");
 				return;
 			}
+			if (!EnsureBoundHomeMutationAvailable ("案件作成")) {
+				return;
+			}
 			PrepareForCaseCreationStart ();
 			BeginKernelCaseCreationFlow ("KernelHomeForm.BtnCreate");
 			try {
@@ -276,6 +279,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void RunCreateCase (bool showCase)
 		{
 			string actualCustomerName = GetActualCustomerName ();
+			if (!EnsureBoundHomeMutationAvailable ("案件作成")) {
+				return;
+			}
 			BeginKernelCaseCreationFlow (showCase ? "KernelHomeForm.RunCreateCase.Single" : "KernelHomeForm.RunCreateCase.Batch");
 			try {
 				KernelCaseCreationResult result = (showCase ? _kernelCaseCreationCommandService.ExecuteCreateCaseSingle (actualCustomerName) : _kernelCaseCreationCommandService.ExecuteCreateCaseBatch (actualCustomerName));
@@ -381,6 +387,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private void SelectDefaultRoot ()
 		{
+			if (!EnsureBoundHomeMutationAvailable ("保存先フォルダ設定")) {
+				return;
+			}
 			string text = _kernelWorkbookService.SelectAndSaveDefaultRoot ();
 			if (!string.IsNullOrWhiteSpace (text)) {
 				ApplyDefaultRootDisplay (text);
@@ -628,7 +637,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			if (isChecked) {
 				if (!_isInitializing) {
-					_kernelWorkbookService.SaveNameRuleA (ruleA);
+					if (!_kernelWorkbookService.SaveNameRuleA (ruleA)) {
+						ReloadSettings ();
+						ShowBoundHomeRequiredMessage ("命名規則設定");
+						return;
+					}
 				}
 				RefreshPreview ();
 			}
@@ -638,10 +651,29 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			if (isChecked) {
 				if (!_isInitializing) {
-					_kernelWorkbookService.SaveNameRuleB (ruleB);
+					if (!_kernelWorkbookService.SaveNameRuleB (ruleB)) {
+						ReloadSettings ();
+						ShowBoundHomeRequiredMessage ("命名規則設定");
+						return;
+					}
 				}
 				RefreshPreview ();
 			}
+		}
+
+		private bool EnsureBoundHomeMutationAvailable (string featureName)
+		{
+			if (_kernelWorkbookService.HasValidHomeWorkbookBinding ()) {
+				return true;
+			}
+			ReloadSettings ();
+			ShowBoundHomeRequiredMessage (featureName);
+			return false;
+		}
+
+		private static void ShowBoundHomeRequiredMessage (string featureName)
+		{
+			MessageBox.Show ((featureName ?? "この操作") + " を実行できません。Kernel HOME の元 workbook を特定できませんでした。", "案件情報System");
 		}
 
 		private string GetCustomerDisplayName ()

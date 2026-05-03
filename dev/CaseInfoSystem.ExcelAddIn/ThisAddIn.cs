@@ -755,6 +755,7 @@ namespace CaseInfoSystem.ExcelAddIn
             {
             ExcelAddInTraceLogWriter.Write("Kernel home requested from COM automation.");
             }
+            _kernelWorkbookService?.ClearHomeWorkbookBinding("ThisAddIn.ShowKernelHomeFromAutomation");
             ShowKernelHomePlaceholderWithExternalWorkbookSuppression("KernelAutomationService.ShowHome");
         }
 
@@ -974,6 +975,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
+            _kernelWorkbookService?.ClearHomeWorkbookBinding("ThisAddIn.TryShowKernelHomeFormOnStartup");
             ShowKernelHomePlaceholder();
         }
 

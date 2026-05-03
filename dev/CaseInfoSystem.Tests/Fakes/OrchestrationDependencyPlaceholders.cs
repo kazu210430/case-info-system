@@ -196,8 +196,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
     internal sealed class UserErrorService
     {
+        internal Action<string, Exception> OnShowUserError { get; set; }
+
         internal void ShowUserError(string context, Exception ex)
         {
+            OnShowUserError?.Invoke(context, ex);
         }
     }
 

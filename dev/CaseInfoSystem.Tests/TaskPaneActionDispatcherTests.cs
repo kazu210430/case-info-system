@@ -154,6 +154,71 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void HandleCaseControlActionInvoked_WhenAccountingActionThrows_LogsErrorAndSkipsPostActionRefresh()
+        {
+            var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();
+            var excelInteropService = new ExcelInteropService();
+            Excel.Workbook workbook = CreateWorkbook(@"C:\cases\case.xlsx");
+            excelInteropService.OnFindOpenWorkbook = _ => workbook;
+
+            var control = new DocumentButtonsControl();
+            TaskPaneHost host = OrchestrationTestSupport.CreateTaskPaneHost(control, "262");
+            host.WorkbookFullName = workbook.FullName;
+            var expectedException = new System.InvalidOperationException("Accounting action failed.");
+            var loggerMessages = new List<string>();
+            string userErrorContext = null;
+            System.Exception userErrorException = null;
+            int invalidateCalls = 0;
+            int renderAfterActionCalls = 0;
+            int showCalls = 0;
+            int requestCalls = 0;
+            addIn.RequestTaskPaneDisplayForTargetWindowHandler = (request, targetWorkbook, targetWindow) => requestCalls++;
+            var userErrorService = new UserErrorService
+            {
+                OnShowUserError = (context, ex) =>
+                {
+                    userErrorContext = context;
+                    userErrorException = ex;
+                }
+            };
+
+            var dispatcher = CreateDispatcher(
+                addIn,
+                excelInteropService,
+                CreateBusinessActionLauncher(
+                    promptAccepted: true,
+                    onDocumentCreate: null,
+                    onAccountingExecute: _ => throw expectedException,
+                    caseListResultFactory: null,
+                    caseListContextFactory: null),
+                new CaseTaskPaneViewStateBuilder(),
+                userErrorService,
+                OrchestrationTestSupport.CreateLogger(loggerMessages),
+                windowKey => host,
+                _ => invalidateCalls++,
+                (targetControl, targetWorkbook) => renderAfterActionCalls++,
+                (targetHost, reason) =>
+                {
+                    showCalls++;
+                    return true;
+                });
+
+            dispatcher.HandleCaseControlActionInvoked("262", control, new TaskPaneActionEventArgs("accounting", string.Empty));
+
+            Assert.Contains(
+                loggerMessages,
+                message => message.Contains("ERROR: CaseControl_ActionInvoked failed.")
+                    && message.Contains("InvalidOperationException")
+                    && message.Contains("Accounting action failed."));
+            Assert.Equal("CaseControl_ActionInvoked", userErrorContext);
+            Assert.Same(expectedException, userErrorException);
+            Assert.Equal(0, requestCalls);
+            Assert.Equal(0, invalidateCalls);
+            Assert.Equal(0, renderAfterActionCalls);
+            Assert.Equal(0, showCalls);
+        }
+
+        [Fact]
         public void HandleCaseControlActionInvoked_WhenCaseListActionRuns_DefersRefreshAndInvalidatesSignature()
         {
             var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();

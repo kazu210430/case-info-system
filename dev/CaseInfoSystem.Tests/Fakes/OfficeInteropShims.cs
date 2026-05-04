@@ -404,8 +404,6 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal Action<CaseInfoSystem.ExcelAddIn.App.TaskPaneDisplayRequest, Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window> RequestTaskPaneDisplayForTargetWindowHandler { get; set; }
 
-        internal Func<string, string, bool> ShowKernelSheetAndRefreshPaneHandler { get; set; }
-
         internal Func<CaseInfoSystem.ExcelAddIn.Domain.WorkbookContext, string, string, bool> ShowKernelSheetAndRefreshPaneFromHomeHandler { get; set; }
 
         internal Action<Microsoft.Office.Interop.Excel.Workbook, string> ShowWorkbookTaskPaneWhenReadyHandler { get; set; }
@@ -453,12 +451,6 @@ namespace CaseInfoSystem.ExcelAddIn
             RequestTaskPaneDisplayForTargetWindowHandler?.Invoke(request, workbook, targetWindow);
         }
 
-        internal bool ShowKernelSheetAndRefreshPane(string kernelTransitionSheetCodeName, string kernelTransitionReason)
-        {
-            return ShowKernelSheetAndRefreshPaneHandler == null
-                || ShowKernelSheetAndRefreshPaneHandler(kernelTransitionSheetCodeName, kernelTransitionReason);
-        }
-
         internal bool ShowKernelSheetAndRefreshPaneFromHome(
             CaseInfoSystem.ExcelAddIn.Domain.WorkbookContext context,
             string kernelTransitionSheetCodeName,
@@ -468,7 +460,7 @@ namespace CaseInfoSystem.ExcelAddIn
             displayedWorkbook = context == null ? null : context.Workbook;
             return ShowKernelSheetAndRefreshPaneFromHomeHandler != null
                 ? ShowKernelSheetAndRefreshPaneFromHomeHandler(context, kernelTransitionSheetCodeName, kernelTransitionReason)
-                : ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
+                : true;
         }
 
         internal void ShowWorkbookTaskPaneWhenReady(Microsoft.Office.Interop.Excel.Workbook workbook, string reason)

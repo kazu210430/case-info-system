@@ -631,33 +631,6 @@ namespace CaseInfoSystem.ExcelAddIn
             }
         }
 
-        internal bool ShowKernelSheetAndRefreshPaneFromHome(string sheetCodeName, string reason)
-        {
-            KernelFlickerTraceContext.BeginNewTrace();
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=ThisAddIn action=trace-begin trigger=ShowKernelSheetAndRefreshPaneFromHome traceOriginReason="
-                + (reason ?? string.Empty)
-                + ", sheetCodeName="
-                + (sheetCodeName ?? string.Empty)
-                + ", activeState="
-                + FormatActiveExcelState());
-            // 処理ブロック: 次に来る activate 系イベントに備えて、Kernel HOME 抑止要求を発行する。
-            SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
-            Excel.Workbook displayedWorkbook;
-            bool shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName, out displayedWorkbook);
-            if (!shown)
-            {
-                return false;
-            }
-
-            if (displayedWorkbook != null)
-            {
-                RefreshTaskPane(reason, displayedWorkbook, null);
-            }
-            return true;
-        }
-
         internal bool ShowKernelSheetAndRefreshPaneFromHome(WorkbookContext context, string sheetCodeName, string reason, out Excel.Workbook displayedWorkbook)
         {
             displayedWorkbook = null;
@@ -730,101 +703,6 @@ namespace CaseInfoSystem.ExcelAddIn
             }
 
             displayedWorkbook = resolvedDisplayedWorkbook;
-            return true;
-        }
-
-        internal bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason)
-        {
-            Excel.Workbook displayedWorkbook;
-            return ShowKernelSheetAndRefreshPane(sheetCodeName, reason, out displayedWorkbook);
-        }
-
-        internal bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason, out Excel.Workbook displayedWorkbook)
-        {
-            displayedWorkbook = null;
-            Excel.Workbook resolvedDisplayedWorkbook = null;
-            KernelFlickerTraceContext.BeginNewTrace();
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=ThisAddIn action=trace-begin trigger=ShowKernelSheetAndRefreshPane traceOriginReason="
-                + (reason ?? string.Empty)
-                + ", sheetCodeName="
-                + (sheetCodeName ?? string.Empty)
-                + ", activeState="
-                + FormatActiveExcelState());
-            // 処理ブロック: 遷移開始前の時点観測として、開始ログへ出す workbook 状態を記録する。
-            Excel.Workbook activeWorkbookBefore = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
-            _logger?.Info(
-                "ShowKernelSheetAndRefreshPane started. reason="
-                + (reason ?? string.Empty)
-                + ", sheetCodeName="
-                + (sheetCodeName ?? string.Empty)
-                + ", activeWorkbookBefore="
-                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(activeWorkbookBefore)));
-            // 処理ブロック: 次に来る activate 系イベントに備えて、Kernel HOME 抑止要求を発行する。
-            SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
-            _logger?.Info("[Transition] suppression requested. reason=" + reason);
-            bool shouldSuspendScreenUpdating = !string.IsNullOrWhiteSpace(reason)
-                && reason.IndexOf("KernelHomeForm.OpenSheet", StringComparison.OrdinalIgnoreCase) >= 0;
-            bool shown = false;
-            Action performTransition = () =>
-            {
-                // 処理ブロック: sheet 表示前の内部 cleanup として、表示中の HOME UI を退避する。
-                HideKernelHomePlaceholder();
-                // 処理ブロック: 表示実行そのものではなく、対象 sheet の表示要求を発行し、その結果を受けて続行可否を判定する。
-                shown = _kernelWorkbookService.ShowSheetByCodeName(sheetCodeName, out resolvedDisplayedWorkbook);
-                _logger?.Info("[Transition] sheet shown=" + shown + ", sheet=" + sheetCodeName);
-                if (!shown)
-                {
-                    return;
-                }
-
-                // 処理ブロック: pane 同期の実行ではなく、表示後の pane 同期要求を発行する。
-                if (resolvedDisplayedWorkbook == null)
-                {
-                    _logger?.Warn(
-                        "Kernel pane refresh skipped because displayed workbook was unavailable after sheet navigation. reason="
-                        + (reason ?? string.Empty)
-                        + ", sheetCodeName="
-                        + (sheetCodeName ?? string.Empty));
-                    return;
-                }
-
-                _logger?.Info("[Transition] pane refresh requested.");
-                RefreshTaskPane(reason, resolvedDisplayedWorkbook, null);
-            };
-
-            if (shouldSuspendScreenUpdating)
-            {
-                RunWithScreenUpdatingSuspended(performTransition);
-            }
-            else
-            {
-                performTransition();
-            }
-
-            displayedWorkbook = resolvedDisplayedWorkbook;
-
-            if (!shown)
-            {
-                // 処理ブロック: sheet 表示失敗時の中断観測として、失敗理由をログへ記録して終了する。
-                _logger?.Info(
-                    "ShowKernelSheetAndRefreshPane aborted because target sheet could not be shown. reason="
-                    + (reason ?? string.Empty)
-                    + ", sheetCodeName="
-                    + (sheetCodeName ?? string.Empty));
-                return false;
-            }
-
-            // 処理ブロック: 遷移完了後の時点観測として、完了ログへ出す workbook 状態を記録する。
-            Excel.Workbook activeWorkbookAfter = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
-            _logger?.Info(
-                "ShowKernelSheetAndRefreshPane completed. reason="
-                + (reason ?? string.Empty)
-                + ", kernelWorkbook="
-                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(resolvedDisplayedWorkbook))
-                + ", activeWorkbookAfter="
-                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(activeWorkbookAfter)));
             return true;
         }
 

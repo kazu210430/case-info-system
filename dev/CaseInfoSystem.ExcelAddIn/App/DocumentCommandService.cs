@@ -24,8 +24,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal interface IKernelSheetPaneRefreshBridge
     {
-        bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason);
-
         bool ShowKernelSheetAndRefreshPane(WorkbookContext context, string sheetCodeName, string reason);
     }
 
@@ -81,11 +79,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal ThisAddInKernelSheetPaneRefreshBridge(ThisAddIn addIn)
         {
             _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
-        }
-
-        public bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason)
-        {
-            return _addIn.ShowKernelSheetAndRefreshPane(sheetCodeName, reason);
         }
 
         public bool ShowKernelSheetAndRefreshPane(WorkbookContext context, string sheetCodeName, string reason)

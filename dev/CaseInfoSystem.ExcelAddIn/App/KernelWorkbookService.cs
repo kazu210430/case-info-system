@@ -677,43 +677,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ApplyHomeDisplayVisibility(triggerReason);
         }
 
-        internal bool ShowSheetByCodeName(string codeName)
-        {
-            Excel.Workbook displayedWorkbook;
-            return ShowSheetByCodeName(codeName, out displayedWorkbook);
-        }
-
-        internal bool ShowSheetByCodeName(string codeName, out Excel.Workbook displayedWorkbook)
-        {
-            displayedWorkbook = null;
-            Excel.Workbook workbook = GetOrOpenKernelWorkbook();
-            if (workbook == null)
-            {
-                return false;
-            }
-
-            bool previousEnableEvents = _application.EnableEvents;
-            try
-            {
-                _application.EnableEvents = false;
-                PrepareWorkbookForSheetNavigation(workbook, codeName);
-                Excel.Worksheet worksheet = _excelInteropService.FindWorksheetByCodeName(workbook, codeName);
-                if (worksheet == null)
-                {
-                    return false;
-                }
-
-                workbook.Activate();
-                worksheet.Activate();
-                displayedWorkbook = workbook;
-                return true;
-            }
-            finally
-            {
-                _application.EnableEvents = previousEnableEvents;
-            }
-        }
-
         private void PrepareWorkbookForSheetNavigation(Excel.Workbook workbook, string codeName)
         {
             if (_isHomeDisplayPrepared)

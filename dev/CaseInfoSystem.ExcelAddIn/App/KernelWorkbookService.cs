@@ -246,7 +246,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (bindingStatus == KernelHomeBindingStatus.None)
             {
-                workbook = GetOrOpenKernelWorkbook();
+                _logger.Warn("Kernel settings load failed closed because HOME binding was not available.");
+                return new KernelSettingsState();
             }
 
             if (workbook == null)

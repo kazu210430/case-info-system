@@ -334,6 +334,29 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void LoadSettings_WhenHomeBindingIsMissing_ReturnsDefaultStateWithoutFallbackLookup()
+        {
+            int openKernelCalls = 0;
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+
+            KernelSettingsState state = service.LoadSettings();
+
+            Assert.Equal(string.Empty, state.SystemRoot);
+            Assert.Equal(string.Empty, state.DefaultRoot);
+            Assert.Equal("YYYY", state.NameRuleA);
+            Assert.Equal("DOC", state.NameRuleB);
+            Assert.Equal(0, openKernelCalls);
+        }
+
+        [Fact]
         public void LoadSettings_WhenHomeBindingBecomesInvalid_ReturnsDefaultStateWithoutFallbackLookup()
         {
             int openKernelCalls = 0;

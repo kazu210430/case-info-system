@@ -8,33 +8,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
 	internal sealed class AccountingWorkbookService
 	{
-		private sealed class ApplicationStateScope : IDisposable
-		{
-			private readonly Application _application;
-
-			private readonly bool _screenUpdating;
-
-			private readonly bool _enableEvents;
-
-			private bool _disposed;
-
-			internal ApplicationStateScope (Application application, bool screenUpdating, bool enableEvents)
-			{
-				_application = application;
-				_screenUpdating = screenUpdating;
-				_enableEvents = enableEvents;
-			}
-
-			public void Dispose ()
-			{
-				if (!_disposed) {
-					_disposed = true;
-					_application.ScreenUpdating = _screenUpdating;
-					_application.EnableEvents = _enableEvents;
-				}
-			}
-		}
-
 		private readonly Application _application;
 
 		private readonly ExcelValidationService _excelValidationService;
@@ -290,11 +263,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal IDisposable BeginInitializationScope ()
 		{
-			bool screenUpdating = _application.ScreenUpdating;
-			bool enableEvents = _application.EnableEvents;
-			_application.ScreenUpdating = false;
-			_application.EnableEvents = false;
-			return new ApplicationStateScope (_application, screenUpdating, enableEvents);
+			var excelApplicationStateScope = new ExcelApplicationStateScope (_application);
+			excelApplicationStateScope.SetScreenUpdating (false);
+			excelApplicationStateScope.SetEnableEvents (false);
+			return excelApplicationStateScope;
 		}
 
 		internal bool EnsureNumberFormatLocal (Workbook workbook, string sheetName, string address, string numberFormatLocal)

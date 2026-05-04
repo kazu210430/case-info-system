@@ -464,27 +464,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 using (BeginManagedCloseScope(workbook))
                 {
-                    bool previousDisplayAlerts = _application.DisplayAlerts;
+                    if (saveChanges)
+                    {
+                        workbook.Save();
+                    }
+                    else
+                    {
+                        WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
+                    }
+
+                    _sessionDirtyWorkbookKeys.Remove(workbookKey);
+                    SchedulePostCloseFollowUp(workbookKey, folderPath);
+
+                    ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
                     try
                     {
-                        _application.DisplayAlerts = false;
-
-                        if (saveChanges)
-                        {
-                            workbook.Save();
-                        }
-                        else
-                        {
-                            WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
-                        }
-
-                        _sessionDirtyWorkbookKeys.Remove(workbookKey);
-                        SchedulePostCloseFollowUp(workbookKey, folderPath);
+                        closeScope.SetDisplayAlerts(false);
                         workbook.Close(SaveChanges: false);
                     }
                     finally
                     {
-                        _application.DisplayAlerts = previousDisplayAlerts;
+                        closeScope.Dispose();
                     }
                 }
             }

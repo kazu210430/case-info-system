@@ -45,11 +45,6 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             Excel.Application hiddenApplication = new Excel.Application();
@@ -136,11 +131,6 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
             var service = new KernelCaseCreationService(
                 kernelWorkbookService,
@@ -193,7 +183,6 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => kernelWorkbook
                 });
 
             var caseWorkbookInitializer = new CaseWorkbookInitializer
@@ -299,7 +288,6 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => kernelWorkbook
                 });
 
             Excel.Application hiddenApplication = new Excel.Application();
@@ -397,7 +385,6 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => kernelWorkbook
                 });
 
             var caseWorkbookInitializer = new CaseWorkbookInitializer
@@ -494,7 +481,6 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => kernelWorkbook
                 });
 
             int visibleInitializeCount = 0;

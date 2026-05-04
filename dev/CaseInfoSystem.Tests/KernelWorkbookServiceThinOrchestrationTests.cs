@@ -21,11 +21,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    },
                     ResolveKernelWorkbookPath = root =>
                     {
                         fallbackResolveCalls++;
@@ -64,11 +59,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return primary;
-                    },
                     ResolveKernelWorkbookPath = root =>
                     {
                         fallbackResolveCalls++;
@@ -107,11 +97,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    },
                     ResolveKernelWorkbookPath = root =>
                     {
                         fallbackResolveCalls++;
@@ -140,7 +125,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => new Excel.Workbook(),
                     ResolveKernelWorkbookPath = root => root + "\\kernel.xlsm",
                     FindOpenWorkbook = path => path == @"C:\root\kernel.xlsm" ? fallback : null
                 });
@@ -158,11 +142,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    },
                     ResolveKernelWorkbookPath = root => string.Empty,
                     FindOpenWorkbook = path =>
                     {
@@ -195,11 +174,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    },
                     HasOtherVisibleWorkbook = _ => false,
                     HasOtherWorkbook = _ => false,
                     CloseKernelWorkbookWithoutLifecycle = workbook => observedCloseWorkbook = workbook,
@@ -258,11 +232,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             Assert.True(service.BindHomeWorkbook(boundWorkbook));
@@ -285,11 +254,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             Assert.False(service.BindHomeWorkbook(boundWorkbook));
@@ -316,11 +280,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             Assert.True(service.BindHomeWorkbook(
@@ -341,11 +300,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             KernelSettingsState state = service.LoadSettings();
@@ -374,11 +328,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             Assert.True(service.BindHomeWorkbook(
@@ -400,11 +349,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             string selectedRoot = service.SelectAndSaveDefaultRoot();
@@ -420,11 +364,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             Excel.Workbook resolved = (Excel.Workbook)typeof(KernelWorkbookService)
@@ -442,11 +381,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return new Excel.Workbook();
-                    }
                 });
 
             typeof(KernelWorkbookService)
@@ -465,11 +399,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        openKernelCalls++;
-                        return null;
-                    },
                     HasOtherVisibleWorkbook = _ => false,
                     HasOtherWorkbook = _ => false,
                     ReleaseHomeDisplay = showExcel => releaseCalls.Add(showExcel),
@@ -508,7 +437,6 @@ namespace CaseInfoSystem.Tests
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
                     ApplyHomeDisplayVisibility = () => callLog.Add("apply"),
-                    GetOpenKernelWorkbook = () => null,
                     HasOtherVisibleWorkbook = _ => false,
                     HasOtherWorkbook = _ => false,
                     ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
@@ -538,11 +466,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () =>
-                    {
-                        callLog.Add("get:" + phase.ToString());
-                        return null;
-                    },
                     ResolveKernelWorkbookPath = root =>
                     {
                         callLog.Add("resolve:" + phase.ToString());
@@ -590,7 +513,6 @@ namespace CaseInfoSystem.Tests
                     OrchestrationTestSupport.CreateLogger(new List<string>()),
                     new KernelWorkbookService.KernelWorkbookServiceTestHooks
                     {
-                        GetOpenKernelWorkbook = () => kernelWorkbook,
                         HasOtherVisibleWorkbook = _ => true,
                         HasOtherWorkbook = _ => true,
                         ApplyHomeDisplayVisibility = () => { },
@@ -627,7 +549,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => null,
                     HasOtherVisibleWorkbook = _ => true,
                     HasOtherWorkbook = _ => true,
                     ReleaseHomeDisplay = showExcel => releaseCalls.Add(showExcel),
@@ -652,7 +573,6 @@ namespace CaseInfoSystem.Tests
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => kernelWorkbook,
                     HasOtherVisibleWorkbook = _ => true,
                     HasOtherWorkbook = _ => true,
                     RequestManagedCloseFromHomeExit = workbook =>
@@ -683,7 +603,6 @@ namespace CaseInfoSystem.Tests
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
                     ApplyHomeDisplayVisibility = () => callLog.Add("apply"),
-                    GetOpenKernelWorkbook = () => kernelWorkbook,
                     HasOtherVisibleWorkbook = _ => true,
                     HasOtherWorkbook = _ => true,
                     RequestManagedCloseFromHomeExit = workbook =>

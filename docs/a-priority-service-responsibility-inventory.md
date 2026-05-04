@@ -67,7 +67,6 @@
 ### 現在担っている責務
 
 - Kernel workbook 解決
-  - `GetOpenKernelWorkbook`
   - `ResolveKernelWorkbook`
   - `GetOrOpenKernelWorkbook`
   - `ResolveKernelWorkbookPathFromAvailableSystemRoot`

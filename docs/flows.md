@@ -138,7 +138,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - `KernelTemplateSyncService.Execute(context)` は `WorkbookContext` を必須入力として扱い、対象 Kernel workbook を `_kernelWorkbookService.ResolveKernelWorkbook(context)` で確定します。
 - `KernelOpenWorkbookLocator.ResolveKernelWorkbook(context)` は、まず `context.Workbook` が Kernel ならその workbook を使い、それ以外は `WorkbookContext.SystemRoot` に対応する Kernel workbook path を解決して open workbook を特定します。
 - この経路では、複数 Kernel workbook や hidden workbook が同時に存在しても、雛形登録・更新、snapshot 反映、cache invalidate は要求元の `SYSTEM_ROOT` 文脈に対応する Kernel workbook へ閉じます。
-- `GetOpenKernelWorkbook()` は単一 root 前提の便利関数として残りますが、雛形登録・更新フローでは使いません。
+- `GetOpenKernelWorkbook()` のような文脈なし API は使わず、雛形登録・更新フローの Kernel workbook 選択は `ResolveKernelWorkbook(context)` に限定します。
 
 ### 登録前チェック
 
@@ -364,7 +364,7 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 
 補足:
 
-- 現在の実装では、この `openKernelWorkbook` 自体が `GetOpenKernelWorkbook()` の探索順に依存して選ばれます。
+- 現在の実装では、この `openKernelWorkbook` は `ResolveKernelWorkbook(context)` によって要求元の `SYSTEM_ROOT` 文脈へ閉じた workbook として選ばれます。
 - したがって cache invalidate の境界は root 単位に改善済みですが、その upstream にある Kernel workbook 選択境界は将来課題として残ります。
 - `MasterTemplateCatalogService` と `TaskPaneSnapshotBuilderService` は、どちらも `MasterWorkbookReadAccessService` を共有して Master path 解決と read-only open を揃えています。
 

@@ -10,49 +10,30 @@ namespace CaseInfoSystem.Tests
     public class KernelOpenWorkbookLocatorTests
     {
         [Fact]
-        public void HasAnyOpenKernelWorkbook_ReturnsTrueWithoutCallingGetOpenOverride_WhenKernelWorkbookExists()
+        public void HasAnyOpenKernelWorkbook_ReturnsTrue_WhenKernelWorkbookExists()
         {
             var application = new Excel.Application();
             AddWorkbook(application, WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"));
-            int getOpenCalls = 0;
-            KernelOpenWorkbookLocator locator = CreateLocator(
-                application,
-                () =>
-                {
-                    getOpenCalls++;
-                    return null;
-                });
+            KernelOpenWorkbookLocator locator = CreateLocator(application);
 
             bool result = locator.HasAnyOpenKernelWorkbook();
 
             Assert.True(result);
-            Assert.Equal(0, getOpenCalls);
         }
 
         [Fact]
-        public void HasAnyOpenKernelWorkbook_ReturnsFalseWithoutCallingGetOpenOverride_WhenKernelWorkbookIsAbsent()
+        public void HasAnyOpenKernelWorkbook_ReturnsFalse_WhenKernelWorkbookIsAbsent()
         {
             var application = new Excel.Application();
             AddWorkbook(application, "ExistingCase.xlsx");
-            int getOpenCalls = 0;
-            KernelOpenWorkbookLocator locator = CreateLocator(
-                application,
-                () =>
-                {
-                    getOpenCalls++;
-                    return new Excel.Workbook
-                    {
-                        Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm")
-                    };
-                });
+            KernelOpenWorkbookLocator locator = CreateLocator(application);
 
             bool result = locator.HasAnyOpenKernelWorkbook();
 
             Assert.False(result);
-            Assert.Equal(0, getOpenCalls);
         }
 
-        private static KernelOpenWorkbookLocator CreateLocator(Excel.Application application, System.Func<Excel.Workbook> getOpenKernelWorkbookOverride)
+        private static KernelOpenWorkbookLocator CreateLocator(Excel.Application application)
         {
             var loggerMessages = new List<string>();
             Logger logger = OrchestrationTestSupport.CreateLogger(loggerMessages);
@@ -60,8 +41,7 @@ namespace CaseInfoSystem.Tests
                 application,
                 null,
                 new PathCompatibilityService(),
-                logger,
-                getOpenKernelWorkbookOverride: getOpenKernelWorkbookOverride);
+                logger);
         }
 
         private static Excel.Workbook AddWorkbook(Excel.Application application, string workbookName)

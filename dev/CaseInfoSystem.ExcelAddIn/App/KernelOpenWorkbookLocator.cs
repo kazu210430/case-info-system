@@ -12,7 +12,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
         private readonly Logger _logger;
-        private readonly Func<Excel.Workbook> _getOpenKernelWorkbookOverride;
         private readonly Func<string, string> _resolveKernelWorkbookPathOverride;
         private readonly Func<string, Excel.Workbook> _findOpenWorkbookOverride;
 
@@ -21,7 +20,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
             Logger logger,
-            Func<Excel.Workbook> getOpenKernelWorkbookOverride = null,
             Func<string, string> resolveKernelWorkbookPathOverride = null,
             Func<string, Excel.Workbook> findOpenWorkbookOverride = null)
         {
@@ -29,34 +27,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _excelInteropService = excelInteropService;
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _getOpenKernelWorkbookOverride = getOpenKernelWorkbookOverride;
             _resolveKernelWorkbookPathOverride = resolveKernelWorkbookPathOverride;
             _findOpenWorkbookOverride = findOpenWorkbookOverride;
-        }
-
-        internal Excel.Workbook GetOpenKernelWorkbook()
-        {
-            if (_getOpenKernelWorkbookOverride != null)
-            {
-                return _getOpenKernelWorkbookOverride();
-            }
-
-            try
-            {
-                foreach (Excel.Workbook workbook in _application.Workbooks)
-                {
-                    if (IsKernelWorkbook(workbook))
-                    {
-                        return workbook;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("GetOpenKernelWorkbook failed.", ex);
-            }
-
-            return null;
         }
 
         internal bool HasAnyOpenKernelWorkbook()

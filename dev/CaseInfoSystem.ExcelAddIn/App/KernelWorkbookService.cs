@@ -83,7 +83,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _excelInteropService,
                 _pathCompatibilityService,
                 _logger,
-                getOpenKernelWorkbookOverride: _testHooks == null ? null : _testHooks.GetOpenKernelWorkbook,
                 resolveKernelWorkbookPathOverride: _testHooks == null ? null : _testHooks.ResolveKernelWorkbookPath,
                 findOpenWorkbookOverride: _testHooks == null ? null : _testHooks.FindOpenWorkbook);
             _kernelWorkbookStateService = new KernelWorkbookStateService(
@@ -95,11 +94,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 hasOtherWorkbookOverride: _testHooks == null ? null : _testHooks.HasOtherWorkbook);
             _kernelWorkbookSettingsService = new KernelWorkbookSettingsService();
             _homeSessionCloseCoordinator = new KernelHomeSessionCloseCoordinator(this);
-        }
-
-        internal Excel.Workbook GetOpenKernelWorkbook()
-        {
-            return _kernelOpenWorkbookLocator.GetOpenKernelWorkbook();
         }
 
         internal bool IsKernelWorkbook(Excel.Workbook workbook)
@@ -393,13 +387,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             string caller = ResolveExternalCaller();
             _homeSessionCloseCoordinator.Execute(saveKernelWorkbook, entryPoint, caller);
-        }
-
-        private Excel.Workbook GetOpenKernelWorkbookCore()
-        {
-            return _testHooks != null && _testHooks.GetOpenKernelWorkbook != null
-                ? _testHooks.GetOpenKernelWorkbook()
-                : GetOpenKernelWorkbook();
         }
 
         private KernelHomeBinding CreateHomeBinding(Domain.WorkbookContext context)
@@ -1876,8 +1863,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal sealed class KernelWorkbookServiceTestHooks
         {
             internal Action ApplyHomeDisplayVisibility { get; set; }
-
-            internal Func<Excel.Workbook> GetOpenKernelWorkbook { get; set; }
 
             internal Func<string, string> ResolveKernelWorkbookPath { get; set; }
 

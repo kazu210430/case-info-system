@@ -21,11 +21,6 @@ namespace CaseInfoSystem.Tests
                     OrchestrationTestSupport.CreateLogger(new List<string>()),
                     new KernelWorkbookService.KernelWorkbookServiceTestHooks
                     {
-                        GetOpenKernelWorkbook = () =>
-                        {
-                            openKernelCalls++;
-                            return new Excel.Workbook();
-                        }
                     }),
                 new KernelCasePathService
                 {
@@ -55,11 +50,6 @@ namespace CaseInfoSystem.Tests
                     OrchestrationTestSupport.CreateLogger(new List<string>()),
                     new KernelWorkbookService.KernelWorkbookServiceTestHooks
                     {
-                        GetOpenKernelWorkbook = () =>
-                        {
-                            openKernelCalls++;
-                            return new Excel.Workbook();
-                        }
                     }),
                 new KernelCasePathService
                 {

@@ -6,16 +6,15 @@
 
 ## Kernel workbook 選択境界
 
-### KernelCommandService.cs:57 / KernelTemplateSyncService.cs:129 / KernelOpenWorkbookLocator.cs:36
+### KernelCommandService.cs:57 / KernelTemplateSyncService.cs:129 / KernelWorkbookResolverService.cs:22
 
-* 内容: 雛形登録・更新は `KernelCommandService.Execute(context, actionId)` の `reflect-template` 分岐から始まるが、`context` は `ExecuteReflectTemplate()` / `KernelTemplateSyncService.Execute()` へ渡されない。`KernelTemplateSyncService.Execute()` は `GetOpenKernelWorkbook()` に依存し、`KernelOpenWorkbookLocator.GetOpenKernelWorkbook()` は開いている workbook を列挙して Kernel と判定された最初の workbook を返す。
-* 見ていない文脈: active workbook、visible workbook、`WorkbookContext.SystemRoot`、表示中の CASE workbook。
-* 下流との関係: `MasterTemplateCatalogService.InvalidateCache(workbook)` は resolved master path 単位で cache を無効化するため、cache 境界自体は改善済み。残課題はその upstream にある「どの Kernel workbook を対象として処理するか」の境界。
-* 影響範囲: 雛形登録・更新、Base snapshot 更新、master catalog cache invalidate、複数 `SYSTEM_ROOT` 共存時の操作対象選択。
+* 内容: 旧 `GetOpenKernelWorkbook()` 依存は解消済みであり、同 API は削除済みです。雛形登録・更新は `KernelCommandService.Execute(context, actionId)` の `reflect-template` 分岐から `WorkbookContext` を保持したまま進み、`KernelTemplateSyncService.Execute(context)` は `ResolveKernelWorkbook(context)` で対象 Kernel workbook を確定します。
+* 現状: 文脈なしで `Workbook` を返す API は廃止済みです。残っているのは startup 判定用の bool-only probe `HasAnyOpenKernelWorkbook()` と、文脈付き解決 `ResolveKernelWorkbook(context)` / `ResolveKernelWorkbook(systemRoot)` です。
+* technical debt: 本論点で今後検討対象として残すなら、`KernelWorkbookResolverService.ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` 側の文脈境界と open 契約の整理であり、旧 `GetOpenKernelWorkbook` を復活させる話ではありません。
+* 影響範囲: CASE/Kernel 間の workbook resolve / open、read-only open、複数 `SYSTEM_ROOT` 共存時の選択境界。
 * 危険度: 中
-* 現状: 単一 Kernel workbook 運用では問題化しにくいため未対応。複数 Kernel workbook や hidden workbook が同時に存在する場合は、利用者の意図と異なる root を操作対象にする余地がある。
-* 将来案: command / UI / CASE 文脈から `SYSTEM_ROOT` を明示的に渡し、その文脈で Kernel workbook を確定する。`GetOpenKernelWorkbook()` は単一 root 前提の convenience に限定し、複数 root を跨ぐ経路では使用範囲を絞る。
-* 補足方針: HOME unbound は placeholder-only に固定する。`GetOpenKernelWorkbook()` を HOME 表示補助や HOME close 時の復元補助として「1冊選ぶ API」に使う経路は縮退対象とし、残す場合も startup の open 有無判定などの convenience に限定する。
+* 将来案: `ResolveOrOpen` 系も `SYSTEM_ROOT` と caller context を明示した境界で整理し、`ResolveKernelWorkbook(...)` 系との責務差分を docs / 実装で固定する。
+* 補足方針: HOME unbound は placeholder-only に固定する。startup の open 有無判定は bool probe に限定し、「1冊選ぶ API」を再導入しない。
 
 ## CASE workbook lifecycle orchestration 境界
 

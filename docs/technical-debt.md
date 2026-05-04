@@ -15,6 +15,7 @@
 * 危険度: 中
 * 現状: 単一 Kernel workbook 運用では問題化しにくいため未対応。複数 Kernel workbook や hidden workbook が同時に存在する場合は、利用者の意図と異なる root を操作対象にする余地がある。
 * 将来案: command / UI / CASE 文脈から `SYSTEM_ROOT` を明示的に渡し、その文脈で Kernel workbook を確定する。`GetOpenKernelWorkbook()` は単一 root 前提の convenience に限定し、複数 root を跨ぐ経路では使用範囲を絞る。
+* 補足方針: HOME unbound は placeholder-only に固定する。`GetOpenKernelWorkbook()` を HOME 表示補助や HOME close 時の復元補助として「1冊選ぶ API」に使う経路は縮退対象とし、残す場合も startup の open 有無判定などの convenience に限定する。
 
 ## CASE workbook lifecycle orchestration 境界
 

@@ -266,6 +266,14 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 
 - retry / protection / ready-show の詳細 policy は `docs/taskpane-refresh-policy.md` を参照します。
 
+### Kernel HOME unbound セッション
+
+- startup 時の自動表示や明示的な HOME 表示では、Kernel HOME が valid binding を持たない `unbound` 状態で開く場合があります。
+- `unbound` HOME は placeholder-only とし、Kernel が既に open でも自動 bind せず、Kernel workbook / Kernel window の選択や復元を行いません。
+- Kernel が open でない場合も、`unbound` HOME 表示のために Kernel workbook を探したり開いたりしません。
+- `unbound` HOME を閉じるときも、Kernel workbook は managed close 対象や window 復元対象に含めません。
+- startup 文脈で使う open Kernel workbook の有無は表示可否判定の事実であり、HOME 表示後に 1 冊の Kernel workbook を選ぶための入力には使いません。
+
 ### 更新の入口
 
 - `TaskPaneRefreshOrchestrationService` が起動時の再描画要求を扱います。

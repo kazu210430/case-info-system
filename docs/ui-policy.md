@@ -64,6 +64,14 @@
 - WindowActivate 後の TaskPane 再調整
 - Kernel HOME 表示直後の一時的なイベント抑止
 
+### Kernel HOME unbound 表示
+
+- valid binding を持たない `unbound` HOME は placeholder-only として表示します。
+- `unbound` HOME 表示中は、Kernel が既に open でも Kernel workbook / Kernel window へ触れません。
+- `unbound` HOME 表示のために、open していない Kernel workbook を探索・open しません。
+- `unbound` HOME close 時も、Kernel window を復元対象として扱いません。
+- startup で使う open Kernel workbook の有無は bool の表示判定材料として扱い、表示制御のために 1 冊の Kernel workbook を選ぶ API へ昇格させません。
+
 ### 不明点
 
 - すべての表示不整合ケースに対する期待挙動は、コードだけでは確定しません。

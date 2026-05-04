@@ -139,6 +139,10 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - `KernelOpenWorkbookLocator.ResolveKernelWorkbook(context)` は、まず `context.Workbook` が Kernel ならその workbook を使い、それ以外は `WorkbookContext.SystemRoot` に対応する Kernel workbook path を解決して open workbook を特定します。
 - この経路では、複数 Kernel workbook や hidden workbook が同時に存在しても、雛形登録・更新、snapshot 反映、cache invalidate は要求元の `SYSTEM_ROOT` 文脈に対応する Kernel workbook へ閉じます。
 - `GetOpenKernelWorkbook()` のような文脈なし API は使わず、雛形登録・更新フローの Kernel workbook 選択は `ResolveKernelWorkbook(context)` に限定します。
+- 本フェーズの到達点として、Kernel 操作は `WorkbookContext` を唯一の入口とし、root 不一致は補正せず fail-closed とします。
+- 許容される open は、明示的な `WorkbookContext` / `SYSTEM_ROOT` 文脈から行う open と user action 起点の open です。
+- 禁止される open は、context-less fallback open と暗黙の workbook 推測です。
+- `KernelWorkbookResolverService.ResolveOrOpen(...)` 系は、業務都合により open 内包責務を残した将来課題として扱います。
 
 ### 登録前チェック
 
@@ -273,6 +277,7 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 - Kernel が open でない場合も、`unbound` HOME 表示のために Kernel workbook を探したり開いたりしません。
 - `unbound` HOME を閉じるときも、Kernel workbook は managed close 対象や window 復元対象に含めません。
 - startup 文脈で使う open Kernel workbook の有無は表示可否判定の事実であり、HOME 表示後に 1 冊の Kernel workbook を選ぶための入力には使いません。
+- `unbound` HOME は fail-closed セッションであり、binding 不成立を補正するための fallback open は行いません。
 
 ### 更新の入口
 

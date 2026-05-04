@@ -4,6 +4,51 @@
 
 確認時点のコードでは、指定の `FolderWindowService.cs (line 80)` は `WaitForFolderWindow` の開始位置で、`Thread.Sleep` 自体は line 88 にあります。指定の `WorkbookClipboardPreservationService.cs (line 144)` は retry ループの開始位置で、`Thread.Sleep` 自体は line 156 にあります。
 
+## Kernel 文脈寄せフェーズ（完了）
+
+今回までの整理で、Kernel 文脈寄せフェーズは完了扱いとする。
+
+- Kernel 操作はすべて `WorkbookContext` 起点で扱う。
+- 文脈なし workbook 取得 API は廃止済みである。
+- context-less な fallback open は廃止済みである。
+- HOME unbound は placeholder-only / fail-closed として扱う。
+- window 表示復元は暗黙挙動ではなく、明示的な管理に寄せている。
+- 上記到達点は実機確認済みの前提で記録する。
+
+### 設計原則
+
+- `WorkbookContext` を Kernel 操作の唯一の source-of-truth とする。
+- `SYSTEM_ROOT` の root 不一致は補正せず fail-closed とする。
+- 暗黙の workbook 選択は禁止する。
+- 表示補助のために workbook 解決責務を拡張しない。
+
+### Remaining: KernelWorkbookResolverService の責務
+
+- `KernelWorkbookResolverService.ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` は、なお resolve と open を同じ責務で抱えている。
+- `ResolveOrOpen` 系には、文脈付き resolve と open 契約が同居しており、責務境界が `ResolveKernelWorkbook(...)` 系ほど明確ではない。
+- 業務都合により、現時点ではこの open 内包責務を残置している。
+- したがって、Kernel 文脈寄せフェーズ完了は `ResolveOrOpen` 系の純化完了を意味しない。
+
+### open 粒度の整理
+
+#### 許容される open
+
+- 明示的な `WorkbookContext` / `SYSTEM_ROOT` 文脈から行う open
+- user action 起点で caller が意図を保持した open
+
+#### 禁止される open
+
+- context-less fallback open
+- 暗黙の workbook 推測にもとづく open
+- root 不一致を補正するための open
+
+### 将来方針
+
+- `Resolve` と `Open` を分離する。
+- `Open` は ApplicationService 層へ押し出す。
+- Resolver は pure に近い責務へ寄せる。
+- `ResolveOrOpen` 系は段階的に縮退させ、最終的に `WorkbookContext` / `SYSTEM_ROOT` 解決責務へ閉じる。
+
 ## Kernel workbook 選択境界
 
 ### KernelCommandService.cs:57 / KernelTemplateSyncService.cs:129 / KernelWorkbookResolverService.cs:22

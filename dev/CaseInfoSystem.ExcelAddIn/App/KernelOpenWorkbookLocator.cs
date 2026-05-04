@@ -61,7 +61,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool HasAnyOpenKernelWorkbook()
         {
-            return GetOpenKernelWorkbook() != null;
+            try
+            {
+                foreach (Excel.Workbook workbook in _application.Workbooks)
+                {
+                    if (IsKernelWorkbook(workbook))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("HasAnyOpenKernelWorkbook failed.", ex);
+            }
+
+            return false;
         }
 
         internal Excel.Workbook ResolveKernelWorkbook(WorkbookContext context)

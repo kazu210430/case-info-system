@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -96,29 +95,39 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 throw new FileNotFoundException("Base workbook was not found.", baseWorkbookPath);
             }
 
+            BaseHomeReflectionPlan reflectionPlan = BuildBaseHomeReflectionPlan(kernelWorkbook, userDataWorksheet, snapshot);
             Excel.Workbook baseWorkbook = _excelInteropService.FindOpenWorkbook(baseWorkbookPath);
-            bool wasAlreadyOpen = baseWorkbook != null;
-            HiddenWorkbookSession hiddenSession = null;
+            if (baseWorkbook != null)
+            {
+                ApplyBaseHomeReflectionPlan(baseWorkbook, reflectionPlan);
+                baseWorkbook.Save();
+                return;
+            }
+
+            Excel.Application isolatedApplication = null;
+            Excel.Workbook isolatedWorkbook = null;
 
             try
             {
-                if (baseWorkbook == null)
-                {
-                    hiddenSession = OpenWorkbookHiddenInIsolatedApplication(baseWorkbookPath);
-                    baseWorkbook = hiddenSession.Workbook;
-                    _logger.Info("Kernel user data reflection hidden workbook opened for Base in isolated application. path=" + baseWorkbookPath);
-                }
+                isolatedApplication = CreateHiddenIsolatedApplication();
+                isolatedWorkbook = isolatedApplication.Workbooks.Open(baseWorkbookPath, UpdateLinks: 0, ReadOnly: false);
+                _accountingWorkbookService.SetWorkbookWindowsVisible(isolatedWorkbook, false);
+                _logger.Info("Kernel user data reflection hidden workbook opened for Base in isolated application. path=" + baseWorkbookPath);
 
-                BaseHomeReflectionPlan reflectionPlan = BuildBaseHomeReflectionPlan(kernelWorkbook, userDataWorksheet, snapshot);
-                ApplyBaseHomeReflectionPlan(baseWorkbook, reflectionPlan);
-                baseWorkbook.Save();
+                ApplyBaseHomeReflectionPlan(isolatedWorkbook, reflectionPlan);
+                isolatedWorkbook.Save();
             }
             finally
             {
-                if (!wasAlreadyOpen && hiddenSession != null)
+                if (isolatedWorkbook != null)
                 {
-                    hiddenSession.CloseWithoutSaving();
+                    CloseWorkbookQuietly(isolatedWorkbook);
                     _logger.Info("Kernel user data reflection hidden workbook closed for Base in isolated application. path=" + baseWorkbookPath);
+                }
+
+                if (isolatedApplication != null)
+                {
+                    QuitApplicationQuietly(isolatedApplication);
                 }
             }
         }
@@ -126,31 +135,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private void ReflectToAccountingSet(Excel.Workbook kernelWorkbook, UserDataSnapshot snapshot)
         {
             string accountingWorkbookPath = _accountingTemplateResolver.ResolveTemplatePath(kernelWorkbook);
+            AccountingReflectionPlan reflectionPlan = BuildAccountingReflectionPlan(
+                snapshot,
+                _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookFullName(kernelWorkbook)));
             Excel.Workbook accountingWorkbook = _excelInteropService.FindOpenWorkbook(accountingWorkbookPath);
-            bool wasAlreadyOpen = accountingWorkbook != null;
-            HiddenWorkbookSession hiddenSession = null;
+            if (accountingWorkbook != null)
+            {
+                ApplyAccountingReflectionPlan(accountingWorkbook, reflectionPlan);
+                accountingWorkbook.Save();
+                return;
+            }
+
+            Excel.Application isolatedApplication = null;
+            Excel.Workbook isolatedWorkbook = null;
 
             try
             {
-                if (accountingWorkbook == null)
-                {
-                    hiddenSession = OpenWorkbookHiddenInIsolatedApplication(accountingWorkbookPath);
-                    accountingWorkbook = hiddenSession.Workbook;
-                    _logger.Info("Kernel user data reflection hidden workbook opened for Accounting in isolated application. path=" + accountingWorkbookPath);
-                }
+                isolatedApplication = CreateHiddenIsolatedApplication();
+                isolatedWorkbook = isolatedApplication.Workbooks.Open(accountingWorkbookPath, UpdateLinks: 0, ReadOnly: false);
+                _accountingWorkbookService.SetWorkbookWindowsVisible(isolatedWorkbook, false);
+                _logger.Info("Kernel user data reflection hidden workbook opened for Accounting in isolated application. path=" + accountingWorkbookPath);
 
-                AccountingReflectionPlan reflectionPlan = BuildAccountingReflectionPlan(
-                    snapshot,
-                    _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookFullName(kernelWorkbook)));
-                ApplyAccountingReflectionPlan(accountingWorkbook, reflectionPlan);
-                accountingWorkbook.Save();
+                ApplyAccountingReflectionPlan(isolatedWorkbook, reflectionPlan);
+                isolatedWorkbook.Save();
             }
             finally
             {
-                if (!wasAlreadyOpen && hiddenSession != null)
+                if (isolatedWorkbook != null)
                 {
-                    hiddenSession.CloseWithoutSaving();
+                    CloseWorkbookQuietly(isolatedWorkbook);
                     _logger.Info("Kernel user data reflection hidden workbook closed for Accounting in isolated application. path=" + accountingWorkbookPath);
+                }
+
+                if (isolatedApplication != null)
+                {
+                    QuitApplicationQuietly(isolatedApplication);
                 }
             }
         }
@@ -298,54 +317,56 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return expectedSystemRoot;
         }
 
-        private HiddenWorkbookSession OpenWorkbookHiddenInIsolatedApplication(string workbookPath)
+        private static Excel.Application CreateHiddenIsolatedApplication()
         {
-            if (string.IsNullOrWhiteSpace(workbookPath))
-            {
-                throw new ArgumentException("Workbook path is required.", nameof(workbookPath));
-            }
-
-            Excel.Application hiddenApplication = new Excel.Application
+            return new Excel.Application
             {
                 Visible = false,
                 DisplayAlerts = false,
                 ScreenUpdating = false,
                 EnableEvents = false
             };
+        }
 
-            Excel.Workbook workbook = null;
+        private static void CloseWorkbookQuietly(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
             try
             {
-                workbook = hiddenApplication.Workbooks.Open(workbookPath, UpdateLinks: 0, ReadOnly: false);
-                _accountingWorkbookService.SetWorkbookWindowsVisible(workbook, false);
-                return new HiddenWorkbookSession(hiddenApplication, workbook);
+                workbook.Close(SaveChanges: false);
             }
             catch
             {
-                if (workbook != null)
-                {
-                    try
-                    {
-                        workbook.Close(SaveChanges: false);
-                    }
-                    catch
-                    {
-                        // hidden workbook cleanup failure must not mask the original exception.
-                    }
-                }
-
-                try
-                {
-                    hiddenApplication.Quit();
-                }
-                catch
-                {
-                    // hidden application cleanup failure must not mask the original exception.
-                }
-
+                // isolated workbook cleanup failure must not mask the original exception.
+            }
+            finally
+            {
                 CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(workbook);
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(hiddenApplication);
-                throw;
+            }
+        }
+
+        private static void QuitApplicationQuietly(Excel.Application application)
+        {
+            if (application == null)
+            {
+                return;
+            }
+
+            try
+            {
+                application.Quit();
+            }
+            catch
+            {
+                // isolated application cleanup failure must not mask the original exception.
+            }
+            finally
+            {
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(application);
             }
         }
 
@@ -741,39 +762,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 catch
                 {
                     // UI restore failures must not stop shutdown paths.
-                }
-            }
-        }
-
-        private sealed class HiddenWorkbookSession
-        {
-            internal HiddenWorkbookSession(Excel.Application application, Excel.Workbook workbook)
-            {
-                Application = application ?? throw new ArgumentNullException(nameof(application));
-                Workbook = workbook ?? throw new ArgumentNullException(nameof(workbook));
-            }
-
-            internal Excel.Application Application { get; }
-
-            internal Excel.Workbook Workbook { get; }
-
-            internal void CloseWithoutSaving()
-            {
-                try
-                {
-                    Workbook.Close(SaveChanges: false);
-                }
-                finally
-                {
-                    try
-                    {
-                        Application.Quit();
-                    }
-                    finally
-                    {
-                        CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(Workbook);
-                        CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(Application);
-                    }
                 }
             }
         }

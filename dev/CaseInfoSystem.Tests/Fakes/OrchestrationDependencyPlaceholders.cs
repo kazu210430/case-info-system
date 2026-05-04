@@ -28,7 +28,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal Func<Excel.Workbook, string, Excel.Worksheet> OnFindWorksheetByCodeName { get; set; }
 
+        internal Func<Excel.Workbook, string, Excel.Worksheet> OnFindWorksheetByName { get; set; }
+
         internal Func<string, Excel.Workbook> OnFindOpenWorkbook { get; set; }
+
+        internal Func<Excel.Worksheet, IReadOnlyDictionary<string, string>> OnReadKeyValueMapFromColumnsAandB { get; set; }
+
+        internal Func<Excel.Worksheet, IReadOnlyList<IReadOnlyDictionary<string, string>>> OnReadRecordsFromHeaderRow { get; set; }
 
         internal Excel.Workbook GetActiveWorkbook() => _application?.ActiveWorkbook;
 
@@ -87,6 +93,30 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             return workbook?.Worksheets.FirstOrDefault(worksheet => string.Equals(worksheet?.CodeName, sheetCodeName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal Excel.Worksheet FindWorksheetByName(Excel.Workbook workbook, string sheetName)
+        {
+            if (OnFindWorksheetByName != null)
+            {
+                return OnFindWorksheetByName(workbook, sheetName);
+            }
+
+            return workbook?.Worksheets.FirstOrDefault(worksheet => string.Equals(worksheet?.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal IReadOnlyDictionary<string, string> ReadKeyValueMapFromColumnsAandB(Excel.Worksheet worksheet)
+        {
+            return OnReadKeyValueMapFromColumnsAandB == null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : OnReadKeyValueMapFromColumnsAandB(worksheet) ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        internal IReadOnlyList<IReadOnlyDictionary<string, string>> ReadRecordsFromHeaderRow(Excel.Worksheet worksheet)
+        {
+            return OnReadRecordsFromHeaderRow == null
+                ? Array.Empty<IReadOnlyDictionary<string, string>>()
+                : OnReadRecordsFromHeaderRow(worksheet) ?? Array.Empty<IReadOnlyDictionary<string, string>>();
         }
 
         internal bool TryNormalizeCaseListRowHeight(CaseInfoSystem.ExcelAddIn.Domain.CaseContext context)
@@ -509,6 +539,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Action<Excel.Workbook, string, string, string> OnWriteCell { get; set; }
 
+        internal Action<Excel.Worksheet, string, object> OnWriteCellValue { get; set; }
+
         internal Func<Excel.Workbook, string, AccountingLawyerMappingResult> OnReflectLawyers { get; set; }
 
         internal Action<Excel.Workbook> OnActivateInvoiceEntry { get; set; }
@@ -536,6 +568,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal void WriteCell(Excel.Workbook workbook, string sheetName, string address, string valueText)
         {
             OnWriteCell?.Invoke(workbook, sheetName, address, valueText);
+        }
+
+        internal void WriteCellValue(Excel.Worksheet worksheet, string address, object value)
+        {
+            OnWriteCellValue?.Invoke(worksheet, address, value);
         }
 
         internal AccountingLawyerMappingResult ReflectLawyers(Excel.Workbook workbook, string lawyerLinesText)

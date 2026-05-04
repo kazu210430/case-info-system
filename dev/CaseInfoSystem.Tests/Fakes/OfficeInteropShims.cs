@@ -71,9 +71,24 @@ namespace Microsoft.Office.Interop.Excel
         xlCalculationManual = -4135
     }
 
+    public enum XlDirection
+    {
+        xlUp = -4162,
+        xlToLeft = -4159
+    }
+
+    public enum XlEnableSelection
+    {
+        xlNoRestrictions = 0,
+        xlUnlockedCells = 1,
+        xlNoSelection = -4142
+    }
+
     public class Application
     {
         public static List<Application> CreatedApplications { get; } = new List<Application>();
+
+        public static Action<Application> ConfigureNewApplication { get; set; }
 
         public bool DisplayAlerts { get; set; }
 
@@ -88,6 +103,8 @@ namespace Microsoft.Office.Interop.Excel
         public bool UserControl { get; set; }
 
         public bool Visible { get; set; }
+
+        public object StatusBar { get; set; }
 
         public int Hwnd { get; set; }
 
@@ -105,6 +122,7 @@ namespace Microsoft.Office.Interop.Excel
         {
             Workbooks = new Workbooks(this);
             CreatedApplications.Add(this);
+            ConfigureNewApplication?.Invoke(this);
         }
 
         public void Quit()
@@ -116,6 +134,7 @@ namespace Microsoft.Office.Interop.Excel
         public static void ResetCreatedApplications()
         {
             CreatedApplications.Clear();
+            ConfigureNewApplication = null;
         }
     }
 
@@ -319,10 +338,38 @@ namespace Microsoft.Office.Interop.Excel
 
         public object Parent { get; set; }
 
+        public bool ProtectContents { get; set; }
+
+        public bool ProtectDrawingObjects { get; set; }
+
+        public bool ProtectScenarios { get; set; }
+
+        public XlEnableSelection EnableSelection { get; set; }
+
         public WorksheetCellCollection Cells { get; } = new WorksheetCellCollection();
+
+        public WorksheetRowCollection Rows { get; } = new WorksheetRowCollection();
+
+        public WorksheetColumnCollection Columns { get; } = new WorksheetColumnCollection();
+
+        public WorksheetRangeAccessor Range { get; } = new WorksheetRangeAccessor();
 
         public void Activate()
         {
+        }
+
+        public void Unprotect(string Password = null)
+        {
+            ProtectContents = false;
+            ProtectDrawingObjects = false;
+            ProtectScenarios = false;
+        }
+
+        public void Protect(string Password = null, bool UserInterfaceOnly = false, bool AllowFiltering = false, bool AllowSorting = false)
+        {
+            ProtectContents = true;
+            ProtectDrawingObjects = true;
+            ProtectScenarios = true;
         }
     }
 
@@ -339,11 +386,18 @@ namespace Microsoft.Office.Interop.Excel
 
     public class Range
     {
+        public Range()
+        {
+            End = new RangeEndAccessor(this);
+        }
+
         public object Value2 { get; set; }
 
-        public int Start { get; set; }
+        public int Row { get; set; }
 
-        public int End { get; set; }
+        public bool Locked { get; set; } = true;
+
+        public RangeEndAccessor End { get; }
 
         public string Text
         {
@@ -352,7 +406,36 @@ namespace Microsoft.Office.Interop.Excel
         }
     }
 
-    public sealed class WorksheetCellCollection
+    public sealed class RangeEndAccessor
+    {
+        private readonly Range _owner;
+
+        public RangeEndAccessor(Range owner)
+        {
+            _owner = owner;
+        }
+
+        public Range this[XlDirection direction] => _owner;
+    }
+
+    public sealed class WorksheetRowCollection
+    {
+        public int Count { get; set; } = 1048576;
+    }
+
+    public sealed class WorksheetColumnCollection
+    {
+        public int Count { get; set; } = 16384;
+
+        public Range this[object column] => new Range();
+    }
+
+    public sealed class WorksheetRangeAccessor
+    {
+        public Range this[object from, object to] => new Range();
+    }
+
+    public sealed class WorksheetCellCollection : Range
     {
         private readonly Dictionary<string, Range> _cells = new Dictionary<string, Range>(StringComparer.OrdinalIgnoreCase);
 
@@ -371,6 +454,10 @@ namespace Microsoft.Office.Interop.Excel
                 if (!_cells.TryGetValue(key, out Range range))
                 {
                     range = new Range();
+                    if (int.TryParse(Convert.ToString(row), out int rowNumber))
+                    {
+                        range.Row = rowNumber;
+                    }
                     _cells[key] = range;
                 }
 

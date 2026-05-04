@@ -9,7 +9,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class TaskPaneManager
     {
-        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
         private readonly ICaseTaskPaneSnapshotReader _caseTaskPaneSnapshotReader;
@@ -24,13 +23,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
         private readonly TaskPaneHostRegistry _taskPaneHostRegistry;
+        private readonly TaskPaneHostLifecycleService _taskPaneHostLifecycleService;
         private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
         private readonly TaskPaneNonCaseActionHandler _taskPaneNonCaseActionHandler;
         private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
-        private readonly TaskPaneRefreshFlowCoordinator _taskPaneRefreshFlowCoordinator;
+        private readonly TaskPaneHostFlowService _taskPaneHostFlowService;
         private readonly CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
         private readonly TaskPaneManagerTestHooks _testHooks;
-        private int _kernelFlickerTraceRefreshPaneSequence;
 
         internal TaskPaneManager(
             ThisAddIn addIn,
@@ -134,6 +133,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 KernelControl_ActionInvoked,
                 AccountingControl_ActionInvoked,
                 (windowKey, control, e) => _taskPaneActionDispatcher?.HandleCaseControlActionInvoked(windowKey, control, e));
+            _taskPaneHostLifecycleService = new TaskPaneHostLifecycleService(
+                _hostsByWindowKey,
+                _taskPaneHostRegistry,
+                _excelInteropService,
+                _logger,
+                FormatHostDescriptor);
             _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 _hostsByWindowKey,
                 _kernelCaseInteractionState,
@@ -143,7 +148,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
                 TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor,
-                windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
+                windowKey => _taskPaneHostLifecycleService.RemoveHost(windowKey));
             _taskPaneNonCaseActionHandler = new TaskPaneNonCaseActionHandler(
                 _excelInteropService,
                 _kernelCommandService,
@@ -189,7 +194,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 host => _taskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(host),
                 (control, workbook) => _casePaneSnapshotRenderService.RenderAfterAction(control, workbook),
                 (host, reason) => _taskPaneDisplayCoordinator.TryShowHost(host, reason));
-            _taskPaneRefreshFlowCoordinator = new TaskPaneRefreshFlowCoordinator(this);
+            _taskPaneHostFlowService = new TaskPaneHostFlowService(
+                _excelInteropService,
+                _taskPaneDisplayCoordinator,
+                _taskPaneHostLifecycleService,
+                _logger,
+                FormatContextDescriptor,
+                FormatHostDescriptor,
+                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
+                RenderHost);
         }
 
         internal TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
@@ -222,6 +235,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 KernelControl_ActionInvoked,
                 AccountingControl_ActionInvoked,
                 (windowKey, control, e) => _taskPaneActionDispatcher?.HandleCaseControlActionInvoked(windowKey, control, e));
+            _taskPaneHostLifecycleService = new TaskPaneHostLifecycleService(
+                _hostsByWindowKey,
+                _taskPaneHostRegistry,
+                _excelInteropService,
+                _logger,
+                FormatHostDescriptor);
             _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 _hostsByWindowKey,
                 _kernelCaseInteractionState,
@@ -231,15 +250,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 FormatHostDescriptor,
                 workbook => FormatWorkbookDescriptor(workbook),
                 TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor,
-                windowKey => _taskPaneHostRegistry.RemoveHost(windowKey));
+                windowKey => _taskPaneHostLifecycleService.RemoveHost(windowKey));
             _taskPaneNonCaseActionHandler = null;
             _taskPaneActionDispatcher = null;
-            _taskPaneRefreshFlowCoordinator = new TaskPaneRefreshFlowCoordinator(this);
+            _taskPaneHostFlowService = new TaskPaneHostFlowService(
+                _excelInteropService,
+                _taskPaneDisplayCoordinator,
+                _taskPaneHostLifecycleService,
+                _logger,
+                FormatContextDescriptor,
+                FormatHostDescriptor,
+                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
+                RenderHost);
         }
 
         internal bool RefreshPane(WorkbookContext context, string reason)
         {
-            return _taskPaneRefreshFlowCoordinator.RefreshPane(context, reason);
+            return _taskPaneHostFlowService.RefreshPane(context, reason);
         }
 
         internal bool TryShowExistingPane(Excel.Workbook workbook, Excel.Window window, string reason)
@@ -265,124 +292,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal bool HasVisibleCasePaneForWorkbookWindow(Excel.Workbook workbook, Excel.Window window)
         {
             return _taskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(_excelInteropService, workbook, window);
-        }
-
-        private bool TryAcceptRefreshPaneRequest(WorkbookContext context, string reason, int refreshPaneCallId, out WorkbookRole role, out string windowKey)
-        {
-            role = context == null ? WorkbookRole.Unknown : context.Role;
-            windowKey = string.Empty;
-            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey: null))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason=PreconditionPolicyRole"
-                    + ", role="
-                    + role.ToString());
-                HideAll();
-                return false;
-            }
-
-            windowKey = TaskPaneManagerDiagnosticHelper.SafeGetWindowKey(context.Window);
-            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason=PreconditionPolicyWindowKey"
-                    + ", role="
-                    + role.ToString()
-                    + ", windowKey="
-                    + windowKey);
-                HideAll();
-                _logger.Warn("RefreshPane skipped because windowKey was empty. reason=" + (reason ?? string.Empty));
-                return false;
-            }
-
-            return true;
-        }
-
-        private TaskPaneHost ResolveRefreshHost(WorkbookContext context, string windowKey, int refreshPaneCallId)
-        {
-            RemoveStaleKernelHosts(context, windowKey);
-            TaskPaneHost host = GetOrReplaceHost(windowKey, context.Window, context.Role);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=host-selected refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host));
-            return host;
-        }
-
-        private bool TryReuseCaseHostForRefresh(TaskPaneHost host, WorkbookContext context, string reason, string windowKey, int refreshPaneCallId)
-        {
-            if (!ShouldReuseCaseHostWithoutRender(host, context, reason))
-            {
-                return false;
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=reuse-case-host refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host)
-                + ", reason="
-                + (reason ?? string.Empty));
-            _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
-            if (!_taskPaneDisplayCoordinator.TryShowHost(host, "RefreshPane.ReuseCaseHost"))
-            {
-                _logger.Warn("RefreshPane skipped because reused CASE host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-                return false;
-            }
-
-            _logger.Info("TaskPane reused. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
-            return true;
-        }
-
-        private bool RenderAndShowHostForRefresh(TaskPaneHost host, WorkbookContext context, string reason, string windowKey, int refreshPaneCallId)
-        {
-            TaskPaneRenderStateEvaluation renderState = TaskPaneRenderStateEvaluator.EvaluateRenderState(
-                _excelInteropService,
-                host,
-                context);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=render-evaluate refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host)
-                + ", renderRequired="
-                + renderState.IsRenderRequired.ToString());
-            if (renderState.IsRenderRequired)
-            {
-                RenderHost(host, context, reason);
-                host.LastRenderSignature = renderState.RenderSignature;
-            }
-            else
-            {
-                _logger.Debug(nameof(TaskPaneManager), "RefreshPane render skipped because the host state did not change. windowKey=" + windowKey + ", role=" + context.Role);
-            }
-
-            _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
-            if (!_taskPaneDisplayCoordinator.TryShowHost(host, "RefreshPane"))
-            {
-                _logger.Warn("RefreshPane skipped because host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-                return false;
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=refresh-pane-end refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + FormatHostDescriptor(host)
-                + ", result=Shown");
-            _logger.Info("TaskPane refreshed. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
-            return true;
         }
 
         // Host lifecycle 責務: windowKey 単位の host 集合を保持し、hide/dispose/create/remove を担う。
@@ -420,18 +329,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// </summary>
         internal void RemoveWorkbookPanes(Excel.Workbook workbook)
         {
-            if (workbook == null)
-            {
-                return;
-            }
-
-            string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
-            if (string.IsNullOrWhiteSpace(workbookFullName))
-            {
-                return;
-            }
-
-            _taskPaneHostRegistry.RemoveWorkbookPanes(workbookFullName);
+            _taskPaneHostLifecycleService.RemoveWorkbookPanes(workbook);
         }
 
         /// <summary>
@@ -447,77 +345,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void DisposeAll()
         {
-            _taskPaneHostRegistry.DisposeAll();
+            _taskPaneHostLifecycleService.DisposeAll();
         }
 
         internal void RegisterHost(TaskPaneHost host)
         {
-            _taskPaneHostRegistry.RegisterHost(host);
-        }
-
-        private TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
-        {
-            return _taskPaneHostRegistry.GetOrReplaceHost(windowKey, window, role);
-        }
-
-        private void RemoveStaleKernelHosts(WorkbookContext context, string activeWindowKey)
-        {
-            if (context == null
-                || context.Role != WorkbookRole.Kernel
-                || string.IsNullOrWhiteSpace(context.WorkbookFullName)
-                || string.IsNullOrWhiteSpace(activeWindowKey))
-            {
-                return;
-            }
-
-            var staleKeys = new List<string>();
-            foreach (KeyValuePair<string, TaskPaneHost> pair in _hostsByWindowKey)
-            {
-                if (string.Equals(pair.Key, activeWindowKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                TaskPaneHost host = pair.Value;
-                if (!TaskPaneManagerDiagnosticHelper.IsKernelHost(host))
-                {
-                    continue;
-                }
-
-                if (!string.Equals(host.WorkbookFullName, context.WorkbookFullName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                staleKeys.Add(pair.Key);
-            }
-
-            foreach (string staleKey in staleKeys)
-            {
-                _logger.Info(
-                    "Removed stale kernel task pane host. workbook="
-                    + context.WorkbookFullName
-                    + ", staleWindowKey="
-                    + staleKey
-                    + ", activeWindowKey="
-                    + activeWindowKey);
-                RemoveHost(staleKey);
-            }
-        }
-
-        private static bool ShouldReuseCaseHostWithoutRender(TaskPaneHost host, WorkbookContext context, string reason)
-        {
-            if (host == null || context == null)
-            {
-                return false;
-            }
-
-            return TaskPaneHostReusePolicy.ShouldReuseCaseHostWithoutRender(
-                context.Role,
-                TaskPaneManagerDiagnosticHelper.IsCaseHost(host),
-                !string.IsNullOrWhiteSpace(host.LastRenderSignature),
-                string.Equals(host.WorkbookFullName, context.WorkbookFullName, StringComparison.OrdinalIgnoreCase),
-                reason);
+            _taskPaneHostLifecycleService.RegisterHost(host);
         }
 
         // Render 制御責務: role ごとの描画と signature 更新対象を分離し、再描画条件は上位から受け取る。
@@ -574,16 +407,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)
         {
             _taskPaneDisplayCoordinator.PrepareTargetWindowForForcedRefresh(targetWindow);
-        }
-
-        private bool TryShowHost(TaskPaneHost host, string reason)
-        {
-            return _taskPaneDisplayCoordinator.TryShowHost(host, reason);
-        }
-
-        private void RemoveHost(string windowKey)
-        {
-            _taskPaneHostRegistry.RemoveHost(windowKey);
         }
 
         private void KernelControl_ActionInvoked(string windowKey, KernelNavigationActionEventArgs e)
@@ -765,42 +588,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal Func<string, string, bool> TryShowHost { get; set; }
 
             internal Action<string> OnCasePaneUpdatedNotification { get; set; }
-        }
-
-        // Refresh flow 責務: RefreshPane の主経路で前提確認、host 解決、reuse、render/show を順序どおり調停する。
-        private sealed class TaskPaneRefreshFlowCoordinator
-        {
-            private readonly TaskPaneManager _owner;
-
-            internal TaskPaneRefreshFlowCoordinator(TaskPaneManager owner)
-            {
-                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
-            }
-
-            internal bool RefreshPane(WorkbookContext context, string reason)
-            {
-                int refreshPaneCallId = ++_owner._kernelFlickerTraceRefreshPaneSequence;
-                _owner._logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=refresh-pane-start refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason="
-                    + (reason ?? string.Empty)
-                    + ", context="
-                    + _owner.FormatContextDescriptor(context));
-                if (!_owner.TryAcceptRefreshPaneRequest(context, reason, refreshPaneCallId, out WorkbookRole role, out string windowKey))
-                {
-                    return false;
-                }
-
-                TaskPaneHost host = _owner.ResolveRefreshHost(context, windowKey, refreshPaneCallId);
-                if (_owner.TryReuseCaseHostForRefresh(host, context, reason, windowKey, refreshPaneCallId))
-                {
-                    return true;
-                }
-
-                return _owner.RenderAndShowHostForRefresh(host, context, reason, windowKey, refreshPaneCallId);
-            }
         }
     }
 

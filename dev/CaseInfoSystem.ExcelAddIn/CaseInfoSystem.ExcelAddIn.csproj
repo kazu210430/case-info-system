@@ -253,6 +253,8 @@
     <Compile Include="App\TaskPaneNonCaseActionHandler.cs" />
     <Compile Include="App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="App\TaskPaneHostFactory.cs" />
+    <Compile Include="App\TaskPaneHostFlowService.cs" />
+    <Compile Include="App\TaskPaneHostLifecycleService.cs" />
     <Compile Include="App\TaskPaneHostRegistry.cs" />
     <Compile Include="App\TaskPaneManager.cs" />
     <Compile Include="App\TaskPaneRenderStateEvaluator.cs" />

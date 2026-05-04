@@ -68,6 +68,7 @@
     <Compile Include="ExcelWindowRecoveryServiceTests.cs" />
     <Compile Include="ExcelApplicationStateScopeTests.cs" />
     <Compile Include="TaskPaneHostReusePolicyTests.cs" />
+    <Compile Include="TaskPaneHostLifecycleServiceTests.cs" />
     <Compile Include="TaskPaneManagerOrchestrationPolicyTests.cs" />
     <Compile Include="TaskPanePostActionRefreshPolicyTests.cs" />
     <Compile Include="TransientPaneSuppressionServiceTests.cs" />
@@ -119,6 +120,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneNonCaseActionHandler.cs" Link="Source\App\TaskPaneNonCaseActionHandler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneBusinessActionLauncher.cs" Link="Source\App\TaskPaneBusinessActionLauncher.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostFactory.cs" Link="Source\App\TaskPaneHostFactory.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostFlowService.cs" Link="Source\App\TaskPaneHostFlowService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostLifecycleService.cs" Link="Source\App\TaskPaneHostLifecycleService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostRegistry.cs" Link="Source\App\TaskPaneHostRegistry.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManager.cs" Link="Source\App\TaskPaneManager.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRenderStateEvaluator.cs" Link="Source\App\TaskPaneRenderStateEvaluator.cs" />

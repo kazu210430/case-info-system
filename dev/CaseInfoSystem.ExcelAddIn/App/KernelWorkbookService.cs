@@ -140,6 +140,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return true;
         }
 
+        internal bool BindHomeWorkbook(Excel.Workbook workbook)
+        {
+            KernelHomeBinding binding = CreateHomeBinding(workbook);
+            if (binding == null)
+            {
+                ClearHomeWorkbookBinding("BindHomeWorkbook.WorkbookInvalid");
+                _logger.Warn(
+                    "Kernel HOME binding was not created from workbook. workbook="
+                    + GetWorkbookFullNameCore(workbook));
+                return false;
+            }
+
+            _homeBinding = binding;
+            _logger.Info(
+                "Kernel HOME binding created from workbook. workbook="
+                + GetWorkbookFullNameCore(binding.Workbook)
+                + ", systemRoot="
+                + binding.SystemRoot);
+            return true;
+        }
+
         internal void ClearHomeWorkbookBinding(string reason)
         {
             if (_homeBinding == null)
@@ -387,25 +408,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return null;
             }
 
-            Excel.Workbook workbook = context.Workbook;
-            if (!IsKernelWorkbook(workbook))
-            {
-                return null;
-            }
-
             string normalizedContextSystemRoot = _pathCompatibilityService.NormalizePath(context.SystemRoot);
             if (string.IsNullOrWhiteSpace(normalizedContextSystemRoot))
             {
                 return null;
             }
 
-            string workbookSystemRoot = GetWorkbookSystemRootForHomeBinding(workbook);
-            if (!string.Equals(workbookSystemRoot, normalizedContextSystemRoot, StringComparison.OrdinalIgnoreCase))
+            return CreateHomeBinding(context.Workbook, normalizedContextSystemRoot);
+        }
+
+        private KernelHomeBinding CreateHomeBinding(Excel.Workbook workbook)
+        {
+            return CreateHomeBinding(workbook, systemRoot: null);
+        }
+
+        private KernelHomeBinding CreateHomeBinding(Excel.Workbook workbook, string systemRoot)
+        {
+            if (!IsKernelWorkbook(workbook))
             {
                 return null;
             }
 
-            return new KernelHomeBinding(workbook, normalizedContextSystemRoot);
+            string workbookSystemRoot = GetWorkbookSystemRootForHomeBinding(workbook);
+            if (string.IsNullOrWhiteSpace(workbookSystemRoot))
+            {
+                return null;
+            }
+
+            string normalizedSystemRoot = _pathCompatibilityService.NormalizePath(systemRoot);
+            if (!string.IsNullOrWhiteSpace(normalizedSystemRoot)
+                && !string.Equals(workbookSystemRoot, normalizedSystemRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return new KernelHomeBinding(workbook, string.IsNullOrWhiteSpace(normalizedSystemRoot) ? workbookSystemRoot : normalizedSystemRoot);
         }
 
         private KernelHomeBindingStatus ResolveHomeBindingStatus(string operationName, out Excel.Workbook workbook)

@@ -73,7 +73,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 if (action == KernelHomeDisplayAction.Show)
                 {
                     _logger.Info("Kernel HOME requested from " + state.EventName);
-                    _kernelWorkbookService.ClearHomeWorkbookBinding("KernelWorkbookAvailabilityService.Show." + state.EventName);
+                    bool bound = workbook != null && _kernelWorkbookService.BindHomeWorkbook(workbook);
+                    if (!bound)
+                    {
+                        _logger.Warn(
+                            "Kernel HOME auto-show opened without bound workbook. eventName="
+                            + state.EventName
+                            + ", workbook="
+                            + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
+                    }
                     _showKernelHomePlaceholderWithExternalWorkbookSuppression("HandleKernelWorkbookBecameAvailable." + state.EventName);
                     return;
                 }

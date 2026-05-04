@@ -65,6 +65,12 @@ namespace Microsoft.Office.Interop.Excel
         xlOpenXMLWorkbookMacroEnabled = 52
     }
 
+    public enum XlCalculation
+    {
+        xlCalculationAutomatic = -4105,
+        xlCalculationManual = -4135
+    }
+
     public class Application
     {
         public static List<Application> CreatedApplications { get; } = new List<Application>();
@@ -74,6 +80,8 @@ namespace Microsoft.Office.Interop.Excel
         public bool EnableEvents { get; set; }
 
         public bool ScreenUpdating { get; set; } = true;
+
+        public XlCalculation Calculation { get; set; } = XlCalculation.xlCalculationAutomatic;
 
         public bool Ready { get; set; } = true;
 

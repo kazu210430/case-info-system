@@ -11,46 +11,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
 	internal sealed class AccountingSaveAsService
 	{
-		private sealed class ExcelApplicationState
-		{
-			private readonly Microsoft.Office.Interop.Excel.Application _application;
-
-			private bool ScreenUpdating { get; }
-
-			private bool EnableEvents { get; }
-
-			private bool DisplayAlerts { get; }
-
-			private ExcelApplicationState (Microsoft.Office.Interop.Excel.Application application, bool screenUpdating, bool enableEvents, bool displayAlerts)
-			{
-				_application = application;
-				ScreenUpdating = screenUpdating;
-				EnableEvents = enableEvents;
-				DisplayAlerts = displayAlerts;
-			}
-
-			internal static ExcelApplicationState CaptureAndApply (Microsoft.Office.Interop.Excel.Application application)
-			{
-				if (application == null) {
-					return null;
-				}
-				ExcelApplicationState result = new ExcelApplicationState (application, application.ScreenUpdating, application.EnableEvents, application.DisplayAlerts);
-				application.ScreenUpdating = false;
-				application.EnableEvents = false;
-				application.DisplayAlerts = false;
-				return result;
-			}
-
-			internal void Restore ()
-			{
-				if (_application != null) {
-					_application.ScreenUpdating = ScreenUpdating;
-					_application.EnableEvents = EnableEvents;
-					_application.DisplayAlerts = DisplayAlerts;
-				}
-			}
-		}
-
 		private const string ProcedureName = "AccountingSaveAs";
 
 		private const string RoleDocumentPropertyName = "ROLE";
@@ -99,39 +59,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			Workbook workbook = null;
 			bool openedTemporarily = false;
-			ExcelApplicationState excelApplicationState = null;
-			try {
-				excelApplicationState = ExcelApplicationState.CaptureAndApply (context.Workbook.Application);
-				workbook = ResolveCaseWorkbook (context.Workbook, out openedTemporarily);
-				if (workbook == null) {
-					throw new InvalidOperationException ("CASEブックを取得できませんでした。");
-				}
-				string documentName = ResolveActiveSheetName (context.Workbook);
-				string customerName = ResolveCustomerName (workbook);
-				string right = BuildOutputFileName (workbook, documentName, customerName);
-				string text = _documentOutputService.ResolveWorkbookFolder (workbook);
-				if (string.IsNullOrWhiteSpace (text)) {
-					throw new InvalidOperationException ("保存先フォルダのローカルパスを解決できませんでした。");
-				}
-				string rawFullPath = _pathCompatibilityService.CombinePath (text, right);
-				string text2 = _documentOutputService.PrepareSavePath (rawFullPath);
-				if (string.IsNullOrWhiteSpace (text2)) {
-					throw new InvalidOperationException ("保存先ファイルパスを確定できませんでした。");
-				}
-				_logger.Info ("Accounting save-as started. workbook=" + (_excelInteropService.GetWorkbookFullName (context.Workbook) ?? string.Empty) + ", caseWorkbook=" + (_excelInteropService.GetWorkbookFullName (workbook) ?? string.Empty) + ", savePath=" + text2);
-				_accountingWorkbookService.SaveAsMacroEnabled (context.Workbook, text2);
-				MessageBox.Show ("保存しました。" + Environment.NewLine + text2, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-			} catch (Exception exception) {
-				_userErrorService.ShowUserError ("AccountingSaveAs", exception);
-			} finally {
-				if (openedTemporarily && workbook != null) {
-					try {
-						_accountingWorkbookService.CloseWithoutSaving (workbook);
-					} catch (Exception exception2) {
-						_logger.Error ("Accounting save-as temporary case workbook close failed.", exception2);
+			using (var excelApplicationStateScope = new ExcelApplicationStateScope (context.Workbook.Application)) {
+				excelApplicationStateScope.SetScreenUpdating (false);
+				excelApplicationStateScope.SetEnableEvents (false);
+				excelApplicationStateScope.SetDisplayAlerts (false);
+				try {
+					workbook = ResolveCaseWorkbook (context.Workbook, out openedTemporarily);
+					if (workbook == null) {
+						throw new InvalidOperationException ("CASEブックを取得できませんでした。");
+					}
+					string documentName = ResolveActiveSheetName (context.Workbook);
+					string customerName = ResolveCustomerName (workbook);
+					string right = BuildOutputFileName (workbook, documentName, customerName);
+					string text = _documentOutputService.ResolveWorkbookFolder (workbook);
+					if (string.IsNullOrWhiteSpace (text)) {
+						throw new InvalidOperationException ("保存先フォルダのローカルパスを解決できませんでした。");
+					}
+					string rawFullPath = _pathCompatibilityService.CombinePath (text, right);
+					string text2 = _documentOutputService.PrepareSavePath (rawFullPath);
+					if (string.IsNullOrWhiteSpace (text2)) {
+						throw new InvalidOperationException ("保存先ファイルパスを確定できませんでした。");
+					}
+					_logger.Info ("Accounting save-as started. workbook=" + (_excelInteropService.GetWorkbookFullName (context.Workbook) ?? string.Empty) + ", caseWorkbook=" + (_excelInteropService.GetWorkbookFullName (workbook) ?? string.Empty) + ", savePath=" + text2);
+					_accountingWorkbookService.SaveAsMacroEnabled (context.Workbook, text2);
+					MessageBox.Show ("保存しました。" + Environment.NewLine + text2, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				} catch (Exception exception) {
+					_userErrorService.ShowUserError ("AccountingSaveAs", exception);
+				} finally {
+					if (openedTemporarily && workbook != null) {
+						try {
+							_accountingWorkbookService.CloseWithoutSaving (workbook);
+						} catch (Exception exception2) {
+							_logger.Error ("Accounting save-as temporary case workbook close failed.", exception2);
+						}
 					}
 				}
-				excelApplicationState?.Restore ();
 			}
 		}
 

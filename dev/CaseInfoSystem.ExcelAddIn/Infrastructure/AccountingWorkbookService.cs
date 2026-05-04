@@ -116,20 +116,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (string.IsNullOrWhiteSpace (savePath)) {
 				throw new ArgumentException ("Save path is required.", "savePath");
 			}
-			bool displayAlerts = _application.DisplayAlerts;
-			bool enableEvents = _application.EnableEvents;
-			bool screenUpdating = _application.ScreenUpdating;
-			try {
-				_application.DisplayAlerts = false;
-				_application.EnableEvents = false;
-				_application.ScreenUpdating = false;
+			using (var excelApplicationStateScope = new ExcelApplicationStateScope (_application)) {
+				excelApplicationStateScope.SetDisplayAlerts (false);
+				excelApplicationStateScope.SetEnableEvents (false);
+				excelApplicationStateScope.SetScreenUpdating (false);
 				XlFileFormat saveFormat = ResolveSaveAsFileFormat (savePath);
 				workbook.SaveAs (savePath, saveFormat, Type.Missing, Type.Missing, Type.Missing, Type.Missing, XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				_logger.Info ("Accounting workbook SaveAs completed. path=" + savePath + ", format=" + saveFormat);
-			} finally {
-				_application.DisplayAlerts = displayAlerts;
-				_application.EnableEvents = enableEvents;
-				_application.ScreenUpdating = screenUpdating;
 			}
 		}
 

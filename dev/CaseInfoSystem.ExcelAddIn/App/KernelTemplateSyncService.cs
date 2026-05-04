@@ -14,15 +14,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
 	internal sealed class KernelTemplateSyncService
 	{
-		private sealed class AppState
-		{
-			internal bool ScreenUpdating { get; set; }
-
-			internal bool EnableEvents { get; set; }
-
-			internal bool DisplayAlerts { get; set; }
-		}
-
 		private sealed class SheetProtectionState
 		{
 			internal bool IsProtected { get; set; }
@@ -134,62 +125,64 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new InvalidOperationException ("Kernel ブックを開いてから実行してください。");
 			}
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			AppState state = SaveAppState ();
-			Worksheet worksheet = null;
-			SheetProtectionState sheetProtectionState = null;
-			try {
-				ApplyFastSettings ();
-				worksheet = GetMasterListSheet (openKernelWorkbook);
-				sheetProtectionState = SaveSheetProtectionState (worksheet);
-				if (sheetProtectionState.IsProtected) {
-					worksheet.Unprotect (string.Empty);
-				}
-				ValidateMasterListSheet (worksheet);
-				string text = ResolveTemplateDirectory (openKernelWorkbook);
-				IReadOnlyCollection<string> readOnlyCollection = LoadDefinedTemplateTags (openKernelWorkbook);
-				if (readOnlyCollection.Count == 0) {
+			using (var excelApplicationStateScope = new ExcelApplicationStateScope (_application, suppressRestoreExceptions: true)) {
+				excelApplicationStateScope.SetScreenUpdating (false);
+				excelApplicationStateScope.SetEnableEvents (false);
+				excelApplicationStateScope.SetDisplayAlerts (false);
+				Worksheet worksheet = null;
+				SheetProtectionState sheetProtectionState = null;
+				try {
+					worksheet = GetMasterListSheet (openKernelWorkbook);
+					sheetProtectionState = SaveSheetProtectionState (worksheet);
+					if (sheetProtectionState.IsProtected) {
+						worksheet.Unprotect (string.Empty);
+					}
+					ValidateMasterListSheet (worksheet);
+					string text = ResolveTemplateDirectory (openKernelWorkbook);
+					IReadOnlyCollection<string> readOnlyCollection = LoadDefinedTemplateTags (openKernelWorkbook);
+					if (readOnlyCollection.Count == 0) {
+						return new KernelTemplateSyncResult {
+							Success = false,
+							TemplateDirectory = text,
+							Message = "Kernelブックの管理シート CaseList_FieldInventory を読み取れません。"
+						};
+					}
+					TemplateRegistrationValidationSummary templateRegistrationValidationSummary = _wordTemplateRegistrationValidationService.Validate (text, readOnlyCollection);
+					if (templateRegistrationValidationSummary.DetectedFileCount == 0) {
+						return new KernelTemplateSyncResult {
+							Success = false,
+							TemplateDirectory = text,
+							DetectedCount = 0,
+							TemplateResults = templateRegistrationValidationSummary.TemplateResults,
+							Message = "雛形フォルダに Word 雛形 (.docx / .dotx / .docm / .dotm) が見つかりませんでした。" + Environment.NewLine + "フォルダ: " + text
+						};
+					}
+					IReadOnlyList<TemplateRegistrationValidationEntry> validTemplates = templateRegistrationValidationSummary.GetValidTemplates ();
+					int updatedCount = WriteToMasterList (worksheet, validTemplates);
+					int masterVersion = IncrementTaskPaneMasterVersion (openKernelWorkbook);
+					openKernelWorkbook.Save ();
+					string snapshotText = BuildTaskPaneSnapshot (worksheet, openKernelWorkbook, masterVersion);
+					string errorMessage;
+					bool baseSyncSucceeded = TrySyncTaskPaneSnapshotToBase (openKernelWorkbook, snapshotText, masterVersion, out errorMessage);
+					_masterTemplateCatalogService.InvalidateCache (openKernelWorkbook);
+					_logger.Info ("Kernel template sync completed. updatedCount=" + updatedCount + ", detectedCount=" + templateRegistrationValidationSummary.DetectedFileCount + ", excludedCount=" + templateRegistrationValidationSummary.ExcludedTemplateCount + ", warningCount=" + templateRegistrationValidationSummary.WarningFileCount + ", masterVersion=" + masterVersion);
 					return new KernelTemplateSyncResult {
-						Success = false,
+						Success = true,
+						UpdatedCount = updatedCount,
+						DetectedCount = templateRegistrationValidationSummary.DetectedFileCount,
+						ExcludedCount = templateRegistrationValidationSummary.ExcludedTemplateCount,
+						WarningCount = templateRegistrationValidationSummary.WarningFileCount,
+						MasterVersion = masterVersion,
 						TemplateDirectory = text,
-						Message = "Kernelブックの管理シート CaseList_FieldInventory を読み取れません。"
-					};
-				}
-				TemplateRegistrationValidationSummary templateRegistrationValidationSummary = _wordTemplateRegistrationValidationService.Validate (text, readOnlyCollection);
-				if (templateRegistrationValidationSummary.DetectedFileCount == 0) {
-					return new KernelTemplateSyncResult {
-						Success = false,
-						TemplateDirectory = text,
-						DetectedCount = 0,
 						TemplateResults = templateRegistrationValidationSummary.TemplateResults,
-						Message = "雛形フォルダに Word 雛形 (.docx / .dotx / .docm / .dotm) が見つかりませんでした。" + Environment.NewLine + "フォルダ: " + text
+						BaseSyncError = errorMessage,
+						Message = BuildCompletedMessage (text, updatedCount, templateRegistrationValidationSummary, stopwatch.Elapsed, masterVersion, baseSyncSucceeded, errorMessage)
 					};
+				} finally {
+					if (worksheet != null && sheetProtectionState != null) {
+						RestoreSheetProtectionState (worksheet, sheetProtectionState);
+					}
 				}
-				IReadOnlyList<TemplateRegistrationValidationEntry> validTemplates = templateRegistrationValidationSummary.GetValidTemplates ();
-				int updatedCount = WriteToMasterList (worksheet, validTemplates);
-				int masterVersion = IncrementTaskPaneMasterVersion (openKernelWorkbook);
-				openKernelWorkbook.Save ();
-				string snapshotText = BuildTaskPaneSnapshot (worksheet, openKernelWorkbook, masterVersion);
-				string errorMessage;
-				bool baseSyncSucceeded = TrySyncTaskPaneSnapshotToBase (openKernelWorkbook, snapshotText, masterVersion, out errorMessage);
-				_masterTemplateCatalogService.InvalidateCache (openKernelWorkbook);
-				_logger.Info ("Kernel template sync completed. updatedCount=" + updatedCount + ", detectedCount=" + templateRegistrationValidationSummary.DetectedFileCount + ", excludedCount=" + templateRegistrationValidationSummary.ExcludedTemplateCount + ", warningCount=" + templateRegistrationValidationSummary.WarningFileCount + ", masterVersion=" + masterVersion);
-				return new KernelTemplateSyncResult {
-					Success = true,
-					UpdatedCount = updatedCount,
-					DetectedCount = templateRegistrationValidationSummary.DetectedFileCount,
-					ExcludedCount = templateRegistrationValidationSummary.ExcludedTemplateCount,
-					WarningCount = templateRegistrationValidationSummary.WarningFileCount,
-					MasterVersion = masterVersion,
-					TemplateDirectory = text,
-					TemplateResults = templateRegistrationValidationSummary.TemplateResults,
-					BaseSyncError = errorMessage,
-					Message = BuildCompletedMessage (text, updatedCount, templateRegistrationValidationSummary, stopwatch.Elapsed, masterVersion, baseSyncSucceeded, errorMessage)
-				};
-			} finally {
-				if (worksheet != null && sheetProtectionState != null) {
-					RestoreSheetProtectionState (worksheet, sheetProtectionState);
-				}
-				RestoreAppState (state);
 			}
 		}
 
@@ -554,35 +547,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return num3;
 		}
 
-
-		private AppState SaveAppState ()
-		{
-			return new AppState {
-				ScreenUpdating = _application.ScreenUpdating,
-				EnableEvents = _application.EnableEvents,
-				DisplayAlerts = _application.DisplayAlerts
-			};
-		}
-
-		private void ApplyFastSettings ()
-		{
-			_application.ScreenUpdating = false;
-			_application.EnableEvents = false;
-			_application.DisplayAlerts = false;
-		}
-
-		private void RestoreAppState (AppState state)
-		{
-			if (state == null) {
-				return;
-			}
-			try {
-				_application.ScreenUpdating = state.ScreenUpdating;
-				_application.EnableEvents = state.EnableEvents;
-				_application.DisplayAlerts = state.DisplayAlerts;
-			} catch {
-			}
-		}
 
 		private static SheetProtectionState SaveSheetProtectionState (Worksheet worksheet)
 		{

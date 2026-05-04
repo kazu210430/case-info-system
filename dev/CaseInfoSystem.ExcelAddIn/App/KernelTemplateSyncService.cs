@@ -128,7 +128,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			using (var excelApplicationStateScope = new ExcelApplicationStateScope (_application, suppressRestoreExceptions: true)) {
 				excelApplicationStateScope.SetScreenUpdating (false);
 				excelApplicationStateScope.SetEnableEvents (false);
-				excelApplicationStateScope.SetDisplayAlerts (false);
 				Worksheet worksheet = null;
 				SheetProtectionState sheetProtectionState = null;
 				try {
@@ -160,7 +159,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					IReadOnlyList<TemplateRegistrationValidationEntry> validTemplates = templateRegistrationValidationSummary.GetValidTemplates ();
 					int updatedCount = WriteToMasterList (worksheet, validTemplates);
 					int masterVersion = IncrementTaskPaneMasterVersion (openKernelWorkbook);
-					openKernelWorkbook.Save ();
+					using (var saveScope = new ExcelApplicationStateScope (_application, suppressRestoreExceptions: true)) {
+						saveScope.SetDisplayAlerts (false);
+						openKernelWorkbook.Save ();
+					}
 					string snapshotText = BuildTaskPaneSnapshot (worksheet, openKernelWorkbook, masterVersion);
 					string errorMessage;
 					bool baseSyncSucceeded = TrySyncTaskPaneSnapshotToBase (openKernelWorkbook, snapshotText, masterVersion, out errorMessage);
@@ -256,7 +258,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					workbook = _application.Workbooks.Open (text, 0, false, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				}
 				SaveSnapshotToBaseWorkbook (workbook, snapshotText, masterVersion);
-				workbook.Save ();
+				using (var saveScope = new ExcelApplicationStateScope (_application, suppressRestoreExceptions: true)) {
+					saveScope.SetDisplayAlerts (false);
+					workbook.Save ();
+				}
 				return true;
 			} catch (Exception ex) {
 				errorMessage = ex.Message;
@@ -264,8 +269,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return false;
 			} finally {
 				if (!flag && workbook != null) {
-					using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
-						workbook.Close (false, Type.Missing, Type.Missing);
+					using (var closeScope = new ExcelApplicationStateScope (_application, suppressRestoreExceptions: true)) {
+						closeScope.SetDisplayAlerts (false);
+						using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
+							workbook.Close (false, Type.Missing, Type.Missing);
+						}
 					}
 				}
 			}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
@@ -413,14 +414,62 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ResolveWorkbookForHomeDisplayOrClose_WhenHomeBindingIsMissing_ReturnsNullWithoutFallbackLookup()
+        {
+            int openKernelCalls = 0;
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+
+            Excel.Workbook resolved = (Excel.Workbook)typeof(KernelWorkbookService)
+                .GetMethod("ResolveWorkbookForHomeDisplayOrClose", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(service, new object[] { "test" });
+
+            Assert.Null(resolved);
+            Assert.Equal(0, openKernelCalls);
+        }
+
+        [Fact]
+        public void ShowKernelWorkbookWindows_WhenHomeBindingIsMissing_DoesNotLookupOpenKernelWorkbook()
+        {
+            int openKernelCalls = 0;
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+
+            typeof(KernelWorkbookService)
+                .GetMethod("ShowKernelWorkbookWindows", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(service, new object[] { true });
+
+            Assert.Equal(0, openKernelCalls);
+        }
+
+        [Fact]
         public void CloseHomeSession_WhenNoOtherWorkbookExists_QuitsWithoutRestore()
         {
+            int openKernelCalls = 0;
             int quitCalls = 0;
             var releaseCalls = new List<bool>();
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
-                    GetOpenKernelWorkbook = () => null,
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return null;
+                    },
                     HasOtherVisibleWorkbook = _ => false,
                     HasOtherWorkbook = _ => false,
                     ReleaseHomeDisplay = showExcel => releaseCalls.Add(showExcel),
@@ -432,6 +481,7 @@ namespace CaseInfoSystem.Tests
             Assert.Single(releaseCalls);
             Assert.False(releaseCalls[0]);
             Assert.Equal(1, quitCalls);
+            Assert.Equal(0, openKernelCalls);
         }
 
         [Fact]
@@ -534,7 +584,7 @@ namespace CaseInfoSystem.Tests
             KernelCaseInteractionState interactionState = OrchestrationTestSupport.CreateKernelCaseInteractionState(stateLogs);
             using (interactionState.BeginKernelCaseCreationFlow("test"))
             {
-                Excel.Workbook kernelWorkbook = new Excel.Workbook { FullName = @"C:\root\kernel.xlsm", Name = "kernel.xlsm" };
+                Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
                 var service = new KernelWorkbookService(
                     interactionState,
                     OrchestrationTestSupport.CreateLogger(new List<string>()),
@@ -551,6 +601,8 @@ namespace CaseInfoSystem.Tests
                         QuitApplication = () => quitCalls++
                     });
 
+                Assert.True(service.BindHomeWorkbook(
+                    new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
                 service.PrepareForHomeDisplay();
                 service.CloseHomeSessionSavingKernel();
             }
@@ -596,7 +648,7 @@ namespace CaseInfoSystem.Tests
         {
             int quitCalls = 0;
             var callLog = new List<string>();
-            Excel.Workbook kernelWorkbook = new Excel.Workbook { FullName = @"C:\root\kernel.xlsm", Name = "kernel.xlsm" };
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
@@ -613,6 +665,8 @@ namespace CaseInfoSystem.Tests
                 });
 
             service.SetLifecycleService(new KernelWorkbookLifecycleService());
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
             service.CloseHomeSession();
 
             Assert.Equal(0, quitCalls);
@@ -624,7 +678,7 @@ namespace CaseInfoSystem.Tests
         {
             var callLog = new List<string>();
             int requestCalls = 0;
-            Excel.Workbook kernelWorkbook = new Excel.Workbook { FullName = @"C:\root\kernel.xlsm", Name = "kernel.xlsm" };
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
@@ -643,6 +697,8 @@ namespace CaseInfoSystem.Tests
                 });
 
             service.SetLifecycleService(new KernelWorkbookLifecycleService());
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
 
             service.PrepareForHomeDisplay();
             service.CloseHomeSession();
@@ -665,6 +721,19 @@ namespace CaseInfoSystem.Tests
                 OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 hooks);
+        }
+
+        private static Excel.Workbook CreateKernelWorkbook(string systemRoot)
+        {
+            return new Excel.Workbook
+            {
+                Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"),
+                FullName = systemRoot + @"\kernel.xlsm",
+                CustomDocumentProperties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["SYSTEM_ROOT"] = systemRoot
+                }
+            };
         }
     }
 }

@@ -511,12 +511,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return workbook;
             }
 
-            if (bindingStatus == KernelHomeBindingStatus.Invalid)
-            {
-                return null;
-            }
-
-            return GetOpenKernelWorkbookCore();
+            _logger.Info(
+                "Kernel HOME display/close operation skipped because valid binding was not available. operation="
+                + (operationName ?? string.Empty)
+                + ", bindingStatus="
+                + bindingStatus.ToString());
+            return null;
         }
 
         private string GetWorkbookSystemRootForHomeBinding(Excel.Workbook workbook)
@@ -1229,7 +1229,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void ShowKernelWorkbookWindows(bool activateWorkbookWindow)
         {
-            Excel.Workbook workbook = GetOpenKernelWorkbook();
+            Excel.Workbook workbook = ResolveWorkbookForHomeDisplayOrClose("ShowKernelWorkbookWindows");
             if (workbook == null)
             {
                 return;
@@ -1691,7 +1691,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal void Execute(bool saveKernelWorkbook, string entryPoint, string caller)
             {
-                Excel.Workbook workbook = _owner.ResolveWorkbookForHomeDisplayOrClose("CloseHomeSession");
+                Excel.Workbook workbook = _owner.ResolveWorkbookForHomeDisplayOrClose(entryPoint);
                 bool otherVisibleWorkbookExists = _owner.HasOtherVisibleWorkbookCore(workbook);
                 bool otherWorkbookExists = _owner.HasOtherWorkbookCore(workbook);
                 bool skipDisplayRestoreForCaseCreation = KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(

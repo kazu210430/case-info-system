@@ -209,6 +209,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
+            PrepareWorkbookForSheetNavigation(kernelWorkbook, sheetCodeName);
             bool activated = _excelInteropService.ActivateWorkbook(kernelWorkbook);
             bool sheetActivated = activated && _excelInteropService.ActivateWorksheetByCodeName(kernelWorkbook, sheetCodeName);
             _logger.Info(

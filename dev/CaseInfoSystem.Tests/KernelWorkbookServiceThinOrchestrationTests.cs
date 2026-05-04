@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -632,6 +633,79 @@ namespace CaseInfoSystem.Tests
                     "release:True"
                 },
                 callLog);
+        }
+
+        [Fact]
+        public void TryShowSheetByCodeName_WhenHomeDisplayPrepared_RestoresWorkbookWindowVisibilityBeforeSheetActivation()
+        {
+            var loggerMessages = new List<string>();
+            var interactionMessages = new List<string>();
+            string systemRoot = Path.Combine(Path.GetTempPath(), "CaseInfoSystem.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(systemRoot);
+            string kernelWorkbookPath = Path.Combine(systemRoot, WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"));
+            File.WriteAllText(kernelWorkbookPath, string.Empty);
+            try
+            {
+                var application = new Excel.Application
+                {
+                    Visible = true,
+                    Hwnd = 1
+                };
+                var logger = OrchestrationTestSupport.CreateLogger(loggerMessages);
+                var excelInteropService = new ExcelInteropService(application, logger, new PathCompatibilityService());
+                var excelWindowRecoveryService = new ExcelWindowRecoveryService(application, excelInteropService, logger);
+                var service = new KernelWorkbookService(
+                    application,
+                    excelInteropService,
+                    excelWindowRecoveryService,
+                    OrchestrationTestSupport.CreateKernelCaseInteractionState(interactionMessages),
+                    logger);
+                Excel.Workbook kernelWorkbook = CreateKernelWorkbook(systemRoot);
+                kernelWorkbook.FullName = kernelWorkbookPath;
+                kernelWorkbook.Path = systemRoot;
+                var window = new Excel.Window
+                {
+                    Visible = true,
+                    WindowState = Excel.XlWindowState.xlNormal
+                };
+                var worksheet = new Excel.Worksheet
+                {
+                    CodeName = "shUserData",
+                    Name = "UserData",
+                    Parent = kernelWorkbook
+                };
+                kernelWorkbook.Windows.Add(window);
+                kernelWorkbook.Worksheets.Add(worksheet);
+                kernelWorkbook.ActiveSheet = worksheet;
+                application.Workbooks.Add(kernelWorkbook);
+                kernelWorkbook.Activate();
+
+                var context = new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, systemRoot, kernelWorkbook.FullName, "shHOME");
+                Assert.True(service.BindHomeWorkbook(context));
+
+                service.PrepareForHomeDisplayFromSheet();
+                Assert.False(window.Visible);
+
+                bool shown = service.TryShowSheetByCodeName(context, "shUserData", "test");
+
+                Assert.True(shown);
+                Assert.True(window.Visible);
+                Assert.Equal(Excel.XlWindowState.xlNormal, window.WindowState);
+                Assert.Same(kernelWorkbook, application.ActiveWorkbook);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(systemRoot))
+                    {
+                        Directory.Delete(systemRoot, recursive: true);
+                    }
+                }
+                catch
+                {
+                }
+            }
         }
 
         private static KernelWorkbookService CreateService(KernelWorkbookService.KernelWorkbookServiceTestHooks hooks)

@@ -48,6 +48,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly ICasePaneHostBridge _casePaneHostBridge;
 
+		private readonly WorkbookWindowVisibilityService _workbookWindowVisibilityService;
+
 		private readonly Logger _logger;
 
 		[DllImport ("user32.dll")]
@@ -59,7 +61,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		[DllImport ("user32.dll")]
 		private static extern bool SetWindowPos (IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
-		internal KernelCasePresentationService (Application application, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, ExcelInteropService excelInteropService, ExcelWindowRecoveryService excelWindowRecoveryService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, FolderWindowService folderWindowService, CreatedCasePresentationWaitService createdCasePresentationWaitService, TransientPaneSuppressionService transientPaneSuppressionService, ICasePaneHostBridge casePaneHostBridge, Logger logger)
+		internal KernelCasePresentationService (Application application, CaseWorkbookOpenStrategy caseWorkbookOpenStrategy, ExcelInteropService excelInteropService, ExcelWindowRecoveryService excelWindowRecoveryService, KernelWorkbookResolverService kernelWorkbookResolverService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, FolderWindowService folderWindowService, CreatedCasePresentationWaitService createdCasePresentationWaitService, TransientPaneSuppressionService transientPaneSuppressionService, ICasePaneHostBridge casePaneHostBridge, WorkbookWindowVisibilityService workbookWindowVisibilityService, Logger logger)
 		{
 			_application = application ?? throw new ArgumentNullException ("application");
 			_caseWorkbookOpenStrategy = caseWorkbookOpenStrategy ?? throw new ArgumentNullException ("caseWorkbookOpenStrategy");
@@ -71,6 +73,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_createdCasePresentationWaitService = createdCasePresentationWaitService ?? throw new ArgumentNullException ("createdCasePresentationWaitService");
 			_transientPaneSuppressionService = transientPaneSuppressionService ?? throw new ArgumentNullException ("transientPaneSuppressionService");
 			_casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException ("casePaneHostBridge");
+			_workbookWindowVisibilityService = workbookWindowVisibilityService ?? throw new ArgumentNullException ("workbookWindowVisibilityService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
@@ -224,56 +227,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (workbook == null) {
 				return;
 			}
-			string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
-			try {
-				Stopwatch stopwatch2 = Stopwatch.StartNew ();
-				Window window = _excelInteropService.GetFirstVisibleWindow (workbook);
-				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.GetFirstVisibleWindow", stopwatch2.ElapsedMilliseconds);
-				if (window == null) {
-					stopwatch2 = Stopwatch.StartNew ();
-					int count = workbook.Windows.Count;
-					NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WorkbookWindowsCount", stopwatch2.ElapsedMilliseconds, "count=" + count);
-					if (count > 0) {
-						stopwatch2 = Stopwatch.StartNew ();
-						window = workbook.Windows [1];
-						NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.ResolveWorkbookWindowByIndex", stopwatch2.ElapsedMilliseconds, "index=1");
-					}
-				}
-				if (window == null) {
-					_logger.Warn ("ShowCreatedCase workbook window visibility ensure skipped because workbook window could not be resolved. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-					return;
-				}
-				bool isVisible;
-				try {
-					stopwatch2 = Stopwatch.StartNew ();
-					isVisible = window.Visible;
-					NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowVisibleGet", stopwatch2.ElapsedMilliseconds, "visible=" + isVisible);
-				} catch (Exception exception) {
-					_logger.Error ("ShowCreatedCase workbook window visibility ensure failed while reading Window.Visible. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds), exception);
-					return;
-				}
-				if (isVisible) {
-					NewCaseDefaultTimingLogHelper.LogHiddenOpenToWindowVisible (_logger, workbookFullName, "alreadyVisible");
-					_logger.Info ("ShowCreatedCase workbook window visibility ensure skipped because workbook window is already visible. workbook=" + workbookFullName + ", windowHwnd=" + window.Hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-					return;
-				}
-				stopwatch2 = Stopwatch.StartNew ();
-				int hwnd = window.Hwnd;
-				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowHwndGetBeforeVisibleSet", stopwatch2.ElapsedMilliseconds, "windowHwnd=" + hwnd);
-				_logger.Info ("ShowCreatedCase workbook window visibility ensure start. workbook=" + workbookFullName + ", windowHwnd=" + hwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-				stopwatch2 = Stopwatch.StartNew ();
-				window.Visible = true;
-				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowVisibleSetTrue", stopwatch2.ElapsedMilliseconds);
-				stopwatch2 = Stopwatch.StartNew ();
-				bool flag = window.Visible;
-				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowVisibleGetAfterSet", stopwatch2.ElapsedMilliseconds, "visible=" + flag);
-				NewCaseDefaultTimingLogHelper.LogHiddenOpenToWindowVisible (_logger, workbookFullName, "madeVisible");
-				stopwatch2 = Stopwatch.StartNew ();
-				int hwnd2 = window.Hwnd;
-				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensure.WindowHwndGetAfterVisibleSet", stopwatch2.ElapsedMilliseconds, "windowHwnd=" + hwnd2);
-				_logger.Info ("ShowCreatedCase workbook window made visible before ready-show. workbook=" + workbookFullName + ", windowHwnd=" + hwnd2 + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
-			} catch (Exception exception2) {
-				_logger.Error ("ShowCreatedCase workbook window visibility ensure failed. workbook=" + workbookFullName + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds), exception2);
+			WorkbookWindowVisibilityEnsureResult result = _workbookWindowVisibilityService.EnsureVisible (workbook, "KernelCasePresentationService.EnsureWorkbookWindowVisibleBeforeReadyShow");
+			switch (result.Outcome) {
+			case WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible:
+				NewCaseDefaultTimingLogHelper.LogHiddenOpenToWindowVisible (_logger, result.WorkbookFullName, "alreadyVisible");
+				_logger.Info ("ShowCreatedCase workbook window visibility ensure skipped because workbook window is already visible. workbook=" + result.WorkbookFullName + ", windowHwnd=" + result.WindowHwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				break;
+			case WorkbookWindowVisibilityEnsureOutcome.MadeVisible:
+				NewCaseDefaultTimingLogHelper.LogHiddenOpenToWindowVisible (_logger, result.WorkbookFullName, "madeVisible");
+				_logger.Info ("ShowCreatedCase workbook window made visible before ready-show. workbook=" + result.WorkbookFullName + ", windowHwnd=" + result.WindowHwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
+				break;
 			}
 		}
 

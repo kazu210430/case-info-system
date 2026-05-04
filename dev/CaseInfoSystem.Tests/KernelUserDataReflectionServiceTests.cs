@@ -11,6 +11,7 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.Tests
 {
+    [Collection("ExcelApplicationCreatedApplications")]
     public class KernelUserDataReflectionServiceTests
     {
         private static readonly object IsolatedApplicationLock = new object();

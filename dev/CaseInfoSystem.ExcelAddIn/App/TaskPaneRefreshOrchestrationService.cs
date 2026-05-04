@@ -27,6 +27,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
         private readonly ICasePaneHostBridge _casePaneHostBridge;
+        private readonly WorkbookWindowVisibilityService _workbookWindowVisibilityService;
         private readonly PendingPaneRefreshRetryService _pendingPaneRefreshRetryService;
 
         private readonly List<System.Windows.Forms.Timer> _waitReadyRetryTimers = new List<System.Windows.Forms.Timer>();
@@ -41,7 +42,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneRefreshCoordinator taskPaneRefreshCoordinator,
             Func<KernelHomeForm> getKernelHomeForm,
             Func<int> getTaskPaneRefreshSuppressionCount,
-            ICasePaneHostBridge casePaneHostBridge)
+            ICasePaneHostBridge casePaneHostBridge,
+            WorkbookWindowVisibilityService workbookWindowVisibilityService)
         {
             _excelInteropService = excelInteropService;
             _workbookSessionService = workbookSessionService;
@@ -58,6 +60,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
             _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
+            _workbookWindowVisibilityService = workbookWindowVisibilityService ?? throw new ArgumentNullException(nameof(workbookWindowVisibilityService));
             _pendingPaneRefreshRetryService = new PendingPaneRefreshRetryService(
                 _excelInteropService,
                 _workbookSessionService,
@@ -299,71 +302,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            try
-            {
-                Stopwatch ensureVisibilityStopwatch = Stopwatch.StartNew();
-                string workbookFullName = SafeWorkbookFullName(workbook);
-                Excel.Window workbookWindow = null;
-                int workbookWindowsCount = -1;
-
-                if (_excelInteropService == null)
-                {
-                    _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=GetFirstVisibleWindow, skipped=true, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
-                }
-                else
-                {
-                    long beforeGetFirstVisibleWindowElapsedMs = ensureVisibilityStopwatch.ElapsedMilliseconds;
-                    _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=GetFirstVisibleWindow, phase=before, elapsedMs=" + beforeGetFirstVisibleWindowElapsedMs.ToString(CultureInfo.InvariantCulture));
-                    workbookWindow = _excelInteropService.GetFirstVisibleWindow(workbook);
-                    _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=GetFirstVisibleWindow, phase=after, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
-                }
-
-                if (workbookWindow == null)
-                {
-                    long beforeWorkbookWindowsCountElapsedMs = ensureVisibilityStopwatch.ElapsedMilliseconds;
-                    _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=WorkbookWindows.Count, phase=before, elapsedMs=" + beforeWorkbookWindowsCountElapsedMs.ToString(CultureInfo.InvariantCulture));
-                    workbookWindowsCount = workbook.Windows.Count;
-                    _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=WorkbookWindows.Count, phase=after, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", count=" + workbookWindowsCount.ToString(CultureInfo.InvariantCulture));
-
-                    if (workbookWindowsCount > 0)
-                    {
-                        long beforeWorkbookWindowIndexElapsedMs = ensureVisibilityStopwatch.ElapsedMilliseconds;
-                        _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=WorkbookWindows[1], phase=before, elapsedMs=" + beforeWorkbookWindowIndexElapsedMs.ToString(CultureInfo.InvariantCulture));
-                        workbookWindow = workbook.Windows[1];
-                        _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=WorkbookWindows[1], phase=after, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
-                    }
-                }
-
-                if (workbookWindow == null)
-                {
-                    _logger?.Warn("TaskPane wait-ready pre-visibility skipped because workbook window could not be resolved. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
-                    return;
-                }
-
-                long beforeVisibleGetElapsedMs = ensureVisibilityStopwatch.ElapsedMilliseconds;
-                _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=Window.Visible(get), phase=before, elapsedMs=" + beforeVisibleGetElapsedMs.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
-                bool isVisible = workbookWindow.Visible;
-                _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=Window.Visible(get), phase=after, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow) + ", visible=" + isVisible.ToString());
-
-                _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=Window.Activate, skipped=true, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", note=not-invoked-by-this-method");
-                _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=Window.WindowState, skipped=true, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", note=not-invoked-by-this-method");
-
-                if (isVisible)
-                {
-                    _logger?.Info("TaskPane wait-ready pre-visibility skipped because workbook window is already visible. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", windowHwnd=" + SafeWindowHwnd(workbookWindow) + ", elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
-                    return;
-                }
-
-                long beforeVisibleSetElapsedMs = ensureVisibilityStopwatch.ElapsedMilliseconds;
-                _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=Window.Visible(set:true), phase=before, elapsedMs=" + beforeVisibleSetElapsedMs.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
-                workbookWindow.Visible = true;
-                _logger?.Info("TaskPane wait-ready pre-visibility timing. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", step=Window.Visible(set:true), phase=after, elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + ", windowHwnd=" + SafeWindowHwnd(workbookWindow));
-                _logger?.Info("TaskPane wait-ready workbook window made visible. reason=" + (reason ?? string.Empty) + ", workbook=" + workbookFullName + ", windowHwnd=" + SafeWindowHwnd(workbookWindow) + ", elapsedMs=" + ensureVisibilityStopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
-            }
-            catch (Exception ex)
-            {
-                _logger?.Error("EnsureWorkbookWindowVisibleForTaskPaneDisplay failed. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook), ex);
-            }
+            WorkbookWindowVisibilityEnsureResult result = _workbookWindowVisibilityService.EnsureVisible(workbook, reason);
+            _logger?.Info(
+                "TaskPane wait-ready pre-visibility evaluated. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + result.WorkbookFullName
+                + ", attempt="
+                + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ", outcome="
+                + result.Outcome.ToString()
+                + ", windowHwnd="
+                + result.WindowHwnd
+                + ", visibleAfterSet="
+                + (result.VisibleAfterSet.HasValue ? result.VisibleAfterSet.Value.ToString() : string.Empty));
         }
 
         private void ScheduleTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber, Action retryAction)

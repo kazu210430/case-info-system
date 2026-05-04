@@ -122,6 +122,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var pathCompatibilityService = new PathCompatibilityService();
             KernelCaseInteractionState = new KernelCaseInteractionState(_logger);
             ExcelInteropService = new ExcelInteropService(_application, _logger, pathCompatibilityService);
+            var workbookWindowVisibilityService = new WorkbookWindowVisibilityService(ExcelInteropService, _logger);
             var excelWindowRecoveryService = new ExcelWindowRecoveryService(_application, ExcelInteropService, _logger);
             var caseListFieldDefinitionRepository = new CaseListFieldDefinitionRepository(ExcelInteropService);
             var caseListHeaderRepository = new CaseListHeaderRepository(ExcelInteropService);
@@ -253,7 +254,7 @@ namespace CaseInfoSystem.ExcelAddIn
             CaseWorkbookOpenStrategy = caseWorkbookOpenStrategy;
             var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
             var casePaneHostBridge = new ThisAddInCasePaneHostBridge(_addIn);
-            var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, excelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, transientPaneSuppressionService, casePaneHostBridge, _logger);
+            var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, excelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, transientPaneSuppressionService, casePaneHostBridge, workbookWindowVisibilityService, _logger);
             var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, transientPaneSuppressionService, caseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelCaseCreationCommandService = new KernelCaseCreationCommandService(KernelWorkbookService, kernelCaseCreationService, kernelCasePathService, kernelCasePresentationService, createdCasePresentationWaitService, caseWorkbookLifecycleService, ExcelInteropService, _logger);
             KernelUserDataReflectionService = new KernelUserDataReflectionService(
@@ -335,7 +336,8 @@ namespace CaseInfoSystem.ExcelAddIn
                     KernelCaseInteractionState,
                     userErrorService,
                     workbookSessionService,
-                    excelWindowRecoveryService);
+                    excelWindowRecoveryService,
+                    workbookWindowVisibilityService);
             WorkbookCaseTaskPaneRefreshCommandService = taskPaneComposition.WorkbookCaseTaskPaneRefreshCommandService;
             TaskPaneManager = taskPaneComposition.TaskPaneManager;
             WindowActivatePaneHandlingService = taskPaneComposition.WindowActivatePaneHandlingService;
@@ -596,7 +598,8 @@ namespace CaseInfoSystem.ExcelAddIn
             KernelCaseInteractionState kernelCaseInteractionState,
             UserErrorService userErrorService,
             WorkbookSessionService workbookSessionService,
-            ExcelWindowRecoveryService excelWindowRecoveryService)
+            ExcelWindowRecoveryService excelWindowRecoveryService,
+            WorkbookWindowVisibilityService workbookWindowVisibilityService)
         {
             var caseTaskPaneViewStateBuilder = new CaseTaskPaneViewStateBuilder();
             var taskPaneSnapshotBuilderService = new TaskPaneSnapshotBuilderService(
@@ -657,7 +660,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 taskPaneRefreshCoordinator,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount,
-                _casePaneHostBridge);
+                _casePaneHostBridge,
+                workbookWindowVisibilityService);
             return new AddInTaskPaneComposition(
                 workbookCaseTaskPaneRefreshCommandService,
                 taskPaneManager,

@@ -80,6 +80,7 @@
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
     <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
+    <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
@@ -139,6 +140,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WordTemplateRegistrationValidationService.cs" Link="Source\App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookWindowVisibilityService.cs" Link="Source\App\WorkbookWindowVisibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookContextSeed.cs" Link="Source\App\WorkbookContextSeed.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookSessionService.cs" Link="Source\App\WorkbookSessionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />

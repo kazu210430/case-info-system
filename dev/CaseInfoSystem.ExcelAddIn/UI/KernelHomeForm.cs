@@ -263,13 +263,17 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				MessageBox.Show ("シートを開けませんでした。" + ThisAddIn.GetPrimaryTraceLogRelativePath () + " を確認してください。", "案件情報System");
 				return;
 			}
+			WorkbookContext boundContext;
+			if (!TryGetBoundHomeWorkbookContext (featureName, out boundContext)) {
+				return;
+			}
 			_keepBackendSessionOnClose = true;
 			_restoreKernelWorkbookOnClose = true;
 			_sheetNavigationHandled = true;
 			StopForegroundRetry ();
 			Hide ();
 			Microsoft.Office.Interop.Excel.Workbook displayedWorkbook = null;
-			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPane (codeName, "KernelHomeForm.OpenSheet", out displayedWorkbook)) {
+			if (!Globals.ThisAddIn.ShowKernelSheetAndRefreshPaneFromHome (boundContext, codeName, "KernelHomeForm.OpenSheet", out displayedWorkbook)) {
 				MessageBox.Show ("シートを開けませんでした。" + ThisAddIn.GetPrimaryTraceLogRelativePath () + " を確認してください。", "案件情報System");
 			} else {
 				if (Globals.ThisAddIn != null && displayedWorkbook != null) {
@@ -688,6 +692,24 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			ReloadSettings ();
 			ShowBoundHomeRequiredMessage (featureName);
 			return false;
+		}
+
+		private bool TryGetBoundHomeWorkbookContext (string featureName, out WorkbookContext context)
+		{
+			context = null;
+			Excel.Workbook workbook;
+			string systemRoot;
+			if (!TryGetBoundHomeWorkbook (featureName, out workbook, out systemRoot)) {
+				return false;
+			}
+			context = new WorkbookContext (
+				workbook,
+				null,
+				WorkbookRole.Kernel,
+				systemRoot,
+				workbook == null ? string.Empty : (workbook.FullName ?? string.Empty),
+				string.Empty);
+			return true;
 		}
 
 		private static void ShowBoundHomeRequiredMessage (string featureName)

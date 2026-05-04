@@ -658,6 +658,81 @@ namespace CaseInfoSystem.ExcelAddIn
             return true;
         }
 
+        internal bool ShowKernelSheetAndRefreshPaneFromHome(WorkbookContext context, string sheetCodeName, string reason, out Excel.Workbook displayedWorkbook)
+        {
+            displayedWorkbook = null;
+            if (context == null)
+            {
+                _logger?.Warn(
+                    "ShowKernelSheetAndRefreshPaneFromHome skipped because workbook context was not available. reason="
+                    + (reason ?? string.Empty)
+                    + ", sheetCodeName="
+                    + (sheetCodeName ?? string.Empty));
+                return false;
+            }
+
+            Excel.Workbook resolvedDisplayedWorkbook = _kernelWorkbookService.ResolveKernelWorkbook(context);
+            if (resolvedDisplayedWorkbook == null)
+            {
+                _logger?.Warn(
+                    "ShowKernelSheetAndRefreshPaneFromHome skipped because bound kernel workbook could not be resolved. reason="
+                    + (reason ?? string.Empty)
+                    + ", sheetCodeName="
+                    + (sheetCodeName ?? string.Empty));
+                return false;
+            }
+
+            KernelFlickerTraceContext.BeginNewTrace();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=trace-begin trigger=ShowKernelSheetAndRefreshPaneFromHomeBoundContext traceOriginReason="
+                + (reason ?? string.Empty)
+                + ", sheetCodeName="
+                + (sheetCodeName ?? string.Empty)
+                + ", workbook="
+                + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(resolvedDisplayedWorkbook))
+                + ", activeState="
+                + FormatActiveExcelState());
+            SuppressUpcomingKernelHomeDisplay(reason, suppressOnOpen: false, suppressOnActivate: true);
+            bool shouldSuspendScreenUpdating = !string.IsNullOrWhiteSpace(reason)
+                && reason.IndexOf("KernelHomeForm.OpenSheet", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool shown = false;
+            Action performTransition = () =>
+            {
+                HideKernelHomePlaceholder();
+                shown = _kernelWorkbookService.TryShowSheetByCodeName(context, sheetCodeName, reason);
+                _logger?.Info("[Transition] bound-context sheet shown=" + shown + ", sheet=" + sheetCodeName);
+                if (!shown)
+                {
+                    return;
+                }
+
+                RefreshTaskPane(reason, resolvedDisplayedWorkbook, null);
+            };
+
+            if (shouldSuspendScreenUpdating)
+            {
+                RunWithScreenUpdatingSuspended(performTransition);
+            }
+            else
+            {
+                performTransition();
+            }
+
+            if (!shown)
+            {
+                _logger?.Info(
+                    "ShowKernelSheetAndRefreshPaneFromHome aborted because target sheet could not be shown. reason="
+                    + (reason ?? string.Empty)
+                    + ", sheetCodeName="
+                    + (sheetCodeName ?? string.Empty));
+                return false;
+            }
+
+            displayedWorkbook = resolvedDisplayedWorkbook;
+            return true;
+        }
+
         internal bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason)
         {
             Excel.Workbook displayedWorkbook;

@@ -457,6 +457,16 @@ namespace CaseInfoSystem.ExcelAddIn
                 || ShowKernelSheetAndRefreshPaneHandler(kernelTransitionSheetCodeName, kernelTransitionReason);
         }
 
+        internal bool ShowKernelSheetAndRefreshPaneFromHome(
+            CaseInfoSystem.ExcelAddIn.Domain.WorkbookContext context,
+            string kernelTransitionSheetCodeName,
+            string kernelTransitionReason,
+            out Microsoft.Office.Interop.Excel.Workbook displayedWorkbook)
+        {
+            displayedWorkbook = context == null ? null : context.Workbook;
+            return ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
+        }
+
         internal void ShowWorkbookTaskPaneWhenReady(Microsoft.Office.Interop.Excel.Workbook workbook, string reason)
         {
             ShowWorkbookTaskPaneWhenReadyHandler?.Invoke(workbook, reason);

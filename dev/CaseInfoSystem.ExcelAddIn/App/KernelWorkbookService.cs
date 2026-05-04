@@ -594,15 +594,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            bool previousDisplayAlerts = _application.DisplayAlerts;
+            ExcelApplicationStateScope quitScope = new ExcelApplicationStateScope(_application);
             try
             {
-                _application.DisplayAlerts = false;
+                quitScope.SetDisplayAlerts(false);
                 _application.Quit();
             }
             finally
             {
-                _application.DisplayAlerts = previousDisplayAlerts;
+                quitScope.Dispose();
             }
         }
 
@@ -632,15 +632,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            bool previousDisplayAlerts = _application.DisplayAlerts;
+            ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
             try
             {
-                _application.DisplayAlerts = false;
+                closeScope.SetDisplayAlerts(false);
                 workbook.Close(SaveChanges: false);
             }
             finally
             {
-                _application.DisplayAlerts = previousDisplayAlerts;
+                closeScope.Dispose();
             }
         }
 
@@ -683,35 +683,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            bool previousDisplayAlerts = _application.DisplayAlerts;
+            string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
+            bool requiresSave = RequiresSave(workbook);
+            _logger.Info(
+                "SaveAndCloseKernelWorkbook started. workbook="
+                + workbookFullName
+                + ", requiresSave="
+                + requiresSave.ToString());
+
+            if (requiresSave)
+            {
+                workbook.Save();
+                _logger.Info("SaveAndCloseKernelWorkbook saved workbook=" + workbookFullName);
+            }
+            else
+            {
+                _logger.Info("SaveAndCloseKernelWorkbook skipped save because workbook was already saved. workbook=" + workbookFullName);
+            }
+
+            ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
             try
             {
-                string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
-                bool requiresSave = RequiresSave(workbook);
-                _logger.Info(
-                    "SaveAndCloseKernelWorkbook started. workbook="
-                    + workbookFullName
-                    + ", requiresSave="
-                    + requiresSave.ToString());
-                _application.DisplayAlerts = false;
-
-                if (requiresSave)
-                {
-                    workbook.Save();
-                    _logger.Info("SaveAndCloseKernelWorkbook saved workbook=" + workbookFullName);
-                }
-                else
-                {
-                    _logger.Info("SaveAndCloseKernelWorkbook skipped save because workbook was already saved. workbook=" + workbookFullName);
-                }
-
+                closeScope.SetDisplayAlerts(false);
                 workbook.Close(SaveChanges: false);
-                _logger.Info("SaveAndCloseKernelWorkbook closed workbook=" + workbookFullName);
             }
             finally
             {
-                _application.DisplayAlerts = previousDisplayAlerts;
+                closeScope.Dispose();
             }
+
+            _logger.Info("SaveAndCloseKernelWorkbook closed workbook=" + workbookFullName);
         }
 
         /// <summary>

@@ -348,26 +348,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 using (BeginManagedCloseScope(workbook))
                 {
-                    bool previousDisplayAlerts = _application.DisplayAlerts;
+                    if (saveChanges)
+                    {
+                        workbook.Save();
+                    }
+                    else
+                    {
+                        WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
+                    }
+
+                    ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
                     try
                     {
-                        _application.DisplayAlerts = false;
-                        if (saveChanges)
-                        {
-                            workbook.Save();
-                        }
-                        else
-                        {
-                            WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
-                        }
-
+                        closeScope.SetDisplayAlerts(false);
                         workbook.Close(SaveChanges: false);
-                        QuitExcelIfKernelWasLastWorkbook(workbook);
                     }
                     finally
                     {
-                        _application.DisplayAlerts = previousDisplayAlerts;
+                        closeScope.Dispose();
                     }
+
+                    QuitExcelIfKernelWasLastWorkbook(workbook);
                 }
             }
             catch (Exception ex)
@@ -402,7 +403,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _logger.Info("Kernel managed close will quit Excel because no other workbook remains.");
-            _application.Quit();
+            ExcelApplicationStateScope quitScope = new ExcelApplicationStateScope(_application);
+            try
+            {
+                quitScope.SetDisplayAlerts(false);
+                _application.Quit();
+            }
+            finally
+            {
+                quitScope.Dispose();
+            }
         }
 
         /// <summary>

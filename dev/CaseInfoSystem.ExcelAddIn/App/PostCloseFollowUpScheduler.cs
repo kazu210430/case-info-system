@@ -137,16 +137,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            bool previousDisplayAlerts = _application.DisplayAlerts;
+            _logger.Info("Case post-close quitting Excel because no visible workbook remains.");
+            ExcelApplicationStateScope quitScope = new ExcelApplicationStateScope(_application);
             try
             {
-                _application.DisplayAlerts = false;
-                _logger.Info("Case post-close quitting Excel because no visible workbook remains.");
+                quitScope.SetDisplayAlerts(false);
                 _application.Quit();
             }
             finally
             {
-                _application.DisplayAlerts = previousDisplayAlerts;
+                quitScope.Dispose();
             }
         }
 

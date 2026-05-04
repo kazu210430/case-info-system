@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
+using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.UI
 {
@@ -237,13 +238,15 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				MessageBox.Show ("顧客名を入力してください。", "案件情報System");
 				return;
 			}
-			if (!EnsureBoundHomeMutationAvailable ("案件作成")) {
+			Excel.Workbook boundWorkbook;
+			string boundSystemRoot;
+			if (!TryGetBoundHomeWorkbook ("案件作成", out boundWorkbook, out boundSystemRoot)) {
 				return;
 			}
 			PrepareForCaseCreationStart ();
 			BeginKernelCaseCreationFlow ("KernelHomeForm.BtnCreate");
 			try {
-				KernelCaseCreationResult result = _kernelCaseCreationCommandService.ExecuteNewCaseDefault (actualCustomerName);
+				KernelCaseCreationResult result = _kernelCaseCreationCommandService.ExecuteNewCaseDefault (boundWorkbook, boundSystemRoot, actualCustomerName);
 				HandleCaseCreationResult (result);
 			} catch {
 				EndKernelCaseCreationFlow ("KernelHomeForm.BtnCreate.Exception");
@@ -279,12 +282,16 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void RunCreateCase (bool showCase)
 		{
 			string actualCustomerName = GetActualCustomerName ();
-			if (!EnsureBoundHomeMutationAvailable ("案件作成")) {
+			Excel.Workbook boundWorkbook;
+			string boundSystemRoot;
+			if (!TryGetBoundHomeWorkbook ("案件作成", out boundWorkbook, out boundSystemRoot)) {
 				return;
 			}
 			BeginKernelCaseCreationFlow (showCase ? "KernelHomeForm.RunCreateCase.Single" : "KernelHomeForm.RunCreateCase.Batch");
 			try {
-				KernelCaseCreationResult result = (showCase ? _kernelCaseCreationCommandService.ExecuteCreateCaseSingle (actualCustomerName) : _kernelCaseCreationCommandService.ExecuteCreateCaseBatch (actualCustomerName));
+				KernelCaseCreationResult result = (showCase
+					? _kernelCaseCreationCommandService.ExecuteCreateCaseSingle (boundWorkbook, boundSystemRoot, actualCustomerName)
+					: _kernelCaseCreationCommandService.ExecuteCreateCaseBatch (boundWorkbook, boundSystemRoot, actualCustomerName));
 				HandleCaseCreationResult (result);
 			} catch {
 				EndKernelCaseCreationFlow ("KernelHomeForm.RunCreateCase.Exception");
@@ -664,6 +671,18 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private bool EnsureBoundHomeMutationAvailable (string featureName)
 		{
 			if (_kernelWorkbookService.HasValidHomeWorkbookBinding ()) {
+				return true;
+			}
+			ReloadSettings ();
+			ShowBoundHomeRequiredMessage (featureName);
+			return false;
+		}
+
+		private bool TryGetBoundHomeWorkbook (string featureName, out Excel.Workbook workbook, out string systemRoot)
+		{
+			workbook = null;
+			systemRoot = string.Empty;
+			if (_kernelWorkbookService.TryGetValidHomeWorkbookBinding (out workbook, out systemRoot)) {
 				return true;
 			}
 			ReloadSettings ();

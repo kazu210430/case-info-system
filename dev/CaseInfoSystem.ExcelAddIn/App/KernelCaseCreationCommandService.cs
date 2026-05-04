@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
@@ -40,19 +41,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal KernelCaseCreationResult ExecuteNewCaseDefault (string customerName)
+		internal KernelCaseCreationResult ExecuteNewCaseDefault (Workbook kernelWorkbook, string expectedSystemRoot, string customerName)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			Workbook workbook = RequireKernelWorkbook ();
-			string text = _excelInteropService.TryGetDocumentProperty (workbook, "DEFAULT_ROOT");
+			if (!TryValidateBoundKernelWorkbook (kernelWorkbook, expectedSystemRoot, "ExecuteNewCaseDefault")) {
+				return BuildFailure (CreateCaseFailedMessage);
+			}
+			string text = _excelInteropService.TryGetDocumentProperty (kernelWorkbook, "DEFAULT_ROOT");
 			_logger.Info ("Kernel case command start. mode=NewCaseDefault, hasDefaultRoot=" + !string.IsNullOrWhiteSpace (text) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			if (string.IsNullOrWhiteSpace (text)) {
 				string text2 = _kernelCasePathService.SelectFolderPath ("既定のフォルダを選択してください。", string.Empty);
 				if (string.IsNullOrWhiteSpace (text2)) {
 					return BuildFailure (string.Empty);
 				}
-				_excelInteropService.SetDocumentProperty (workbook, "DEFAULT_ROOT", text2);
-				workbook.Save ();
+				_excelInteropService.SetDocumentProperty (kernelWorkbook, "DEFAULT_ROOT", text2);
+				kernelWorkbook.Save ();
 				text = text2;
 				_logger.Info ("Kernel case command default root saved. mode=NewCaseDefault, elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			}
@@ -60,13 +63,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				CustomerName = customerName,
 				Mode = KernelCaseCreationMode.NewCaseDefault,
 				DefaultRoot = text
-			});
+			}, kernelWorkbook, expectedSystemRoot);
 		}
 
-		internal KernelCaseCreationResult ExecuteCreateCaseSingle (string customerName)
+		internal KernelCaseCreationResult ExecuteCreateCaseSingle (Workbook kernelWorkbook, string expectedSystemRoot, string customerName)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			string text = SelectFolderAndRemember ();
+			string text = SelectFolderAndRemember (kernelWorkbook, expectedSystemRoot);
 			_logger.Info ("Kernel case command folder selected. mode=CreateCaseSingle, selected=" + !string.IsNullOrWhiteSpace (text) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			if (string.IsNullOrWhiteSpace (text)) {
 				return BuildFailure (string.Empty);
@@ -75,13 +78,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				CustomerName = customerName,
 				Mode = KernelCaseCreationMode.CreateCaseSingle,
 				SelectedFolderPath = text
-			});
+			}, kernelWorkbook, expectedSystemRoot);
 		}
 
-		internal KernelCaseCreationResult ExecuteCreateCaseBatch (string customerName)
+		internal KernelCaseCreationResult ExecuteCreateCaseBatch (Workbook kernelWorkbook, string expectedSystemRoot, string customerName)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			string text = SelectFolderAndRemember ();
+			string text = SelectFolderAndRemember (kernelWorkbook, expectedSystemRoot);
 			_logger.Info ("Kernel case command folder selected. mode=CreateCaseBatch, selected=" + !string.IsNullOrWhiteSpace (text) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			if (string.IsNullOrWhiteSpace (text)) {
 				return BuildFailure (string.Empty);
@@ -90,10 +93,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				CustomerName = customerName,
 				Mode = KernelCaseCreationMode.CreateCaseBatch,
 				SelectedFolderPath = text
-			});
+			}, kernelWorkbook, expectedSystemRoot);
 		}
 
-		private KernelCaseCreationResult Execute (KernelCaseCreationRequest request)
+		private KernelCaseCreationResult Execute (KernelCaseCreationRequest request, Workbook kernelWorkbook, string expectedSystemRoot)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
 			CreatedCasePresentationWaitService.WaitSession waitSession = null;
@@ -101,6 +104,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			bool waitSessionTransferred = false;
 			try {
 				ValidateRequest (request);
+				ValidateBoundKernelWorkbookOrThrow (kernelWorkbook, expectedSystemRoot, "Execute");
 				_logger.Info ("Kernel case command validated. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				if (ShouldShowCreatedCaseWaitUi (request.Mode)) {
 					waitSession = _createdCasePresentationWaitService.ShowWaiting (stopwatch);
@@ -109,7 +113,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						waitUiShownElapsedMs = stopwatch.ElapsedMilliseconds;
 					}
 				}
-				KernelCaseCreationResult kernelCaseCreationResult = _kernelCaseCreationService.CreateCase (request);
+				KernelCaseCreationResult kernelCaseCreationResult = _kernelCaseCreationService.CreateCase (kernelWorkbook, expectedSystemRoot, request);
 				if (!kernelCaseCreationResult.Success) {
 					return kernelCaseCreationResult;
 				}
@@ -139,7 +143,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return kernelCaseCreationResult2;
 			} catch (Exception exception) {
 				_logger.Error ("Kernel case creation failed.", exception);
-				return BuildFailure ("案件作成に失敗しました。");
+				return BuildFailure (CreateCaseFailedMessage);
 			}
 			finally {
 				if (!waitSessionTransferred) {
@@ -164,7 +168,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return kernelCaseCreationResult;
 			} catch (Exception exception) {
 				_logger.Error ("Kernel case open after save failed.", exception);
-				return BuildFailure ("保存は完了しましたが、案件情報を開けませんでした。");
+				return BuildFailure (OpenCaseFailedMessage);
 			}
 		}
 
@@ -209,19 +213,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private Workbook RequireKernelWorkbook ()
-		{
-			Workbook openKernelWorkbook = _kernelWorkbookService.GetOpenKernelWorkbook ();
-			if (openKernelWorkbook == null) {
-				throw new InvalidOperationException ("Kernel ブックを取得できませんでした。");
-			}
-			return openKernelWorkbook;
-		}
-
-		private string SelectFolderAndRemember ()
+		private string SelectFolderAndRemember (Workbook workbook, string expectedSystemRoot)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			Workbook workbook = RequireKernelWorkbook ();
+			if (!TryValidateBoundKernelWorkbook (workbook, expectedSystemRoot, "SelectFolderAndRemember")) {
+				return string.Empty;
+			}
 			string initialDirectory = _excelInteropService.TryGetDocumentProperty (workbook, "LAST_PICK_FOLDER");
 			string text = _kernelCasePathService.SelectFolderPath ("保存先フォルダを選択してください。", initialDirectory);
 			_logger.Info ("Kernel case folder dialog completed. selected=" + !string.IsNullOrWhiteSpace (text) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
@@ -232,6 +229,51 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			workbook.Save ();
 			_logger.Info ("Kernel case folder remembered. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			return text;
+		}
+
+		private bool TryValidateBoundKernelWorkbook (Workbook workbook, string expectedSystemRoot, string operationName)
+		{
+			if (workbook == null) {
+				_logger.Warn ("Kernel case command failed closed because bound workbook was null. operation=" + (operationName ?? string.Empty));
+				return false;
+			}
+			if (!_kernelWorkbookService.IsKernelWorkbook (workbook)) {
+				_logger.Warn ("Kernel case command failed closed because workbook was not kernel. operation=" + (operationName ?? string.Empty) + ", workbook=" + GetWorkbookIdentity (workbook));
+				return false;
+			}
+			string text = NormalizeSystemRoot (_kernelCasePathService.ResolveSystemRoot (workbook));
+			string text2 = NormalizeSystemRoot (expectedSystemRoot);
+			if (string.IsNullOrWhiteSpace (text2) || string.IsNullOrWhiteSpace (text) || !string.Equals (text, text2, StringComparison.OrdinalIgnoreCase)) {
+				_logger.Warn ("Kernel case command failed closed because kernel root mismatched. operation=" + (operationName ?? string.Empty) + ", workbook=" + GetWorkbookIdentity (workbook) + ", actualSystemRoot=" + text + ", expectedSystemRoot=" + text2);
+				return false;
+			}
+			return true;
+		}
+
+		private void ValidateBoundKernelWorkbookOrThrow (Workbook workbook, string expectedSystemRoot, string operationName)
+		{
+			if (!TryValidateBoundKernelWorkbook (workbook, expectedSystemRoot, operationName)) {
+				throw new InvalidOperationException ("Bound Kernel workbook was not available.");
+			}
+		}
+
+		private string GetWorkbookIdentity (Workbook workbook)
+		{
+			return _excelInteropService.GetWorkbookFullName (workbook);
+		}
+
+		private static string NormalizeSystemRoot (string systemRoot)
+		{
+			string text = (systemRoot ?? string.Empty).Trim ();
+			if (string.IsNullOrWhiteSpace (text)) {
+				return string.Empty;
+			}
+			text = text.TrimEnd (Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			try {
+				return Path.GetFullPath (text).TrimEnd (Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			} catch {
+				return text;
+			}
 		}
 
 		private static KernelCaseCreationResult BuildFailure (string userMessage)

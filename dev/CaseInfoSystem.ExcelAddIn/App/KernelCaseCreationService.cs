@@ -42,17 +42,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
 
-		internal KernelCaseCreationResult CreateCase (KernelCaseCreationRequest request)
+		internal KernelCaseCreationResult CreateCase (Workbook kernelWorkbook, string expectedSystemRoot, KernelCaseCreationRequest request)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
 			if (request == null) {
 				throw new ArgumentNullException ("request");
 			}
-			Workbook openKernelWorkbook = _kernelWorkbookService.GetOpenKernelWorkbook ();
-			if (openKernelWorkbook == null) {
-				throw new InvalidOperationException ("Kernel workbook is not open.");
-			}
-			KernelCaseCreationPlan kernelCaseCreationPlan = ResolveCreationPlan (openKernelWorkbook, request, stopwatch);
+			string text = ValidateAndResolveBoundKernelSystemRoot (kernelWorkbook, expectedSystemRoot);
+			KernelCaseCreationPlan kernelCaseCreationPlan = ResolveCreationPlan (kernelWorkbook, text, request, stopwatch);
 			_logger.Info ("Kernel case creation plan resolved. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds + ", casePath=" + kernelCaseCreationPlan.CaseWorkbookPath);
 			long elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
 			File.Copy (kernelCaseCreationPlan.BaseWorkbookPath, kernelCaseCreationPlan.CaseWorkbookPath, overwrite: false);
@@ -60,17 +57,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				LogCreateSavedCasePhase ("templateCopy", kernelCaseCreationPlan.CaseWorkbookPath, string.Empty, stopwatch, elapsedMilliseconds);
 			}
 			_logger.Info ("Kernel case base workbook copied. mode=" + request.Mode.ToString () + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-			return CreateSavedCase (openKernelWorkbook, kernelCaseCreationPlan);
+			return CreateSavedCase (kernelWorkbook, kernelCaseCreationPlan);
 		}
 
-		private KernelCaseCreationPlan ResolveCreationPlan (Workbook kernelWorkbook, KernelCaseCreationRequest request, Stopwatch outerStopwatch)
+		private KernelCaseCreationPlan ResolveCreationPlan (Workbook kernelWorkbook, string systemRoot, KernelCaseCreationRequest request, Stopwatch outerStopwatch)
 		{
 			Stopwatch stopwatch = Stopwatch.StartNew ();
-			string text = _kernelCasePathService.ResolveSystemRoot (kernelWorkbook);
-			if (string.IsNullOrWhiteSpace (text)) {
+			if (string.IsNullOrWhiteSpace (systemRoot)) {
 				throw new InvalidOperationException ("Kernel SYSTEM_ROOT could not be resolved.");
 			}
-			string text2 = _kernelCasePathService.ResolveBaseWorkbookPath (text);
+			string text2 = _kernelCasePathService.ResolveBaseWorkbookPath (systemRoot);
 			if (!File.Exists (text2)) {
 				throw new FileNotFoundException ("Base workbook was not found.", text2);
 			}
@@ -92,7 +88,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return new KernelCaseCreationPlan {
 				Mode = request.Mode,
 				CustomerName = customerName,
-				SystemRoot = text,
+				SystemRoot = systemRoot,
 				BaseWorkbookPath = text2,
 				CaseFolderPath = text4,
 				CaseWorkbookPath = caseWorkbookPath,
@@ -104,6 +100,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private static string BuildCaseWorkbookName (string customerName, string extension)
 		{
 			return KernelNamingService.BuildCaseBookName (customerName, extension);
+		}
+
+		private string ValidateAndResolveBoundKernelSystemRoot (Workbook kernelWorkbook, string expectedSystemRoot)
+		{
+			if (kernelWorkbook == null) {
+				throw new InvalidOperationException ("Kernel workbook is not available.");
+			}
+			if (!_kernelWorkbookService.IsKernelWorkbook (kernelWorkbook)) {
+				throw new InvalidOperationException ("Kernel workbook was invalid.");
+			}
+			string text = NormalizeSystemRoot (_kernelCasePathService.ResolveSystemRoot (kernelWorkbook));
+			string text2 = NormalizeSystemRoot (expectedSystemRoot);
+			if (string.IsNullOrWhiteSpace (text2) || string.IsNullOrWhiteSpace (text) || !string.Equals (text, text2, StringComparison.OrdinalIgnoreCase)) {
+				throw new InvalidOperationException ("Kernel SYSTEM_ROOT mismatched.");
+			}
+			return text;
+		}
+
+		private static string NormalizeSystemRoot (string systemRoot)
+		{
+			string text = (systemRoot ?? string.Empty).Trim ();
+			if (string.IsNullOrWhiteSpace (text)) {
+				return string.Empty;
+			}
+			text = text.TrimEnd (Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			try {
+				return Path.GetFullPath (text).TrimEnd (Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			} catch {
+				return text;
+			}
 		}
 
 		internal KernelCaseCreationResult CreateSavedCase (Workbook kernelWorkbook, KernelCaseCreationPlan plan)

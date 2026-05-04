@@ -163,6 +163,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return ResolveHomeBindingStatus("HasValidHomeWorkbookBinding", out workbook) == KernelHomeBindingStatus.Valid;
         }
 
+        internal bool TryGetValidHomeWorkbookBinding(out Excel.Workbook workbook, out string systemRoot)
+        {
+            workbook = null;
+            systemRoot = string.Empty;
+
+            KernelHomeBindingStatus bindingStatus = ResolveHomeBindingStatus("TryGetValidHomeWorkbookBinding", out workbook);
+            if (bindingStatus != KernelHomeBindingStatus.Valid)
+            {
+                workbook = null;
+                return false;
+            }
+
+            systemRoot = _homeBinding == null ? string.Empty : _homeBinding.SystemRoot ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(systemRoot))
+            {
+                workbook = null;
+                return false;
+            }
+
+            return true;
+        }
+
         internal bool TryShowSheetByCodeName(Domain.WorkbookContext context, string sheetCodeName, string reason)
         {
             Excel.Workbook kernelWorkbook = ResolveKernelWorkbook(context);

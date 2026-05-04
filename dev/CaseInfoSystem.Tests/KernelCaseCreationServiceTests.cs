@@ -13,6 +13,163 @@ namespace CaseInfoSystem.Tests
     public class KernelCaseCreationServiceTests
     {
         [Fact]
+        public void CreateCase_WhenBoundKernelWorkbookIsProvided_UsesItWithoutOpenKernelFallback()
+        {
+            List<string> logs = new List<string>();
+            string tempRoot = Path.Combine(Path.GetTempPath(), "KernelCaseCreationServiceTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempRoot);
+            string caseFolderPath = Path.Combine(tempRoot, "Selected");
+            Directory.CreateDirectory(caseFolderPath);
+            string baseWorkbookPath = Path.Combine(tempRoot, "Base.xlsx");
+            File.WriteAllText(baseWorkbookPath, "base");
+
+            Excel.Workbook kernelWorkbook = new Excel.Workbook
+            {
+                FullName = Path.Combine(tempRoot, "Kernel.xlsm"),
+                Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"),
+                Path = tempRoot,
+                CustomDocumentProperties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["NAME_RULE_A"] = "YYYY",
+                    ["NAME_RULE_B"] = "DOC"
+                }
+            };
+            kernelWorkbook.Application = new Excel.Application
+            {
+                DisplayAlerts = true
+            };
+
+            int openKernelCalls = 0;
+            var kernelWorkbookService = new KernelWorkbookService(
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+
+            Excel.Application hiddenApplication = new Excel.Application();
+            Excel.Workbook hiddenWorkbook = new Excel.Workbook
+            {
+                Application = hiddenApplication
+            };
+            var transientPaneSuppressionService = new TransientPaneSuppressionService(
+                new FakeExcelInteropService(),
+                new PathCompatibilityService(),
+                OrchestrationTestSupport.CreateLogger(logs));
+            var caseWorkbookLifecycleService = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(logs),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = workbook => workbook == null
+                        ? string.Empty
+                        : (workbook.FullName ?? workbook.Name ?? string.Empty)
+                });
+            var caseWorkbookOpenStrategy = CreateCaseWorkbookOpenStrategy(hiddenApplication, hiddenWorkbook, logs);
+            var casePathService = new KernelCasePathService
+            {
+                OnResolveSystemRoot = workbook => workbook == null ? string.Empty : workbook.Path,
+                OnResolveBaseWorkbookPath = _ => baseWorkbookPath,
+                OnResolveCaseFolderPath = (_, __) => caseFolderPath,
+                OnEnsureFolderExists = folderPath =>
+                {
+                    Directory.CreateDirectory(folderPath);
+                    return true;
+                },
+                OnResolveCaseWorkbookExtension = _ => ".xlsx",
+                OnBuildCaseWorkbookPath = (folderPath, caseWorkbookName) => Path.Combine(folderPath, caseWorkbookName)
+            };
+
+            var service = new KernelCaseCreationService(
+                kernelWorkbookService,
+                casePathService,
+                new CaseWorkbookInitializer(),
+                caseWorkbookOpenStrategy,
+                transientPaneSuppressionService,
+                caseWorkbookLifecycleService,
+                new ExcelInteropService(),
+                OrchestrationTestSupport.CreateLogger(logs));
+
+            try
+            {
+                KernelCaseCreationResult result = service.CreateCase(
+                    kernelWorkbook,
+                    tempRoot,
+                    new KernelCaseCreationRequest
+                    {
+                        CustomerName = "ClientA",
+                        Mode = KernelCaseCreationMode.CreateCaseBatch,
+                        SelectedFolderPath = caseFolderPath
+                    });
+
+                Assert.True(result.Success);
+                Assert.Equal(0, openKernelCalls);
+                Assert.Equal(caseFolderPath, result.CaseFolderPath);
+                Assert.Equal(caseFolderPath, Path.GetDirectoryName(result.CaseWorkbookPath));
+                Assert.True(File.Exists(result.CaseWorkbookPath));
+            }
+            finally
+            {
+                if (Directory.Exists(tempRoot))
+                {
+                    Directory.Delete(tempRoot, recursive: true);
+                }
+            }
+        }
+
+        [Fact]
+        public void CreateCase_WhenBoundKernelRootMismatches_FailsClosedWithoutOpenKernelFallback()
+        {
+            int openKernelCalls = 0;
+            Excel.Workbook kernelWorkbook = new Excel.Workbook
+            {
+                FullName = @"C:\actual-root\Kernel.xlsm",
+                Name = WorkbookFileNameResolver.BuildKernelWorkbookName(".xlsm"),
+                Path = @"C:\actual-root"
+            };
+            var kernelWorkbookService = new KernelWorkbookService(
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    GetOpenKernelWorkbook = () =>
+                    {
+                        openKernelCalls++;
+                        return new Excel.Workbook();
+                    }
+                });
+            var service = new KernelCaseCreationService(
+                kernelWorkbookService,
+                new KernelCasePathService
+                {
+                    OnResolveSystemRoot = workbook => workbook == null ? string.Empty : workbook.Path
+                },
+                new CaseWorkbookInitializer(),
+                CreateCaseWorkbookOpenStrategy(new Excel.Application(), new Excel.Workbook(), new List<string>()),
+                new TransientPaneSuppressionService(new FakeExcelInteropService(), new PathCompatibilityService(), OrchestrationTestSupport.CreateLogger(new List<string>())),
+                new CaseWorkbookLifecycleService(
+                    OrchestrationTestSupport.CreateLogger(new List<string>()),
+                    new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks()),
+                new ExcelInteropService(),
+                OrchestrationTestSupport.CreateLogger(new List<string>()));
+
+            Assert.Throws<InvalidOperationException>(() => service.CreateCase(
+                kernelWorkbook,
+                @"C:\expected-root",
+                new KernelCaseCreationRequest
+                {
+                    CustomerName = "ClientA",
+                    Mode = KernelCaseCreationMode.CreateCaseBatch,
+                    SelectedFolderPath = @"C:\cases"
+                }));
+            Assert.Equal(0, openKernelCalls);
+        }
+
+        [Fact]
         public void CreateSavedCase_ForInteractiveModes_UsesHiddenSessionAndVisibleInitializer()
         {
             List<string> logs = new List<string>();

@@ -222,93 +222,102 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool createdNewWord = false;
             string savedPath = string.Empty;
             string stage = "Initialize";
-            ExcelUiState excelUiState = null;
             XlWindowState previousWindowState = XlWindowState.xlNormal;
             bool restoreExcelWindowPresentation = true;
             DocumentPresentationWaitService.WaitSession waitSession = null;
             var totalStopwatch = Stopwatch.StartNew();
             var phaseStopwatch = Stopwatch.StartNew();
             Excel.Application excelApplication = null;
+            ExcelApplicationStateScope excelApplicationStateScope = null;
+            object previousStatusBar = null;
+            bool hasPreviousStatusBar = false;
 
             try
             {
                 _logger.Debug("ExecuteCreateDocument", "Start template=" + (templateSpec == null ? string.Empty : templateSpec.TemplatePath) + " output=" + (outputPath ?? string.Empty));
                 excelApplication = _documentCreateHostBridge.GetApplication();
                 previousWindowState = excelApplication.WindowState;
-                excelUiState = ExcelUiState.Capture(excelApplication);
-                excelUiState.ApplyForDocumentCreate(excelApplication, false);
+                hasPreviousStatusBar = TryCaptureStatusBar(excelApplication, out previousStatusBar);
+                excelApplicationStateScope = new ExcelApplicationStateScope(excelApplication, suppressRestoreExceptions: true);
+                excelApplicationStateScope.SetScreenUpdating(false);
+                excelApplicationStateScope.SetEnableEvents(false);
                 waitSession = _documentPresentationWaitService.ShowWaiting(totalStopwatch);
 
-                stage = "AcquireWordApplication";
-                SetStatusBar("文書作成：Word準備中...");
-                waitSession?.UpdateStage(DocumentPresentationWaitService.LaunchingWordStageTitle);
-                wordApplication = _wordInteropService.AcquireWordApplication(out createdNewWord);
-                if (wordApplication == null)
+                using (var calculationScope = new ExcelApplicationStateScope(excelApplication, suppressRestoreExceptions: true))
                 {
-                    throw new InvalidOperationException("Word を起動または取得できませんでした。");
+                    calculationScope.SetCalculation(XlCalculation.xlCalculationManual);
+
+                    stage = "AcquireWordApplication";
+                    SetStatusBar("文書作成：Word準備中...");
+                    waitSession?.UpdateStage(DocumentPresentationWaitService.LaunchingWordStageTitle);
+                    wordApplication = _wordInteropService.AcquireWordApplication(out createdNewWord);
+                    if (wordApplication == null)
+                    {
+                        throw new InvalidOperationException("Word を起動または取得できませんでした。");
+                    }
+
+                    wordApplication = _wordInteropService.EnsureWordApplication(ref wordApplication);
+                    wordPerformanceState = _wordInteropService.BeginPerformanceScope(wordApplication, true, createdNewWord);
+                    _logger.Debug("ExecuteCreateDocument", "WordReady createdNew=" + createdNewWord.ToString() + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
+                    phaseStopwatch.Restart();
+
+                    stage = "CreateDocumentFromTemplate";
+                    SetStatusBar("文書作成：テンプレから作成中...");
+                    waitSession?.UpdateStage(DocumentPresentationWaitService.LoadingTemplateStageTitle);
+                    wordDocument = _wordInteropService.CreateDocumentFromTemplate(wordApplication, templateSpec.TemplatePath);
+                    if (wordDocument == null)
+                    {
+                        throw new InvalidOperationException("テンプレートから Word 文書を作成できませんでした。");
+                    }
+                    _logger.Debug("ExecuteCreateDocument", "DocumentCreated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
+                    phaseStopwatch.Restart();
+
+                    stage = "ApplyMergeData";
+                    SetStatusBar("文書作成：差し込み中...");
+                    waitSession?.UpdateStage(DocumentPresentationWaitService.ApplyingMergeDataStageTitle);
+                    _documentMergeService.ApplyMergeData(wordDocument, mergeData);
+                    _logger.Debug("ExecuteCreateDocument", "MergeApplied elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
+                    phaseStopwatch.Restart();
+
+                    stage = "RemoveContentControls";
+                    SetStatusBar("文書作成：仕上げ中...");
+                    _documentMergeService.RemoveContentControlsKeepText(wordDocument);
+                    _logger.Debug("ExecuteCreateDocument", "ControlsRemoved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
+                    phaseStopwatch.Restart();
+
+                    stage = "SaveDocument";
+                    SetStatusBar("文書作成：保存中...");
+                    waitSession?.UpdateStage(DocumentPresentationWaitService.SavingDocumentStageTitle);
+                    DocumentSaveResult saveResult = _documentSaveService.SaveDocument(wordApplication, wordDocument, outputPath);
+                    if (saveResult == null || saveResult.ActiveDocument == null)
+                    {
+                        throw new InvalidOperationException("保存後の Word 文書を再取得できませんでした。");
+                    }
+                    wordDocument = saveResult.ActiveDocument;
+                    savedPath = saveResult.FinalPath;
+                    _logger.Debug("ExecuteCreateDocument", "Saved path=" + (savedPath ?? string.Empty) + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
+                    phaseStopwatch.Restart();
+
+                    stage = "ShowDocument";
+                    SetStatusBar("文書作成：完了（Word表示）...");
+                    waitSession?.UpdateStage(DocumentPresentationWaitService.ShowingScreenStageTitle);
+                    _wordInteropService.ShowDocument(wordApplication, wordDocument);
+                    if (wordPerformanceState != null)
+                    {
+                        // 表示後は Visible を元に戻さない。戻すと Word が再び非表示になる。
+                        wordPerformanceState.HasVisible = false;
+                    }
+                    waitSession?.Close();
+                    restoreExcelWindowPresentation = false;
+                    _logger.Debug("ExecuteCreateDocument", "ShowDocument elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
+                    _logger.Info(
+                        "DocumentCreateService completed. documentName="
+                        + (documentName ?? string.Empty)
+                        + ", template="
+                        + (templateSpec == null ? string.Empty : (templateSpec.TemplatePath ?? string.Empty))
+                        + ", output="
+                        + savedPath);
                 }
-
-                wordApplication = _wordInteropService.EnsureWordApplication(ref wordApplication);
-                wordPerformanceState = _wordInteropService.BeginPerformanceScope(wordApplication, true, createdNewWord);
-                _logger.Debug("ExecuteCreateDocument", "WordReady createdNew=" + createdNewWord.ToString() + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
-                phaseStopwatch.Restart();
-
-                stage = "CreateDocumentFromTemplate";
-                SetStatusBar("文書作成：テンプレから作成中...");
-                waitSession?.UpdateStage(DocumentPresentationWaitService.LoadingTemplateStageTitle);
-                wordDocument = _wordInteropService.CreateDocumentFromTemplate(wordApplication, templateSpec.TemplatePath);
-                if (wordDocument == null)
-                {
-                    throw new InvalidOperationException("テンプレートから Word 文書を作成できませんでした。");
-                }
-                _logger.Debug("ExecuteCreateDocument", "DocumentCreated elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
-                phaseStopwatch.Restart();
-
-                stage = "ApplyMergeData";
-                SetStatusBar("文書作成：差し込み中...");
-                waitSession?.UpdateStage(DocumentPresentationWaitService.ApplyingMergeDataStageTitle);
-                _documentMergeService.ApplyMergeData(wordDocument, mergeData);
-                _logger.Debug("ExecuteCreateDocument", "MergeApplied elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
-                phaseStopwatch.Restart();
-
-                stage = "RemoveContentControls";
-                SetStatusBar("文書作成：仕上げ中...");
-                _documentMergeService.RemoveContentControlsKeepText(wordDocument);
-                _logger.Debug("ExecuteCreateDocument", "ControlsRemoved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed));
-                phaseStopwatch.Restart();
-
-                stage = "SaveDocument";
-                SetStatusBar("文書作成：保存中...");
-                waitSession?.UpdateStage(DocumentPresentationWaitService.SavingDocumentStageTitle);
-                DocumentSaveResult saveResult = _documentSaveService.SaveDocument(wordApplication, wordDocument, outputPath);
-                if (saveResult == null || saveResult.ActiveDocument == null)
-                {
-                    throw new InvalidOperationException("保存後の Word 文書を再取得できませんでした。");
-                }
-                wordDocument = saveResult.ActiveDocument;
-                savedPath = saveResult.FinalPath;
-                _logger.Debug("ExecuteCreateDocument", "Saved path=" + (savedPath ?? string.Empty) + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
-                phaseStopwatch.Restart();
-
-                stage = "ShowDocument";
-                SetStatusBar("文書作成：完了（Word表示）...");
-                waitSession?.UpdateStage(DocumentPresentationWaitService.ShowingScreenStageTitle);
-                _wordInteropService.ShowDocument(wordApplication, wordDocument);
-                if (wordPerformanceState != null)
-                {
-                    // 表示後は Visible を元に戻さない。戻すと Word が再び非表示になる。
-                    wordPerformanceState.HasVisible = false;
-                }
-                waitSession?.Close();
-                restoreExcelWindowPresentation = false;
-                _logger.Debug("ExecuteCreateDocument", "ShowDocument elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
-                _logger.Info(
-                    "DocumentCreateService completed. documentName="
-                    + (documentName ?? string.Empty)
-                    + ", template="
-                    + (templateSpec == null ? string.Empty : (templateSpec.TemplatePath ?? string.Empty))
-                    + ", output="
-                    + savedPath);
             }
             catch (Exception ex)
             {
@@ -343,10 +352,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             finally
             {
                 _wordInteropService.RestorePerformanceState(wordApplication, wordPerformanceState);
-                if (excelUiState != null)
-                {
-                    excelUiState.Restore(excelApplication, restoreExcelWindowPresentation);
-                }
+                excelApplicationStateScope?.Dispose();
 
                 if (restoreExcelWindowPresentation)
                 {
@@ -362,7 +368,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 
                 waitSession?.Dispose();
-                ClearStatusBar();
+                RestoreStatusBar(excelApplication, previousStatusBar, hasPreviousStatusBar);
             }
         }
         /// <summary>
@@ -387,6 +393,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _documentCreateHostBridge.ClearStatusBar();
         }
 
+        private static bool TryCaptureStatusBar(Excel.Application application, out object statusBar)
+        {
+            statusBar = null;
+            if (application == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                statusBar = application.StatusBar;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void RestoreStatusBar(Excel.Application application, object statusBar, bool hasStatusBarSnapshot)
+        {
+            if (!hasStatusBarSnapshot || application == null)
+            {
+                return;
+            }
+
+            try
+            {
+                application.StatusBar = statusBar;
+            }
+            catch
+            {
+                // 例外処理: ステータスバー復元失敗は致命ではないため握りつぶす。
+            }
+        }
+
         /// <summary>
         /// メソッド: 経過時間を見やすい文字列へ整形する。
         /// 引数: elapsed - 経過時間。
@@ -398,91 +440,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return elapsed.TotalSeconds.ToString("0.000");
         }
 
-        /// <summary>
-        /// クラス: VBA の TExcelUIState 互換で Excel UI 状態を保持する。
-        /// 責務: 実行前の ScreenUpdating / EnableEvents / DisplayAlerts / Calculation / Visible を保存復元する。
-        /// </summary>
-        private sealed class ExcelUiState
-        {
-            private ExcelUiState()
-            {
-            }
-
-            internal bool ScreenUpdating { get; private set; }
-
-            internal bool EnableEvents { get; private set; }
-
-            internal bool DisplayAlerts { get; private set; }
-
-            internal XlCalculation Calculation { get; private set; }
-
-            internal bool Visible { get; private set; }
-
-            internal static ExcelUiState Capture(Excel.Application application)
-            {
-                if (application == null)
-                {
-                    return null;
-                }
-
-                return new ExcelUiState
-                {
-                    ScreenUpdating = application.ScreenUpdating,
-                    EnableEvents = application.EnableEvents,
-                    DisplayAlerts = application.DisplayAlerts,
-                    Calculation = application.Calculation,
-                    Visible = application.Visible
-                };
-            }
-
-            internal void ApplyForDocumentCreate(Excel.Application application, bool hideExcel)
-            {
-                if (application == null)
-                {
-                    return;
-                }
-
-                try
-                {
-                    application.ScreenUpdating = false;
-                    application.EnableEvents = false;
-                    application.DisplayAlerts = false;
-                    application.Calculation = XlCalculation.xlCalculationManual;
-                    if (hideExcel)
-                    {
-                        application.Visible = false;
-                    }
-                }
-                catch
-                {
-                    // 例外処理: UI 設定変更失敗は致命ではないため握りつぶす。
-                }
-            }
-
-            internal void Restore(Excel.Application application, bool restoreWindowPresentation)
-            {
-                if (application == null)
-                {
-                    return;
-                }
-
-                try
-                {
-                    application.ScreenUpdating = ScreenUpdating;
-                    application.EnableEvents = EnableEvents;
-                    application.DisplayAlerts = DisplayAlerts;
-                    application.Calculation = Calculation;
-                    if (restoreWindowPresentation)
-                    {
-                        application.Visible = Visible;
-                    }
-                }
-                catch
-                {
-                    // 例外処理: UI 状態復元失敗は致命ではないため握りつぶす。
-                }
-            }
-        }
     }
 }
 

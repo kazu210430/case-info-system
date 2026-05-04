@@ -98,11 +98,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 							window.Visible = visible;
 						}
 					} finally {
-						ReleaseComObject (window);
+						ComObjectReleaseService.Release (window);
 					}
 				}
 			} finally {
-				ReleaseComObject (windows);
+				ComObjectReleaseService.Release (windows);
 			}
 			Workbook activeWorkbook = _application.ActiveWorkbook;
 			_logger.Info ("Accounting workbook windows visibility updated. workbook=" + (workbook.FullName ?? workbook.Name ?? string.Empty) + ", visible=" + visible + ", activeWorkbook=" + (activeWorkbook == null ? string.Empty : (activeWorkbook.FullName ?? activeWorkbook.Name ?? string.Empty)));
@@ -150,8 +150,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("シート「" + sheetName + "」のセル「" + address + "」への書き込みに失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -181,10 +181,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("数式範囲コピーに失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet2);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet2);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -204,10 +204,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("値範囲コピーに失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet2);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet2);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -225,9 +225,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("マージ領域クリアに失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -243,8 +243,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("セル色設定に失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -265,9 +265,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("フォームコントロール OnAction の解除に失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (shape);
-				ReleaseComObject (shapes);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (shape);
+				ComObjectReleaseService.Release (shapes);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -279,7 +279,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				worksheet.Unprotect (Type.Missing);
 				_logger.Debug ("AccountingWorkbookService", "UnprotectSheet sheet=" + sheetName);
 			} finally {
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -291,7 +291,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				worksheet.Protect (Type.Missing, Type.Missing, Type.Missing, Type.Missing, true, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				_logger.Debug ("AccountingWorkbookService", "ProtectSheetUiOnly sheet=" + sheetName);
 			} finally {
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -321,8 +321,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Debug ("AccountingWorkbookService", "EnsureNumberFormatLocal updated. sheet=" + sheetName + ", address=" + address);
 				return true;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -335,8 +335,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
 				return range.Value2;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -347,7 +347,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
 				range.Value2 = value;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.Release (range);
 			}
 		}
 
@@ -358,7 +358,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
 				range.Value2 = values;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.Release (range);
 			}
 		}
 
@@ -369,7 +369,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
 				return range.Value2;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.Release (range);
 			}
 		}
 
@@ -383,8 +383,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range.ClearContents ();
 				_logger.Debug ("AccountingWorkbookService", "ClearRangeContents sheet=" + sheetName + ", address=" + address);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -398,8 +398,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range.Value2 = value ?? string.Empty;
 				_logger.Debug ("AccountingWorkbookService", "WriteNamedRangeValue sheet=" + sheetName + ", rangeName=" + rangeName);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -414,8 +414,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -429,8 +429,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range.ClearContents ();
 				_logger.Debug ("AccountingWorkbookService", "ClearNamedRangeContents sheet=" + sheetName + ", rangeName=" + rangeName);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -446,9 +446,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range2.ClearContents ();
 				_logger.Debug ("AccountingWorkbookService", "ClearNamedRangeMergeAreaContents sheet=" + sheetName + ", rangeName=" + rangeName);
 			} finally {
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -466,10 +466,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				worksheet.PageSetup.PrintArea = range3.get_Address ((object)false, (object)false, XlReferenceStyle.xlA1, Type.Missing, Type.Missing);
 				_logger.Debug ("AccountingWorkbookService", "SetPrintAreaByBounds sheet=" + sheetName + ", lastRow=" + lastRow + ", lastColumn=" + lastColumn);
 			} finally {
-				ReleaseComObject (range3);
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range3);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -483,8 +483,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range.HorizontalAlignment = XlHAlign.xlHAlignCenter;
 				_logger.Debug ("AccountingWorkbookService", "SetHorizontalAlignmentCenter sheet=" + sheetName + ", address=" + address);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -500,9 +500,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range.Sort (range2, XlSortOrder.xlAscending, Type.Missing, Type.Missing, XlSortOrder.xlAscending, Type.Missing, XlSortOrder.xlAscending, XlYesNoGuess.xlNo, Type.Missing, Type.Missing);
 				_logger.Debug ("AccountingWorkbookService", "SortRangeAscending sheet=" + sheetName + ", range=" + sortRangeAddress + ", key=" + keyAddress);
 			} finally {
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -517,9 +517,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = worksheet.Cells [worksheet.Rows.Count, columnAddress] as Range;
 				return range?.get_End (XlDirection.xlUp).Row ?? 1;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (comObject);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (comObject);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -534,8 +534,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -563,9 +563,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range2 = worksheet.Application.Intersect (cell, range, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				return range2 != null;
 			} finally {
-				ReleaseComObject (range2);
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range2);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -581,8 +581,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("逆算に失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -595,8 +595,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = ((_Worksheet)worksheet).get_Range ((object)changingCellAddress, Type.Missing);
 				ExecuteGoalSeek (workbook, sheetName, formulaCellAddress, range, goalValue);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -623,8 +623,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
 				RoundDownCell (range, digits);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -658,8 +658,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("日付セルの読み取りに失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -674,8 +674,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -690,8 +690,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -725,11 +725,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 								}
 							}
 						} finally {
-							ReleaseComObject (range);
+							ComObjectReleaseService.Release (range);
 						}
 					}
 				} finally {
-					ReleaseComObject (worksheet);
+					ComObjectReleaseService.Release (worksheet);
 				}
 			}
 			if (list.Count > 4) {
@@ -761,8 +761,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					_logger.Warn ("Accounting invoice entry select skipped after activation. sheet=請求書, address=A3, message=" + ex.Message);
 				}
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -781,8 +781,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				range.Select ();
 				_logger.Debug ("AccountingWorkbookService", "ActivateCell sheet=" + sheetName + ", address=" + address);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -822,8 +822,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception innerException) {
 				throw new InvalidOperationException ("会計依頼書の黄色エリア表示に失敗しました。", innerException);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -912,14 +912,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				}
 				return ((_Worksheet)worksheet).get_Range ((object)rangeName, Type.Missing);
 			} finally {
-				ReleaseComObject (name2);
-				ReleaseComObject (name);
+				ComObjectReleaseService.Release (name2);
+				ComObjectReleaseService.Release (name);
 			}
-		}
-
-		private static void ReleaseComObject (object comObject)
-		{
-			ComObjectReleaseService.Release (comObject);
 		}
 
 		private static XlFileFormat ResolveSaveAsFileFormat (string savePath)

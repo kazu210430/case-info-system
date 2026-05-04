@@ -188,7 +188,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     }
                     finally
                     {
-                        ReleaseComObject(item);
+                        ComObjectReleaseService.Release(item);
                     }
                 }
 
@@ -210,7 +210,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     }
                     finally
                     {
-                        ReleaseComObject(property);
+                        ComObjectReleaseService.Release(property);
                     }
                 }
 
@@ -218,7 +218,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             finally
             {
-                ReleaseComObject(properties);
+                ComObjectReleaseService.Release(properties);
             }
         }
 
@@ -292,9 +292,5 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             TaskPaneSnapshotChunkStorageHelper.ClearSnapshot(_excelInteropService, workbook, countPropName, partPropPrefix);
         }
 
-        private static void ReleaseComObject(object comObject)
-        {
-            ComObjectReleaseService.Release(comObject);
-        }
     }
 }

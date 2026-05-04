@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -554,11 +554,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return num3;
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// テンプレート同期で所有した COM 参照は完全解放の方針を維持する。
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (comObject);
-		}
 
 		private AppState SaveAppState ()
 		{

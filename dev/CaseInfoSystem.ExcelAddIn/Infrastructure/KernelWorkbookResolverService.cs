@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
@@ -88,16 +87,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 							window.Visible = false;
 						}
 					} finally {
-						if (window != null && Marshal.IsComObject (window)) {
-							ComObjectReleaseService.Release (window);
-						}
+						ComObjectReleaseService.Release (window);
 					}
 				}
 			} catch {
 			} finally {
-				if (windows != null && Marshal.IsComObject (windows)) {
-					ComObjectReleaseService.Release (windows);
-				}
+				ComObjectReleaseService.Release (windows);
 			}
 		}
 	}

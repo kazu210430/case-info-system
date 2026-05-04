@@ -227,11 +227,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                ReleaseComObject(clearRange);
-                ReleaseComObject(targetRange);
-                ReleaseComObject(sourceRange);
-                ReleaseComObject(targetWorksheet);
-                ReleaseComObject(sourceWorksheet);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(clearRange);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(targetRange);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(sourceRange);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(targetWorksheet);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(sourceWorksheet);
             }
         }
 
@@ -315,15 +315,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                ReleaseComObject(firstCell);
-                ReleaseComObject(lastCell);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(firstCell);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(lastCell);
             }
         }
 
-        private static void ReleaseComObject(object comObject)
-        {
-            // Ribbon コマンドで所有した COM 参照は完全解放の方針を維持する。
-            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(comObject);
-        }
     }
 }

@@ -1009,10 +1009,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     }
                     finally
                     {
-                        if (window != null && Marshal.IsComObject(window))
-                        {
-                            ComObjectReleaseService.Release(window);
-                        }
+                        ComObjectReleaseService.Release(window);
                     }
                 }
             }
@@ -1022,10 +1019,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             finally
             {
-                if (windows != null && Marshal.IsComObject(windows))
-                {
-                    ComObjectReleaseService.Release(windows);
-                }
+                ComObjectReleaseService.Release(windows);
             }
         }
 

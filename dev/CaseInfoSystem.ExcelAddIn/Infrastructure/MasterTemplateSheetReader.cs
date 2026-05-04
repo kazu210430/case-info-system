@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -85,9 +85,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             finally
             {
-                ReleaseComObject(valuesRange);
-                ReleaseComObject(lastUsedCell);
-                ReleaseComObject(lastCell);
+                ComObjectReleaseService.FinalRelease(valuesRange);
+                ComObjectReleaseService.FinalRelease(lastUsedCell);
+                ComObjectReleaseService.FinalRelease(lastCell);
             }
         }
 
@@ -142,15 +142,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             finally
             {
-                ReleaseComObject(interior);
-                ReleaseComObject(cell);
+                ComObjectReleaseService.FinalRelease(interior);
+                ComObjectReleaseService.FinalRelease(cell);
             }
         }
 
-        private static void ReleaseComObject(object comObject)
-        {
-            // Master sheet 読み取りで所有した COM 参照は完全解放の方針を維持する。
-            ComObjectReleaseService.FinalRelease(comObject);
-        }
     }
 }

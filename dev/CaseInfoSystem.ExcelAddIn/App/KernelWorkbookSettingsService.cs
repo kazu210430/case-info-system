@@ -103,8 +103,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                ReleaseComObject(property);
-                ReleaseComObject(properties);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(property);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(properties);
             }
         }
 
@@ -126,13 +126,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                ReleaseComObject(properties);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(properties);
             }
         }
 
-        private static void ReleaseComObject(object comObject)
-        {
-            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(comObject);
-        }
     }
 }

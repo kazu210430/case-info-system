@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -89,8 +89,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (obj2);
-				ReleaseComObject (obj);
+				ComObjectReleaseService.FinalRelease (obj2);
+				ComObjectReleaseService.FinalRelease (obj);
 			}
 		}
 
@@ -112,7 +112,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					val.Add (propertyName, false, 4, value ?? string.Empty);
 				}
 			} finally {
-				ReleaseComObject (obj);
+				ComObjectReleaseService.FinalRelease (obj);
 			}
 		}
 
@@ -134,13 +134,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						string value = Convert.ToString ((dynamic)item.Value) ?? string.Empty;
 						list.Add (new KeyValuePair<string, string> (key, value));
 					} finally {
-						ReleaseComObject (item);
+						ComObjectReleaseService.FinalRelease (item);
 					}
 				}
 			} catch (Exception exception) {
 				_logger.Error ("GetCustomDocumentProperties failed.", exception);
 			} finally {
-				ReleaseComObject (obj);
+				ComObjectReleaseService.FinalRelease (obj);
 			}
 			return list;
 		}
@@ -231,7 +231,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Error ("ReadKeyValueMapFromColumnsAandB failed.", exception);
 				return dictionary;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -278,7 +278,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Error ("ReadRecordsFromHeaderRow failed.", exception);
 				return list;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -321,7 +321,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Error ("ReadFieldValuesFromDefinitions failed.", exception);
 				return dictionary;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -454,7 +454,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Error ("TryNormalizeCaseListRowHeight failed.", exception);
 				return false;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -510,7 +510,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				_logger.Error ("TryWriteFieldValue failed.", exception);
 				return false;
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -528,8 +528,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (name);
+				ComObjectReleaseService.FinalRelease (range);
+				ComObjectReleaseService.FinalRelease (name);
 			}
 		}
 
@@ -545,7 +545,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch {
 				return null;
 			} finally {
-				ReleaseComObject (name);
+				ComObjectReleaseService.FinalRelease (name);
 			}
 		}
 
@@ -581,10 +581,5 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			return int.TryParse (s, NumberStyles.Integer, CultureInfo.InvariantCulture, out rowIndex) && rowIndex > 0 && columnIndex > 0;
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// Interop service が所有した COM 参照は完全解放の方針を維持する。
-			ComObjectReleaseService.FinalRelease (comObject);
-		}
 	}
 }

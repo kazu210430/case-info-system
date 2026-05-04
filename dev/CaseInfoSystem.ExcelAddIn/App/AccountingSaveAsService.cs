@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -166,7 +166,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				return (value ?? string.Empty).Trim ();
 			} finally {
-				ReleaseComObject (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (worksheet);
 			}
 		}
 
@@ -223,11 +223,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return null;
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// 保存専用に保持した COM 参照は完全解放の方針を維持する。
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (comObject);
-		}
 
 		private string[] GetCaseWorkbookCandidatePaths (string accountingFolderPath)
 		{

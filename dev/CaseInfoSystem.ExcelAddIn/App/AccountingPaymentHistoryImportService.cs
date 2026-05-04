@@ -124,7 +124,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				int num2 = ReadRoundValue (paymentHistoryWorksheet, "A13", 1);
 				return (num2 == 1) ? (num - 12) : (num - 13);
 			} finally {
-				ReleaseComObject (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
 			}
 		}
 
@@ -161,8 +161,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				return range2;
 			} finally {
-				ReleaseComObject (range4);
-				ReleaseComObject (range3);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range4);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range3);
 			}
 		}
 
@@ -186,8 +186,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (range3);
-				ReleaseComObject (range2);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range3);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range2);
 			}
 		}
 
@@ -272,7 +272,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Error ("Accounting payment history import prompt location calculation failed.", exception);
 				return null;
 			} finally {
-				ReleaseComObject (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
 			}
 		}
 
@@ -333,16 +333,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				range2 = ((_Worksheet)requestWorksheet).get_Range ((object)"F15:F20", Type.Missing);
 				range3 = requestWorksheet.Application.Intersect (range, range2, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				if (range3 == null) {
-					ReleaseComObject (range);
+					CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
 					return null;
 				}
 				return range;
 			} catch {
-				ReleaseComObject (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
 				return null;
 			} finally {
-				ReleaseComObject (range3);
-				ReleaseComObject (range2);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range3);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range2);
 			}
 		}
 
@@ -354,7 +354,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				object value = worksheet.Application.WorksheetFunction.Sum (range, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				return Convert.ToDouble (value);
 			} finally {
-				ReleaseComObject (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
 			}
 		}
 
@@ -377,9 +377,5 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
-		}
 	}
 }

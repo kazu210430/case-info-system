@@ -240,7 +240,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Error ("Installment schedule save-as handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.SaveAsRequested", exception);
 				} finally {
-					ReleaseComObject (worksheet);
+					CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 				}
 			};
 			form.FormClosed += delegate {
@@ -392,7 +392,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Error ("Payment history save-as handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingPaymentHistory.SaveAsRequested", exception);
 				} finally {
-					ReleaseComObject (worksheet);
+					CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 				}
 			};
 			form.FormClosed += delegate {
@@ -468,8 +468,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Error ("Accounting form anchored location calculation failed. sheet=" + (sheetCodeName ?? string.Empty), exception);
 				return null;
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -493,13 +493,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						}
 					} finally {
 						if (!isMatch) {
-							ReleaseComObject (worksheet);
+							CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 						}
 					}
 				}
 				return null;
 			} finally {
-				ReleaseComObject (worksheets);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheets);
 			}
 		}
 
@@ -570,9 +570,5 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return string.Equals (activeSheetCodeName, "見積書", StringComparison.OrdinalIgnoreCase) || string.Equals (activeSheetCodeName, "請求書", StringComparison.OrdinalIgnoreCase) || string.Equals (activeSheetCodeName, "領収書", StringComparison.OrdinalIgnoreCase) || string.Equals (activeSheetCodeName, "会計依頼書", StringComparison.OrdinalIgnoreCase);
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
-		}
 	}
 }

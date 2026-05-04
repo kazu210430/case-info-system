@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -138,24 +138,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						}
 					} catch {
 					} finally {
-						ReleaseComObject (obj6);
-						ReleaseComObject (obj5);
-						ReleaseComObject (obj4);
-						ReleaseComObject (obj3);
+						ComObjectReleaseService.FinalRelease (obj6);
+						ComObjectReleaseService.FinalRelease (obj5);
+						ComObjectReleaseService.FinalRelease (obj4);
+						ComObjectReleaseService.FinalRelease (obj3);
 					}
 				}
 			} catch {
 			} finally {
-				ReleaseComObject (obj2);
-				ReleaseComObject (obj);
+				ComObjectReleaseService.FinalRelease (obj2);
+				ComObjectReleaseService.FinalRelease (obj);
 			}
 			return IntPtr.Zero;
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// Shell COM 参照はこの service 側で寿命を完結させるため完全解放を維持する。
-			ComObjectReleaseService.FinalRelease (comObject);
-		}
 	}
 }

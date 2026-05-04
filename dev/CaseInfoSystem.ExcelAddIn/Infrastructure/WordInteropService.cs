@@ -441,7 +441,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception exception) {
 				_logger.Error ("WordInteropService.CloseDocumentNoSave failed.", exception);
 			} finally {
-				ReleaseComObject (wordDocument);
+				ComObjectReleaseService.FinalRelease (wordDocument);
 				wordDocument = null;
 			}
 		}
@@ -483,7 +483,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				if (_cachedWordApplication == wordApplication) {
 					_cachedWordApplication = null;
 				}
-				ReleaseComObject (wordApplication);
+				ComObjectReleaseService.FinalRelease (wordApplication);
 				wordApplication = null;
 			}
 		}
@@ -613,12 +613,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception exception) {
 				return "Unknown(" + exception.GetType ().FullName + ", hresult=0x" + exception.HResult.ToString ("X8") + ")";
 			}
-		}
-
-		private static void ReleaseComObject (object comObject)
-		{
-			// Word.Application / Word.Document の所有参照は完全解放の方針を維持する。
-			ComObjectReleaseService.FinalRelease (comObject);
 		}
 
 		private static void TryRestoreWordWindow (dynamic wordApplication)

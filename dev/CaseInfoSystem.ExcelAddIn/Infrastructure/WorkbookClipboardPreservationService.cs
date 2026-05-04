@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -45,7 +45,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			} catch (Exception exception) {
 				_logger.Error ("Workbook clipboard preservation failed.", exception);
 			} finally {
-				ReleaseComObject (range);
+				ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -86,9 +86,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				}
 				return true;
 			} finally {
-				ReleaseComObject (obj);
-				ReleaseComObject (workbook2);
-				ReleaseComObject (worksheet);
+				ComObjectReleaseService.FinalRelease (obj);
+				ComObjectReleaseService.FinalRelease (workbook2);
+				ComObjectReleaseService.FinalRelease (worksheet);
 			}
 		}
 
@@ -170,10 +170,5 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			return string.IsNullOrWhiteSpace (text) ? (workbook.Name ?? string.Empty) : text;
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// クリップボード保全用に所有した COM 参照は完全解放の方針を維持する。
-			ComObjectReleaseService.FinalRelease (comObject);
-		}
 	}
 }

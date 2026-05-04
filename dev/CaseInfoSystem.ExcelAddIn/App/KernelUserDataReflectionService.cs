@@ -343,8 +343,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     // hidden application cleanup failure must not mask the original exception.
                 }
 
-                ReleaseComObject(workbook);
-                ReleaseComObject(hiddenApplication);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(workbook);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(hiddenApplication);
                 throw;
             }
         }
@@ -633,14 +633,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     }
 
                     _accountingWorkbookService.WriteCellValue(homeWorksheet, "B" + rowNumber.ToString(), pair.Value ?? string.Empty);
-                    ReleaseComObject(targetCell);
+                    CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(targetCell);
                     targetCell = null;
                 }
             }
             finally
             {
-                ReleaseComObject(targetCell);
-                ReleaseComObject(keyRange);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(targetCell);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(keyRange);
             }
         }
 
@@ -771,17 +771,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     }
                     finally
                     {
-                        ReleaseComObject(Workbook);
-                        ReleaseComObject(Application);
+                        CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(Workbook);
+                        CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(Application);
                     }
                 }
             }
         }
 
-        private static void ReleaseComObject(object comObject)
-        {
-            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(comObject);
-        }
     }
 }
 

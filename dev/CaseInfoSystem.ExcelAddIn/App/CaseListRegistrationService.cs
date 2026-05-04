@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -144,7 +144,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					try {
 						return listRow.Range.Row;
 					} finally {
-						ReleaseComObject (listRow);
+						CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (listRow);
 					}
 				}
 			} catch {
@@ -179,7 +179,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				return 0;
 			} finally {
-				ReleaseComObject (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -290,7 +290,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				return dictionary;
 			} finally {
-				ReleaseComObject (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (range);
 			}
 		}
 
@@ -409,10 +409,5 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return new string (array);
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// 登録処理で所有した COM 参照は完全解放の方針を維持する。
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (comObject);
-		}
 	}
 }

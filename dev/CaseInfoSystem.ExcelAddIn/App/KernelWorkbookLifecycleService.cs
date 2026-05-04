@@ -710,7 +710,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                ReleaseComObject(range);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(range);
             }
         }
 
@@ -734,12 +734,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return result;
-        }
-
-        private static void ReleaseComObject(object comObject)
-        {
-            // ライフサイクル管理で所有した COM 参照は完全解放の方針を維持する。
-            CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(comObject);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
@@ -124,7 +124,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("Accounting set kernel sync hidden Excel session quitting. appHwnd=" + SafeApplicationHwnd (application));
 					QuitApplicationQuietly (application);
 				}
-				ReleaseComObject (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (worksheet);
 			}
 		}
 
@@ -212,7 +212,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				workbook.Close (false, Type.Missing, Type.Missing);
 			} catch {
 			} finally {
-				ReleaseComObject (workbook);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (workbook);
 			}
 		}
 
@@ -225,15 +225,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				application.Quit ();
 			} catch {
 			} finally {
-				ReleaseComObject (application);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (application);
 			}
 		}
 
-		private static void ReleaseComObject (object comObject)
-		{
-			// 同期用に所有した非表示 Excel 参照は完全解放の方針を維持する。
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (comObject);
-		}
 
 		private static string SafeApplicationHwnd (Application application)
 		{

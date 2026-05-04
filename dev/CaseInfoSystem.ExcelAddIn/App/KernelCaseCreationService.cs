@@ -303,8 +303,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Error ("Kernel batch CASE workbook window normalization failed. path=" + ((plan == null) ? string.Empty : (plan.CaseWorkbookPath ?? string.Empty)), exception);
 				throw;
 			} finally {
-				ReleaseComObject (worksheet);
-				ReleaseComObject (window);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (window);
 			}
 		}
 
@@ -439,13 +439,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch {
 				return string.Empty;
 			} finally {
-				ReleaseComObject (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 			}
-		}
-
-		private static void ReleaseComObject (object comObject)
-		{
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
 		}
 
 	}

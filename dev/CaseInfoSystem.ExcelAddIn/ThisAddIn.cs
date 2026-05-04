@@ -148,7 +148,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 // Kernel HOME / sheet command
                 ShowKernelHomeFromKernelCommand,
                 ClearKernelSheetCommandCell,
-                ReleaseComObject,
+                ComObjectReleaseService.FinalRelease,
                 ShowKernelHomePlaceholderWithExternalWorkbookSuppression,
                 HandleExternalWorkbookDetected,
                 ShouldSuppressCasePaneRefresh,
@@ -393,12 +393,6 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 return string.Empty;
             }
-        }
-
-        private static void ReleaseComObject(object comObject)
-        {
-            // VSTO 境界で保持した参照は完全解放の方針を維持する。
-            ComObjectReleaseService.FinalRelease(comObject);
         }
 
         private static string SafeWindowHwnd(Excel.Window window)

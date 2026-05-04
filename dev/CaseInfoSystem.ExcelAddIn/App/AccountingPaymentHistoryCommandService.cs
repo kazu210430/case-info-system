@@ -439,7 +439,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 				return num;
 			} finally {
-				ReleaseComObject (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -502,8 +502,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				object value = worksheet.Application.WorksheetFunction.Sum (range, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
 				_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "I9", value);
 			} finally {
-				ReleaseComObject (range);
-				ReleaseComObject (worksheet);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 			}
 		}
 
@@ -554,11 +554,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch {
 				return string.Empty;
 			}
-		}
-
-		private static void ReleaseComObject (object comObject)
-		{
-			CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (comObject);
 		}
 
 		private double ReadRequiredDouble (Workbook workbook, string sheetName, string address, string itemName, string procedureName)

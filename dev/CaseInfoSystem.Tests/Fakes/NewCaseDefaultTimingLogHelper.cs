@@ -13,5 +13,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal static void LogDetail (CaseInfoSystem.ExcelAddIn.Infrastructure.Logger logger, string workbookPath, string segment, string phase, long elapsedMilliseconds, string details = "")
 		{
 		}
+
+		internal static void LogTaskPaneReadyWaitToRefreshCompleted (CaseInfoSystem.ExcelAddIn.Infrastructure.Logger logger, string workbookPath, string reason, bool refreshed, string completion)
+		{
+		}
 	}
 }

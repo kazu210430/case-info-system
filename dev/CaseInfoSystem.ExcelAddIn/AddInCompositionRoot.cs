@@ -619,6 +619,16 @@ namespace CaseInfoSystem.ExcelAddIn
                 _isTaskPaneRefreshSucceeded);
             var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts);
             var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
+            TaskPaneRefreshOrchestrationService taskPaneRefreshOrchestrationServicePlaceholder = null;
+            var workbookTaskPaneReadyShowAttemptWorker = new WorkbookTaskPaneReadyShowAttemptWorker(
+                excelInteropService,
+                _logger,
+                taskPaneDisplayRetryCoordinator,
+                workbookTaskPaneDisplayAttemptCoordinator,
+                workbookWindowVisibilityService,
+                (workbook, window) => _casePaneHostBridge.HasVisibleCasePaneForWorkbookWindow(workbook, window),
+                (reason, workbook, window) => taskPaneRefreshOrchestrationServicePlaceholder.TryRefreshTaskPane(reason, workbook, window),
+                (workbook, reason, activateWorkbook) => taskPaneRefreshOrchestrationServicePlaceholder.ResolveWorkbookPaneWindow(workbook, reason, activateWorkbook));
             var taskPaneBusinessActionLauncher = new TaskPaneBusinessActionLauncher(
                 documentCommandService,
                 documentNamePromptService);
@@ -655,13 +665,12 @@ namespace CaseInfoSystem.ExcelAddIn
                 excelInteropService,
                 workbookSessionService,
                 _logger,
-                taskPaneDisplayRetryCoordinator,
-                workbookTaskPaneDisplayAttemptCoordinator,
                 taskPaneRefreshCoordinator,
+                workbookTaskPaneReadyShowAttemptWorker,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount,
-                _casePaneHostBridge,
-                workbookWindowVisibilityService);
+                _casePaneHostBridge);
+            taskPaneRefreshOrchestrationServicePlaceholder = taskPaneRefreshOrchestrationService;
             return new AddInTaskPaneComposition(
                 workbookCaseTaskPaneRefreshCommandService,
                 taskPaneManager,

@@ -80,7 +80,9 @@
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
     <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
+    <Compile Include="TaskPaneDisplayRetryCoordinatorTests.cs" />
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
+    <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
@@ -140,7 +142,12 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WordTemplateRegistrationValidationService.cs" Link="Source\App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRetryCoordinator.cs" Link="Source\App\TaskPaneDisplayRetryCoordinator.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshAttemptResult.cs" Link="Source\App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookWindowVisibilityService.cs" Link="Source\App\WorkbookWindowVisibilityService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" Link="Source\App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneDisplayAttemptResult.cs" Link="Source\App\WorkbookTaskPaneDisplayAttemptResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneReadyShowAttemptWorker.cs" Link="Source\App\WorkbookTaskPaneReadyShowAttemptWorker.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookContextSeed.cs" Link="Source\App\WorkbookContextSeed.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookSessionService.cs" Link="Source\App\WorkbookSessionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />

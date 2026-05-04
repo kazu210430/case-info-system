@@ -274,6 +274,7 @@
     <Compile Include="App\WorkbookCaseTaskPaneRefreshCommandService.cs" />
     <Compile Include="App\WorkbookLifecycleCoordinator.cs" />
     <Compile Include="App\WindowActivatePaneHandlingService.cs" />
+    <Compile Include="App\WorkbookTaskPaneReadyShowAttemptWorker.cs" />
     <Compile Include="App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" />
     <Compile Include="App\WorkbookTaskPaneDisplayAttemptResult.cs" />
     <Compile Include="App\WorkbookContextSeed.cs" />

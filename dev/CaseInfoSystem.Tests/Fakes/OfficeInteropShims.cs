@@ -406,6 +406,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal Func<string, string, bool> ShowKernelSheetAndRefreshPaneHandler { get; set; }
 
+        internal Func<CaseInfoSystem.ExcelAddIn.Domain.WorkbookContext, string, string, bool> ShowKernelSheetAndRefreshPaneFromHomeHandler { get; set; }
+
         internal Action<Microsoft.Office.Interop.Excel.Workbook, string> ShowWorkbookTaskPaneWhenReadyHandler { get; set; }
 
         internal Microsoft.Office.Tools.CustomTaskPane CreateTaskPane(Microsoft.Office.Interop.Excel.Window window, UserControl control)
@@ -464,7 +466,9 @@ namespace CaseInfoSystem.ExcelAddIn
             out Microsoft.Office.Interop.Excel.Workbook displayedWorkbook)
         {
             displayedWorkbook = context == null ? null : context.Workbook;
-            return ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
+            return ShowKernelSheetAndRefreshPaneFromHomeHandler != null
+                ? ShowKernelSheetAndRefreshPaneFromHomeHandler(context, kernelTransitionSheetCodeName, kernelTransitionReason)
+                : ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
         }
 
         internal void ShowWorkbookTaskPaneWhenReady(Microsoft.Office.Interop.Excel.Workbook workbook, string reason)

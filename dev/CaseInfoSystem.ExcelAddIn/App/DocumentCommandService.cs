@@ -25,6 +25,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal interface IKernelSheetPaneRefreshBridge
     {
         bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason);
+
+        bool ShowKernelSheetAndRefreshPane(WorkbookContext context, string sheetCodeName, string reason);
     }
 
     internal sealed class ThisAddInScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge
@@ -84,6 +86,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         public bool ShowKernelSheetAndRefreshPane(string sheetCodeName, string reason)
         {
             return _addIn.ShowKernelSheetAndRefreshPane(sheetCodeName, reason);
+        }
+
+        public bool ShowKernelSheetAndRefreshPane(WorkbookContext context, string sheetCodeName, string reason)
+        {
+            Excel.Workbook displayedWorkbook;
+            return _addIn.ShowKernelSheetAndRefreshPaneFromHome(context, sheetCodeName, reason, out displayedWorkbook);
         }
     }
 
@@ -191,6 +199,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             CaseListRegistrationResult completedRegistrationResult = null;
+            WorkbookContext kernelSheetTransitionContext = null;
             bool shouldShowKernelCaseList = false;
             _screenUpdatingExecutionBridge.Execute(() =>
             {
@@ -225,6 +234,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     throw new InvalidOperationException(saveFailureMessageForKernel);
                 }
 
+                kernelSheetTransitionContext = CreateKernelSheetTransitionContext(context);
                 completedRegistrationResult = registrationResult;
                 shouldShowKernelCaseList = true;
             });
@@ -234,7 +244,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 string kernelTransitionSheetCodeName = "shCaseList";
                 string kernelTransitionReason = "DocumentCommandService.Execute";
-                bool paneRefreshed = _kernelSheetPaneRefreshBridge.ShowKernelSheetAndRefreshPane(kernelTransitionSheetCodeName, kernelTransitionReason);
+                bool paneRefreshed = _kernelSheetPaneRefreshBridge.ShowKernelSheetAndRefreshPane(
+                    kernelSheetTransitionContext,
+                    kernelTransitionSheetCodeName,
+                    kernelTransitionReason);
                 if (!paneRefreshed)
                 {
                     _logger.Info("Kernel case list pane refresh by unified add-in was not available.");
@@ -297,6 +310,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 failureMessage = "案件一覧登録後の保存に失敗しました。Excel 上で保存状態を確認してください。詳細: " + ex.Message;
                 return false;
             }
+        }
+
+        private WorkbookContext CreateKernelSheetTransitionContext(CaseContext context)
+        {
+            Excel.Workbook kernelWorkbook = context == null ? null : context.KernelWorkbook;
+            if (kernelWorkbook == null)
+            {
+                return null;
+            }
+
+            Excel.Worksheet caseListWorksheet = context.CaseListWorksheet;
+            return new WorkbookContext(
+                kernelWorkbook,
+                null,
+                WorkbookRole.Kernel,
+                context.SystemRoot,
+                _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(kernelWorkbook),
+                caseListWorksheet == null ? string.Empty : (caseListWorksheet.CodeName ?? string.Empty));
         }
 
         /// <summary>

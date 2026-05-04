@@ -33,7 +33,7 @@ namespace CaseInfoSystem.Tests
             };
 
             CompletionNoticeForm.OnShowNotice = (owner, title, message) => showNoticeCalls++;
-            addIn.ShowKernelSheetAndRefreshPaneHandler = (sheetCodeName, reason) =>
+            addIn.ShowKernelSheetAndRefreshPaneFromHomeHandler = (context, sheetCodeName, reason) =>
             {
                 showKernelSheetCalls++;
                 return true;
@@ -56,7 +56,8 @@ namespace CaseInfoSystem.Tests
                 {
                     OnCreateForCaseListRegistration = workbook => new CaseContext
                     {
-                        KernelWorkbook = kernelWorkbook
+                        KernelWorkbook = kernelWorkbook,
+                        SystemRoot = @"C:\root"
                     }
                 },
                 new ExcelInteropService
@@ -83,6 +84,7 @@ namespace CaseInfoSystem.Tests
             int showKernelSheetCalls = 0;
             int showNoticeCalls = 0;
             string shownMessage = string.Empty;
+            WorkbookContext shownContext = null;
             var kernelWorkbook = new Excel.Workbook
             {
                 FullName = @"C:\kernel.xlsx"
@@ -99,8 +101,9 @@ namespace CaseInfoSystem.Tests
                 showNoticeCalls++;
                 shownMessage = message;
             };
-            addIn.ShowKernelSheetAndRefreshPaneHandler = (sheetCodeName, reason) =>
+            addIn.ShowKernelSheetAndRefreshPaneFromHomeHandler = (context, sheetCodeName, reason) =>
             {
+                shownContext = context;
                 showKernelSheetCalls++;
                 return true;
             };
@@ -122,7 +125,12 @@ namespace CaseInfoSystem.Tests
                 {
                     OnCreateForCaseListRegistration = workbook => new CaseContext
                     {
-                        KernelWorkbook = kernelWorkbook
+                        KernelWorkbook = kernelWorkbook,
+                        CaseListWorksheet = new Excel.Worksheet
+                        {
+                            CodeName = "shCaseList"
+                        },
+                        SystemRoot = @"C:\root"
                     }
                 },
                 new ExcelInteropService
@@ -139,6 +147,12 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(1, showKernelSheetCalls);
             Assert.Equal(1, showNoticeCalls);
             Assert.Equal(registrationResult.Message, shownMessage);
+            Assert.NotNull(shownContext);
+            Assert.Same(kernelWorkbook, shownContext.Workbook);
+            Assert.Equal(WorkbookRole.Kernel, shownContext.Role);
+            Assert.Equal(@"C:\root", shownContext.SystemRoot);
+            Assert.Equal(kernelWorkbook.FullName, shownContext.WorkbookFullName);
+            Assert.Equal("shCaseList", shownContext.ActiveSheetCodeName);
         }
 
         private sealed class InlineScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge

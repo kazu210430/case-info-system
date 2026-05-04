@@ -657,6 +657,8 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
 
         internal Excel.Workbook KernelWorkbook { get; set; }
 
+        internal Excel.Worksheet CaseListWorksheet { get; set; }
+
         internal IReadOnlyDictionary<string, string> CaseValues { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         internal string CustomerName { get; set; } = string.Empty;

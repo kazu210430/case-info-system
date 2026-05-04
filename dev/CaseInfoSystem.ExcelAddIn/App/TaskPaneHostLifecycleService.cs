@@ -9,49 +9,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class TaskPaneHostLifecycleService
     {
-        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
-
         private readonly IDictionary<string, TaskPaneHost> _hostsByWindowKey;
         private readonly TaskPaneHostRegistry _taskPaneHostRegistry;
         private readonly ExcelInteropService _excelInteropService;
         private readonly Logger _logger;
-        private readonly Func<TaskPaneHost, string> _formatHostDescriptor;
 
         internal TaskPaneHostLifecycleService(
             IDictionary<string, TaskPaneHost> hostsByWindowKey,
             TaskPaneHostRegistry taskPaneHostRegistry,
             ExcelInteropService excelInteropService,
-            Logger logger,
-            Func<TaskPaneHost, string> formatHostDescriptor)
+            Logger logger)
         {
             _hostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
             _taskPaneHostRegistry = taskPaneHostRegistry ?? throw new ArgumentNullException(nameof(taskPaneHostRegistry));
             _excelInteropService = excelInteropService;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _formatHostDescriptor = formatHostDescriptor ?? throw new ArgumentNullException(nameof(formatHostDescriptor));
         }
 
-        internal TaskPaneHost ResolveRefreshHost(WorkbookContext context, string windowKey, int refreshPaneCallId)
+        internal TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
         {
-            if (context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
-
-            RemoveStaleKernelHosts(context, windowKey);
-            TaskPaneHost host = _taskPaneHostRegistry.GetOrReplaceHost(windowKey, context.Window, context.Role);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneManager action=host-selected refreshPaneCallId="
-                + refreshPaneCallId.ToString()
-                + ", host="
-                + _formatHostDescriptor(host));
-            return host;
+            return _taskPaneHostRegistry.GetOrReplaceHost(windowKey, window, role);
         }
 
         internal void RegisterHost(TaskPaneHost host)
         {
             _taskPaneHostRegistry.RegisterHost(host);
+        }
+
+        internal void RemoveStaleKernelHostsForRefresh(WorkbookContext context, string activeWindowKey)
+        {
+            RemoveStaleKernelHosts(context, activeWindowKey);
         }
 
         internal void RemoveWorkbookPanes(Excel.Workbook workbook)

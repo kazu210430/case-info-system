@@ -56,7 +56,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            TaskPaneHost host = _taskPaneHostLifecycleService.ResolveRefreshHost(context, windowKey, refreshPaneCallId);
+            _taskPaneHostLifecycleService.RemoveStaleKernelHostsForRefresh(context, windowKey);
+            TaskPaneHost host = _taskPaneHostLifecycleService.GetOrReplaceHost(windowKey, context.Window, role);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=host-selected refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", host="
+                + _formatHostDescriptor(host));
             if (TryReuseCaseHostForRefresh(host, context, reason, windowKey, refreshPaneCallId))
             {
                 return true;

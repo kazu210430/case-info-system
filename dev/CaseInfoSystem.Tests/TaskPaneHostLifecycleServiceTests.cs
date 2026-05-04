@@ -21,8 +21,7 @@ namespace CaseInfoSystem.Tests
                 hostsByWindowKey,
                 registry,
                 new ExcelInteropService(),
-                OrchestrationTestSupport.CreateLogger(new List<string>()),
-                host => host == null ? string.Empty : host.WindowKey);
+                OrchestrationTestSupport.CreateLogger(new List<string>()));
 
             TaskPaneHost activeHost = OrchestrationTestSupport.CreateTaskPaneHost(new KernelNavigationControl(), "101");
             activeHost.WorkbookFullName = @"C:\kernel\kernel.xlsx";
@@ -44,7 +43,8 @@ namespace CaseInfoSystem.Tests
                 @"C:\kernel\kernel.xlsx",
                 "shHOME");
 
-            TaskPaneHost resolvedHost = service.ResolveRefreshHost(context, "101", refreshPaneCallId: 1);
+            service.RemoveStaleKernelHostsForRefresh(context, "101");
+            TaskPaneHost resolvedHost = service.GetOrReplaceHost("101", context.Window, context.Role);
 
             Assert.Same(activeHost, resolvedHost);
             Assert.True(hostsByWindowKey.ContainsKey("101"));
@@ -61,8 +61,7 @@ namespace CaseInfoSystem.Tests
                 hostsByWindowKey,
                 registry,
                 new ExcelInteropService(),
-                OrchestrationTestSupport.CreateLogger(new List<string>()),
-                host => host == null ? string.Empty : host.WindowKey);
+                OrchestrationTestSupport.CreateLogger(new List<string>()));
 
             TaskPaneHost caseHost = OrchestrationTestSupport.CreateTaskPaneHost(new DocumentButtonsControl(), "101");
             caseHost.WorkbookFullName = @"C:\cases\target.xlsx";

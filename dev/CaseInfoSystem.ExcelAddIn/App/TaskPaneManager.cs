@@ -137,8 +137,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _hostsByWindowKey,
                 _taskPaneHostRegistry,
                 _excelInteropService,
-                _logger,
-                FormatHostDescriptor);
+                _logger);
             _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 _hostsByWindowKey,
                 _kernelCaseInteractionState,
@@ -239,8 +238,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _hostsByWindowKey,
                 _taskPaneHostRegistry,
                 _excelInteropService,
-                _logger,
-                FormatHostDescriptor);
+                _logger);
             _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 _hostsByWindowKey,
                 _kernelCaseInteractionState,
@@ -294,7 +292,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _taskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(_excelInteropService, workbook, window);
         }
 
-        // Host lifecycle 責務: windowKey 単位の host 集合を保持し、hide/dispose/create/remove を担う。
+        // Display 制御 facade: 表示前調停と hide/show は display coordinator に委譲する。
         internal void HideAll()
         {
             _taskPaneDisplayCoordinator.HideAll();
@@ -321,6 +319,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
         }
 
+        // Host lifecycle facade: workbook / host 単位の register/remove/dispose は lifecycle service に委譲する。
         /// <summary>
         /// メソッド: 指定 workbook に紐づく pane だけを非表示にして破棄する。
         /// 引数: workbook - 対象 workbook。

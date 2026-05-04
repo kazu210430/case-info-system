@@ -84,9 +84,41 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 ### `TaskPaneManager`
 
-- host 管理、role 別 render 切替、render/show orchestration を担う
-- `TaskPaneHostRegistry` を内包し、VSTO `TaskPaneHost` の生成・差し替え・破棄境界を保持する
-- `TaskPaneRefreshFlowCoordinator`、`TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` で lightweight helper / policy split 済みである
+- TaskPane 側の facade / composition root である
+- `TaskPaneHostRegistry`、`TaskPaneDisplayCoordinator`、`TaskPaneHostLifecycleService`、`TaskPaneHostFlowService`、`TaskPaneActionDispatcher` などを組み立てる
+- role 別 render 切替、CASE pane action wiring、周辺 service への委譲入口を担う
+- `RefreshPane(...)` 本線は `TaskPaneHostFlowService` に委譲し、自身は retry / ready-show / protection / window resolve を持たない
+- lightweight helper / policy として `TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` を使う
+
+やってはいけないこと:
+
+- ready-show / retry / pending timer / protection を保持しない
+- `WorkbookContext` 生成や workbook/window resolve を持たない
+- Excel event の購読や `WorkbookOpen` / `WindowActivate` 入口判定を持たない
+
+### `TaskPaneHostFlowService`
+
+- refresh-time の host flow を担当する
+- 対象は precondition による hide-all / skip、stale kernel host cleanup の実行順、host selection、CASE host reuse、render 要否判定、show 前調停、最終 show である
+- `TaskPaneHostLifecycleService` には lifecycle primitive を要求し、`TaskPaneDisplayCoordinator` には表示調停だけを要求する
+
+やってはいけないこと:
+
+- host 集合の長期保持、register / dispose all、workbook 単位 cleanup の主責務を持たない
+- ready-show / pending retry / protection / workbook window resolve を持たない
+- `WorkbookContext` 生成や Excel event handling を持たない
+
+### `TaskPaneHostLifecycleService`
+
+- registry-backed な host lifecycle primitive を担当する
+- `TaskPaneHostRegistry` を通した get-or-replace / register / remove / dispose / workbook 単位 cleanup を担う
+- refresh-time stale cleanup は flow service から要求されたときだけ実行する
+
+やってはいけないこと:
+
+- render / show / show 前調停 / reuse 判定を持たない
+- ready-show / retry / protection / workbook window resolve を持たない
+- Excel event 入口や `WorkbookContext` 生成を持たない
 
 ### `TaskPaneActionDispatcher`
 
@@ -99,12 +131,19 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - `doc` 実行前の `DocumentNamePromptService.TryPrepare(...)` 順序を固定する
 - prompt 準備後に `DocumentCommandService` を呼び出す
 
-### `TaskPaneRefreshOrchestrationService` / `WindowActivatePaneHandlingService`
+### `TaskPaneRefreshOrchestrationService`
 
-- TaskPane 再描画要求、遅延表示、Window 単位の表示調停を担う
-- `TaskPaneRefreshOrchestrationService` は `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` を使う順序調停寄りの構造になっている
+- Excel event / explicit request / ready-show から入る refresh orchestration の入口である
+- `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryService`、`WorkbookPaneWindowResolver` を使い、precondition、dispatch、pending retry、window resolve、ready-show retry timer を調停する
+- `TaskPaneRefreshCoordinator` へ dispatch し、host selection / render / show 自体は行わない
 - retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` を参照する
-- host 再利用と再表示の方針を維持する
+- `WindowActivatePaneHandlingService` は `WindowActivate` をこの orchestration へ接続する sibling entry service であり、host flow / host lifecycle ではない
+
+やってはいけないこと:
+
+- `TaskPaneHostRegistry` / `TaskPaneHostLifecycleService` / `TaskPaneHost` へ直接触れない
+- role 別 render や show/hide を持たない
+- `WorkbookContext` の最終採用判断より後の host UI 制御を持たない
 
 ### `TaskPaneRefreshPreconditionPolicy`
 
@@ -122,6 +161,25 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - CASE cache 優先で `key -> DocumentName / TemplateFileName` を解決する
 - CASE cache miss 時だけ master catalog に fallback する
 - `WORD_TEMPLATE_DIR` または `SYSTEM_ROOT\雛形` から `TemplatePath` を導出する
+
+## 呼び出し関係
+
+- Excel event handling
+  - `ThisAddIn` / `WorkbookLifecycleCoordinator` / `WindowActivatePaneHandlingService` が入口を持ち、TaskPane 更新要求は `TaskPaneRefreshOrchestrationService` に渡す
+- Workbook 文脈
+  - `TaskPaneRefreshCoordinator` が `WorkbookSessionService` と `ResolveWorkbookPaneWindow(...)` を使って `WorkbookContext` を確定し、その後で `TaskPaneManager.RefreshPane(...)` に渡す
+- Host flow
+  - `TaskPaneManager.RefreshPane(...)` は `TaskPaneHostFlowService` に委譲し、同 service が `TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、role 別 render を順に調停する
+- Control event handling
+  - `TaskPaneHostRegistry` / `TaskPaneManager` が host と control の wiring を持ち、CASE pane UIイベントは `TaskPaneActionDispatcher`、非 CASE action は `TaskPaneNonCaseActionHandler` へ渡す
+
+## 禁止境界
+
+- `TaskPaneManager` に ready-show / retry / protection / workbook window resolve を戻さない
+- `TaskPaneHostFlowService` に pending retry / ready-show / `WorkbookContext` 生成を持たせない
+- `TaskPaneHostLifecycleService` に render / show / reuse 判定を戻さない
+- `TaskPaneRefreshOrchestrationService` から `TaskPaneHostRegistry` / `TaskPaneHostLifecycleService` を直接触らせない
+- `WorkbookOpen` を window 安定通知とみなす前提を、host flow / lifecycle 側へ持ち込まない
 
 ## フロー固定
 

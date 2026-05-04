@@ -190,6 +190,91 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void Execute_WhenTemplateIsNotOpen_UsesIsolatedLifecycleAndQuietsApplication()
+        {
+            string tempDirectory = CreateTempDirectory();
+            try
+            {
+                string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
+                File.WriteAllText(templatePath, "template");
+                Excel.Workbook kernelWorkbook = CreateWorkbook(Path.Combine(tempDirectory, "kernel.xlsx"));
+                kernelWorkbook.Worksheets.Add(CreateUserDataWorksheet());
+                Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
+                Excel.Application isolatedApplication = CreateIsolatedApplication(accountingWorkbook);
+                isolatedApplication.Visible = true;
+                isolatedApplication.DisplayAlerts = true;
+                isolatedApplication.ScreenUpdating = true;
+                isolatedApplication.EnableEvents = true;
+
+                var service = new AccountingSetKernelSyncService(
+                    new ExcelInteropService(),
+                    new AccountingTemplateResolver
+                    {
+                        OnResolveTemplatePath = _ => templatePath
+                    },
+                    new AccountingWorkbookService(),
+                    new PathCompatibilityService(),
+                    OrchestrationTestSupport.CreateLogger(new List<string>()),
+                    () => isolatedApplication);
+
+                service.Execute(kernelWorkbook);
+
+                Assert.False(isolatedApplication.Visible);
+                Assert.False(isolatedApplication.DisplayAlerts);
+                Assert.False(isolatedApplication.ScreenUpdating);
+                Assert.False(isolatedApplication.EnableEvents);
+                Assert.Equal(1, accountingWorkbook.SaveCallCount);
+                Assert.Equal(1, accountingWorkbook.CloseCallCount);
+                Assert.Equal(1, isolatedApplication.QuitCallCount);
+            }
+            finally
+            {
+                TryDeleteDirectory(tempDirectory);
+            }
+        }
+
+        [Fact]
+        public void Execute_WhenIsolatedWorkbookWriteFails_StillClosesWorkbookAndQuitsApplication()
+        {
+            string tempDirectory = CreateTempDirectory();
+            try
+            {
+                string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
+                File.WriteAllText(templatePath, "template");
+                Excel.Workbook kernelWorkbook = CreateWorkbook(Path.Combine(tempDirectory, "kernel.xlsx"));
+                kernelWorkbook.Worksheets.Add(CreateUserDataWorksheet());
+                Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
+                Excel.Application isolatedApplication = CreateIsolatedApplication(accountingWorkbook);
+                InvalidOperationException expected = new InvalidOperationException("write failed");
+
+                var service = new AccountingSetKernelSyncService(
+                    new ExcelInteropService(),
+                    new AccountingTemplateResolver
+                    {
+                        OnResolveTemplatePath = _ => templatePath
+                    },
+                    new AccountingWorkbookService
+                    {
+                        OnWriteCell = (_, __, ___, ____) => throw expected
+                    },
+                    new PathCompatibilityService(),
+                    OrchestrationTestSupport.CreateLogger(new List<string>()),
+                    () => isolatedApplication);
+
+                InvalidOperationException actual = Assert.Throws<InvalidOperationException>(() => service.Execute(kernelWorkbook));
+
+                Assert.Same(expected, actual);
+                Assert.Equal(0, accountingWorkbook.SaveCallCount);
+                Assert.Equal(1, accountingWorkbook.CloseCallCount);
+                Assert.Equal(1, isolatedApplication.QuitCallCount);
+            }
+            finally
+            {
+                TryDeleteDirectory(tempDirectory);
+            }
+        }
+
+        [Fact]
         public void Execute_WhenUserDataWorksheetIsMissing_ThrowsInvalidOperationException()
         {
             var service = new AccountingSetKernelSyncService(
@@ -229,6 +314,13 @@ namespace CaseInfoSystem.Tests
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow1Offset, "B", 123);
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow2Offset, "B", "001");
             return worksheet;
+        }
+
+        private static Excel.Application CreateIsolatedApplication(Excel.Workbook workbook)
+        {
+            var application = new Excel.Application();
+            application.Workbooks.OpenBehavior = (_, __, ___) => workbook;
+            return application;
         }
 
         private static string CreateTempDirectory()

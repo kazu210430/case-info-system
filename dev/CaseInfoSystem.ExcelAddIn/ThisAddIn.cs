@@ -806,13 +806,15 @@ namespace CaseInfoSystem.ExcelAddIn
         public void ReflectKernelUserDataToAccountingSet()
         {
             _logger?.Info("Kernel user data reflection requested from COM automation. target=AccountingSet");
-            _kernelUserDataReflectionService?.ReflectToAccountingSetOnly();
+            WorkbookContext context = ResolveKernelReflectionContextForAutomation();
+            _kernelUserDataReflectionService?.ReflectToAccountingSetOnly(context);
         }
 
         public void ReflectKernelUserDataToBaseHome()
         {
             _logger?.Info("Kernel user data reflection requested from COM automation. target=BaseHome");
-            _kernelUserDataReflectionService?.ReflectToBaseHomeOnly();
+            WorkbookContext context = ResolveKernelReflectionContextForAutomation();
+            _kernelUserDataReflectionService?.ReflectToBaseHomeOnly(context);
         }
 
         // Ribbon / COM 公開入口
@@ -961,6 +963,36 @@ namespace CaseInfoSystem.ExcelAddIn
 
             var openWorkbooks = _excelInteropService.GetOpenWorkbooks();
             return openWorkbooks.Count == 1 ? openWorkbooks[0] : null;
+        }
+
+        private WorkbookContext ResolveKernelReflectionContextForAutomation()
+        {
+            Excel.Workbook workbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
+            string systemRoot = _excelInteropService == null || workbook == null
+                ? string.Empty
+                : _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT");
+
+            if (workbook == null && _kernelWorkbookService != null)
+            {
+                string boundSystemRoot;
+                if (_kernelWorkbookService.TryGetValidHomeWorkbookBinding(out workbook, out boundSystemRoot))
+                {
+                    systemRoot = boundSystemRoot;
+                }
+            }
+
+            if (workbook == null || _excelInteropService == null || _workbookRoleResolver == null)
+            {
+                throw new InvalidOperationException("Kernel workbook context was not available for user-data reflection.");
+            }
+
+            return new WorkbookContext(
+                workbook,
+                _excelInteropService.GetActiveWindow(),
+                _workbookRoleResolver.Resolve(workbook),
+                systemRoot,
+                _excelInteropService.GetWorkbookFullName(workbook),
+                _excelInteropService.GetActiveSheetCodeName(workbook));
         }
 
         private void HideKernelHomePlaceholder()

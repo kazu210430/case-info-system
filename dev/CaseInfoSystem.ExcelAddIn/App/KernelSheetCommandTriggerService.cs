@@ -1,4 +1,5 @@
 using System;
+using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -75,7 +76,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 _logger?.Info("Kernel sheet command detected. command=" + commandText + ", workbook=" + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook)));
                 _clearKernelSheetCommandCell(commandCell);
-                _kernelCommandService.ExecuteSheetCommand(commandText);
+                _kernelCommandService.ExecuteSheetCommand(BuildWorkbookContext(workbook, worksheet), commandText);
             }
             catch (Exception ex)
             {
@@ -86,6 +87,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _releaseComObject(intersection);
                 _releaseComObject(commandCell);
             }
+        }
+
+        private WorkbookContext BuildWorkbookContext(Excel.Workbook workbook, Excel.Worksheet worksheet)
+        {
+            return new WorkbookContext(
+                workbook,
+                _application == null ? null : _application.ActiveWindow,
+                WorkbookRole.Kernel,
+                _excelInteropService == null ? string.Empty : _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
+                _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook),
+                worksheet == null ? string.Empty : worksheet.CodeName ?? string.Empty);
         }
     }
 }

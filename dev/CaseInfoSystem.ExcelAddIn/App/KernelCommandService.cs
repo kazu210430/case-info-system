@@ -52,7 +52,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					ExecuteSheetNavigation (context, "shCaseList", "案件一覧");
 					break;
 				case "register-user-info":
-					ExecuteRegisterUserInfo ();
+					ExecuteRegisterUserInfo (context);
 					break;
 				case "reflect-template":
 					ExecuteReflectTemplate (context);
@@ -66,6 +66,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		internal void ExecuteSheetCommand (string commandId)
 		{
+			ExecuteSheetCommand (null, commandId);
+		}
+
+		internal void ExecuteSheetCommand (WorkbookContext context, string commandId)
+		{
 			if (!string.IsNullOrWhiteSpace (commandId)) {
 				_logger.Info ("Kernel sheet command requested. commandId=" + commandId);
 				switch (commandId.Trim ()) {
@@ -74,10 +79,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_showKernelHomeAction ();
 					break;
 				case "reflect-accounting-set":
-					ExecuteReflectAccountingSetOnly ();
+					ExecuteReflectAccountingSetOnly (context);
 					break;
 				case "reflect-base-home":
-					ExecuteReflectBaseHomeOnly ();
+					ExecuteReflectBaseHomeOnly (context);
 					break;
 				default:
 					_logger.Warn ("Kernel sheet command ignored. commandId=" + commandId);
@@ -94,10 +99,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void ExecuteRegisterUserInfo ()
+		private void ExecuteRegisterUserInfo (WorkbookContext context)
 		{
 			try {
-				_kernelUserDataReflectionService.ReflectAll ();
+				_kernelUserDataReflectionService.ReflectAll (context);
 				MessageBox.Show ("ユーザー情報を反映しました", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteRegisterUserInfo failed.", exception);
@@ -116,20 +121,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void ExecuteReflectAccountingSetOnly ()
+		private void ExecuteReflectAccountingSetOnly (WorkbookContext context)
 		{
 			try {
-				_kernelUserDataReflectionService.ReflectToAccountingSetOnly ();
+				_kernelUserDataReflectionService.ReflectToAccountingSetOnly (context);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectAccountingSetOnly failed.", exception);
 				MessageBox.Show ("会計書類セットへの転記でエラーが発生しました。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 			}
 		}
 
-		private void ExecuteReflectBaseHomeOnly ()
+		private void ExecuteReflectBaseHomeOnly (WorkbookContext context)
 		{
 			try {
-				_kernelUserDataReflectionService.ReflectToBaseHomeOnly ();
+				_kernelUserDataReflectionService.ReflectToBaseHomeOnly (context);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectBaseHomeOnly failed.", exception);
 				MessageBox.Show ("Baseホームへの転記でエラーが発生しました。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);

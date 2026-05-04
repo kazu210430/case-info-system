@@ -54,40 +54,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// メソッド: ユーザー情報を会計セットと Base HOME の両方へ反映する。
         /// 副作用: 必要に応じて対象ブックを開き、セル値と DocProp を更新する。
         /// </summary>
-        internal void ReflectAll()
+        internal void ReflectAll(WorkbookContext context)
         {
             ExecuteReflection(
-                (kernelWorkbook, userDataWorksheet, snapshot) =>
+                context,
+                (kernelWorkbook, systemRoot, userDataWorksheet, snapshot) =>
                 {
                     ReflectToAccountingSet(kernelWorkbook, snapshot);
-                    ReflectToBaseHome(kernelWorkbook, userDataWorksheet, snapshot);
+                    ReflectToBaseHome(systemRoot, kernelWorkbook, userDataWorksheet, snapshot);
                     _logger.Info("Kernel user data reflected to accounting set and base home.");
                 });
         }
 
-        internal void ReflectToAccountingSetOnly()
+        internal void ReflectToAccountingSetOnly(WorkbookContext context)
         {
             ExecuteReflection(
-                (kernelWorkbook, userDataWorksheet, snapshot) =>
+                context,
+                (kernelWorkbook, systemRoot, userDataWorksheet, snapshot) =>
                 {
                     ReflectToAccountingSet(kernelWorkbook, snapshot);
                     _logger.Info("Kernel user data reflected to accounting set.");
                 });
         }
 
-        internal void ReflectToBaseHomeOnly()
+        internal void ReflectToBaseHomeOnly(WorkbookContext context)
         {
             ExecuteReflection(
-                (kernelWorkbook, userDataWorksheet, snapshot) =>
+                context,
+                (kernelWorkbook, systemRoot, userDataWorksheet, snapshot) =>
                 {
-                    ReflectToBaseHome(kernelWorkbook, userDataWorksheet, snapshot);
+                    ReflectToBaseHome(systemRoot, kernelWorkbook, userDataWorksheet, snapshot);
                     _logger.Info("Kernel user data reflected to base home.");
                 });
         }
 
-        private void ReflectToBaseHome(Excel.Workbook kernelWorkbook, Excel.Worksheet userDataWorksheet, UserDataSnapshot snapshot)
+        private void ReflectToBaseHome(string systemRoot, Excel.Workbook kernelWorkbook, Excel.Worksheet userDataWorksheet, UserDataSnapshot snapshot)
         {
-            string systemRoot = ResolveSystemRoot(kernelWorkbook);
             string baseWorkbookPath = WorkbookFileNameResolver.ResolveExistingBaseWorkbookPath(systemRoot, _pathCompatibilityService);
             if (!_pathCompatibilityService.FileExistsSafe(baseWorkbookPath))
             {
@@ -153,18 +155,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private void ExecuteReflection(Action<Excel.Workbook, Excel.Worksheet, UserDataSnapshot> action)
+        private void ExecuteReflection(WorkbookContext context, Action<Excel.Workbook, string, Excel.Worksheet, UserDataSnapshot> action)
         {
             if (action == null)
             {
                 throw new ArgumentNullException(nameof(action));
             }
 
-            Excel.Workbook kernelWorkbook = _kernelWorkbookService.GetOpenKernelWorkbook();
-            if (kernelWorkbook == null)
-            {
-                throw new InvalidOperationException("Kernel workbook is not open.");
-            }
+            Excel.Workbook kernelWorkbook = ResolveReflectionKernelWorkbook(context);
+            string systemRoot = ResolveReflectionSystemRoot(context, kernelWorkbook);
 
             Excel.Application application = kernelWorkbook.Application;
             ExcelApplicationUiState uiState = ExcelApplicationUiState.Capture(application);
@@ -175,12 +174,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 Excel.Worksheet userDataWorksheet = GetKernelUserDataWorksheet(kernelWorkbook);
                 UserDataSnapshot snapshot = ReadUserDataSnapshot(userDataWorksheet, _excelInteropService);
-                action(kernelWorkbook, userDataWorksheet, snapshot);
+                action(kernelWorkbook, systemRoot, userDataWorksheet, snapshot);
             }
             finally
             {
                 uiState.Restore(application);
             }
+        }
+
+        private Excel.Workbook ResolveReflectionKernelWorkbook(WorkbookContext context)
+        {
+            if (context == null)
+            {
+                throw new InvalidOperationException("WorkbookContext is required for user-data reflection.");
+            }
+
+            Excel.Workbook kernelWorkbook = context.Workbook;
+            if (kernelWorkbook == null)
+            {
+                throw new InvalidOperationException("Kernel workbook context was not available for user-data reflection.");
+            }
+
+            if (!_kernelWorkbookService.IsKernelWorkbook(kernelWorkbook))
+            {
+                throw new InvalidOperationException("Reflection target workbook must be a Kernel workbook.");
+            }
+
+            return kernelWorkbook;
         }
         private Excel.Worksheet GetKernelUserDataWorksheet(Excel.Workbook kernelWorkbook)
         {
@@ -260,21 +280,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new UserDataSnapshot(values);
         }
 
-        private string ResolveSystemRoot(Excel.Workbook kernelWorkbook)
+        private string ResolveReflectionSystemRoot(WorkbookContext context, Excel.Workbook kernelWorkbook)
         {
-            string systemRoot = _pathCompatibilityService.NormalizePath(_excelInteropService.TryGetDocumentProperty(kernelWorkbook, "SYSTEM_ROOT"));
-            if (!string.IsNullOrWhiteSpace(systemRoot))
+            string expectedSystemRoot = _pathCompatibilityService.NormalizePath(context == null ? string.Empty : context.SystemRoot);
+            if (string.IsNullOrWhiteSpace(expectedSystemRoot))
             {
-                return systemRoot;
+                throw new InvalidOperationException("SYSTEM_ROOT context was not available for user-data reflection.");
             }
 
-            systemRoot = _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookPath(kernelWorkbook));
-            if (string.IsNullOrWhiteSpace(systemRoot))
+            string workbookSystemRoot = _pathCompatibilityService.NormalizePath(_excelInteropService.TryGetDocumentProperty(kernelWorkbook, "SYSTEM_ROOT"));
+            if (string.IsNullOrWhiteSpace(workbookSystemRoot)
+                || !string.Equals(workbookSystemRoot, expectedSystemRoot, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("SYSTEM_ROOT could not be resolved.");
+                throw new InvalidOperationException("Kernel workbook SYSTEM_ROOT mismatched for user-data reflection.");
             }
 
-            return systemRoot;
+            return expectedSystemRoot;
         }
 
         private HiddenWorkbookSession OpenWorkbookHiddenInIsolatedApplication(string workbookPath)

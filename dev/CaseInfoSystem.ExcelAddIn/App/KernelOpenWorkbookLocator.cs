@@ -59,6 +59,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return null;
         }
 
+        internal bool HasAnyOpenKernelWorkbook()
+        {
+            return GetOpenKernelWorkbook() != null;
+        }
+
         internal Excel.Workbook ResolveKernelWorkbook(WorkbookContext context)
         {
             if (context == null)

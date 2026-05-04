@@ -66,6 +66,23 @@ namespace CaseInfoSystem.Tests
             Assert.True(context.HasVisibleNonKernelWorkbook);
         }
 
+        [Fact]
+        public void InspectForStartupDescription_ReportsNoOpenKernelWorkbook_WhenKernelIsAbsent()
+        {
+            var application = new Excel.Application();
+            Excel.Workbook activeWorkbook = AddWorkbook(application, "ExistingCase.xlsx");
+            application.ActiveWorkbook = activeWorkbook;
+            KernelStartupContextInspector inspector = CreateInspector(application);
+
+            KernelStartupContext context = inspector.InspectForStartupDescription();
+
+            Assert.Equal(activeWorkbook.Name, context.DescribeActiveWorkbookName);
+            Assert.False(context.DescribeActiveWorkbookIsKernel);
+            Assert.False(context.DescribeActiveWorkbookReadFailed);
+            Assert.False(context.HasOpenKernelWorkbook);
+            Assert.True(context.HasVisibleNonKernelWorkbook);
+        }
+
         private static KernelStartupContextInspector CreateInspector(Excel.Application application)
         {
             var loggerMessages = new List<string>();

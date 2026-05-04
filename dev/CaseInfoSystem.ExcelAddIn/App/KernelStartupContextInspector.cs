@@ -59,7 +59,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 try
                 {
-                    context.HasOpenKernelWorkbook = _kernelOpenWorkbookLocator.GetOpenKernelWorkbook() != null;
+                    context.HasOpenKernelWorkbook = _kernelOpenWorkbookLocator.HasAnyOpenKernelWorkbook();
                 }
                 catch
                 {
@@ -97,7 +97,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                context.HasOpenKernelWorkbook = _kernelOpenWorkbookLocator.GetOpenKernelWorkbook() != null;
+                context.HasOpenKernelWorkbook = _kernelOpenWorkbookLocator.HasAnyOpenKernelWorkbook();
                 context.HasVisibleNonKernelWorkbook = HasVisibleNonKernelWorkbook();
             }
             catch

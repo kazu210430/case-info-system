@@ -688,57 +688,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             EnsureWorkbookVisible(workbook);
         }
 
-        private Excel.Workbook GetOrOpenKernelWorkbook()
-        {
-            Excel.Workbook workbook = GetOpenKernelWorkbook();
-            if (workbook != null)
-            {
-                if (_isHomeDisplayPrepared)
-                {
-                    HideKernelWorkbookWindows(workbook);
-                }
-
-                return workbook;
-            }
-
-            string workbookPath = KernelWorkbookResolver.ResolveKernelWorkbookPathFromAvailableWorkbooks(
-                _application,
-                _excelInteropService,
-                _pathCompatibilityService,
-                _logger,
-                IsKernelWorkbook);
-            if (string.IsNullOrWhiteSpace(workbookPath) || !File.Exists(workbookPath))
-            {
-                return null;
-            }
-
-            bool previousEnableEvents = _application.EnableEvents;
-            try
-            {
-                _application.EnableEvents = false;
-                workbook = _application.Workbooks.Open(workbookPath, ReadOnly: false);
-                if (workbook.Windows.Count > 0)
-                {
-                    SetKernelWindowVisibleFalse(
-                        workbook,
-                        workbook.Windows[1],
-                        1,
-                        "GetOrOpenKernelWorkbook.OpenedWorkbook");
-                }
-
-                if (_isHomeDisplayPrepared)
-                {
-                    HideKernelWorkbookWindows(workbook);
-                }
-
-                return workbook;
-            }
-            finally
-            {
-                _application.EnableEvents = previousEnableEvents;
-            }
-        }
-
         private void SaveAndCloseKernelWorkbook(Excel.Workbook workbook)
         {
             if (workbook == null)

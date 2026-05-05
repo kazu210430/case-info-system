@@ -134,7 +134,9 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 ### `TaskPaneRefreshOrchestrationService`
 
 - Excel event / explicit request / ready-show から入る refresh orchestration の入口である
-- `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryService`、`WorkbookPaneWindowResolver` を使い、precondition、dispatch、pending retry、window resolve、ready-show retry timer を調停する
+- `ShowWorkbookTaskPaneWhenReady(...)` を ready-show 入口として持ち、ready-show attempt 本体は `WorkbookTaskPaneReadyShowAttemptWorker` へ委譲する
+- `ScheduleTaskPaneReadyRetry(...)` により ready-show retry `80ms` の scheduling を担う
+- `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryService`、`WorkbookPaneWindowResolver` を使い、precondition、dispatch、pending retry fallback、window resolve 入口を調停する
 - `TaskPaneRefreshCoordinator` へ dispatch し、host selection / render / show 自体は行わない
 - retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` を参照する
 - `WindowActivatePaneHandlingService` は `WindowActivate` をこの orchestration へ接続する sibling entry service であり、host flow / host lifecycle ではない
@@ -142,8 +144,47 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 やってはいけないこと:
 
 - `TaskPaneHostRegistry` / `TaskPaneHostLifecycleService` / `TaskPaneHost` へ直接触れない
+- ready-show attempt 本体や visible pane early-complete 判定を戻さない
 - role 別 render や show/hide を持たない
 - `WorkbookContext` の最終採用判断より後の host UI 制御を持たない
+
+### `WorkbookTaskPaneReadyShowAttemptWorker`
+
+- ready-show attempt 本体の実行境界である
+- `TaskPaneDisplayRetryCoordinator` と `WorkbookTaskPaneDisplayAttemptCoordinator` を内側 helper として使い、attempt 1 の即時実行と retry 継続可否を進める
+- attempt 1 のときだけ `WorkbookWindowVisibilityService.EnsureVisible(...)` を呼び、Workbook Window 可視化を前処理する
+- window 解決後に `HasVisibleCasePaneForWorkbookWindow(...)` を確認し、既存 visible CASE pane があれば success 相当で early-complete する
+- early-complete が成立しない場合だけ `TryRefreshTaskPane(...)` へ refresh を handoff する
+- ready-show 側の試行が尽きた後は、自身で pending retry を持たず orchestration 側の fallback へ戻す
+
+やってはいけないこと:
+
+- `400ms` pending retry state / timer を持たない
+- protection 判定や Excel event 入口判定を持たない
+- CASE 専用 visible pane early-complete を accounting へ広げない
+
+### `WorkbookWindowVisibilityService`
+
+- workbook window visible ensure の共通責務を担う
+- 対象 workbook の visible window を優先解決し、必要時だけ `Window.Visible = true` を補助する
+- `KernelCasePresentationService` の ready-show 前処理と `WorkbookTaskPaneReadyShowAttemptWorker` の attempt 1 前処理で共用する
+
+やってはいけないこと:
+
+- ready-show retry scheduling / pending retry / protection 判定 / event flow を持たない
+- refresh dispatch や host UI 制御を持たない
+
+### `PendingPaneRefreshRetryService`
+
+- `400ms` pending retry の fallback 経路を担う
+- workbook target と active target を分けて追跡し、対象 workbook を再取得できる間はその workbook を追う
+- ready-show / deferred refresh が即時成功しなかった後に retry sequence を開始する
+- 対象 workbook を見失っても active CASE context があれば active refresh fallback を継続する
+
+やってはいけないこと:
+
+- ready-show attempt 本体や visible pane early-complete 判定を持たない
+- workbook window visible ensure や protection 判定を持たない
 
 ### `TaskPaneRefreshPreconditionPolicy`
 
@@ -166,6 +207,8 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 - Excel event handling
   - `ThisAddIn` / `WorkbookLifecycleCoordinator` / `WindowActivatePaneHandlingService` が入口を持ち、TaskPane 更新要求は `TaskPaneRefreshOrchestrationService` に渡す
+- Ready-show path
+  - `KernelCasePresentationService` / `AccountingSetCreateService` の ready-show 要求は `TaskPaneRefreshOrchestrationService` に入り、`WorkbookTaskPaneReadyShowAttemptWorker` が attempt 実行を担当し、失敗時だけ `PendingPaneRefreshRetryService` 側 fallback へ戻す
 - Workbook 文脈
   - `TaskPaneRefreshCoordinator` が `WorkbookSessionService` と `ResolveWorkbookPaneWindow(...)` を使って `WorkbookContext` を確定し、その後で `TaskPaneManager.RefreshPane(...)` に渡す
 - Host flow
@@ -179,6 +222,10 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - `TaskPaneHostFlowService` に pending retry / ready-show / `WorkbookContext` 生成を持たせない
 - `TaskPaneHostLifecycleService` に render / show / reuse 判定を戻さない
 - `TaskPaneRefreshOrchestrationService` から `TaskPaneHostRegistry` / `TaskPaneHostLifecycleService` を直接触らせない
+- `TaskPaneRefreshOrchestrationService` に ready-show attempt 本体を戻さない
+- `WorkbookTaskPaneReadyShowAttemptWorker` に pending retry state を持たせない
+- `WorkbookWindowVisibilityService` に ready-show / retry / protection 判定を持たせない
+- CASE 専用 visible pane early-complete を accounting に広げない
 - `WorkbookOpen` を window 安定通知とみなす前提を、host flow / lifecycle 側へ持ち込まない
 
 ## フロー固定

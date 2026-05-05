@@ -762,15 +762,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            ExcelApplicationStateScope quitScope = new ExcelApplicationStateScope(_application);
+            bool previousDisplayAlerts = true;
+            bool hasDisplayAlertsSnapshot = false;
             try
             {
-                quitScope.SetDisplayAlerts(false);
+                previousDisplayAlerts = _application.DisplayAlerts;
+                hasDisplayAlertsSnapshot = true;
+                _application.DisplayAlerts = false;
                 _application.Quit();
             }
-            finally
+            catch
             {
-                quitScope.Dispose();
+                if (hasDisplayAlertsSnapshot)
+                {
+                    try
+                    {
+                        _application.DisplayAlerts = previousDisplayAlerts;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                throw;
             }
         }
 
@@ -800,16 +814,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
-            try
-            {
-                closeScope.SetDisplayAlerts(false);
-                workbook.Close(SaveChanges: false);
-            }
-            finally
-            {
-                closeScope.Dispose();
-            }
+            CloseWorkbookWithoutSave(workbook);
         }
 
         private void ConcealKernelWorkbookWindowsForCaseCreationCloseCore(Excel.Workbook workbook)
@@ -869,18 +874,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Info("SaveAndCloseKernelWorkbook skipped save because workbook was already saved. workbook=" + workbookFullName);
             }
 
-            ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
+            CloseWorkbookWithoutSave(workbook);
+
+            _logger.Info("SaveAndCloseKernelWorkbook closed workbook=" + workbookFullName);
+        }
+
+        private void CloseWorkbookWithoutSave(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
+            bool previousDisplayAlerts = true;
+            bool hasDisplayAlertsSnapshot = false;
             try
             {
-                closeScope.SetDisplayAlerts(false);
-                workbook.Close(SaveChanges: false);
+                previousDisplayAlerts = _application.DisplayAlerts;
+                hasDisplayAlertsSnapshot = true;
+                _application.DisplayAlerts = false;
+                WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
             }
             finally
             {
-                closeScope.Dispose();
+                if (hasDisplayAlertsSnapshot)
+                {
+                    _application.DisplayAlerts = previousDisplayAlerts;
+                }
             }
-
-            _logger.Info("SaveAndCloseKernelWorkbook closed workbook=" + workbookFullName);
         }
 
         /// <summary>

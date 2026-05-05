@@ -883,12 +883,135 @@ namespace CaseInfoSystem.Tests
             }
         }
 
+        [Fact]
+        public void CloseKernelWorkbookWithoutLifecycleCore_UsesInteropHelperOptionalArgumentsAndRestoresDisplayAlerts()
+        {
+            var application = new Excel.Application
+            {
+                DisplayAlerts = true
+            };
+            var service = CreateRealService(application);
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            application.Workbooks.Add(kernelWorkbook);
+
+            InvokePrivate(service, "CloseKernelWorkbookWithoutLifecycleCore", kernelWorkbook);
+
+            Assert.Equal(1, kernelWorkbook.CloseCallCount);
+            Assert.False(kernelWorkbook.LastCloseSaveChanges.GetValueOrDefault());
+            Assert.Same(Type.Missing, kernelWorkbook.LastCloseFilename);
+            Assert.Same(Type.Missing, kernelWorkbook.LastCloseRouteWorkbook);
+            Assert.True(application.DisplayAlerts);
+        }
+
+        [Fact]
+        public void CloseKernelWorkbookWithoutLifecycleCore_WhenCloseThrows_RestoresDisplayAlerts()
+        {
+            var application = new Excel.Application
+            {
+                DisplayAlerts = true
+            };
+            var service = CreateRealService(application);
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            kernelWorkbook.CloseBehavior = () => throw new InvalidOperationException("close failed");
+            application.Workbooks.Add(kernelWorkbook);
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => InvokePrivate(service, "CloseKernelWorkbookWithoutLifecycleCore", kernelWorkbook));
+
+            Assert.Equal("close failed", exception.Message);
+            Assert.True(application.DisplayAlerts);
+        }
+
+        [Fact]
+        public void SaveAndCloseKernelWorkbook_UsesInteropHelperOptionalArgumentsAndRestoresDisplayAlerts()
+        {
+            var application = new Excel.Application
+            {
+                DisplayAlerts = true
+            };
+            var service = CreateRealService(application);
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            application.Workbooks.Add(kernelWorkbook);
+
+            InvokePrivate(service, "SaveAndCloseKernelWorkbook", kernelWorkbook);
+
+            Assert.Equal(1, kernelWorkbook.SaveCallCount);
+            Assert.Equal(1, kernelWorkbook.CloseCallCount);
+            Assert.False(kernelWorkbook.LastCloseSaveChanges.GetValueOrDefault());
+            Assert.Same(Type.Missing, kernelWorkbook.LastCloseFilename);
+            Assert.Same(Type.Missing, kernelWorkbook.LastCloseRouteWorkbook);
+            Assert.True(application.DisplayAlerts);
+        }
+
+        [Fact]
+        public void QuitApplicationCore_WhenQuitSucceeds_DoesNotRestoreDisplayAlertsAfterSuccessfulQuit()
+        {
+            var application = new Excel.Application
+            {
+                DisplayAlerts = true
+            };
+            var service = CreateRealService(application);
+
+            InvokePrivate(service, "QuitApplicationCore");
+
+            Assert.Equal(1, application.QuitCallCount);
+            Assert.False(application.DisplayAlerts);
+        }
+
+        [Fact]
+        public void QuitApplicationCore_WhenQuitThrows_RestoresDisplayAlerts()
+        {
+            var application = new Excel.Application
+            {
+                DisplayAlerts = true,
+                QuitBehavior = () => throw new InvalidOperationException("quit failed")
+            };
+            var service = CreateRealService(application);
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => InvokePrivate(service, "QuitApplicationCore"));
+
+            Assert.Equal("quit failed", exception.Message);
+            Assert.Equal(1, application.QuitCallCount);
+            Assert.True(application.DisplayAlerts);
+        }
+
         private static KernelWorkbookService CreateService(KernelWorkbookService.KernelWorkbookServiceTestHooks hooks)
         {
             return new KernelWorkbookService(
                 OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 hooks);
+        }
+
+        private static KernelWorkbookService CreateRealService(Excel.Application application)
+        {
+            var loggerMessages = new List<string>();
+            var interactionMessages = new List<string>();
+            var logger = OrchestrationTestSupport.CreateLogger(loggerMessages);
+            var excelInteropService = new ExcelInteropService(application, logger, new PathCompatibilityService());
+            var excelWindowRecoveryService = new ExcelWindowRecoveryService(application, excelInteropService, logger);
+
+            return new KernelWorkbookService(
+                application,
+                excelInteropService,
+                excelWindowRecoveryService,
+                OrchestrationTestSupport.CreateKernelCaseInteractionState(interactionMessages),
+                logger);
+        }
+
+        private static void InvokePrivate(object target, string methodName, params object[] args)
+        {
+            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+
+            try
+            {
+                method.Invoke(target, args);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException;
+            }
         }
 
         private static Excel.Workbook CreateKernelWorkbook(string systemRoot)

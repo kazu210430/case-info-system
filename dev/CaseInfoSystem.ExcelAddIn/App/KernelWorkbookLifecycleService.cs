@@ -992,7 +992,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             try
             {
-                return _application?.ActiveWindow == null ? string.Empty : _application.ActiveWindow.Caption ?? string.Empty;
+                return _application?.ActiveWindow == null ? string.Empty : Convert.ToString(_application.ActiveWindow.Caption) ?? string.Empty;
             }
             catch
             {

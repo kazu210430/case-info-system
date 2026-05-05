@@ -470,9 +470,37 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class KernelWorkbookLifecycleService
     {
+        private Action<string, Excel.Workbook, bool> _homeManagedCloseStarted;
+        private Action<string, Excel.Workbook, bool> _homeManagedCloseSucceeded;
+        private Action<string, Excel.Workbook, bool, Exception> _homeManagedCloseFailed;
+
         internal IDisposable BeginManagedCloseScope(Excel.Workbook workbook) => new NoOpDisposable();
 
         internal bool RequestManagedCloseFromHomeExit(Excel.Workbook workbook) => true;
+
+        internal void RegisterHomeManagedCloseCallbacks(
+            Action<string, Excel.Workbook, bool> onStarted,
+            Action<string, Excel.Workbook, bool> onSucceeded,
+            Action<string, Excel.Workbook, bool, Exception> onFailed)
+        {
+            _homeManagedCloseStarted = onStarted;
+            _homeManagedCloseSucceeded = onSucceeded;
+            _homeManagedCloseFailed = onFailed;
+        }
+
+        internal void SimulateManagedCloseSuccess(Excel.Workbook workbook, bool saveChanges = false)
+        {
+            string workbookKey = workbook == null ? string.Empty : workbook.FullName ?? string.Empty;
+            _homeManagedCloseStarted?.Invoke(workbookKey, workbook, saveChanges);
+            _homeManagedCloseSucceeded?.Invoke(workbookKey, workbook, saveChanges);
+        }
+
+        internal void SimulateManagedCloseFailure(Excel.Workbook workbook, Exception exception, bool saveChanges = false)
+        {
+            string workbookKey = workbook == null ? string.Empty : workbook.FullName ?? string.Empty;
+            _homeManagedCloseStarted?.Invoke(workbookKey, workbook, saveChanges);
+            _homeManagedCloseFailed?.Invoke(workbookKey, workbook, saveChanges, exception);
+        }
 
         private sealed class NoOpDisposable : IDisposable
         {

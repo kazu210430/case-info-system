@@ -36,6 +36,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Dictionary<string, int> _managedCloseCounts;
         private Control _managedCloseDispatcher;
         private int _beforeSaveDocPropSynchronizationSuppressionCount;
+        private Action<string, Excel.Workbook, bool> _homeManagedCloseStarted;
+        private Action<string, Excel.Workbook, bool> _homeManagedCloseSucceeded;
+        private Action<string, Excel.Workbook, bool, Exception> _homeManagedCloseFailed;
 
         /// <summary>
         /// コンストラクタ: KernelWorkbookLifecycleService を初期化する。
@@ -60,6 +63,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _caseListMappingRepository = caseListMappingRepository ?? throw new ArgumentNullException(nameof(caseListMappingRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _managedCloseCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        internal void RegisterHomeManagedCloseCallbacks(
+            Action<string, Excel.Workbook, bool> onStarted,
+            Action<string, Excel.Workbook, bool> onSucceeded,
+            Action<string, Excel.Workbook, bool, Exception> onFailed)
+        {
+            _homeManagedCloseStarted = onStarted;
+            _homeManagedCloseSucceeded = onSucceeded;
+            _homeManagedCloseFailed = onFailed;
         }
 
         /// <summary>
@@ -341,11 +354,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Workbook workbook = _excelInteropService.FindOpenWorkbook(workbookKey);
             if (workbook == null)
             {
+                Exception missingWorkbookException = new InvalidOperationException("Managed close target workbook was not found.");
+                _logger.Error(
+                    "Kernel managed close failed because workbook was not found. workbook="
+                    + (workbookKey ?? string.Empty)
+                    + ", saveChanges="
+                    + saveChanges.ToString(),
+                    missingWorkbookException);
+                _homeManagedCloseFailed?.Invoke(workbookKey, null, saveChanges, missingWorkbookException);
                 return;
             }
 
             try
             {
+                _logger.Info(
+                    "Kernel managed close started. workbook="
+                    + GetWorkbookKey(workbook)
+                    + ", saveChanges="
+                    + saveChanges.ToString());
+                _homeManagedCloseStarted?.Invoke(workbookKey, workbook, saveChanges);
                 using (BeginManagedCloseScope(workbook))
                 {
                     if (saveChanges)
@@ -370,10 +397,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                     QuitExcelIfKernelWasLastWorkbook(workbook);
                 }
+
+                _logger.Info(
+                    "Kernel managed close succeeded. workbook="
+                    + GetWorkbookKey(workbook)
+                    + ", saveChanges="
+                    + saveChanges.ToString());
+                _homeManagedCloseSucceeded?.Invoke(workbookKey, workbook, saveChanges);
             }
             catch (Exception ex)
             {
-                _logger.Error("Kernel workbook managed close failed.", ex);
+                _logger.Error(
+                    "Kernel managed close failed. workbook="
+                    + (workbookKey ?? string.Empty)
+                    + ", saveChanges="
+                    + saveChanges.ToString()
+                    + ", exceptionType="
+                    + (ex.GetType().FullName ?? string.Empty)
+                    + ", exceptionMessage="
+                    + (ex.Message ?? string.Empty),
+                    ex);
+                _homeManagedCloseFailed?.Invoke(workbookKey, workbook, saveChanges, ex);
                 MessageBox.Show(
                     "保存または終了に失敗しました。もう一度お試しください。",
                     BuildCloseDialogTitle(workbook),

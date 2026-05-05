@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
@@ -600,6 +601,7 @@ namespace CaseInfoSystem.Tests
             var callLog = new List<string>();
             int requestCalls = 0;
             Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            var lifecycleService = new KernelWorkbookLifecycleService();
             var service = CreateService(
                 new KernelWorkbookService.KernelWorkbookServiceTestHooks
                 {
@@ -616,13 +618,15 @@ namespace CaseInfoSystem.Tests
                     QuitApplication = () => callLog.Add("quit")
                 });
 
-            service.SetLifecycleService(new KernelWorkbookLifecycleService());
+            service.SetLifecycleService(lifecycleService);
             Assert.True(service.BindHomeWorkbook(
                 new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
 
             service.PrepareForHomeDisplay();
             service.CloseHomeSession();
             service.CloseHomeSession();
+            Assert.True(service.HasValidHomeWorkbookBinding());
+            lifecycleService.SimulateManagedCloseSuccess(kernelWorkbook);
 
             Assert.Equal(
                 new[]
@@ -633,6 +637,49 @@ namespace CaseInfoSystem.Tests
                     "release:True"
                 },
                 callLog);
+            Assert.False(service.HasValidHomeWorkbookBinding());
+        }
+
+        [Fact]
+        public void CloseHomeSession_WhenManagedCloseFails_PreservesBindingUntilRetrySucceeds()
+        {
+            var callLog = new List<string>();
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            var lifecycleService = new KernelWorkbookLifecycleService();
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    ApplyHomeDisplayVisibility = () => callLog.Add("apply"),
+                    HasOtherVisibleWorkbook = _ => true,
+                    HasOtherWorkbook = _ => true,
+                    ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
+                    QuitApplication = () => callLog.Add("quit")
+                });
+
+            service.SetLifecycleService(lifecycleService);
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
+
+            service.PrepareForHomeDisplay();
+            service.CloseHomeSession();
+            lifecycleService.SimulateManagedCloseFailure(
+                kernelWorkbook,
+                new COMException("managed close failed", unchecked((int)0x80020005)));
+
+            Assert.Equal(new[] { "apply" }, callLog);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+
+            service.CloseHomeSession();
+            lifecycleService.SimulateManagedCloseSuccess(kernelWorkbook);
+
+            Assert.Equal(
+                new[]
+                {
+                    "apply",
+                    "release:True"
+                },
+                callLog);
+            Assert.False(service.HasValidHomeWorkbookBinding());
         }
 
         [Fact]

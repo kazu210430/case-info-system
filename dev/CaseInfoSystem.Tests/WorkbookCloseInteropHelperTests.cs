@@ -8,6 +8,27 @@ namespace CaseInfoSystem.Tests
     public class WorkbookCloseInteropHelperTests
     {
         [Fact]
+        public void Close_PassesMissingOptionalArgumentsToWorkbookClose()
+        {
+            var application = new Excel.Application();
+            var workbook = new Excel.Workbook
+            {
+                FullName = @"C:\temp\Kernel.xlsx",
+                Name = "Kernel.xlsx",
+                Path = @"C:\temp"
+            };
+
+            application.Workbooks.Add(workbook);
+
+            WorkbookCloseInteropHelper.Close(workbook);
+
+            Assert.Equal(1, workbook.CloseCallCount);
+            Assert.Same(Type.Missing, workbook.LastCloseSaveChangesArgument);
+            Assert.Same(Type.Missing, workbook.LastCloseFilename);
+            Assert.Same(Type.Missing, workbook.LastCloseRouteWorkbook);
+        }
+
+        [Fact]
         public void CloseWithoutSave_PassesFalseAndMissingOptionalArgumentsToWorkbookClose()
         {
             var application = new Excel.Application();

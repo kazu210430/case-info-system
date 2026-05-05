@@ -365,64 +365,117 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            string managedCloseWorkbookKey = workbookKey ?? string.Empty;
             string currentManagedCloseMethod = "BeginManagedCloseScope";
             string failedManagedCloseMethod = null;
+            bool saveAttempted = false;
+            bool saveSucceeded = false;
+            bool closeInvoked = false;
+            bool closeCompleted = false;
+            bool hasDisplayAlertsSnapshot = false;
+            bool previousDisplayAlerts = true;
             try
             {
                 _logger.Info(
                     "Kernel managed close started. workbook="
-                    + GetWorkbookKey(workbook)
+                    + managedCloseWorkbookKey
                     + ", saveChanges="
                     + saveChanges.ToString());
                 _homeManagedCloseStarted?.Invoke(workbookKey, workbook, saveChanges);
                 using (BeginManagedCloseScope(workbook))
                 {
+                    LogManagedCloseState("Start", managedCloseWorkbookKey, workbook, saveChanges, saveAttempted, saveSucceeded, closeInvoked);
                     if (saveChanges)
                     {
-                        currentManagedCloseMethod = "Workbook.Save";
+                        currentManagedCloseMethod = "Save";
+                        saveAttempted = true;
+                        LogManagedCloseState("BeforeSave", managedCloseWorkbookKey, workbook, saveChanges, saveAttempted, saveSucceeded, closeInvoked);
                         _logger.Info(
                             "Kernel managed close calling Workbook.Save. workbook="
-                            + GetWorkbookKey(workbook)
+                            + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
-                        workbook.Save();
+                        try
+                        {
+                            workbook.Save();
+                        }
+                        catch (Exception ex)
+                        {
+                            failedManagedCloseMethod = currentManagedCloseMethod;
+                            _logger.Error(
+                                "Kernel managed close save failed. workbook="
+                                + managedCloseWorkbookKey
+                                + ", saveChanges="
+                                + saveChanges.ToString()
+                                + ", failedMethod=Save"
+                                + ", saveAttempted="
+                                + saveAttempted.ToString()
+                                + ", saveSucceeded="
+                                + saveSucceeded.ToString()
+                                + ", closeInvoked="
+                                + closeInvoked.ToString()
+                                + ", "
+                                + BuildManagedCloseDiagnosticDetails(workbook),
+                                ex);
+                            throw;
+                        }
+                        saveSucceeded = true;
                         _logger.Info(
                             "Kernel managed close completed Workbook.Save. workbook="
-                            + GetWorkbookKey(workbook)
+                            + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
+                        LogManagedCloseState("SaveSucceeded", managedCloseWorkbookKey, workbook, saveChanges, saveAttempted, saveSucceeded, closeInvoked);
                     }
                     else
                     {
-                        currentManagedCloseMethod = "WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose";
-                        WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
+                        _logger.Info(
+                            "Kernel managed close skipped Workbook.Save because saveChanges=false. workbook="
+                            + managedCloseWorkbookKey);
                     }
 
-                    ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
                     try
                     {
-                        currentManagedCloseMethod = "ExcelApplicationStateScope.SetDisplayAlerts(false)";
+                        currentManagedCloseMethod = "ReadDisplayAlerts";
                         _logger.Info(
-                            "Kernel managed close calling ExcelApplicationStateScope.SetDisplayAlerts(false). workbook="
-                            + GetWorkbookKey(workbook)
+                            "Kernel managed close reading Application.DisplayAlerts. workbook="
+                            + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
-                        closeScope.SetDisplayAlerts(false);
+                        previousDisplayAlerts = _application.DisplayAlerts;
+                        hasDisplayAlertsSnapshot = true;
                         _logger.Info(
-                            "Kernel managed close completed ExcelApplicationStateScope.SetDisplayAlerts(false). workbook="
-                            + GetWorkbookKey(workbook)
+                            "Kernel managed close read Application.DisplayAlerts. workbook="
+                            + managedCloseWorkbookKey
+                            + ", saveChanges="
+                            + saveChanges.ToString()
+                            + ", displayAlerts="
+                            + previousDisplayAlerts.ToString());
+                        currentManagedCloseMethod = "SetDisplayAlertsFalse";
+                        _logger.Info(
+                            "Kernel managed close setting Application.DisplayAlerts=false. workbook="
+                            + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
-                        currentManagedCloseMethod = "Workbook.Close(false, Type.Missing, Type.Missing)";
+                        _application.DisplayAlerts = false;
                         _logger.Info(
-                            "Kernel managed close calling Workbook.Close(false, Type.Missing, Type.Missing). workbook="
-                            + GetWorkbookKey(workbook)
+                            "Kernel managed close set Application.DisplayAlerts=false. workbook="
+                            + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
-                        WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
+                        currentManagedCloseMethod = "Close";
+                        LogManagedCloseState("BeforeClose", managedCloseWorkbookKey, workbook, saveChanges, saveAttempted, saveSucceeded, closeInvoked);
+                        closeInvoked = true;
                         _logger.Info(
-                            "Kernel managed close completed Workbook.Close(false, Type.Missing, Type.Missing). workbook="
-                            + GetWorkbookKey(workbook)
+                            "Kernel managed close calling Workbook.Close(Type.Missing, Type.Missing, Type.Missing). workbook="
+                            + managedCloseWorkbookKey
+                            + ", saveChanges="
+                            + saveChanges.ToString());
+                        WorkbookCloseInteropHelper.Close(workbook);
+                        closeCompleted = true;
+                        _logger.Info(
+                            "Kernel managed close completed Workbook.Close(Type.Missing, Type.Missing, Type.Missing). workbook="
+                            + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
                     }
@@ -433,57 +486,80 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     }
                     finally
                     {
-                        _logger.Info(
-                            "Kernel managed close restoring DisplayAlerts scope. workbook="
-                            + GetWorkbookKey(workbook)
-                            + ", saveChanges="
-                            + saveChanges.ToString());
-                        try
+                        if (hasDisplayAlertsSnapshot)
                         {
-                            closeScope.Dispose();
-                        }
-                        catch
-                        {
-                            if (string.IsNullOrWhiteSpace(failedManagedCloseMethod))
+                            _logger.Info(
+                                "Kernel managed close restoring Application.DisplayAlerts. workbook="
+                                + managedCloseWorkbookKey
+                                + ", saveChanges="
+                                + saveChanges.ToString()
+                                + ", displayAlerts="
+                                + previousDisplayAlerts.ToString());
+                            try
                             {
-                                failedManagedCloseMethod = "ExcelApplicationStateScope.Dispose";
+                                _application.DisplayAlerts = previousDisplayAlerts;
                             }
+                            catch
+                            {
+                                if (string.IsNullOrWhiteSpace(failedManagedCloseMethod))
+                                {
+                                    failedManagedCloseMethod = "RestoreDisplayAlerts";
+                                }
 
-                            throw;
+                                throw;
+                            }
+                            _logger.Info(
+                                "Kernel managed close restored Application.DisplayAlerts. workbook="
+                                + managedCloseWorkbookKey
+                                + ", saveChanges="
+                                + saveChanges.ToString()
+                                + ", displayAlerts="
+                                + previousDisplayAlerts.ToString());
                         }
-                        _logger.Info(
-                            "Kernel managed close restored DisplayAlerts scope. workbook="
-                            + GetWorkbookKey(workbook)
-                            + ", saveChanges="
-                            + saveChanges.ToString());
                     }
 
                     currentManagedCloseMethod = nameof(QuitExcelIfKernelWasLastWorkbook);
-                    QuitExcelIfKernelWasLastWorkbook(workbook);
+                    QuitExcelIfKernelWasLastWorkbook(workbook, managedCloseWorkbookKey);
                 }
 
                 _logger.Info(
                     "Kernel managed close succeeded. workbook="
-                    + GetWorkbookKey(workbook)
+                    + managedCloseWorkbookKey
                     + ", saveChanges="
-                    + saveChanges.ToString());
-                _homeManagedCloseSucceeded?.Invoke(workbookKey, workbook, saveChanges);
+                    + saveChanges.ToString()
+                    + ", saveAttempted="
+                    + saveAttempted.ToString()
+                    + ", saveSucceeded="
+                    + saveSucceeded.ToString()
+                    + ", closeInvoked="
+                    + closeInvoked.ToString());
+                _homeManagedCloseSucceeded?.Invoke(workbookKey, null, saveChanges);
             }
             catch (Exception ex)
             {
+                string diagnosticDetails = closeCompleted
+                    ? string.Empty
+                    : BuildManagedCloseDiagnosticDetails(workbook);
                 _logger.Error(
                     "Kernel managed close failed. workbook="
-                    + (workbookKey ?? string.Empty)
+                    + managedCloseWorkbookKey
                     + ", saveChanges="
                     + saveChanges.ToString()
                     + ", failedMethod="
                     + (failedManagedCloseMethod ?? currentManagedCloseMethod)
+                    + ", saveAttempted="
+                    + saveAttempted.ToString()
+                    + ", saveSucceeded="
+                    + saveSucceeded.ToString()
+                    + ", closeInvoked="
+                    + closeInvoked.ToString()
                     + ", exceptionType="
                     + (ex.GetType().FullName ?? string.Empty)
                     + ", exceptionMessage="
-                    + (ex.Message ?? string.Empty),
+                    + (ex.Message ?? string.Empty)
+                    + (string.IsNullOrWhiteSpace(diagnosticDetails) ? string.Empty : ", " + diagnosticDetails),
                     ex);
-                _homeManagedCloseFailed?.Invoke(workbookKey, workbook, saveChanges, ex);
+                _homeManagedCloseFailed?.Invoke(workbookKey, closeCompleted ? null : workbook, saveChanges, ex);
                 MessageBox.Show(
                     "保存または終了に失敗しました。もう一度お試しください。",
                     BuildCloseDialogTitle(workbook),
@@ -495,13 +571,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         /// <summary>
         /// メソッド: Kernel が最後のブックなら Excel を終了する。
         /// </summary>
-        private void QuitExcelIfKernelWasLastWorkbook(Excel.Workbook closingWorkbook)
+        private void QuitExcelIfKernelWasLastWorkbook(Excel.Workbook closingWorkbook, string closingWorkbookKey)
         {
             bool hasOtherVisibleWorkbook = HasOtherVisibleWorkbook(closingWorkbook);
             bool hasOtherWorkbook = HasOtherWorkbook(closingWorkbook);
             _logger.Info(
                 "Kernel managed close post-check. workbook="
-                + GetWorkbookKey(closingWorkbook)
+                + (closingWorkbookKey ?? string.Empty)
                 + ", hasOtherVisibleWorkbook="
                 + hasOtherVisibleWorkbook.ToString()
                 + ", hasOtherWorkbook="
@@ -513,15 +589,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _logger.Info("Kernel managed close will quit Excel because no other workbook remains.");
-            ExcelApplicationStateScope quitScope = new ExcelApplicationStateScope(_application);
+            bool previousDisplayAlerts = true;
+            bool hasDisplayAlertsSnapshot = false;
             try
             {
-                quitScope.SetDisplayAlerts(false);
+                previousDisplayAlerts = _application.DisplayAlerts;
+                hasDisplayAlertsSnapshot = true;
+                _logger.Info(
+                    "Kernel managed close setting Application.DisplayAlerts=false before Quit. workbook="
+                    + (closingWorkbookKey ?? string.Empty)
+                    + ", displayAlerts="
+                    + previousDisplayAlerts.ToString());
+                _application.DisplayAlerts = false;
                 _application.Quit();
             }
-            finally
+            catch
             {
-                quitScope.Dispose();
+                if (hasDisplayAlertsSnapshot)
+                {
+                    try
+                    {
+                        _application.DisplayAlerts = previousDisplayAlerts;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                throw;
             }
         }
 
@@ -644,6 +739,314 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private string GetWorkbookKey(Excel.Workbook workbook)
         {
             return _excelInteropService.GetWorkbookFullName(workbook);
+        }
+
+        private void LogManagedCloseState(
+            string stage,
+            string workbookKey,
+            Excel.Workbook workbook,
+            bool saveChanges,
+            bool saveAttempted,
+            bool saveSucceeded,
+            bool closeInvoked)
+        {
+            _logger.Info(
+                "Kernel managed close state. stage="
+                + (stage ?? string.Empty)
+                + ", workbook="
+                + (workbookKey ?? string.Empty)
+                + ", saveChanges="
+                + saveChanges.ToString()
+                + ", saveAttempted="
+                + saveAttempted.ToString()
+                + ", saveSucceeded="
+                + saveSucceeded.ToString()
+                + ", closeInvoked="
+                + closeInvoked.ToString()
+                + ", "
+                + BuildManagedCloseDiagnosticDetails(workbook));
+        }
+
+        private string BuildManagedCloseDiagnosticDetails(Excel.Workbook workbook)
+        {
+            string workbookFullName = SafeGetWorkbookFullName(workbook);
+            string workbookPath = SafeGetWorkbookPath(workbook);
+            string activeWorkbookFullName = SafeGetWorkbookFullName(SafeGetActiveWorkbook());
+            return "workbookName=" + SafeGetWorkbookName(workbook)
+                + ", workbookFullName=" + workbookFullName
+                + ", workbookPath=" + workbookPath
+                + ", workbookFileExists=" + SafeFileExists(workbookFullName)
+                + ", workbookDirectoryExists=" + SafeDirectoryExists(workbookPath)
+                + ", workbookReadOnly=" + SafeGetWorkbookReadOnly(workbook)
+                + ", workbookSaved=" + SafeGetWorkbookSaved(workbook)
+                + ", workbookWindowCount=" + SafeGetWorkbookWindowCount(workbook)
+                + ", workbookVisibleWindowCount=" + SafeGetWorkbookVisibleWindowCount(workbook)
+                + ", workbookHasVisibleWindow=" + SafeHasVisibleWorkbookWindow(workbook)
+                + ", applicationDisplayAlerts=" + SafeGetApplicationDisplayAlerts()
+                + ", applicationScreenUpdating=" + SafeGetApplicationScreenUpdating()
+                + ", applicationVisible=" + SafeGetApplicationVisible()
+                + ", activeWorkbook=" + activeWorkbookFullName
+                + ", activeWorkbookMatches=" + SafeActiveWorkbookMatches(workbookFullName, activeWorkbookFullName)
+                + ", activeWindowVisible=" + SafeGetActiveWindowVisible()
+                + ", activeWindowCaption=" + SafeGetActiveWindowCaption()
+                + ", activeWindowHwnd=" + SafeGetActiveWindowHwnd()
+                + ", managedCloseDepth=" + GetManagedCloseDepth(workbook);
+        }
+
+        private Excel.Workbook SafeGetActiveWorkbook()
+        {
+            try
+            {
+                return _application == null ? null : _application.ActiveWorkbook;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private string SafeGetWorkbookFullName(Excel.Workbook workbook)
+        {
+            try
+            {
+                return _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookFullName(workbook));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetWorkbookName(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? string.Empty : workbook.Name ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetWorkbookPath(Excel.Workbook workbook)
+        {
+            try
+            {
+                return _pathCompatibilityService.NormalizePath(_excelInteropService.GetWorkbookPath(workbook));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetWorkbookReadOnly(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? string.Empty : workbook.ReadOnly.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetWorkbookSaved(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? string.Empty : workbook.Saved.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetWorkbookWindowCount(Excel.Workbook workbook)
+        {
+            try
+            {
+                return workbook == null ? "0" : workbook.Windows.Count.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetWorkbookVisibleWindowCount(Excel.Workbook workbook)
+        {
+            try
+            {
+                if (workbook == null)
+                {
+                    return "0";
+                }
+
+                int visibleWindowCount = 0;
+                foreach (Excel.Window window in workbook.Windows)
+                {
+                    if (window != null && window.Visible)
+                    {
+                        visibleWindowCount++;
+                    }
+                }
+
+                return visibleWindowCount.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeHasVisibleWorkbookWindow(Excel.Workbook workbook)
+        {
+            try
+            {
+                if (workbook == null)
+                {
+                    return "False";
+                }
+
+                foreach (Excel.Window window in workbook.Windows)
+                {
+                    if (window != null && window.Visible)
+                    {
+                        return "True";
+                    }
+                }
+
+                return "False";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetApplicationDisplayAlerts()
+        {
+            try
+            {
+                return _application == null ? string.Empty : _application.DisplayAlerts.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetApplicationScreenUpdating()
+        {
+            try
+            {
+                return _application == null ? string.Empty : _application.ScreenUpdating.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetApplicationVisible()
+        {
+            try
+            {
+                return _application == null ? string.Empty : _application.Visible.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeActiveWorkbookMatches(string workbookFullName, string activeWorkbookFullName)
+        {
+            try
+            {
+                return string.Equals(workbookFullName, activeWorkbookFullName, StringComparison.OrdinalIgnoreCase).ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetActiveWindowVisible()
+        {
+            try
+            {
+                return _application?.ActiveWindow == null ? string.Empty : _application.ActiveWindow.Visible.ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetActiveWindowCaption()
+        {
+            try
+            {
+                return _application?.ActiveWindow == null ? string.Empty : _application.ActiveWindow.Caption ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeGetActiveWindowHwnd()
+        {
+            try
+            {
+                return _application?.ActiveWindow == null ? string.Empty : Convert.ToString(_application.ActiveWindow.Hwnd) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeFileExists(string path)
+        {
+            try
+            {
+                return string.IsNullOrWhiteSpace(path) ? string.Empty : _pathCompatibilityService.FileExistsSafe(path).ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string SafeDirectoryExists(string path)
+        {
+            try
+            {
+                return string.IsNullOrWhiteSpace(path) ? string.Empty : _pathCompatibilityService.DirectoryExistsSafe(path).ToString();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string GetManagedCloseDepth(Excel.Workbook workbook)
+        {
+            string workbookKey = GetWorkbookKey(workbook);
+            if (string.IsNullOrWhiteSpace(workbookKey))
+            {
+                return "0";
+            }
+
+            return _managedCloseCounts.TryGetValue(workbookKey, out int count)
+                ? count.ToString()
+                : "0";
         }
 
         /// <summary>

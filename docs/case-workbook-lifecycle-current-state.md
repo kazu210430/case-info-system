@@ -12,6 +12,8 @@
 
 この文書は TaskPaneManager 側の追加整理を扱いません。lifecycle 側の安定到達点だけを明文化します。
 
+今回この文書で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` の安定化到達点だけです。全 workbook close 経路の一般ルールではありません。`KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などの読み取り専用 / 一時 workbook close は今回の確定範囲に含めません。
+
 ## 現在の構成
 
 - `AddInCompositionRoot`
@@ -43,13 +45,44 @@
 5. folder offer
    - `KernelCaseCreationCommandService` から pending が付与されていた workbook では、保存先フォルダが解決できる場合だけ created case folder offer prompt を出し、必要時に `CaseFolderOpenService` が Explorer を開きます。
 6. managed close
-   - dirty path では `CaseWorkbookLifecycleService` が dispatcher 経由で managed close を予約し、`ManagedCloseState` のスコープ内で save 有無を処理して `workbook.Close(SaveChanges: false)` へ進めます。
+   - dirty path では `CaseWorkbookLifecycleService` が dispatcher 経由で managed close を予約し、`ManagedCloseState` のスコープ内で save 有無を処理し、今回安定化対象の managed close 経路では `WorkbookCloseInteropHelper.CloseWithoutSave(workbook)` を使って `false, Type.Missing, Type.Missing` の optional 引数を明示した close へ進めます。
 7. post-close follow-up
    - dirty path では managed close 内で、clean close では before-close 中に `PostCloseFollowUpScheduler` を予約します。
 8. close 後判定
-   - `PostCloseFollowUpScheduler` は対象 workbook が残っていないことを確認し、Excel busy なら retry し、visible workbook が 1 つも無い場合だけ Excel 終了を試みます。
+   - `PostCloseFollowUpScheduler` は対象 workbook が残っていないことを確認し、Excel busy なら retry し、visible workbook が 1 つも無い場合だけ Excel 終了を試みます。`Quit` 成功後は終了中 `Application` を restore せず、`DisplayAlerts` の restore は失敗時だけに限定します。
 
 dirty path の大まかな順序は `before-close -> dirty prompt -> folder offer -> managed close -> post-close follow-up` です。
+
+## 今回安定化対象の close / quit 境界
+
+### Kernel HOME close
+
+- `KernelHomeForm` は close 意思表示を受け、`FormClosing` cancel で close 可否を制御します。
+- `KernelWorkbookService.RequestCloseHomeSessionFromForm(...)` が backend close を調停します。
+- HOME close は fail-closed とし、backend close 成功後にのみ HOME session / binding / visibility を解放します。
+- close 失敗時は Form を閉じず、binding / visibility を維持します。
+- HOME session の finalization は `FormClosed` 後の `FinalizePendingHomeSessionCloseAfterFormClosed()` に限定します。
+
+### Kernel / CASE managed close
+
+- 今回安定化対象の managed close 経路では `WorkbookCloseInteropHelper` を経由します。
+- `Workbook.Close(SaveChanges: false)` のような named argument は使いません。
+- save ありの Kernel managed close では `Type.Missing, Type.Missing, Type.Missing`、save なしの Kernel / CASE managed close では `false, Type.Missing, Type.Missing` を明示して渡します。
+- close 後に対象 workbook を再参照しません。
+
+### managed close / post-close quit の最小 COM 原則
+
+- 今回安定化対象の managed close / quit 経路では `Save` / `DisplayAlerts` / `Close` / `Quit` 以外の COM 操作を増やしません。
+- この経路では `ExcelApplicationStateScope` を使いません。
+- `DisplayAlerts` は個別の `try/finally` または同等の局所 restore で扱います。
+- `Quit` 成功後は終了中 `Application` を restore しません。
+- `Quit` 失敗時だけ `DisplayAlerts` を restore します。
+
+### CASE post-close quit
+
+- `PostCloseFollowUpScheduler` が visible workbook を確認し、残っていなければ `Quit` を試みます。
+- 設計目標は CASE close 後に白 Excel を残さないことです。
+- これは今回安定化対象の managed close / quit 経路の話であり、全 close 経路の一般ルールではありません。
 
 ## 関連テスト
 
@@ -70,8 +103,17 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 - ただし、その実行ログやチェックリスト結果自体はリポジトリ内では未確認であり、証跡の保管場所は不明です。
 - Compile / build 成功と runtime `Addins\` 反映成功、実機確認成功は別物として扱う前提を維持します。
 
+## Shadow copy / 実機反映
+
+- Excel が起動中だと古い shadow copy DLL が使われ続けることがあります。
+- 実機確認前は Excel を完全終了します。
+- 実行 DLL の確認は `Runtime execution observed` ログの `assemblySha256` を使います。
+
 ## 残る注意点
 
 - `CaseWorkbookLifecycleService` は分割後も orchestration hub のままで、close 順序依存と CASE HOME 表示補正が同居しています。
 - `PostCloseFollowUpScheduler` の visible workbook 判定、Excel busy retry、Excel 終了判定は lifecycle 安定性に直結するため、TaskPaneManager 整理とは切り離して扱うほうが安全です。
 - direct `MessageBox.Show` は `CaseClosePromptService` と `CaseWorkbookLifecycleService` の一部に残っています。詳細は `docs/technical-debt.md` を参照してください。
+- helper 非経由 close が `KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などに残っています。
+- `WorkbookPromptSuppressionHelper` の `Workbook.Saved` 操作は今回対象外です。
+- これらは別途棚卸し対象であり、今回 docs の確定範囲外です。

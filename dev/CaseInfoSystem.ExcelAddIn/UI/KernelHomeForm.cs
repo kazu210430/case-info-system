@@ -475,64 +475,89 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private void KernelHomeForm_FormClosing (object sender, FormClosingEventArgs e)
 		{
+			LogHomeCloseDiagnostic (
+				"FormClosing entered",
+				"closeReason=" + e.CloseReason.ToString ());
 			if (_kernelWorkbookService == null) {
+				LogHomeCloseDiagnostic ("FormClosing allow", "reason=no-kernel-workbook-service");
 				return;
 			}
 			if (_allowImmediateFormClose) {
+				LogHomeCloseDiagnostic ("FormClosing allow", "reason=allow-immediate-form-close");
 				StopForegroundRetry ();
 				ExitPendingHomeSessionCloseState ();
 				return;
 			}
 			if (_sheetNavigationHandled) {
+				LogHomeCloseDiagnostic ("FormClosing allow", "reason=sheet-navigation-handled");
 				StopForegroundRetry ();
 				return;
 			}
 			if (_homeSessionClosePending) {
+				LogHomeCloseDiagnostic ("FormClosing cancel", "reason=home-session-close-already-pending");
 				e.Cancel = true;
 				return;
 			}
 			if (!ShouldUseServiceMediatedSessionClose ()) {
+				LogHomeCloseDiagnostic ("FormClosing allow", "reason=service-mediation-not-required");
 				return;
 			}
+			string entryPoint = ResolveHomeSessionCloseEntryPoint ();
 			KernelHomeSessionCloseRequestStatus requestStatus = _kernelWorkbookService.RequestCloseHomeSessionFromForm (
 				_keepBackendSessionOnClose && _saveKernelWorkbookOnClose,
-				ResolveHomeSessionCloseEntryPoint ());
+				entryPoint);
+			LogHomeCloseDiagnostic (
+				"FormClosing close request result",
+				"entryPoint=" + entryPoint + ", requestStatus=" + requestStatus.ToString ());
 			if (requestStatus == KernelHomeSessionCloseRequestStatus.Pending) {
 				EnterPendingHomeSessionCloseState ();
+				LogHomeCloseDiagnostic ("FormClosing cancel", "reason=close-request-pending");
 				e.Cancel = true;
 				return;
 			}
 			if (requestStatus == KernelHomeSessionCloseRequestStatus.Completed) {
 				_finalizePendingHomeSessionCloseOnFormClosed = true;
 				StopForegroundRetry ();
+				LogHomeCloseDiagnostic ("FormClosing allow", "reason=close-request-completed");
 				return;
 			}
 			ExitPendingHomeSessionCloseState ();
+			LogHomeCloseDiagnostic ("FormClosing cancel", "reason=close-request-rejected");
 			e.Cancel = true;
 		}
 
 		private void KernelHomeForm_FormClosed (object sender, FormClosedEventArgs e)
 		{
 			try {
+				LogHomeCloseDiagnostic (
+					"FormClosed entered",
+					"closeReason=" + e.CloseReason.ToString ());
 				if (_kernelWorkbookService == null) {
+					LogHomeCloseDiagnostic ("FormClosed completed", "reason=no-kernel-workbook-service");
 					return;
 				}
 				StopForegroundRetry ();
 				_kernelWorkbookService.RegisterHomeSessionCloseObserver (null, null);
 				if (_sheetNavigationHandled) {
+					LogHomeCloseDiagnostic ("FormClosed completed", "reason=sheet-navigation-handled");
 					return;
 				}
 				if (_finalizePendingHomeSessionCloseOnFormClosed) {
+					LogHomeCloseDiagnostic ("FormClosed finalization start", "mode=FinalizePendingHomeSessionCloseAfterFormClosed");
 					_kernelWorkbookService.FinalizePendingHomeSessionCloseAfterFormClosed ();
+					LogHomeCloseDiagnostic ("FormClosed finalization completed", "mode=FinalizePendingHomeSessionCloseAfterFormClosed");
 					return;
 				}
 				if (_keepBackendSessionOnClose) {
 					if (!_saveKernelWorkbookOnClose) {
+						LogHomeCloseDiagnostic ("FormClosed completed", "mode=CompleteHomeNavigation");
 						_kernelWorkbookService.CompleteHomeNavigation (_restoreKernelWorkbookOnClose);
 					} else {
+						LogHomeCloseDiagnostic ("FormClosed completed", "mode=save-kernel-without-pending-finalization");
 						_logger.Info ("KernelHomeForm closed without pending HOME session finalization. saveKernelWorkbook=True");
 					}
 				} else {
+					LogHomeCloseDiagnostic ("FormClosed completed", "mode=close-home-without-pending-finalization");
 					_logger.Info ("KernelHomeForm closed without pending HOME session finalization. saveKernelWorkbook=False");
 				}
 			} finally {
@@ -582,6 +607,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				if (base.IsDisposed) {
 					return;
 				}
+				LogHomeCloseDiagnostic ("Close success notification received", "action=close-form");
 				_finalizePendingHomeSessionCloseOnFormClosed = true;
 				_allowImmediateFormClose = true;
 				ExitPendingHomeSessionCloseState ();
@@ -596,6 +622,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				if (base.IsDisposed) {
 					return;
 				}
+				LogHomeCloseDiagnostic ("Close failure notification received", "action=restore-form");
 				_allowImmediateFormClose = false;
 				_finalizePendingHomeSessionCloseOnFormClosed = false;
 				ExitPendingHomeSessionCloseState ();
@@ -623,6 +650,56 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				return;
 			}
 			action ();
+		}
+
+		private void LogHomeCloseDiagnostic (string stage, string detail = null)
+		{
+			if (_logger == null) {
+				return;
+			}
+			string traceId = EnsureHomeCloseTraceContext ();
+			string entryPointCandidate = ShouldUseServiceMediatedSessionClose () ? ResolveHomeSessionCloseEntryPoint () : string.Empty;
+			string bindingValid = (_kernelWorkbookService != null && _kernelWorkbookService.HasValidHomeWorkbookBinding ()).ToString ();
+			_logger.Info (
+				"KernelHomeForm close diagnostic. stage="
+				+ (stage ?? string.Empty)
+				+ ", detail="
+				+ (detail ?? string.Empty)
+				+ ", traceId="
+				+ traceId
+				+ ", entryPointCandidate="
+				+ entryPointCandidate
+				+ ", bindingValid="
+				+ bindingValid
+				+ ", keepBackendSessionOnClose="
+				+ _keepBackendSessionOnClose.ToString ()
+				+ ", restoreKernelWorkbookOnClose="
+				+ _restoreKernelWorkbookOnClose.ToString ()
+				+ ", saveKernelWorkbookOnClose="
+				+ _saveKernelWorkbookOnClose.ToString ()
+				+ ", allowImmediateFormClose="
+				+ _allowImmediateFormClose.ToString ()
+				+ ", homeSessionClosePending="
+				+ _homeSessionClosePending.ToString ()
+				+ ", finalizePendingHomeSessionCloseOnFormClosed="
+				+ _finalizePendingHomeSessionCloseOnFormClosed.ToString ()
+				+ ", formVisible="
+				+ base.Visible.ToString ()
+				+ ", formWindowState="
+				+ base.WindowState.ToString ());
+		}
+
+		private string EnsureHomeCloseTraceContext ()
+		{
+			string currentTraceId = KernelFlickerTraceContext.CurrentTraceId;
+			if (!string.IsNullOrWhiteSpace (currentTraceId)) {
+				return currentTraceId;
+			}
+			if (!string.IsNullOrWhiteSpace (_kernelFlickerTraceId)) {
+				KernelFlickerTraceContext.SetCurrentTrace (_kernelFlickerTraceId);
+				return _kernelFlickerTraceId;
+			}
+			return string.Empty;
 		}
 
 		private void BeginKernelCaseCreationFlow (string reason)

@@ -138,15 +138,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _logger.Info("Case post-close quitting Excel because no visible workbook remains.");
-            ExcelApplicationStateScope quitScope = new ExcelApplicationStateScope(_application);
+            bool previousDisplayAlerts = true;
+            bool hasDisplayAlertsSnapshot = false;
             try
             {
-                quitScope.SetDisplayAlerts(false);
+                previousDisplayAlerts = _application.DisplayAlerts;
+                hasDisplayAlertsSnapshot = true;
+                _application.DisplayAlerts = false;
                 _application.Quit();
             }
-            finally
+            catch
             {
-                quitScope.Dispose();
+                if (hasDisplayAlertsSnapshot)
+                {
+                    try
+                    {
+                        _application.DisplayAlerts = previousDisplayAlerts;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                throw;
             }
         }
 

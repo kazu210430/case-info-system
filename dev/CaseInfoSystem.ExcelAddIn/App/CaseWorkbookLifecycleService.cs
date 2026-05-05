@@ -476,15 +476,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     _sessionDirtyWorkbookKeys.Remove(workbookKey);
                     SchedulePostCloseFollowUp(workbookKey, folderPath);
 
-                    ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
+                    bool previousDisplayAlerts = true;
+                    bool hasDisplayAlertsSnapshot = false;
                     try
                     {
-                        closeScope.SetDisplayAlerts(false);
-                        workbook.Close(SaveChanges: false);
+                        previousDisplayAlerts = _application.DisplayAlerts;
+                        hasDisplayAlertsSnapshot = true;
+                        _application.DisplayAlerts = false;
+                        WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
                     }
                     finally
                     {
-                        closeScope.Dispose();
+                        if (hasDisplayAlertsSnapshot)
+                        {
+                            _application.DisplayAlerts = previousDisplayAlerts;
+                        }
                     }
                 }
             }

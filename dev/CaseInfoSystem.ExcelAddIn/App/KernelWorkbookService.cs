@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -31,7 +32,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
         private bool _isHomeDisplayPrepared;
         private KernelHomeBinding _homeBinding;
-        private PendingManagedHomeSessionClose _pendingManagedHomeSessionClose;
+        private PendingHomeSessionClose _pendingHomeSessionClose;
+        private Action _homeSessionCloseReadyToCloseForm;
+        private Action _homeSessionCloseFailed;
 
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -55,9 +58,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 HandleManagedHomeSessionCloseFailed);
         }
 
+        internal void RegisterHomeSessionCloseObserver(Action onReadyToCloseForm, Action onFailed)
+        {
+            _homeSessionCloseReadyToCloseForm = onReadyToCloseForm;
+            _homeSessionCloseFailed = onFailed;
+        }
+
+        internal KernelHomeSessionCloseRequestStatus RequestCloseHomeSessionFromForm(bool saveKernelWorkbook, string entryPoint)
+        {
+            string caller = ResolveExternalCaller();
+            return _homeSessionCloseCoordinator.ExecuteForForm(saveKernelWorkbook, entryPoint, caller);
+        }
+
+        internal void FinalizePendingHomeSessionCloseAfterFormClosed()
+        {
+            _homeSessionCloseCoordinator.FinalizePendingCloseAfterFormClosed();
+        }
+
         private void HandleManagedHomeSessionCloseStarted(string workbookKey, Excel.Workbook workbook, bool saveChanges)
         {
-            PendingManagedHomeSessionClose pendingClose = FindPendingManagedHomeSessionClose(workbookKey);
+            PendingHomeSessionClose pendingClose = FindPendingHomeSessionClose(workbookKey);
             if (pendingClose == null)
             {
                 return;
@@ -74,7 +94,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void HandleManagedHomeSessionCloseSucceeded(string workbookKey, Excel.Workbook workbook, bool saveChanges)
         {
-            PendingManagedHomeSessionClose pendingClose = TakePendingManagedHomeSessionClose(workbookKey);
+            PendingHomeSessionClose pendingClose = FindPendingHomeSessionClose(workbookKey);
             if (pendingClose == null)
             {
                 return;
@@ -87,12 +107,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + GetWorkbookFullNameCore(workbook)
                 + ", saveChanges="
                 + saveChanges.ToString());
-            _homeSessionCloseCoordinator.CompleteDeferredHomeSession(pendingClose, workbook);
+
+            if (pendingClose.DeferSessionCompletionUntilFormClosed)
+            {
+                pendingClose.MarkBackendCloseCompleted();
+                NotifyHomeSessionCloseReadyToCloseForm();
+                return;
+            }
+
+            _homeSessionCloseCoordinator.CompleteDeferredHomeSession(TakePendingHomeSessionClose(workbookKey), workbook);
         }
 
         private void HandleManagedHomeSessionCloseFailed(string workbookKey, Excel.Workbook workbook, bool saveChanges, Exception exception)
         {
-            PendingManagedHomeSessionClose pendingClose = TakePendingManagedHomeSessionClose(workbookKey);
+            PendingHomeSessionClose pendingClose = TakePendingHomeSessionClose(workbookKey);
             if (pendingClose == null)
             {
                 return;
@@ -110,51 +138,81 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", exceptionMessage="
                 + (exception == null ? string.Empty : exception.Message ?? string.Empty),
                 exception);
+
+            if (pendingClose.DeferSessionCompletionUntilFormClosed)
+            {
+                NotifyHomeSessionCloseFailed();
+            }
         }
 
-        private void RegisterPendingManagedHomeSessionClose(
-            string workbookKey,
-            bool saveKernelWorkbook,
-            KernelHomeSessionCompletionAction completionAction,
-            string entryPoint)
+        private void NotifyHomeSessionCloseReadyToCloseForm()
         {
-            if (string.IsNullOrWhiteSpace(workbookKey))
+            if (_homeSessionCloseReadyToCloseForm == null)
             {
                 return;
             }
 
-            _pendingManagedHomeSessionClose = new PendingManagedHomeSessionClose(
+            _homeSessionCloseReadyToCloseForm();
+        }
+
+        private void NotifyHomeSessionCloseFailed()
+        {
+            if (_homeSessionCloseFailed == null)
+            {
+                return;
+            }
+
+            _homeSessionCloseFailed();
+        }
+
+        private void RegisterPendingHomeSessionClose(
+            string workbookKey,
+            bool saveKernelWorkbook,
+            KernelHomeSessionCompletionAction completionAction,
+            string entryPoint,
+            bool deferSessionCompletionUntilFormClosed,
+            bool backendCloseCompleted)
+        {
+            _pendingHomeSessionClose = new PendingHomeSessionClose(
                 workbookKey,
                 saveKernelWorkbook,
                 completionAction,
-                entryPoint);
+                entryPoint,
+                deferSessionCompletionUntilFormClosed,
+                backendCloseCompleted);
             _logger.Info(
-                "CloseHomeSession deferred UI release until managed close succeeds. entryPoint="
+                "CloseHomeSession pending close registered. entryPoint="
                 + (entryPoint ?? string.Empty)
                 + ", workbook="
-                + workbookKey
+                + (workbookKey ?? string.Empty)
                 + ", completionAction="
-                + completionAction.ToString());
+                + completionAction.ToString()
+                + ", deferSessionCompletionUntilFormClosed="
+                + deferSessionCompletionUntilFormClosed.ToString()
+                + ", backendCloseCompleted="
+                + backendCloseCompleted.ToString());
         }
 
-        private PendingManagedHomeSessionClose FindPendingManagedHomeSessionClose(string workbookKey)
+        private PendingHomeSessionClose FindPendingHomeSessionClose(string workbookKey)
         {
-            if (_pendingManagedHomeSessionClose == null
+            if (_pendingHomeSessionClose == null
                 || string.IsNullOrWhiteSpace(workbookKey)
-                || !string.Equals(_pendingManagedHomeSessionClose.WorkbookKey, workbookKey, StringComparison.OrdinalIgnoreCase))
+                || !string.Equals(_pendingHomeSessionClose.WorkbookKey, workbookKey, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
 
-            return _pendingManagedHomeSessionClose;
+            return _pendingHomeSessionClose;
         }
 
-        private PendingManagedHomeSessionClose TakePendingManagedHomeSessionClose(string workbookKey)
+        private PendingHomeSessionClose TakePendingHomeSessionClose(string workbookKey = null)
         {
-            PendingManagedHomeSessionClose pendingClose = FindPendingManagedHomeSessionClose(workbookKey);
+            PendingHomeSessionClose pendingClose = string.IsNullOrWhiteSpace(workbookKey)
+                ? _pendingHomeSessionClose
+                : FindPendingHomeSessionClose(workbookKey);
             if (pendingClose != null)
             {
-                _pendingManagedHomeSessionClose = null;
+                _pendingHomeSessionClose = null;
             }
 
             return pendingClose;
@@ -1790,6 +1848,51 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal void Execute(bool saveKernelWorkbook, string entryPoint, string caller)
             {
+                ExecuteCore(
+                    saveKernelWorkbook,
+                    entryPoint,
+                    caller,
+                    deferSessionCompletionUntilFormClosed: false);
+            }
+
+            internal KernelHomeSessionCloseRequestStatus ExecuteForForm(bool saveKernelWorkbook, string entryPoint, string caller)
+            {
+                return ExecuteCore(
+                    saveKernelWorkbook,
+                    entryPoint,
+                    caller,
+                    deferSessionCompletionUntilFormClosed: true);
+            }
+
+            internal void FinalizePendingCloseAfterFormClosed()
+            {
+                PendingHomeSessionClose pendingClose = _owner.TakePendingHomeSessionClose();
+                if (pendingClose == null)
+                {
+                    return;
+                }
+
+                if (!pendingClose.DeferSessionCompletionUntilFormClosed || !pendingClose.BackendCloseCompleted)
+                {
+                    _owner._logger.Warn(
+                        "CloseHomeSession finalization skipped because pending close was not ready. entryPoint="
+                        + (pendingClose.EntryPoint ?? string.Empty)
+                        + ", backendCloseCompleted="
+                        + pendingClose.BackendCloseCompleted.ToString());
+                    return;
+                }
+
+                CompleteDeferredHomeSession(
+                    pendingClose,
+                    _owner.ResolveWorkbookForHomeDisplayOrClose("FinalizePendingHomeSessionCloseAfterFormClosed"));
+            }
+
+            private KernelHomeSessionCloseRequestStatus ExecuteCore(
+                bool saveKernelWorkbook,
+                string entryPoint,
+                string caller,
+                bool deferSessionCompletionUntilFormClosed)
+            {
                 Excel.Workbook workbook = _owner.ResolveWorkbookForHomeDisplayOrClose(entryPoint);
                 bool otherVisibleWorkbookExists = _owner.HasOtherVisibleWorkbookCore(workbook);
                 bool otherWorkbookExists = _owner.HasOtherWorkbookCore(workbook);
@@ -1836,24 +1939,63 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + skipDisplayRestoreForCaseCreation.ToString());
 
                 bool deferCompletion = false;
-                if (workbook != null
-                    && !ExecuteCloseBranch(
-                        workbook,
-                        saveKernelWorkbook,
-                        skipDisplayRestoreForCaseCreation,
-                        completionAction,
-                        entryPoint,
-                        out deferCompletion))
+                try
                 {
-                    return;
+                    if (workbook != null
+                        && !ExecuteCloseBranch(
+                            workbook,
+                            saveKernelWorkbook,
+                            skipDisplayRestoreForCaseCreation,
+                            completionAction,
+                            entryPoint,
+                            deferSessionCompletionUntilFormClosed,
+                            out deferCompletion))
+                    {
+                        return KernelHomeSessionCloseRequestStatus.Rejected;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _owner._logger.Error(
+                        "CloseHomeSession failed before completion. entryPoint="
+                        + (entryPoint ?? string.Empty)
+                        + ", workbook="
+                        + _owner.GetWorkbookFullNameCore(workbook)
+                        + ", saveKernelWorkbook="
+                        + saveKernelWorkbook.ToString(),
+                        ex);
+                    if (!deferSessionCompletionUntilFormClosed)
+                    {
+                        throw;
+                    }
+
+                    MessageBox.Show(
+                        "保存または終了に失敗しました。もう一度お試しください。",
+                        "案件情報System",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return KernelHomeSessionCloseRequestStatus.Rejected;
                 }
 
                 if (deferCompletion)
                 {
-                    return;
+                    return KernelHomeSessionCloseRequestStatus.Pending;
+                }
+
+                if (deferSessionCompletionUntilFormClosed)
+                {
+                    _owner.RegisterPendingHomeSessionClose(
+                        _owner.GetWorkbookFullNameCore(workbook),
+                        saveKernelWorkbook,
+                        completionAction,
+                        entryPoint,
+                        deferSessionCompletionUntilFormClosed: true,
+                        backendCloseCompleted: true);
+                    return KernelHomeSessionCloseRequestStatus.Completed;
                 }
 
                 CompleteHomeSession(saveKernelWorkbook, completionAction, workbook, entryPoint);
+                return KernelHomeSessionCloseRequestStatus.Completed;
             }
 
             private bool ExecuteCloseBranch(
@@ -1862,6 +2004,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 bool skipDisplayRestoreForCaseCreation,
                 KernelHomeSessionCompletionAction completionAction,
                 string entryPoint,
+                bool deferSessionCompletionUntilFormClosed,
                 out bool deferCompletion)
             {
                 deferCompletion = false;
@@ -1911,11 +2054,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         return false;
                     }
 
-                    _owner.RegisterPendingManagedHomeSessionClose(
+                    _owner.RegisterPendingHomeSessionClose(
                         _owner.GetWorkbookFullNameCore(workbook),
                         saveKernelWorkbook,
                         completionAction,
-                        entryPoint);
+                        entryPoint,
+                        deferSessionCompletionUntilFormClosed,
+                        backendCloseCompleted: false);
                     deferCompletion = true;
                     return true;
                 }
@@ -1930,7 +2075,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return true;
             }
 
-            internal void CompleteDeferredHomeSession(PendingManagedHomeSessionClose pendingClose, Excel.Workbook workbook)
+            internal void CompleteDeferredHomeSession(PendingHomeSessionClose pendingClose, Excel.Workbook workbook)
             {
                 if (pendingClose == null)
                 {
@@ -1995,18 +2140,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private sealed class PendingManagedHomeSessionClose
+        private sealed class PendingHomeSessionClose
         {
-            internal PendingManagedHomeSessionClose(
+            internal PendingHomeSessionClose(
                 string workbookKey,
                 bool saveKernelWorkbook,
                 KernelHomeSessionCompletionAction completionAction,
-                string entryPoint)
+                string entryPoint,
+                bool deferSessionCompletionUntilFormClosed,
+                bool backendCloseCompleted)
             {
                 WorkbookKey = workbookKey ?? string.Empty;
                 SaveKernelWorkbook = saveKernelWorkbook;
                 CompletionAction = completionAction;
                 EntryPoint = entryPoint ?? string.Empty;
+                DeferSessionCompletionUntilFormClosed = deferSessionCompletionUntilFormClosed;
+                BackendCloseCompleted = backendCloseCompleted;
             }
 
             internal string WorkbookKey { get; }
@@ -2016,6 +2165,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal KernelHomeSessionCompletionAction CompletionAction { get; }
 
             internal string EntryPoint { get; }
+
+            internal bool DeferSessionCompletionUntilFormClosed { get; }
+
+            internal bool BackendCloseCompleted { get; private set; }
+
+            internal void MarkBackendCloseCompleted()
+            {
+                BackendCloseCompleted = true;
+            }
         }
 
         private sealed class KernelHomeBinding
@@ -2064,6 +2222,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal Action<Excel.Workbook> ConcealKernelWorkbookWindowsForCaseCreationClose { get; set; }
         }
+    }
+
+    internal enum KernelHomeSessionCloseRequestStatus
+    {
+        Rejected = 0,
+        Pending = 1,
+        Completed = 2
     }
 
     internal sealed class KernelSettingsState

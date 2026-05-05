@@ -57,7 +57,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private IDisposable _kernelCaseCreationFlowScope;
 
-		private bool _isClosingBySession;
+		private bool _allowImmediateFormClose;
+
+		private bool _homeSessionClosePending;
+
+		private bool _finalizePendingHomeSessionCloseOnFormClosed;
 
 		private string _kernelFlickerTraceId = string.Empty;
 
@@ -96,6 +100,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			_kernelWorkbookService = kernelWorkbookService;
 			_kernelCaseCreationCommandService = kernelCaseCreationCommandService;
 			_logger = logger;
+			_kernelWorkbookService.RegisterHomeSessionCloseObserver (
+				HandleHomeSessionCloseReadyToCloseForm,
+				HandleHomeSessionCloseFailed);
 			InitializeRuntime ();
 		}
 
@@ -158,6 +165,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				SelectDefaultRoot ();
 			};
 			base.Shown += KernelHomeForm_Shown;
+			base.FormClosing += KernelHomeForm_FormClosing;
 			base.FormClosed += KernelHomeForm_FormClosed;
 			ApplyHandCursorToButtons (this);
 		}
@@ -420,28 +428,30 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private void CloseHomeSession ()
 		{
-			_isClosingBySession = true;
 			Close ();
 		}
 
 		internal void PrepareForExistingCaseOpenClose ()
 		{
-			_isClosingBySession = true;
 			_sheetNavigationHandled = false;
 			_keepBackendSessionOnClose = true;
 			_restoreKernelWorkbookOnClose = false;
 			_saveKernelWorkbookOnClose = true;
 		}
 
+		internal void PrepareForSilentDispose ()
+		{
+			_allowImmediateFormClose = true;
+			_sheetNavigationHandled = true;
+			_finalizePendingHomeSessionCloseOnFormClosed = false;
+		}
+
 		private void CloseKernelAfterCaseCreation ()
 		{
-			_isClosingBySession = true;
 			_sheetNavigationHandled = false;
 			_keepBackendSessionOnClose = true;
 			_restoreKernelWorkbookOnClose = false;
 			_saveKernelWorkbookOnClose = true;
-			StopForegroundRetry ();
-			Hide ();
 			Close ();
 		}
 
@@ -463,6 +473,44 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			});
 		}
 
+		private void KernelHomeForm_FormClosing (object sender, FormClosingEventArgs e)
+		{
+			if (_kernelWorkbookService == null) {
+				return;
+			}
+			if (_allowImmediateFormClose) {
+				StopForegroundRetry ();
+				ExitPendingHomeSessionCloseState ();
+				return;
+			}
+			if (_sheetNavigationHandled) {
+				StopForegroundRetry ();
+				return;
+			}
+			if (_homeSessionClosePending) {
+				e.Cancel = true;
+				return;
+			}
+			if (!ShouldUseServiceMediatedSessionClose ()) {
+				return;
+			}
+			KernelHomeSessionCloseRequestStatus requestStatus = _kernelWorkbookService.RequestCloseHomeSessionFromForm (
+				_keepBackendSessionOnClose && _saveKernelWorkbookOnClose,
+				ResolveHomeSessionCloseEntryPoint ());
+			if (requestStatus == KernelHomeSessionCloseRequestStatus.Pending) {
+				EnterPendingHomeSessionCloseState ();
+				e.Cancel = true;
+				return;
+			}
+			if (requestStatus == KernelHomeSessionCloseRequestStatus.Completed) {
+				_finalizePendingHomeSessionCloseOnFormClosed = true;
+				StopForegroundRetry ();
+				return;
+			}
+			ExitPendingHomeSessionCloseState ();
+			e.Cancel = true;
+		}
+
 		private void KernelHomeForm_FormClosed (object sender, FormClosedEventArgs e)
 		{
 			try {
@@ -470,24 +518,111 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 					return;
 				}
 				StopForegroundRetry ();
-				if (!_isClosingBySession) {
-					_isClosingBySession = true;
-				}
+				_kernelWorkbookService.RegisterHomeSessionCloseObserver (null, null);
 				if (_sheetNavigationHandled) {
 					return;
 				}
+				if (_finalizePendingHomeSessionCloseOnFormClosed) {
+					_kernelWorkbookService.FinalizePendingHomeSessionCloseAfterFormClosed ();
+					return;
+				}
 				if (_keepBackendSessionOnClose) {
-					if (_saveKernelWorkbookOnClose) {
-						_kernelWorkbookService.CloseHomeSessionSavingKernel ();
-					} else {
+					if (!_saveKernelWorkbookOnClose) {
 						_kernelWorkbookService.CompleteHomeNavigation (_restoreKernelWorkbookOnClose);
+					} else {
+						_logger.Info ("KernelHomeForm closed without pending HOME session finalization. saveKernelWorkbook=True");
 					}
 				} else {
-					_kernelWorkbookService.CloseHomeSession ();
+					_logger.Info ("KernelHomeForm closed without pending HOME session finalization. saveKernelWorkbook=False");
 				}
 			} finally {
 				EndKernelCaseCreationFlow ("KernelHomeForm.FormClosed");
 			}
+		}
+
+		private bool ShouldUseServiceMediatedSessionClose ()
+		{
+			if (_sheetNavigationHandled) {
+				return false;
+			}
+			if (!_keepBackendSessionOnClose) {
+				return true;
+			}
+			return _saveKernelWorkbookOnClose;
+		}
+
+		private string ResolveHomeSessionCloseEntryPoint ()
+		{
+			if (_keepBackendSessionOnClose && _saveKernelWorkbookOnClose) {
+				return "KernelHomeForm.FormClosing.CloseHomeSessionSavingKernel";
+			}
+			return "KernelHomeForm.FormClosing.CloseHomeSession";
+		}
+
+		private void EnterPendingHomeSessionCloseState ()
+		{
+			StopForegroundRetry ();
+			_homeSessionClosePending = true;
+			base.UseWaitCursor = true;
+			base.Enabled = false;
+		}
+
+		private void ExitPendingHomeSessionCloseState ()
+		{
+			_homeSessionClosePending = false;
+			base.UseWaitCursor = false;
+			if (!base.IsDisposed) {
+				base.Enabled = true;
+			}
+		}
+
+		private void HandleHomeSessionCloseReadyToCloseForm ()
+		{
+			RunOnUiThread (delegate {
+				if (base.IsDisposed) {
+					return;
+				}
+				_finalizePendingHomeSessionCloseOnFormClosed = true;
+				_allowImmediateFormClose = true;
+				ExitPendingHomeSessionCloseState ();
+				StopForegroundRetry ();
+				Close ();
+			});
+		}
+
+		private void HandleHomeSessionCloseFailed ()
+		{
+			RunOnUiThread (delegate {
+				if (base.IsDisposed) {
+					return;
+				}
+				_allowImmediateFormClose = false;
+				_finalizePendingHomeSessionCloseOnFormClosed = false;
+				ExitPendingHomeSessionCloseState ();
+				if (!base.Visible) {
+					Show ();
+				}
+				base.WindowState = FormWindowState.Normal;
+				ForceBringToFront ("KernelHomeForm.HomeSessionCloseFailed");
+				BeginForegroundRetry ();
+			});
+		}
+
+		private void RunOnUiThread (Action action)
+		{
+			if (action == null) {
+				return;
+			}
+			if (base.IsDisposed) {
+				return;
+			}
+			if (InvokeRequired) {
+				BeginInvoke ((MethodInvoker)delegate {
+					action ();
+				});
+				return;
+			}
+			action ();
 		}
 
 		private void BeginKernelCaseCreationFlow (string reason)

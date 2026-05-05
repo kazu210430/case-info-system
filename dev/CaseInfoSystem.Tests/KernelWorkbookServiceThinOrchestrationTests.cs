@@ -683,6 +683,134 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void RequestCloseHomeSessionFromForm_WhenManagedCloseSucceeds_DefersReleaseUntilFinalize()
+        {
+            int readyNotifications = 0;
+            int failureNotifications = 0;
+            var callLog = new List<string>();
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            var lifecycleService = new KernelWorkbookLifecycleService();
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    ApplyHomeDisplayVisibility = () => { },
+                    HasOtherVisibleWorkbook = _ => true,
+                    HasOtherWorkbook = _ => true,
+                    ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
+                    QuitApplication = () => callLog.Add("quit")
+                });
+
+            service.SetLifecycleService(lifecycleService);
+            service.RegisterHomeSessionCloseObserver(
+                () => readyNotifications++,
+                () => failureNotifications++);
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
+            service.PrepareForHomeDisplay();
+
+            KernelHomeSessionCloseRequestStatus status = service.RequestCloseHomeSessionFromForm(false, "test");
+
+            Assert.Equal(KernelHomeSessionCloseRequestStatus.Pending, status);
+            Assert.Empty(callLog);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+
+            lifecycleService.SimulateManagedCloseSuccess(kernelWorkbook);
+
+            Assert.Equal(1, readyNotifications);
+            Assert.Equal(0, failureNotifications);
+            Assert.Empty(callLog);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+
+            service.FinalizePendingHomeSessionCloseAfterFormClosed();
+
+            Assert.Equal(new[] { "release:True" }, callLog);
+            Assert.False(service.HasValidHomeWorkbookBinding());
+        }
+
+        [Fact]
+        public void RequestCloseHomeSessionFromForm_WhenManagedCloseFails_NotifiesFailureWithoutRelease()
+        {
+            int readyNotifications = 0;
+            int failureNotifications = 0;
+            var callLog = new List<string>();
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            var lifecycleService = new KernelWorkbookLifecycleService();
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    ApplyHomeDisplayVisibility = () => { },
+                    HasOtherVisibleWorkbook = _ => true,
+                    HasOtherWorkbook = _ => true,
+                    ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
+                    QuitApplication = () => callLog.Add("quit")
+                });
+
+            service.SetLifecycleService(lifecycleService);
+            service.RegisterHomeSessionCloseObserver(
+                () => readyNotifications++,
+                () => failureNotifications++);
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
+            service.PrepareForHomeDisplay();
+
+            KernelHomeSessionCloseRequestStatus status = service.RequestCloseHomeSessionFromForm(false, "test");
+
+            Assert.Equal(KernelHomeSessionCloseRequestStatus.Pending, status);
+
+            lifecycleService.SimulateManagedCloseFailure(
+                kernelWorkbook,
+                new COMException("managed close failed", unchecked((int)0x80020005)));
+
+            Assert.Equal(0, readyNotifications);
+            Assert.Equal(1, failureNotifications);
+            Assert.Empty(callLog);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+
+            service.FinalizePendingHomeSessionCloseAfterFormClosed();
+
+            Assert.Empty(callLog);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+        }
+
+        [Fact]
+        public void RequestCloseHomeSessionFromForm_WhenSaveCloseSucceeds_DefersReleaseUntilFinalize()
+        {
+            var callLog = new List<string>();
+            Excel.Workbook kernelWorkbook = CreateKernelWorkbook(@"C:\root");
+            var service = CreateService(
+                new KernelWorkbookService.KernelWorkbookServiceTestHooks
+                {
+                    ApplyHomeDisplayVisibility = () => { },
+                    HasOtherVisibleWorkbook = _ => true,
+                    HasOtherWorkbook = _ => true,
+                    SaveAndCloseKernelWorkbook = workbook => callLog.Add("save-close"),
+                    ReleaseHomeDisplay = showExcel => callLog.Add("release:" + showExcel.ToString()),
+                    QuitApplication = () => callLog.Add("quit")
+                });
+
+            Assert.True(service.BindHomeWorkbook(
+                new WorkbookContext(kernelWorkbook, null, WorkbookRole.Kernel, @"C:\root", kernelWorkbook.FullName, "shHOME")));
+            service.PrepareForHomeDisplay();
+
+            KernelHomeSessionCloseRequestStatus status = service.RequestCloseHomeSessionFromForm(true, "test");
+
+            Assert.Equal(KernelHomeSessionCloseRequestStatus.Completed, status);
+            Assert.Equal(new[] { "save-close" }, callLog);
+            Assert.True(service.HasValidHomeWorkbookBinding());
+
+            service.FinalizePendingHomeSessionCloseAfterFormClosed();
+
+            Assert.Equal(
+                new[]
+                {
+                    "save-close",
+                    "release:True"
+                },
+                callLog);
+            Assert.False(service.HasValidHomeWorkbookBinding());
+        }
+
+        [Fact]
         public void TryShowSheetByCodeName_WhenHomeDisplayPrepared_RestoresWorkbookWindowVisibilityBeforeSheetActivation()
         {
             var loggerMessages = new List<string>();

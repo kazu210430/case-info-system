@@ -556,6 +556,7 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 try
                 {
+                    _kernelHomeForm.PrepareForSilentDispose();
                     _kernelHomeForm.Dispose();
                 }
                 catch (Exception ex)

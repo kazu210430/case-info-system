@@ -365,6 +365,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            string currentManagedCloseMethod = "BeginManagedCloseScope";
+            string failedManagedCloseMethod = null;
             try
             {
                 _logger.Info(
@@ -377,24 +379,86 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 {
                     if (saveChanges)
                     {
+                        currentManagedCloseMethod = "Workbook.Save";
+                        _logger.Info(
+                            "Kernel managed close calling Workbook.Save. workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
                         workbook.Save();
+                        _logger.Info(
+                            "Kernel managed close completed Workbook.Save. workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
                     }
                     else
                     {
+                        currentManagedCloseMethod = "WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose";
                         WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose(workbook);
                     }
 
                     ExcelApplicationStateScope closeScope = new ExcelApplicationStateScope(_application);
                     try
                     {
+                        currentManagedCloseMethod = "ExcelApplicationStateScope.SetDisplayAlerts(false)";
+                        _logger.Info(
+                            "Kernel managed close calling ExcelApplicationStateScope.SetDisplayAlerts(false). workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
                         closeScope.SetDisplayAlerts(false);
-                        workbook.Close(SaveChanges: false);
+                        _logger.Info(
+                            "Kernel managed close completed ExcelApplicationStateScope.SetDisplayAlerts(false). workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
+                        currentManagedCloseMethod = "Workbook.Close(false, Type.Missing, Type.Missing)";
+                        _logger.Info(
+                            "Kernel managed close calling Workbook.Close(false, Type.Missing, Type.Missing). workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
+                        WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
+                        _logger.Info(
+                            "Kernel managed close completed Workbook.Close(false, Type.Missing, Type.Missing). workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
+                    }
+                    catch
+                    {
+                        failedManagedCloseMethod = currentManagedCloseMethod;
+                        throw;
                     }
                     finally
                     {
-                        closeScope.Dispose();
+                        _logger.Info(
+                            "Kernel managed close restoring DisplayAlerts scope. workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
+                        try
+                        {
+                            closeScope.Dispose();
+                        }
+                        catch
+                        {
+                            if (string.IsNullOrWhiteSpace(failedManagedCloseMethod))
+                            {
+                                failedManagedCloseMethod = "ExcelApplicationStateScope.Dispose";
+                            }
+
+                            throw;
+                        }
+                        _logger.Info(
+                            "Kernel managed close restored DisplayAlerts scope. workbook="
+                            + GetWorkbookKey(workbook)
+                            + ", saveChanges="
+                            + saveChanges.ToString());
                     }
 
+                    currentManagedCloseMethod = nameof(QuitExcelIfKernelWasLastWorkbook);
                     QuitExcelIfKernelWasLastWorkbook(workbook);
                 }
 
@@ -412,6 +476,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + (workbookKey ?? string.Empty)
                     + ", saveChanges="
                     + saveChanges.ToString()
+                    + ", failedMethod="
+                    + (failedManagedCloseMethod ?? currentManagedCloseMethod)
                     + ", exceptionType="
                     + (ex.GetType().FullName ?? string.Empty)
                     + ", exceptionMessage="

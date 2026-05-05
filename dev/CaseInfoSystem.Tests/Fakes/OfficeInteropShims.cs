@@ -241,6 +241,12 @@ namespace Microsoft.Office.Interop.Excel
 
         public Action CloseBehavior { get; set; }
 
+        public bool? LastCloseSaveChanges { get; private set; }
+
+        public object LastCloseFilename { get; private set; }
+
+        public object LastCloseRouteWorkbook { get; private set; }
+
         public void Save()
         {
             SaveCallCount++;
@@ -256,6 +262,9 @@ namespace Microsoft.Office.Interop.Excel
         public void Close(bool SaveChanges = false, object Filename = null, object RouteWorkbook = null)
         {
             CloseCallCount++;
+            LastCloseSaveChanges = SaveChanges;
+            LastCloseFilename = Filename;
+            LastCloseRouteWorkbook = RouteWorkbook;
             CloseBehavior?.Invoke();
             Application?.Workbooks?.Remove(this);
             if (Application?.ActiveWorkbook == this)

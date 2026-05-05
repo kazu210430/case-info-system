@@ -332,6 +332,7 @@
     <Compile Include="Infrastructure\ComObjectReleaseService.cs" />
     <Compile Include="Infrastructure\ExcelValidationService.cs" />
     <Compile Include="Infrastructure\ExcelApplicationStateScope.cs" />
+    <Compile Include="Infrastructure\WorkbookCloseInteropHelper.cs" />
     <Compile Include="Infrastructure\IExcelInteropService.cs" />
     <Compile Include="Infrastructure\IPathCompatibilityService.cs" />
     <Compile Include="Infrastructure\IWorkbookRoleResolver.cs" />

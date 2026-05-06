@@ -94,30 +94,54 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 			internal int WriteToMasterList (Worksheet masterSheet, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
 			{
-				int num = 3;
-				int num2 = 101;
-				masterSheet.Range [(dynamic)masterSheet.Cells [num, 1], (dynamic)masterSheet.Cells [num2, 3]].ClearContents ();
-				object[,] array = new object[99, 3];
-				int num3 = 0;
+				int num = MasterListFirstDataRow;
+				int num2 = MasterListFirstDataRow + MasterListMaxKeyCount - 1;
+				masterSheet.Range [(dynamic)masterSheet.Cells [num, ColumnA], (dynamic)masterSheet.Cells [num2, ColumnC]].ClearContents ();
+				MasterListRowPayload masterListRowPayload = BuildMasterListRowPayload (templates);
+				_accountingWorkbookService.WriteRangeValues (masterSheet, "$A$" + num.ToString () + ":$C$" + num2.ToString (), masterListRowPayload.Values);
+				return masterListRowPayload.UpdatedCount;
+			}
+
+			private static MasterListRowPayload BuildMasterListRowPayload (IReadOnlyList<TemplateRegistrationValidationEntry> templates)
+			{
+				object[,] array = new object[MasterListMaxKeyCount, 3];
+				int num = 0;
 				if (templates == null) {
-					return 0;
+					return new MasterListRowPayload (array, num);
 				}
 				foreach (TemplateRegistrationValidationEntry template in templates) {
-					if (template == null || !int.TryParse (template.Key, out var result)) {
+					if (!TryBuildMasterListRow (template, array)) {
 						continue;
 					}
-					int num4 = result + 3 - 1;
-					if (num4 >= num && num4 <= num2) {
-						string text = template.FileName ?? string.Empty;
-						int num5 = num4 - num;
-						array [num5, 0] = result.ToString ("00");
-						array [num5, 1] = text;
-						array [num5, 2] = template.DisplayName ?? KernelTemplateSyncService.ExtractDocumentName (text);
-						num3++;
-					}
+					num++;
 				}
-				_accountingWorkbookService.WriteRangeValues (masterSheet, "$A$" + num.ToString () + ":$C$" + num2.ToString (), array);
-				return num3;
+				return new MasterListRowPayload (array, num);
+			}
+
+			private static bool TryBuildMasterListRow (TemplateRegistrationValidationEntry template, object[,] values)
+			{
+				if (template == null || !int.TryParse (template.Key, out var result) || result < 1 || result > MasterListMaxKeyCount) {
+					return false;
+				}
+				string text = template.FileName ?? string.Empty;
+				int num = result - 1;
+				values [num, ColumnA - 1] = result.ToString ("00");
+				values [num, ColumnB - 1] = text;
+				values [num, ColumnC - 1] = template.DisplayName ?? KernelTemplateSyncService.ExtractDocumentName (text);
+				return true;
+			}
+
+			private sealed class MasterListRowPayload
+			{
+				internal object[,] Values { get; }
+
+				internal int UpdatedCount { get; }
+
+				internal MasterListRowPayload (object[,] values, int updatedCount)
+				{
+					Values = values ?? throw new ArgumentNullException ("values");
+					UpdatedCount = updatedCount;
+				}
 			}
 
 			internal int IncrementTaskPaneMasterVersion (Workbook kernelWorkbook)

@@ -132,6 +132,56 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
+		public void WriteToMasterList_WhenTemplatesContainInvalidOrOutOfRangeKeys_WritesOnlyValidRows ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				object[,] capturedValues = null;
+				string capturedAddress = null;
+				harness.AccountingWorkbookService.OnWriteRangeValues = (worksheet, address, values) =>
+				{
+					capturedAddress = address;
+					capturedValues = values;
+				};
+
+				int updatedCount = InvokeWriteToMasterList (harness, new[] {
+					new TemplateRegistrationValidationEntry { Key = "02", FileName = "02_Second.docx", DisplayName = "Second" },
+					new TemplateRegistrationValidationEntry { Key = "100", FileName = "100_OutOfRange.docx", DisplayName = "OutOfRange" },
+					new TemplateRegistrationValidationEntry { Key = "abc", FileName = "abc_Invalid.docx", DisplayName = "Invalid" },
+					new TemplateRegistrationValidationEntry { Key = "0", FileName = "00_Zero.docx", DisplayName = "Zero" },
+					null
+				});
+
+				Assert.Equal (1, updatedCount);
+				Assert.Equal ("$A$3:$C$101", capturedAddress);
+				Assert.NotNull (capturedValues);
+				Assert.Equal (updatedCount, CountWrittenRows (capturedValues));
+				Assert.Null (capturedValues[0, 0]);
+				Assert.Equal ("02", capturedValues[1, 0]);
+				Assert.Equal ("02_Second.docx", capturedValues[1, 1]);
+				Assert.Equal ("Second", capturedValues[1, 2]);
+			}
+		}
+
+		[Fact]
+		public void WriteToMasterList_WhenDisplayNameIsNull_FallsBackToExtractedDocumentName ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				object[,] capturedValues = null;
+				harness.AccountingWorkbookService.OnWriteRangeValues = (worksheet, address, values) => capturedValues = values;
+
+				int updatedCount = InvokeWriteToMasterList (harness, new[] {
+					new TemplateRegistrationValidationEntry { Key = "01", FileName = "01_契約書.docx", DisplayName = null }
+				});
+
+				Assert.Equal (1, updatedCount);
+				Assert.NotNull (capturedValues);
+				Assert.Equal ("01", capturedValues[0, 0]);
+				Assert.Equal ("01_契約書.docx", capturedValues[0, 1]);
+				Assert.Equal ("契約書", capturedValues[0, 2]);
+			}
+		}
+
+		[Fact]
 		public void Execute_WhenMasterSheetStartsProtected_TemporarilyUnprotectsAndRestoresOriginalProtectionState ()
 		{
 			using (TestHarness harness = TestHarness.Create (includeDefinedTags: true, createValidTemplate: true, createBaseFile: true)) {
@@ -267,6 +317,33 @@ namespace CaseInfoSystem.Tests
 			MethodInfo saveSnapshotMethod = publicationExecutor.GetType ().GetMethod ("SaveSnapshotToBaseWorkbook", BindingFlags.Instance | BindingFlags.NonPublic);
 			Assert.NotNull (saveSnapshotMethod);
 			saveSnapshotMethod.Invoke (publicationExecutor, new object[] { harness.BaseWorkbook, snapshotText, masterVersion });
+		}
+
+		private static int InvokeWriteToMasterList (TestHarness harness, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
+		{
+			FieldInfo publicationExecutorField = typeof (KernelTemplateSyncService).GetField ("_publicationExecutor", BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.NotNull (publicationExecutorField);
+			object publicationExecutor = publicationExecutorField.GetValue (harness.Service);
+			Assert.NotNull (publicationExecutor);
+
+			MethodInfo writeToMasterListMethod = publicationExecutor.GetType ().GetMethod ("WriteToMasterList", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+			Assert.NotNull (writeToMasterListMethod);
+			object result = writeToMasterListMethod.Invoke (publicationExecutor, new object[] { harness.MasterSheet, templates });
+			return result is int updatedCount ? updatedCount : 0;
+		}
+
+		private static int CountWrittenRows (object[,] values)
+		{
+			if (values == null) {
+				return 0;
+			}
+			int num = 0;
+			for (int i = 0; i < values.GetLength (0); i++) {
+				if (values [i, 0] != null) {
+					num++;
+				}
+			}
+			return num;
 		}
 
 		private sealed class TestHarness : IDisposable

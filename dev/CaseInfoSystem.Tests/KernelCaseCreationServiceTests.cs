@@ -202,6 +202,20 @@ namespace CaseInfoSystem.Tests
                 Path = caseFolderPath,
                 Application = hiddenApplication
             };
+            Excel.Worksheet homeWorksheet = new Excel.Worksheet
+            {
+                CodeName = "shHOME",
+                Name = "\u30db\u30fc\u30e0",
+                Parent = hiddenWorkbook
+            };
+            Excel.Window hiddenWindow = new Excel.Window
+            {
+                Visible = false,
+                WindowState = Excel.XlWindowState.xlMinimized
+            };
+            hiddenWorkbook.Worksheets.Add(homeWorksheet);
+            hiddenWorkbook.ActiveSheet = homeWorksheet;
+            hiddenWorkbook.Windows.Add(hiddenWindow);
             var transientPaneSuppressionService = new TransientPaneSuppressionService(
                 new FakeExcelInteropService(),
                 new PathCompatibilityService(),
@@ -248,12 +262,16 @@ namespace CaseInfoSystem.Tests
                 Assert.Empty(kernelWorkbook.Application.Workbooks);
                 Assert.Equal(1, hiddenWorkbook.SaveCallCount);
                 Assert.Equal(1, hiddenWorkbook.CloseCallCount);
+                Assert.True(hiddenWindow.Visible);
+                Assert.Equal(Excel.XlWindowState.xlNormal, hiddenWindow.WindowState);
+                Assert.False(hiddenWindow.Activated);
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.True(result.Success);
                 Assert.Equal(finalCaseWorkbookPath, result.CaseWorkbookPath);
                 Assert.True(File.Exists(finalCaseWorkbookPath));
                 Assert.Contains(logs, message => message.IndexOf("hidden session opened", StringComparison.OrdinalIgnoreCase) >= 0);
                 Assert.Contains(logs, message => message.IndexOf("deferred visible presentation", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("interactive CASE workbook window normalized before save", StringComparison.OrdinalIgnoreCase) >= 0);
             }
             finally
             {

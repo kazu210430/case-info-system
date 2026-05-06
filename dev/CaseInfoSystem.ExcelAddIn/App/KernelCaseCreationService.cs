@@ -240,7 +240,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						}
 						_logger.Info ("Kernel saved CASE hidden initialized. path=" + plan.CaseWorkbookPath + ", route=" + hiddenCaseWorkbookSession.RouteName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 					}
-					if (plan.Mode == KernelCaseCreationMode.CreateCaseBatch) {
+					if (deferredVisiblePresentationRequired) {
+						NormalizeInteractiveWorkbookWindowStateBeforeSave (workbook, plan, stopwatch);
+					} else if (plan.Mode == KernelCaseCreationMode.CreateCaseBatch) {
 						NormalizeBatchWorkbookWindowStateBeforeSave (workbook, plan, stopwatch);
 					}
 					elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
@@ -284,7 +286,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			Worksheet worksheet = null;
 			int num = SafeWorkbookWindowCount (workbook);
 			try {
-				window = ResolveOrCreateBatchWorkbookWindow (workbook);
+				window = ResolveOrCreateWorkbookWindowForSave (workbook);
 				if (window == null) {
 					throw new InvalidOperationException ("Batch CASE workbook window could not be resolved before save.");
 				}
@@ -308,7 +310,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private Window ResolveOrCreateBatchWorkbookWindow (Workbook workbook)
+		private void NormalizeInteractiveWorkbookWindowStateBeforeSave (Workbook workbook, KernelCaseCreationPlan plan, Stopwatch stopwatch)
+		{
+			Window window = null;
+			int num = SafeWorkbookWindowCount (workbook);
+			try {
+				window = ResolveOrCreateWorkbookWindowForSave (workbook);
+				if (window == null) {
+					throw new InvalidOperationException ("Interactive CASE workbook window could not be resolved before save.");
+				}
+				window.Visible = true;
+				if (window.WindowState == XlWindowState.xlMinimized) {
+					window.WindowState = XlWindowState.xlNormal;
+				}
+				_logger.Info ("Kernel interactive CASE workbook window normalized before save. path=" + plan.CaseWorkbookPath + ", initialWindowCount=" + num + ", finalWindowCount=" + SafeWorkbookWindowCount (workbook) + ", windowVisible=" + SafeWindowVisible (window) + ", windowState=" + SafeWindowState (window) + ", activeSheet=" + SafeWorksheetName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+			} catch (Exception exception) {
+				_logger.Error ("Kernel interactive CASE workbook window normalization failed. path=" + ((plan == null) ? string.Empty : (plan.CaseWorkbookPath ?? string.Empty)), exception);
+				throw;
+			} finally {
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (window);
+			}
+		}
+
+		private Window ResolveOrCreateWorkbookWindowForSave (Workbook workbook)
 		{
 			if (workbook == null) {
 				return null;

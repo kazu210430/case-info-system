@@ -16,6 +16,13 @@
 - `WorkbookOpen` 直後の window-dependent refresh は shared policy で skip 判定する
 - `KernelUserDataReflectionService` の managed hidden reflection session は非表示処理として扱い、表示制御経路に昇格させない
 
+## CASE新規作成専用 managed hidden create session と表示境界
+
+- CASE新規作成の hidden create session は非表示の作業経路であり、表示完了や foreground の最終責務を持ちません。
+- interactive な CASE 表示は、hidden create session close 後に shared app の `OpenHiddenForCaseDisplay(...)`、`KernelCasePresentationService`、`WorkbookWindowVisibilityService` が引き継ぎます。
+- `KernelHomeForm` / `KernelWorkbookCloseService` は CASE 作成フロー中の Kernel HOME close で display restore を skip し、表示済み CASE より前に Kernel を戻さない契約で動作します。
+- `CreateCaseBatch` だけは保存前に workbook window の normal / visible 正規化を明示的に行います。interactive route は reopen 後の window recovery を前提にしており、保存ファイルへの window state 非残留はこの文書では一般化しません。
+
 ## 禁止事項
 
 - WorkbookOpen 直後に直接 UI 表示制御を行う実装は禁止する

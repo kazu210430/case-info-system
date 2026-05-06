@@ -34,6 +34,19 @@
   - `KernelCaseCreationCommandService` がフォルダ選択を行う複数作成向けの分岐です。
   - 作成後は `KernelCasePresentationService` が CASE ブックを直接表示せず、フォルダ表示へ進める実装があります。
 
+### CASE新規作成専用 managed hidden create session
+
+1. `KernelCaseCreationService.CreateSavedCase(...)` は現コードで `ShouldUseHiddenCreateSession() == true` のため、全モードで `CreateSavedCaseWithoutShowing(...)` を通します。
+2. `CaseWorkbookOpenStrategy.OpenHiddenWorkbook(...)` が hidden create route を選びます。優先順は `app-cache`、未使用時は `legacy-isolated`、環境変数指定時だけ `experimental-shared` です。
+3. `NewCaseDefault` / `CreateCaseSingle` は hidden create session で `InitializeForVisibleCreate(...)`、save、hidden session close を完了したあと、`KernelCasePresentationService` が shared app の `OpenHiddenForCaseDisplay(...)` で CASE を reopen します。
+4. interactive 表示開始後は `KernelHomeForm.CloseKernelAfterCaseCreation()` と `KernelWorkbookCloseService` が Kernel HOME close を完了します。CASE 作成フロー中は `KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(...)` により Kernel を前景へ戻しません。
+5. `CreateCaseBatch` は hidden create session で `InitializeForHiddenCreate(...)` を使い、`NormalizeBatchWorkbookWindowStateBeforeSave(...)` のあとに save / close して完了します。CASE workbook の reopen は行わず、フォルダ表示と HOME 継続へ分岐します。
+
+補足:
+
+- `experimental-shared` という route 名でも、実装は current/shared app ではなく dedicated hidden `Application` を生成する経路です。
+- `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app cache の例外です。
+
 ### 不明点
 
 - `CaseWorkbookInitializer` が初期化時に書き込む全項目の一覧は、この文書では確定しません。

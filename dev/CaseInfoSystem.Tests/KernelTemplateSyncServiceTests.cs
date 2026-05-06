@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Reflection;
 using System.Security;
 using System.Text;
 using CaseInfoSystem.ExcelAddIn.App;
@@ -82,6 +83,51 @@ namespace CaseInfoSystem.Tests
 				Assert.False (string.IsNullOrWhiteSpace (result.BaseSyncError));
 				Assert.Contains ("Base", result.Message);
 				Assert.Equal (1, harness.BaseWorkbook.CloseCallCount);
+			}
+		}
+
+		[Fact]
+		public void SaveSnapshotToBaseWorkbook_WhenSnapshotIsEmpty_WritesCountZeroAndBaseVersion ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				InvokeSaveSnapshotToBaseWorkbook (harness, string.Empty, 7);
+
+				Assert.Equal ("0", harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_COUNT"]);
+				Assert.Equal ("7", harness.BaseProperties["TASKPANE_BASE_MASTER_VERSION"]);
+				Assert.False (harness.BaseProperties.ContainsKey ("TASKPANE_MASTER_VERSION"));
+			}
+		}
+
+		[Fact]
+		public void SaveSnapshotToBaseWorkbook_WhenSnapshotExceedsChunkSize_SplitsIntoMultipleChunks ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				string snapshotText = new string ('A', 240) + new string ('B', 240) + "C";
+
+				InvokeSaveSnapshotToBaseWorkbook (harness, snapshotText, 11);
+
+				Assert.Equal ("3", harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_COUNT"]);
+				Assert.Equal ("11", harness.BaseProperties["TASKPANE_BASE_MASTER_VERSION"]);
+				Assert.Equal ("11", harness.BaseProperties["TASKPANE_MASTER_VERSION"]);
+				Assert.Equal (new string ('A', 240), harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_01"]);
+				Assert.Equal (new string ('B', 240), harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_02"]);
+				Assert.Equal ("C", harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_03"]);
+			}
+		}
+
+		[Fact]
+		public void SaveSnapshotToBaseWorkbook_WhenNewSnapshotIsShorter_ClearsStaleChunks ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				InvokeSaveSnapshotToBaseWorkbook (harness, new string ('X', 481), 3);
+				InvokeSaveSnapshotToBaseWorkbook (harness, "short", 4);
+
+				Assert.Equal ("1", harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_COUNT"]);
+				Assert.Equal ("4", harness.BaseProperties["TASKPANE_BASE_MASTER_VERSION"]);
+				Assert.Equal ("4", harness.BaseProperties["TASKPANE_MASTER_VERSION"]);
+				Assert.Equal ("short", harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_01"]);
+				Assert.Equal (string.Empty, harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_02"]);
+				Assert.Equal (string.Empty, harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_03"]);
 			}
 		}
 
@@ -211,6 +257,18 @@ namespace CaseInfoSystem.Tests
 			worksheet.Protection.AllowUsingPivotTables = false;
 		}
 
+		private static void InvokeSaveSnapshotToBaseWorkbook (TestHarness harness, string snapshotText, int masterVersion)
+		{
+			FieldInfo publicationExecutorField = typeof (KernelTemplateSyncService).GetField ("_publicationExecutor", BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.NotNull (publicationExecutorField);
+			object publicationExecutor = publicationExecutorField.GetValue (harness.Service);
+			Assert.NotNull (publicationExecutor);
+
+			MethodInfo saveSnapshotMethod = publicationExecutor.GetType ().GetMethod ("SaveSnapshotToBaseWorkbook", BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.NotNull (saveSnapshotMethod);
+			saveSnapshotMethod.Invoke (publicationExecutor, new object[] { harness.BaseWorkbook, snapshotText, masterVersion });
+		}
+
 		private sealed class TestHarness : IDisposable
 		{
 			private const string SystemRootPropertyName = "SYSTEM_ROOT";
@@ -251,6 +309,8 @@ namespace CaseInfoSystem.Tests
 
 			internal Dictionary<string, string> KernelProperties { get; }
 
+			internal Dictionary<string, string> BaseProperties { get; }
+
 			internal List<string> Events { get; }
 
 			private TestHarness (bool includeDefinedTags, bool createValidTemplate, bool createBaseFile)
@@ -271,6 +331,7 @@ namespace CaseInfoSystem.Tests
 				KernelWorkbook = CreateKernelWorkbook (_systemRoot, KernelProperties);
 				MasterSheet = KernelWorkbook.Worksheets [1];
 				BaseWorkbook = CreateBaseWorkbook (_systemRoot);
+				BaseProperties = (Dictionary<string, string>)BaseWorkbook.CustomDocumentProperties;
 
 				if (includeDefinedTags) {
 					AddFieldInventorySheet (KernelWorkbook);

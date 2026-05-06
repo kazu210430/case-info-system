@@ -221,25 +221,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 			private void SaveSnapshotToBaseWorkbook (Workbook baseWorkbook, string snapshotText, int masterVersion)
 			{
-				string s = _excelInteropService.TryGetDocumentProperty (baseWorkbook, "TASKPANE_BASE_SNAPSHOT_COUNT");
-				int result;
-				int num = (int.TryParse (s, out result) ? result : 0);
-				if (string.IsNullOrEmpty (snapshotText)) {
-					_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_BASE_SNAPSHOT_COUNT", "0");
-					_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_BASE_MASTER_VERSION", masterVersion.ToString ());
-					return;
+				BaseSnapshotPropertyStorage.Save (_excelInteropService, baseWorkbook, snapshotText, masterVersion);
+			}
+
+			private static class BaseSnapshotPropertyStorage
+			{
+				internal static void Save (ExcelInteropService excelInteropService, Workbook baseWorkbook, string snapshotText, int masterVersion)
+				{
+					string s = excelInteropService.TryGetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp);
+					int result;
+					int num = (int.TryParse (s, out result) ? result : 0);
+					if (string.IsNullOrEmpty (snapshotText)) {
+						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, "0");
+						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString ());
+						return;
+					}
+					int num2 = CalculateChunkCount (snapshotText);
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, num2.ToString ());
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString ());
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneMasterVersionProp, masterVersion.ToString ());
+					WriteSnapshotChunks (excelInteropService, baseWorkbook, snapshotText, num2);
+					ClearStaleSnapshotChunks (excelInteropService, baseWorkbook, num2 + 1, num);
 				}
-				int num2 = (snapshotText.Length - 1) / 240 + 1;
-				_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_BASE_SNAPSHOT_COUNT", num2.ToString ());
-				_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_BASE_MASTER_VERSION", masterVersion.ToString ());
-				_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_MASTER_VERSION", masterVersion.ToString ());
-				for (int i = 1; i <= num2; i++) {
-					int num3 = (i - 1) * 240;
-					int length = Math.Min (240, snapshotText.Length - num3);
-					_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_BASE_SNAPSHOT_" + i.ToString ("00"), snapshotText.Substring (num3, length));
+
+				private static int CalculateChunkCount (string snapshotText)
+				{
+					return (snapshotText.Length - 1) / TaskPaneCacheChunkSize + 1;
 				}
-				for (int j = num2 + 1; j <= num; j++) {
-					_excelInteropService.SetDocumentProperty (baseWorkbook, "TASKPANE_BASE_SNAPSHOT_" + j.ToString ("00"), string.Empty);
+
+				private static void WriteSnapshotChunks (ExcelInteropService excelInteropService, Workbook baseWorkbook, string snapshotText, int chunkCount)
+				{
+					for (int i = 1; i <= chunkCount; i++) {
+						int num = (i - 1) * TaskPaneCacheChunkSize;
+						int length = Math.Min (TaskPaneCacheChunkSize, snapshotText.Length - num);
+						excelInteropService.SetDocumentProperty (baseWorkbook, BuildChunkPropertyName (i), snapshotText.Substring (num, length));
+					}
+				}
+
+				private static void ClearStaleSnapshotChunks (ExcelInteropService excelInteropService, Workbook baseWorkbook, int firstStaleChunkIndex, int previousChunkCount)
+				{
+					for (int i = firstStaleChunkIndex; i <= previousChunkCount; i++) {
+						excelInteropService.SetDocumentProperty (baseWorkbook, BuildChunkPropertyName (i), string.Empty);
+					}
+				}
+
+				private static string BuildChunkPropertyName (int chunkIndex)
+				{
+					return TaskPaneBaseCachePartPropPrefix + chunkIndex.ToString ("00");
 				}
 			}
 		}

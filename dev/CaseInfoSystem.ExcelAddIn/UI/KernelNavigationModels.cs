@@ -32,6 +32,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal const string OpenTemplateList = "open-template-list";
         internal const string OpenCaseList = "open-case-list";
         internal const string RegisterUserInfo = "register-user-info";
+        internal const string OpenTemplateFolder = "open-template-folder";
         internal const string ReflectTemplate = "reflect-template";
     }
 
@@ -54,6 +55,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
             if (isTemplateList)
             {
+                definitions.Add(new KernelNavigationActionDefinition("open-template-folder", "雛形フォルダを開く", SectionAction, true, false));
                 definitions.Add(new KernelNavigationActionDefinition("reflect-template", "雛形登録・更新", SectionAction, true, false));
             }
 

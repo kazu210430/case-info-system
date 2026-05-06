@@ -220,6 +220,8 @@
     <Compile Include="App\KernelCasePathService.cs" />
     <Compile Include="App\KernelCasePresentationService.cs" />
     <Compile Include="App\KernelNameRuleReader.cs" />
+    <Compile Include="App\KernelTemplateFolderPathResolver.cs" />
+    <Compile Include="App\KernelTemplateFolderOpenService.cs" />
     <Compile Include="App\KernelTemplateSyncPreflightService.cs" />
     <Compile Include="App\KernelTemplateSyncService.cs" />
     <Compile Include="App\KernelUserDataRegistrationExecutionService.cs" />

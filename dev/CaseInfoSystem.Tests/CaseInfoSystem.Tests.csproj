@@ -84,6 +84,8 @@
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
     <Compile Include="KernelTemplateSyncPreflightServiceTests.cs" />
+    <Compile Include="KernelNavigationModelsTests.cs" />
+    <Compile Include="KernelTemplateFolderOpenServiceTests.cs" />
     <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
     <Compile Include="TaskPaneDisplayRetryCoordinatorTests.cs" />
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
@@ -147,6 +149,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\PostCloseFollowUpScheduler.cs" Link="Source\App\PostCloseFollowUpScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateSyncPreflightService.cs" Link="Source\App\KernelTemplateSyncPreflightService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateFolderPathResolver.cs" Link="Source\App\KernelTemplateFolderPathResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateFolderOpenService.cs" Link="Source\App\KernelTemplateFolderOpenService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WordTemplateRegistrationValidationService.cs" Link="Source\App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRetryCoordinator.cs" Link="Source\App\TaskPaneDisplayRetryCoordinator.cs" />

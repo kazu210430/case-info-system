@@ -155,6 +155,12 @@ namespace CaseInfoSystem.ExcelAddIn
             KernelWorkbookLifecycleService = kernelWorkbookCoreComposition.KernelWorkbookLifecycleService;
             var userErrorService = new UserErrorService(_logger);
             var folderWindowService = new FolderWindowService(pathCompatibilityService, _logger);
+            var kernelTemplateFolderPathResolver = new KernelTemplateFolderPathResolver(ExcelInteropService, pathCompatibilityService);
+            var kernelTemplateFolderOpenService = new KernelTemplateFolderOpenService(
+                kernelTemplateFolderPathResolver,
+                pathCompatibilityService,
+                folderWindowService,
+                _logger);
             var managedCloseState = new ManagedCloseState();
             var caseFolderOpenService = new CaseFolderOpenService(ExcelInteropService, pathCompatibilityService, folderWindowService);
             var caseClosePromptService = new CaseClosePromptService(ExcelInteropService);
@@ -290,6 +296,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 KernelUserDataReflectionService,
                 kernelUserDataRegistrationExecutionService,
                 kernelTemplateSyncService,
+                kernelTemplateFolderOpenService,
                 _showKernelHomeFromKernelCommand,
                 _logger);
             var kernelSheetCommandTriggerService = new KernelSheetCommandTriggerService(

@@ -22,6 +22,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly KernelTemplateSyncService _kernelTemplateSyncService;
 
+		private readonly KernelTemplateFolderOpenService _kernelTemplateFolderOpenService;
+
 		private readonly Action _showKernelHomeAction;
 
 		private readonly Logger _logger;
@@ -31,6 +33,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			IKernelUserDataReflectionService kernelUserDataReflectionService,
 			KernelUserDataRegistrationExecutionService kernelUserDataRegistrationExecutionService,
 			KernelTemplateSyncService kernelTemplateSyncService,
+			KernelTemplateFolderOpenService kernelTemplateFolderOpenService,
 			Action showKernelHomeAction,
 			Logger logger)
 		{
@@ -38,6 +41,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_kernelUserDataReflectionService = kernelUserDataReflectionService ?? throw new ArgumentNullException ("kernelUserDataReflectionService");
 			_kernelUserDataRegistrationExecutionService = kernelUserDataRegistrationExecutionService ?? throw new ArgumentNullException ("kernelUserDataRegistrationExecutionService");
 			_kernelTemplateSyncService = kernelTemplateSyncService ?? throw new ArgumentNullException ("kernelTemplateSyncService");
+			_kernelTemplateFolderOpenService = kernelTemplateFolderOpenService ?? throw new ArgumentNullException ("kernelTemplateFolderOpenService");
 			_showKernelHomeAction = showKernelHomeAction ?? throw new ArgumentNullException ("showKernelHomeAction");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 		}
@@ -62,6 +66,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					break;
 				case "register-user-info":
 					ExecuteRegisterUserInfo (context);
+					break;
+				case "open-template-folder":
+					ExecuteOpenTemplateFolder (context);
 					break;
 				case "reflect-template":
 					ExecuteReflectTemplate (context);
@@ -127,6 +134,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectTemplate failed.", exception);
 				UserErrorService.ShowOkNotification ("雛形登録・更新を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
+			}
+		}
+
+		private void ExecuteOpenTemplateFolder (WorkbookContext context)
+		{
+			try {
+				var openKernelWorkbook = _kernelWorkbookService.ResolveKernelWorkbook (context);
+				if (openKernelWorkbook == null) {
+					UserErrorService.ShowOkNotification ("Kernel ブックを開いてから実行してください。", "案件情報System", MessageBoxIcon.Exclamation);
+					return;
+				}
+				KernelTemplateFolderOpenService.OpenResult openResult = _kernelTemplateFolderOpenService.TryOpen (openKernelWorkbook);
+				if (!openResult.Success) {
+					UserErrorService.ShowOkNotification (openResult.FailureMessage, "案件情報System", MessageBoxIcon.Exclamation);
+				}
+			} catch (Exception exception) {
+				_logger.Error ("ExecuteOpenTemplateFolder failed.", exception);
+				UserErrorService.ShowOkNotification ("雛形フォルダを開けませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 

@@ -998,29 +998,41 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (showExcel)
             {
-                bool shouldAvoidGlobalExcelWindowRestore = ShouldAvoidGlobalExcelWindowRestore();
-                bool shouldPromoteKernelWindow = !shouldAvoidGlobalExcelWindowRestore
-                    && ShouldPromoteKernelWorkbookOnHomeRelease();
-                KernelWorkbookHomeReleaseAction homeReleaseAction = KernelWorkbookHomeReleaseFallbackPolicy.DecideHomeReleaseAction(
-                    shouldAvoidGlobalExcelWindowRestore: shouldAvoidGlobalExcelWindowRestore,
-                    shouldPromoteKernelWorkbook: shouldPromoteKernelWindow);
-
-                if (homeReleaseAction == KernelWorkbookHomeReleaseAction.SkipRestore)
-                {
-                    _logger.Info("ReleaseHomeDisplay skipped global Excel window restore to preserve other workbook layouts.");
-                    _isHomeDisplayPrepared = false;
-                    return;
-                }
-
-                if (homeReleaseAction == KernelWorkbookHomeReleaseAction.PromoteAndRestore)
-                {
-                    ShowExcelMainWindow();
-                }
-
-                ShowKernelWorkbookWindows(homeReleaseAction == KernelWorkbookHomeReleaseAction.PromoteAndRestore);
+                DispatchHomeDisplayReleaseBranchForShowingExcel();
             }
 
             _isHomeDisplayPrepared = false;
+        }
+
+        private void DispatchHomeDisplayReleaseBranchForShowingExcel()
+        {
+            KernelWorkbookHomeReleaseAction homeReleaseAction = ResolveHomeDisplayReleaseActionForShowingExcel();
+            switch (homeReleaseAction)
+            {
+                case KernelWorkbookHomeReleaseAction.SkipRestore:
+                    _logger.Info("ReleaseHomeDisplay skipped global Excel window restore to preserve other workbook layouts.");
+                    return;
+
+                case KernelWorkbookHomeReleaseAction.PromoteAndRestore:
+                    ShowExcelMainWindow();
+                    ShowKernelWorkbookWindows(activateWorkbookWindow: true);
+                    return;
+
+                case KernelWorkbookHomeReleaseAction.RestoreWithoutPromotion:
+                default:
+                    ShowKernelWorkbookWindows(activateWorkbookWindow: false);
+                    return;
+            }
+        }
+
+        private KernelWorkbookHomeReleaseAction ResolveHomeDisplayReleaseActionForShowingExcel()
+        {
+            bool shouldAvoidGlobalExcelWindowRestore = ShouldAvoidGlobalExcelWindowRestore();
+            bool shouldPromoteKernelWindow = !shouldAvoidGlobalExcelWindowRestore
+                && ShouldPromoteKernelWorkbookOnHomeRelease();
+            return KernelWorkbookHomeReleaseFallbackPolicy.DecideHomeReleaseAction(
+                shouldAvoidGlobalExcelWindowRestore: shouldAvoidGlobalExcelWindowRestore,
+                shouldPromoteKernelWorkbook: shouldPromoteKernelWindow);
         }
 
         /// <summary>

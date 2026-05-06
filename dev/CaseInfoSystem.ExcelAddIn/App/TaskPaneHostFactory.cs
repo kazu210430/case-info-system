@@ -37,12 +37,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal TaskPaneHost CreateHost(string windowKey, Excel.Window window, WorkbookRole role, out string paneRoleName)
         {
-            // Current-state boundary: binding happens here, while concrete pane lifetime is owned by TaskPaneHost and VSTO create/remove stays in ThisAddIn.
+            // Current-state create boundary:
+            // - control construction and ActionInvoked binding stay here,
+            // - concrete pane lifetime starts when TaskPaneHost is constructed,
+            // - VSTO CustomTaskPane create/remove stays in ThisAddIn.
             if (role == WorkbookRole.Kernel)
             {
-                var kernelControl = new KernelNavigationControl();
-                kernelControl.ActionInvoked += (sender, e) => _handleKernelActionInvoked(windowKey, e);
-                var host = new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey);
+                TaskPaneHost host = CreateKernelHost(windowKey, window);
                 paneRoleName = "Kernel";
                 LogHostCreated(host, paneRoleName);
                 return host;
@@ -50,19 +51,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (role == WorkbookRole.Accounting)
             {
-                var accountingControl = new AccountingNavigationControl();
-                accountingControl.ActionInvoked += (sender, e) => _handleAccountingActionInvoked(windowKey, e);
-                var host = new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey);
+                TaskPaneHost host = CreateAccountingHost(windowKey, window);
                 paneRoleName = "Accounting";
                 LogHostCreated(host, paneRoleName);
                 return host;
             }
 
+            TaskPaneHost caseHost = CreateCaseHost(windowKey, window);
+            paneRoleName = "Case";
+            LogHostCreated(caseHost, paneRoleName);
+            return caseHost;
+        }
+
+        // Current-state timing fixed point: Kernel binds ActionInvoked before TaskPaneHost construction.
+        // Do not normalize this with Case; the asymmetry is intentional inventory, not cleanup target.
+        private TaskPaneHost CreateKernelHost(string windowKey, Excel.Window window)
+        {
+            var kernelControl = new KernelNavigationControl();
+            kernelControl.ActionInvoked += (sender, e) => _handleKernelActionInvoked(windowKey, e);
+            return new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey);
+        }
+
+        // Current-state timing fixed point: Accounting also binds before TaskPaneHost construction.
+        private TaskPaneHost CreateAccountingHost(string windowKey, Excel.Window window)
+        {
+            var accountingControl = new AccountingNavigationControl();
+            accountingControl.ActionInvoked += (sender, e) => _handleAccountingActionInvoked(windowKey, e);
+            return new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey);
+        }
+
+        // Current-state timing fixed point: Case constructs TaskPaneHost first, then binds ActionInvoked.
+        // Keep this bind-after-host order exactly as-is; do not align it with the Kernel/Accounting path here.
+        private TaskPaneHost CreateCaseHost(string windowKey, Excel.Window window)
+        {
             var caseControl = new DocumentButtonsControl();
             var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey);
             caseControl.ActionInvoked += (sender, e) => _handleCaseActionInvoked(windowKey, caseControl, e);
-            paneRoleName = "Case";
-            LogHostCreated(caseHost, paneRoleName);
             return caseHost;
         }
 

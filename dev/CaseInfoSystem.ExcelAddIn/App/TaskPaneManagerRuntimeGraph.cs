@@ -386,22 +386,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneNonCaseActionHandler taskPaneNonCaseActionHandler = null;
             TaskPaneActionDispatcher taskPaneActionDispatcher = null;
 
-            // Compose the host factory outside the registry so the registry stays an orchestration owner,
-            // not a secondary composition root for control/binding wiring.
-            var taskPaneHostFactory = new TaskPaneHostFactory(
-                graphContext.AddIn,
-                graphContext.Logger,
-                manager.FormatHostDescriptor,
-                (windowKey, e) => taskPaneNonCaseActionHandler?.HandleKernelActionInvoked(windowKey, e),
-                (windowKey, e) => taskPaneNonCaseActionHandler?.HandleAccountingActionInvoked(windowKey, e),
-                (windowKey, control, e) => taskPaneActionDispatcher?.HandleCaseControlActionInvoked(windowKey, control, e));
-
-            var taskPaneHostRegistry = new TaskPaneHostRegistry(
-                manager.HostsByWindowKey,
-                graphContext.Logger,
-                // Diagnostic-only input for remove-host trace output. Registry does not own identity or metadata timing through this formatter.
-                manager.FormatHostDescriptor,
-                taskPaneHostFactory);
+            // Create-side adapter composition only:
+            // this graph factory decides who collaborates with the create path, but it does not own runtime create timing.
+            // Once refresh/lifecycle code calls into GetOrReplaceHost/CreateHost, the concrete timing still belongs to the
+            // existing TaskPaneHostRegistry -> TaskPaneHostFactory -> TaskPaneHost -> ThisAddIn chain.
+            TaskPaneHostFactory taskPaneHostFactory = CreateTaskPaneHostFactory(
+                manager,
+                graphContext,
+                () => taskPaneNonCaseActionHandler,
+                () => taskPaneActionDispatcher);
+            TaskPaneHostRegistry taskPaneHostRegistry = CreateTaskPaneHostRegistry(manager, graphContext, taskPaneHostFactory);
 
             var taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 manager.HostsByWindowKey,
@@ -494,6 +488,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 taskPaneNonCaseActionHandler,
                 taskPaneActionDispatcher,
                 taskPaneHostFlowService);
+        }
+
+        private static TaskPaneHostFactory CreateTaskPaneHostFactory(
+            TaskPaneManager manager,
+            TaskPaneManagerRuntimeGraphComposeContext graphContext,
+            Func<TaskPaneNonCaseActionHandler> resolveNonCaseActionHandler,
+            Func<TaskPaneActionDispatcher> resolveCaseActionDispatcher)
+        {
+            // Compose-time intent only. Runtime ActionInvoked binding timing remains inside TaskPaneHostFactory/CreateHost(...).
+            return new TaskPaneHostFactory(
+                graphContext.AddIn,
+                graphContext.Logger,
+                manager.FormatHostDescriptor,
+                (windowKey, e) => resolveNonCaseActionHandler()?.HandleKernelActionInvoked(windowKey, e),
+                (windowKey, e) => resolveNonCaseActionHandler()?.HandleAccountingActionInvoked(windowKey, e),
+                (windowKey, control, e) => resolveCaseActionDispatcher()?.HandleCaseControlActionInvoked(windowKey, control, e));
+        }
+
+        private static TaskPaneHostRegistry CreateTaskPaneHostRegistry(
+            TaskPaneManager manager,
+            TaskPaneManagerRuntimeGraphComposeContext graphContext,
+            TaskPaneHostFactory taskPaneHostFactory)
+        {
+            return new TaskPaneHostRegistry(
+                manager.HostsByWindowKey,
+                graphContext.Logger,
+                // Diagnostic-only input for remove-host trace output. Registry does not own identity or metadata timing through this formatter.
+                manager.FormatHostDescriptor,
+                taskPaneHostFactory);
         }
 
         private static string ResolveWorkbookFullName(TaskPaneManagerRuntimeGraphComposeContext graphContext, Excel.Workbook workbook)

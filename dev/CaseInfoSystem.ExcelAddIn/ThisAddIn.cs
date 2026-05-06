@@ -440,8 +440,9 @@ namespace CaseInfoSystem.ExcelAddIn
             }
         }
 
-        // Task pane / HOME 表示の VSTO 境界
-        // WindowActivate / post-action refresh から共通で入る最小限の入口。
+        // TaskPane display-entry boundary.
+        // WindowActivate / post-action refresh から共通で入る create-side refresh/display の入口であり、
+        // concrete VSTO CustomTaskPane create/remove 自体は下の CreateTaskPane(...) / RemoveTaskPane(...) に残す。
         internal void RequestTaskPaneDisplayForTargetWindow(TaskPaneDisplayRequest request, Excel.Workbook workbook, Excel.Window targetWindow)
         {
             if (request != null && request.RefreshIntent == TaskPaneDisplayRefreshIntent.ForceRefresh)
@@ -533,7 +534,8 @@ namespace CaseInfoSystem.ExcelAddIn
         }
 
         // Concrete VSTO adapter boundary for CustomTaskPane creation.
-        // Higher-level ownership stays in TaskPaneHostFactory/TaskPaneHost/TaskPaneHostRegistry/TaskPaneManager.
+        // RequestTaskPaneDisplayForTargetWindow(...) is only the display-entry; the actual VSTO create call stays here.
+        // Higher-level create-side ownership stays in TaskPaneHostFactory/TaskPaneHost/TaskPaneHostRegistry/TaskPaneManager.
         internal CustomTaskPane CreateTaskPane(Excel.Window window, System.Windows.Forms.UserControl control)
         {
             CustomTaskPane pane = CustomTaskPanes.Add(control, TaskPaneTitle, window);
@@ -542,6 +544,7 @@ namespace CaseInfoSystem.ExcelAddIn
         }
 
         // Concrete VSTO adapter boundary for CustomTaskPane removal.
+        // This remains separate from the display-entry above so create/remove adapter calls stay readable without changing timing.
         // Current-state remove ordering is still owned by TaskPaneHost.Dispose().
         internal void RemoveTaskPane(CustomTaskPane pane)
         {

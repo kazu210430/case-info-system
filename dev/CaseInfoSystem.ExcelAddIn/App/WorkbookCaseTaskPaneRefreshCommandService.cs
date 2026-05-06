@@ -31,20 +31,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (workbook == null)
             {
-                MessageBox.Show("対象ブックを取得できませんでした。", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UserErrorService.ShowOkNotification("対象ブックを取得できませんでした。", ProductTitle, MessageBoxIcon.Information);
                 return;
             }
 
             if (_workbookRoleResolver == null || _excelInteropService == null || _resolveWorkbookPaneWindow == null || _isTaskPaneRefreshSucceeded == null)
             {
-                MessageBox.Show("Pane 更新サービスを利用できません。", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                UserErrorService.ShowOkNotification("Pane 更新サービスを利用できません。", ProductTitle, MessageBoxIcon.Warning);
                 return;
             }
 
             WorkbookRole role = _workbookRoleResolver.Resolve(workbook);
             if (role != WorkbookRole.Case)
             {
-                MessageBox.Show("CASE ブックで実行してください。", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UserErrorService.ShowOkNotification("CASE ブックで実行してください。", ProductTitle, MessageBoxIcon.Information);
                 return;
             }
 
@@ -52,7 +52,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool refreshed = _isTaskPaneRefreshSucceeded("RibbonCasePaneRefresh", workbook, window);
             if (!refreshed)
             {
-                MessageBox.Show("文書ボタンパネルを更新できませんでした。", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                UserErrorService.ShowOkNotification("文書ボタンパネルを更新できませんでした。", ProductTitle, MessageBoxIcon.Warning);
             }
         }
     }

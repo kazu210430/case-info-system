@@ -58,7 +58,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					ExecuteReflectTemplate (context);
 					break;
 				default:
-					MessageBox.Show ("未対応の操作です。actionId=" + actionId, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+					UserErrorService.ShowOkNotification ("未対応の操作です。actionId=" + actionId, "案件情報System", MessageBoxIcon.Asterisk);
 					break;
 				}
 			}
@@ -95,7 +95,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			if (!_kernelWorkbookService.TryShowSheetByCodeName (context, codeName, "KernelTaskPane." + (codeName ?? string.Empty))) {
 				_logger.Warn ("Kernel sheet navigation failed. feature=" + featureName + ", codeName=" + (codeName ?? string.Empty));
-				MessageBox.Show (featureName + " を開けませんでした。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				UserErrorService.ShowOkNotification (featureName + " を開けませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 
@@ -103,10 +103,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			try {
 				_kernelUserDataReflectionService.ReflectAll (context);
-				MessageBox.Show ("ユーザー情報を反映しました", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("ユーザー情報を反映しました", "案件情報System", MessageBoxIcon.Asterisk);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteRegisterUserInfo failed.", exception);
-				MessageBox.Show ("ユーザー情報登録を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				UserErrorService.ShowOkNotification ("ユーザー情報登録を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 
@@ -117,7 +117,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				TemplateRegistrationResultForm.ShowNotice ("案件情報System", kernelTemplateSyncResult.Message);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectTemplate failed.", exception);
-				MessageBox.Show ("雛形登録・更新を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				UserErrorService.ShowOkNotification ("雛形登録・更新を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 
@@ -127,7 +127,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_kernelUserDataReflectionService.ReflectToAccountingSetOnly (context);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectAccountingSetOnly failed.", exception);
-				MessageBox.Show ("会計書類セットへの転記でエラーが発生しました。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				UserErrorService.ShowOkNotification ("会計書類セットへの転記でエラーが発生しました。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 
@@ -137,7 +137,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_kernelUserDataReflectionService.ReflectToBaseHomeOnly (context);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectBaseHomeOnly failed.", exception);
-				MessageBox.Show ("Baseホームへの転記でエラーが発生しました。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				UserErrorService.ShowOkNotification ("Baseホームへの転記でエラーが発生しました。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 	}

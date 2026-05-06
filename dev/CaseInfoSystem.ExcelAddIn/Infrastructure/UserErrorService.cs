@@ -5,6 +5,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
 	internal sealed class UserErrorService
 	{
+		private const string DefaultTitle = "案件情報System";
+
 		private readonly Logger _logger;
 
 		internal UserErrorService (Logger logger)
@@ -18,7 +20,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			Exception ex = exception ?? new InvalidOperationException ("不明なエラーが発生しました。");
 			_logger.Error (text, ex);
 			string text2 = "エラーが発生しました。" + Environment.NewLine + Environment.NewLine + "処理: " + text + Environment.NewLine + "種類: " + ex.GetType ().Name + Environment.NewLine + "内容: " + ex.Message;
-			MessageBox.Show (text2, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Hand);
+			ShowOkNotification (text2, DefaultTitle, MessageBoxIcon.Hand);
+		}
+
+		internal static DialogResult ShowOkNotification (string message, string title, MessageBoxIcon icon)
+		{
+			return MessageBox.Show (
+				message ?? string.Empty,
+				string.IsNullOrWhiteSpace (title) ? DefaultTitle : title,
+				MessageBoxButtons.OK,
+				icon);
 		}
 	}
 }

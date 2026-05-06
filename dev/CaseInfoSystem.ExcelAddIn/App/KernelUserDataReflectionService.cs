@@ -336,6 +336,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger.Info("Kernel user data reflection hidden workbook opened in managed session. target=" + workbookKind + ", path=" + workbookPath);
 
                 action(isolatedWorkbook);
+                RestoreOwnedWorkbookWindowVisibilityForSave(isolatedWorkbook, workbookKind, workbookPath);
                 isolatedWorkbook.Save();
             }
             finally
@@ -375,6 +376,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private static Excel.Workbook OpenWorkbookInManagedHiddenSession(Excel.Application application, string workbookPath)
         {
             return application.Workbooks.Open(workbookPath, UpdateLinks: 0, ReadOnly: false);
+        }
+
+        private void RestoreOwnedWorkbookWindowVisibilityForSave(Excel.Workbook workbook, string workbookKind, string workbookPath)
+        {
+            if (workbook == null)
+            {
+                return;
+            }
+
+            _accountingWorkbookService.SetWorkbookWindowsVisible(workbook, true);
+            _logger.Info(
+                "Kernel user data reflection owned workbook windows restored before save. target="
+                + workbookKind
+                + ", path="
+                + workbookPath);
         }
 
         private static void CloseWorkbookQuietly(Excel.Workbook workbook)

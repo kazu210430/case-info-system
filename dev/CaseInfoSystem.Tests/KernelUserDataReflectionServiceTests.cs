@@ -41,7 +41,12 @@ namespace CaseInfoSystem.Tests
                     kernelWorkbook.Worksheets.Add(userDataWorksheet);
 
                     Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
-                    bool? hiddenVisibility = null;
+                    var windowVisibilityChanges = new List<bool>();
+                    accountingWorkbook.SaveBehavior = () =>
+                    {
+                        Assert.Equal(new[] { false, true }, windowVisibilityChanges);
+                        accountingWorkbook.Saved = true;
+                    };
                     Excel.Application.ConfigureNewApplication = application =>
                         application.Workbooks.OpenBehavior = (_, __, ___) => accountingWorkbook;
 
@@ -56,7 +61,7 @@ namespace CaseInfoSystem.Tests
                         templatePath,
                         new AccountingWorkbookService
                         {
-                            OnSetWorkbookWindowsVisible = (_, visible) => hiddenVisibility = visible
+                            OnSetWorkbookWindowsVisible = (_, visible) => windowVisibilityChanges.Add(visible)
                         },
                         new List<string>());
 
@@ -75,7 +80,7 @@ namespace CaseInfoSystem.Tests
                     Assert.False(isolatedApplication.DisplayAlerts);
                     Assert.False(isolatedApplication.ScreenUpdating);
                     Assert.False(isolatedApplication.EnableEvents);
-                    Assert.False(hiddenVisibility.GetValueOrDefault(true));
+                    Assert.Equal(new[] { false, true }, windowVisibilityChanges);
                     Assert.Equal(1, accountingWorkbook.SaveCallCount);
                     Assert.Equal(1, accountingWorkbook.CloseCallCount);
                     Assert.Equal(1, isolatedApplication.QuitCallCount);
@@ -159,6 +164,60 @@ namespace CaseInfoSystem.Tests
                     Excel.Application.ResetCreatedApplications();
                     TryDeleteDirectory(tempDirectory);
                 }
+            }
+        }
+
+        [Fact]
+        public void ReflectToAccountingSetOnly_WhenTemplateIsAlreadyOpen_DoesNotChangeWorkbookWindowVisibility()
+        {
+            string tempDirectory = CreateTempDirectory();
+            try
+            {
+                Excel.Application kernelApplication = new Excel.Application
+                {
+                    DisplayAlerts = true,
+                    EnableEvents = true,
+                    ScreenUpdating = true,
+                    StatusBar = "ready"
+                };
+                string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
+                File.WriteAllText(templatePath, "template");
+
+                Excel.Workbook kernelWorkbook = CreateKernelWorkbook(tempDirectory, kernelApplication);
+                Excel.Worksheet userDataWorksheet = CreateUserDataWorksheet();
+                kernelWorkbook.Worksheets.Add(userDataWorksheet);
+
+                Excel.Workbook openAccountingWorkbook = CreateWorkbook(templatePath);
+                bool visibilityTouched = false;
+                var excelInteropService = new ExcelInteropService
+                {
+                    OnFindOpenWorkbook = _ => openAccountingWorkbook,
+                    OnFindWorksheetByCodeName = (_, __) => userDataWorksheet,
+                    OnReadKeyValueMapFromColumnsAandB = _ => CreateUserDataValues()
+                };
+                var service = CreateService(
+                    excelInteropService,
+                    templatePath,
+                    new AccountingWorkbookService
+                    {
+                        OnSetWorkbookWindowsVisible = (_, __) => visibilityTouched = true
+                    },
+                    new List<string>());
+
+                service.ReflectToAccountingSetOnly(CreateContext(kernelWorkbook, tempDirectory));
+
+                Assert.False(visibilityTouched);
+                Assert.Equal(1, openAccountingWorkbook.SaveCallCount);
+                Assert.Equal(0, openAccountingWorkbook.CloseCallCount);
+                Assert.Equal(0, kernelApplication.QuitCallCount);
+                Assert.True(kernelApplication.DisplayAlerts);
+                Assert.True(kernelApplication.EnableEvents);
+                Assert.True(kernelApplication.ScreenUpdating);
+                Assert.Equal("ready", kernelApplication.StatusBar);
+            }
+            finally
+            {
+                TryDeleteDirectory(tempDirectory);
             }
         }
 

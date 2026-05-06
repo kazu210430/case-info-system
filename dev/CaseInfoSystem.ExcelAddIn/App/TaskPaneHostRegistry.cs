@@ -7,42 +7,29 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    // Orchestrates replace/register/remove over the shared host map.
+    // The shared map itself is still owned by TaskPaneManager, concrete VSTO pane lifetime stays below TaskPaneHost/ThisAddIn,
+    // TaskPaneHostFactory composition now lives outside this type, and the host descriptor formatter is consumed only for diagnostics.
     internal sealed class TaskPaneHostRegistry
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
 
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
-        private readonly ThisAddIn _addIn;
         private readonly Logger _logger;
-        private readonly Func<TaskPaneHost, string> _formatHostDescriptor;
-        private readonly Action<string, KernelNavigationActionEventArgs> _handleKernelActionInvoked;
-        private readonly Action<string, AccountingNavigationActionEventArgs> _handleAccountingActionInvoked;
-        private readonly Action<string, DocumentButtonsControl, TaskPaneActionEventArgs> _handleCaseActionInvoked;
+        private readonly Func<TaskPaneHost, string> _formatHostDescriptorForDiagnostics;
         private readonly TaskPaneHostFactory _taskPaneHostFactory;
 
         internal TaskPaneHostRegistry(
             Dictionary<string, TaskPaneHost> hostsByWindowKey,
-            ThisAddIn addIn,
             Logger logger,
-            Func<TaskPaneHost, string> formatHostDescriptor,
-            Action<string, KernelNavigationActionEventArgs> handleKernelActionInvoked,
-            Action<string, AccountingNavigationActionEventArgs> handleAccountingActionInvoked,
-            Action<string, DocumentButtonsControl, TaskPaneActionEventArgs> handleCaseActionInvoked)
+            Func<TaskPaneHost, string> formatHostDescriptorForDiagnostics,
+            TaskPaneHostFactory taskPaneHostFactory)
         {
             _hostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
-            _addIn = addIn;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _formatHostDescriptor = formatHostDescriptor ?? throw new ArgumentNullException(nameof(formatHostDescriptor));
-            _handleKernelActionInvoked = handleKernelActionInvoked ?? throw new ArgumentNullException(nameof(handleKernelActionInvoked));
-            _handleAccountingActionInvoked = handleAccountingActionInvoked ?? throw new ArgumentNullException(nameof(handleAccountingActionInvoked));
-            _handleCaseActionInvoked = handleCaseActionInvoked ?? throw new ArgumentNullException(nameof(handleCaseActionInvoked));
-            _taskPaneHostFactory = new TaskPaneHostFactory(
-                _addIn,
-                _logger,
-                _formatHostDescriptor,
-                _handleKernelActionInvoked,
-                _handleAccountingActionInvoked,
-                _handleCaseActionInvoked);
+            // Diagnostic-only input: registry does not own host identity, metadata timing, or replace/remove decisions through this formatter.
+            _formatHostDescriptorForDiagnostics = formatHostDescriptorForDiagnostics ?? throw new ArgumentNullException(nameof(formatHostDescriptorForDiagnostics));
+            _taskPaneHostFactory = taskPaneHostFactory ?? throw new ArgumentNullException(nameof(taskPaneHostFactory));
         }
 
         internal void RegisterHost(TaskPaneHost host)
@@ -151,6 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private TaskPaneHost CreateAndRegisterHost(string windowKey, Excel.Window window, WorkbookRole role)
         {
+            // Factory owns control creation and ActionInvoked binding. Registry only decides reuse vs replace and records the host.
             TaskPaneHost host = _taskPaneHostFactory.CreateHost(windowKey, window, role, out string paneRoleName);
             _hostsByWindowKey.Add(windowKey, host);
             _logger.Debug(nameof(TaskPaneHostRegistry), "TaskPane host registered. role=" + paneRoleName + ", windowKey=" + windowKey);
@@ -198,7 +186,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneManager action=remove-host host="
-                + _formatHostDescriptor(host));
+                + _formatHostDescriptorForDiagnostics(host));
         }
     }
 }

@@ -135,6 +135,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostLifecycleService.cs" Link="Source\App\TaskPaneHostLifecycleService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneHostRegistry.cs" Link="Source\App\TaskPaneHostRegistry.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManager.cs" Link="Source\App\TaskPaneManager.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManagerRuntimeGraph.cs" Link="Source\App\TaskPaneManagerRuntimeGraph.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRenderStateEvaluator.cs" Link="Source\App\TaskPaneRenderStateEvaluator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandService.cs" Link="Source\App\DocumentCommandService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionModeService.cs" Link="Source\App\DocumentExecutionModeService.cs" />

@@ -70,14 +70,19 @@ namespace CaseInfoSystem.Tests
 
         private static TaskPaneHostRegistry CreateRegistry(Dictionary<string, TaskPaneHost> hostsByWindowKey)
         {
+            var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();
+            var logger = OrchestrationTestSupport.CreateLogger(new List<string>());
             return new TaskPaneHostRegistry(
                 hostsByWindowKey,
-                new CaseInfoSystem.ExcelAddIn.ThisAddIn(),
-                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                logger,
                 host => host == null ? string.Empty : host.WindowKey,
-                (windowKey, e) => { },
-                (windowKey, e) => { },
-                (windowKey, control, e) => { });
+                new TaskPaneHostFactory(
+                    addIn,
+                    logger,
+                    host => host == null ? string.Empty : host.WindowKey,
+                    (windowKey, e) => { },
+                    (windowKey, e) => { },
+                    (windowKey, control, e) => { }));
         }
     }
 }

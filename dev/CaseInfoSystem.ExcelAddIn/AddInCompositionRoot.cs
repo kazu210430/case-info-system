@@ -673,7 +673,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var taskPaneBusinessActionLauncher = new TaskPaneBusinessActionLauncher(
                 documentCommandService,
                 documentNamePromptService);
-            var taskPaneManager = new TaskPaneManager(
+            var taskPaneManager = TaskPaneManagerRuntimeBootstrap.CreateAttached(
                 _addIn,
                 excelInteropService,
                 caseTaskPaneSnapshotReader,
@@ -685,8 +685,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 accountingInternalCommandService,
                 kernelCaseInteractionState,
                 userErrorService,
-                _logger,
-                testHooks: null);
+                _logger);
             var windowActivatePanePredicateBridge = new ThisAddInWindowActivatePanePredicateBridge(_addIn);
             var windowActivatePaneHandlingService = new WindowActivatePaneHandlingService(
                 windowActivatePanePredicateBridge,

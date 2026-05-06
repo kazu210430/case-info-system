@@ -181,7 +181,7 @@ namespace CaseInfoSystem.Tests
         [Fact]
         public void Decide_ReturnsHide_WhenRequestIsAccepted_AndManagedPaneRemains_ForNonDisplayTarget()
         {
-            var manager = new TaskPaneManager(
+            var manager = TaskPaneManagerRuntimeBootstrap.CreateThinAttachedForTests(
                 OrchestrationTestSupport.CreateLogger(new System.Collections.Generic.List<string>()),
                 OrchestrationTestSupport.CreateKernelCaseInteractionState(new System.Collections.Generic.List<string>()),
                 testHooks: null);

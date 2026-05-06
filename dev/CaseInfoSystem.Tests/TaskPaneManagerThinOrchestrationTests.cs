@@ -18,7 +18,7 @@ namespace CaseInfoSystem.Tests
             var logs = new List<string>();
             var hidden = new List<string>();
             int showAttempts = 0;
-            var manager = new TaskPaneManager(
+            var manager = TaskPaneManagerRuntimeBootstrap.CreateThinAttachedForTests(
                 OrchestrationTestSupport.CreateLogger(logs),
                 OrchestrationTestSupport.CreateKernelCaseInteractionState(new List<string>()),
                 new TaskPaneManager.TaskPaneManagerTestHooks
@@ -51,7 +51,7 @@ namespace CaseInfoSystem.Tests
             KernelCaseInteractionState interactionState = OrchestrationTestSupport.CreateKernelCaseInteractionState(stateLogs);
             using (interactionState.BeginKernelCaseCreationFlow("test"))
             {
-                var manager = new TaskPaneManager(
+                var manager = TaskPaneManagerRuntimeBootstrap.CreateThinAttachedForTests(
                     OrchestrationTestSupport.CreateLogger(new List<string>()),
                     interactionState,
                     new TaskPaneManager.TaskPaneManagerTestHooks
@@ -79,7 +79,7 @@ namespace CaseInfoSystem.Tests
             KernelCaseInteractionState interactionState = OrchestrationTestSupport.CreateKernelCaseInteractionState(stateLogs);
             using (interactionState.BeginKernelCaseCreationFlow("test"))
             {
-                var manager = new TaskPaneManager(
+                var manager = TaskPaneManagerRuntimeBootstrap.CreateThinAttachedForTests(
                     OrchestrationTestSupport.CreateLogger(new List<string>()),
                     interactionState,
                     new TaskPaneManager.TaskPaneManagerTestHooks
@@ -106,7 +106,7 @@ namespace CaseInfoSystem.Tests
             var hidden = new List<string>();
             var stateLogs = new List<string>();
             KernelCaseInteractionState interactionState = OrchestrationTestSupport.CreateKernelCaseInteractionState(stateLogs);
-            var manager = new TaskPaneManager(
+            var manager = TaskPaneManagerRuntimeBootstrap.CreateThinAttachedForTests(
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
                 interactionState,
                 new TaskPaneManager.TaskPaneManagerTestHooks
@@ -372,16 +372,22 @@ namespace CaseInfoSystem.Tests
             TaskPaneSnapshotBuilderService snapshotBuilderService,
             TaskPaneManager.TaskPaneManagerTestHooks hooks)
         {
-            return new TaskPaneManager(
+            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader = snapshotBuilderService ?? new TaskPaneSnapshotBuilderService();
+            var caseTaskPaneViewStateBuilder = new CaseTaskPaneViewStateBuilder();
+            var casePaneSnapshotRenderService = new CasePaneSnapshotRenderService(
+                caseTaskPaneSnapshotReader,
+                caseTaskPaneViewStateBuilder);
+            return TaskPaneManagerRuntimeBootstrap.CreateAttachedForTests(
                 new CaseInfoSystem.ExcelAddIn.ThisAddIn(),
                 new ExcelInteropService(),
-                snapshotBuilderService ?? new TaskPaneSnapshotBuilderService(),
+                caseTaskPaneSnapshotReader,
                 new TaskPaneBusinessActionLauncher(
                     CreateDocumentCommandService(),
                     new DocumentNamePromptService()),
                 new KernelCommandService(),
                 new AccountingSheetCommandService(),
-                new CaseTaskPaneViewStateBuilder(),
+                caseTaskPaneViewStateBuilder,
+                casePaneSnapshotRenderService,
                 new AccountingInternalCommandService(),
                 interactionState,
                 new UserErrorService(),

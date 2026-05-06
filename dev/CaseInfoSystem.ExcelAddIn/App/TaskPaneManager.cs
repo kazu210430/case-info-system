@@ -22,75 +22,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
-        private readonly TaskPaneHostRegistry _taskPaneHostRegistry;
-        private readonly TaskPaneHostLifecycleService _taskPaneHostLifecycleService;
-        private readonly TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
-        private readonly TaskPaneNonCaseActionHandler _taskPaneNonCaseActionHandler;
-        private readonly TaskPaneActionDispatcher _taskPaneActionDispatcher;
-        private readonly TaskPaneHostFlowService _taskPaneHostFlowService;
-        private readonly CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
         private readonly TaskPaneManagerTestHooks _testHooks;
+        private TaskPaneHostRegistry _taskPaneHostRegistry;
+        private TaskPaneHostLifecycleService _taskPaneHostLifecycleService;
+        private TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
+        private TaskPaneNonCaseActionHandler _taskPaneNonCaseActionHandler;
+        private TaskPaneActionDispatcher _taskPaneActionDispatcher;
+        private TaskPaneHostFlowService _taskPaneHostFlowService;
+        private CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
 
-        internal TaskPaneManager(
-            ThisAddIn addIn,
-            ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
-            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
-            KernelCommandService kernelCommandService,
-            AccountingSheetCommandService accountingSheetCommandService,
-            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
-            AccountingInternalCommandService accountingInternalCommandService,
-            KernelCaseInteractionState kernelCaseInteractionState,
-            UserErrorService userErrorService,
-            Logger logger)
-            : this(
-                addIn,
-                excelInteropService,
-                caseTaskPaneSnapshotReader,
-                taskPaneBusinessActionLauncher,
-                kernelCommandService,
-                accountingSheetCommandService,
-                caseTaskPaneViewStateBuilder,
-                new CasePaneSnapshotRenderService(caseTaskPaneSnapshotReader, caseTaskPaneViewStateBuilder),
-                accountingInternalCommandService,
-                kernelCaseInteractionState,
-                userErrorService,
-                logger,
-                testHooks: null)
-        {
-        }
-
-        internal TaskPaneManager(
-            ThisAddIn addIn,
-            ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
-            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
-            KernelCommandService kernelCommandService,
-            AccountingSheetCommandService accountingSheetCommandService,
-            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
-            AccountingInternalCommandService accountingInternalCommandService,
-            KernelCaseInteractionState kernelCaseInteractionState,
-            UserErrorService userErrorService,
-            Logger logger,
-            TaskPaneManagerTestHooks testHooks)
-            : this(
-                addIn,
-                excelInteropService,
-                caseTaskPaneSnapshotReader,
-                taskPaneBusinessActionLauncher,
-                kernelCommandService,
-                accountingSheetCommandService,
-                caseTaskPaneViewStateBuilder,
-                new CasePaneSnapshotRenderService(caseTaskPaneSnapshotReader, caseTaskPaneViewStateBuilder),
-                accountingInternalCommandService,
-                kernelCaseInteractionState,
-                userErrorService,
-                logger,
-                testHooks)
-        {
-        }
-
-        internal TaskPaneManager(
+        private TaskPaneManager(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
             ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
@@ -119,92 +60,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
-            _casePaneCacheRefreshNotificationService = new CasePaneCacheRefreshNotificationService(
-                _logger,
-                workbook => _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook),
-                _testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null
-                    ? new Action<string>(reason => _testHooks.OnCasePaneUpdatedNotification(reason))
-                    : null);
-            _taskPaneHostRegistry = new TaskPaneHostRegistry(
-                _hostsByWindowKey,
-                _addIn,
-                _logger,
-                FormatHostDescriptor,
-                KernelControl_ActionInvoked,
-                AccountingControl_ActionInvoked,
-                (windowKey, control, e) => _taskPaneActionDispatcher?.HandleCaseControlActionInvoked(windowKey, control, e));
-            _taskPaneHostLifecycleService = new TaskPaneHostLifecycleService(
-                _hostsByWindowKey,
-                _taskPaneHostRegistry,
-                _excelInteropService,
-                _logger);
-            _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
-                _hostsByWindowKey,
-                _kernelCaseInteractionState,
-                _logger,
-                _testHooks,
-                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
-                FormatHostDescriptor,
-                workbook => FormatWorkbookDescriptor(workbook),
-                TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor,
-                windowKey => _taskPaneHostLifecycleService.RemoveHost(windowKey));
-            _taskPaneNonCaseActionHandler = new TaskPaneNonCaseActionHandler(
-                _excelInteropService,
-                _kernelCommandService,
-                _accountingSheetCommandService,
-                _accountingInternalCommandService,
-                _userErrorService,
-                _logger,
-                windowKey => _hostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null,
-                RenderHost,
-                (host, reason) => _taskPaneDisplayCoordinator.TryShowHost(host, reason));
-            Func<string, TaskPaneHost> resolveHost = windowKey => _hostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null;
-            var taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(_taskPaneBusinessActionLauncher);
-            var taskPaneCaseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
-                _excelInteropService,
-                _logger,
-                resolveHost);
-            Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> handlePostActionRefresh =
-                (host, workbook, control, actionKind) => _taskPaneActionDispatcher.HandlePostActionRefresh(host, workbook, control, actionKind);
-            var taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
-                taskPaneCaseActionTargetResolver,
-                taskPaneCaseFallbackActionExecutor,
-                _caseTaskPaneViewStateBuilder,
-                _userErrorService,
-                _logger,
-                handlePostActionRefresh);
-            var taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
-                taskPaneCaseActionTargetResolver,
-                taskPaneCaseFallbackActionExecutor,
-                _caseTaskPaneViewStateBuilder,
-                _userErrorService,
-                _logger,
-                handlePostActionRefresh);
-            _taskPaneActionDispatcher = new TaskPaneActionDispatcher(
-                _addIn,
-                _excelInteropService,
-                _caseTaskPaneViewStateBuilder,
-                _userErrorService,
-                _logger,
-                taskPaneCaseFallbackActionExecutor,
-                taskPaneCaseActionTargetResolver,
-                taskPaneCaseAccountingActionHandler,
-                taskPaneCaseDocumentActionHandler,
-                host => _taskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(host),
-                (control, workbook) => _casePaneSnapshotRenderService.RenderAfterAction(control, workbook),
-                (host, reason) => _taskPaneDisplayCoordinator.TryShowHost(host, reason));
-            _taskPaneHostFlowService = new TaskPaneHostFlowService(
-                _excelInteropService,
-                _taskPaneDisplayCoordinator,
-                _taskPaneHostLifecycleService,
-                _logger,
-                FormatContextDescriptor,
-                FormatHostDescriptor,
-                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
-                RenderHost);
         }
 
-        internal TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
+        private TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
         {
             _addIn = null;
             _excelInteropService = null;
@@ -220,46 +78,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
             _testHooks = testHooks;
-            _casePaneCacheRefreshNotificationService = new CasePaneCacheRefreshNotificationService(
-                _logger,
-                workbook => workbook == null ? string.Empty : (workbook.FullName ?? string.Empty),
-                _testHooks != null && _testHooks.OnCasePaneUpdatedNotification != null
-                    ? new Action<string>(reason => _testHooks.OnCasePaneUpdatedNotification(reason))
-                    : null);
-            _taskPaneHostRegistry = new TaskPaneHostRegistry(
-                _hostsByWindowKey,
-                _addIn,
-                _logger,
-                FormatHostDescriptor,
-                KernelControl_ActionInvoked,
-                AccountingControl_ActionInvoked,
-                (windowKey, control, e) => _taskPaneActionDispatcher?.HandleCaseControlActionInvoked(windowKey, control, e));
-            _taskPaneHostLifecycleService = new TaskPaneHostLifecycleService(
-                _hostsByWindowKey,
-                _taskPaneHostRegistry,
-                _excelInteropService,
-                _logger);
-            _taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
-                _hostsByWindowKey,
-                _kernelCaseInteractionState,
-                _logger,
-                _testHooks,
-                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
-                FormatHostDescriptor,
-                workbook => FormatWorkbookDescriptor(workbook),
-                TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor,
-                windowKey => _taskPaneHostLifecycleService.RemoveHost(windowKey));
-            _taskPaneNonCaseActionHandler = null;
-            _taskPaneActionDispatcher = null;
-            _taskPaneHostFlowService = new TaskPaneHostFlowService(
-                _excelInteropService,
-                _taskPaneDisplayCoordinator,
-                _taskPaneHostLifecycleService,
-                _logger,
-                FormatContextDescriptor,
-                FormatHostDescriptor,
-                TaskPaneManagerDiagnosticHelper.SafeGetWindowKey,
-                RenderHost);
+        }
+
+        private void AttachRuntimeGraph(TaskPaneManagerRuntimeGraph runtimeGraph)
+        {
+            if (runtimeGraph == null)
+            {
+                throw new ArgumentNullException(nameof(runtimeGraph));
+            }
+
+            if (_taskPaneHostFlowService != null)
+            {
+                throw new InvalidOperationException("TaskPaneManager runtime graph is already attached.");
+            }
+
+            _casePaneCacheRefreshNotificationService = runtimeGraph.CasePaneCacheRefreshNotificationService ?? throw new ArgumentException("Case pane cache notification service is required.", nameof(runtimeGraph));
+            _taskPaneHostRegistry = runtimeGraph.TaskPaneHostRegistry ?? throw new ArgumentException("Task pane host registry is required.", nameof(runtimeGraph));
+            _taskPaneHostLifecycleService = runtimeGraph.TaskPaneHostLifecycleService ?? throw new ArgumentException("Task pane host lifecycle service is required.", nameof(runtimeGraph));
+            _taskPaneDisplayCoordinator = runtimeGraph.TaskPaneDisplayCoordinator ?? throw new ArgumentException("Task pane display coordinator is required.", nameof(runtimeGraph));
+            _taskPaneNonCaseActionHandler = runtimeGraph.TaskPaneNonCaseActionHandler;
+            _taskPaneActionDispatcher = runtimeGraph.TaskPaneActionDispatcher;
+            _taskPaneHostFlowService = runtimeGraph.TaskPaneHostFlowService ?? throw new ArgumentException("Task pane host flow service is required.", nameof(runtimeGraph));
         }
 
         internal bool RefreshPane(WorkbookContext context, string reason)
@@ -353,7 +192,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         // Render 制御責務: role ごとの描画と signature 更新対象を分離し、再描画条件は上位から受け取る。
-        private void RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
+        internal void RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
         {
             host.WorkbookFullName = context.WorkbookFullName;
 
@@ -424,7 +263,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneNonCaseActionHandler?.HandleAccountingActionInvoked(windowKey, e);
         }
 
-        private string FormatContextDescriptor(WorkbookContext context)
+        internal string FormatContextDescriptor(WorkbookContext context)
         {
             return TaskPaneManagerDiagnosticHelper.FormatContextDescriptor(
                 context,
@@ -432,14 +271,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 context == null ? string.Empty : TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(context.Window));
         }
 
-        private string FormatHostDescriptor(TaskPaneHost host)
+        internal string FormatHostDescriptor(TaskPaneHost host)
         {
             return TaskPaneManagerDiagnosticHelper.FormatHostDescriptor(
                 host,
                 TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(host == null ? null : host.Window));
         }
 
-        private string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        internal string FormatWorkbookDescriptor(Excel.Workbook workbook)
         {
             return FormatWorkbookDescriptor(workbook, null);
         }
@@ -466,6 +305,72 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return workbook == null || _excelInteropService == null
                 ? string.Empty
                 : (_excelInteropService.GetWorkbookName(workbook) ?? string.Empty);
+        }
+
+        internal static string SafeGetWindowKey(Excel.Window window)
+        {
+            return TaskPaneManagerDiagnosticHelper.SafeGetWindowKey(window);
+        }
+
+        internal static string FormatWindowDescriptor(Excel.Window window)
+        {
+            return TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(window);
+        }
+
+        internal Dictionary<string, TaskPaneHost> HostsByWindowKey
+        {
+            get { return _hostsByWindowKey; }
+        }
+
+        // Bridge used only by TaskPaneManagerRuntimeBootstrap. It exposes private construction/attach seams
+        // without reopening TaskPaneManager as a general runtime entrypoint.
+        internal static class RuntimeBootstrapAccess
+        {
+            internal static TaskPaneManager CreateUnattachedFullForBootstrap(TaskPaneManagerRuntimeEntryContext context)
+            {
+                if (context == null)
+                {
+                    throw new ArgumentNullException(nameof(context));
+                }
+
+                return new TaskPaneManager(
+                    context.AddIn,
+                    context.ExcelInteropService,
+                    context.CaseTaskPaneSnapshotReader,
+                    context.TaskPaneBusinessActionLauncher,
+                    context.KernelCommandService,
+                    context.AccountingSheetCommandService,
+                    context.CaseTaskPaneViewStateBuilder,
+                    context.CasePaneSnapshotRenderService,
+                    context.AccountingInternalCommandService,
+                    context.KernelCaseInteractionState,
+                    context.UserErrorService,
+                    context.Logger,
+                    context.TestHooks);
+            }
+
+            internal static TaskPaneManager CreateUnattachedThinForBootstrap(TaskPaneManagerRuntimeEntryContext context)
+            {
+                if (context == null)
+                {
+                    throw new ArgumentNullException(nameof(context));
+                }
+
+                return new TaskPaneManager(
+                    context.Logger,
+                    context.KernelCaseInteractionState,
+                    context.TestHooks);
+            }
+
+            internal static void AttachRuntimeGraphForBootstrap(TaskPaneManager manager, TaskPaneManagerRuntimeGraph runtimeGraph)
+            {
+                if (manager == null)
+                {
+                    throw new ArgumentNullException(nameof(manager));
+                }
+
+                manager.AttachRuntimeGraph(runtimeGraph);
+            }
         }
 
         private static class TaskPaneManagerDiagnosticHelper

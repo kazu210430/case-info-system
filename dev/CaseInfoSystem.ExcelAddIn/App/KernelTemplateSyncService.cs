@@ -70,6 +70,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private sealed class PublicationExecutor
 		{
+			internal sealed class PublicationSideEffectResult
+			{
+				internal int UpdatedCount { get; }
+
+				internal int MasterVersion { get; }
+
+				internal bool BaseSyncSucceeded { get; }
+
+				internal string BaseSyncError { get; }
+
+				internal PublicationSideEffectResult (int updatedCount, int masterVersion, bool baseSyncSucceeded, string baseSyncError)
+				{
+					UpdatedCount = updatedCount;
+					MasterVersion = masterVersion;
+					BaseSyncSucceeded = baseSyncSucceeded;
+					BaseSyncError = baseSyncError ?? string.Empty;
+				}
+			}
+
 			private readonly Application _application;
 
 			private readonly ExcelInteropService _excelInteropService;
@@ -80,16 +99,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 			private readonly CaseWorkbookLifecycleService _caseWorkbookLifecycleService;
 
+			private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
+
 			private readonly Logger _logger;
 
-			internal PublicationExecutor (Application application, ExcelInteropService excelInteropService, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, Logger logger)
+			internal PublicationExecutor (Application application, ExcelInteropService excelInteropService, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, MasterTemplateCatalogService masterTemplateCatalogService, Logger logger)
 			{
 				_application = application ?? throw new ArgumentNullException ("application");
 				_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 				_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 				_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 				_caseWorkbookLifecycleService = caseWorkbookLifecycleService ?? throw new ArgumentNullException ("caseWorkbookLifecycleService");
+				_masterTemplateCatalogService = masterTemplateCatalogService ?? throw new ArgumentNullException ("masterTemplateCatalogService");
 				_logger = logger ?? throw new ArgumentNullException ("logger");
+			}
+
+			internal PublicationSideEffectResult PublishValidatedTemplates (Workbook kernelWorkbook, Worksheet masterSheet, string systemRoot, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
+			{
+				int updatedCount = WriteToMasterList (masterSheet, templates);
+				int masterVersion = IncrementTaskPaneMasterVersion (kernelWorkbook);
+				// Kernel Save is the publication commit boundary.
+				SaveKernelWorkbook (kernelWorkbook);
+				string snapshotText = BuildTaskPaneSnapshot (masterSheet, systemRoot, masterVersion);
+				string errorMessage;
+				bool baseSyncSucceeded = TrySyncTaskPaneSnapshotToBase (systemRoot, snapshotText, masterVersion, out errorMessage);
+				_masterTemplateCatalogService.InvalidateCache (kernelWorkbook);
+				return new PublicationSideEffectResult (updatedCount, masterVersion, baseSyncSucceeded, errorMessage);
 			}
 
 			internal int WriteToMasterList (Worksheet masterSheet, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
@@ -350,8 +385,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly KernelTemplateSyncPreflightService _kernelTemplateSyncPreflightService;
 
-		private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
-
 		private readonly CaseWorkbookLifecycleService _caseWorkbookLifecycleService;
 
 		private readonly PublicationExecutor _publicationExecutor;
@@ -367,10 +400,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_caseListFieldDefinitionRepository = caseListFieldDefinitionRepository ?? throw new ArgumentNullException ("caseListFieldDefinitionRepository");
 			_kernelTemplateSyncPreflightService = kernelTemplateSyncPreflightService ?? throw new ArgumentNullException ("kernelTemplateSyncPreflightService");
-			_masterTemplateCatalogService = masterTemplateCatalogService ?? throw new ArgumentNullException ("masterTemplateCatalogService");
 			_caseWorkbookLifecycleService = caseWorkbookLifecycleService ?? throw new ArgumentNullException ("caseWorkbookLifecycleService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
-			_publicationExecutor = new PublicationExecutor (application, excelInteropService, accountingWorkbookService, pathCompatibilityService, caseWorkbookLifecycleService, logger);
+			_publicationExecutor = new PublicationExecutor (application, excelInteropService, accountingWorkbookService, pathCompatibilityService, caseWorkbookLifecycleService, masterTemplateCatalogService, logger);
 		}
 
 		internal KernelTemplateSyncResult Execute (WorkbookContext context)
@@ -400,26 +432,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					string text = kernelTemplateSyncPreflightResult.TemplateDirectory;
 					TemplateRegistrationValidationSummary templateRegistrationValidationSummary = kernelTemplateSyncPreflightResult.ValidationSummary;
 					IReadOnlyList<TemplateRegistrationValidationEntry> validTemplates = templateRegistrationValidationSummary.GetValidTemplates ();
-					int updatedCount = _publicationExecutor.WriteToMasterList (worksheet, validTemplates);
-					int masterVersion = _publicationExecutor.IncrementTaskPaneMasterVersion (openKernelWorkbook);
-					// Kernel Save is the publication commit boundary.
-					_publicationExecutor.SaveKernelWorkbook (openKernelWorkbook);
-					string snapshotText = _publicationExecutor.BuildTaskPaneSnapshot (worksheet, systemRoot, masterVersion);
-					string errorMessage;
-					bool baseSyncSucceeded = _publicationExecutor.TrySyncTaskPaneSnapshotToBase (systemRoot, snapshotText, masterVersion, out errorMessage);
-					_masterTemplateCatalogService.InvalidateCache (openKernelWorkbook);
-					_logger.Info ("Kernel template sync completed. updatedCount=" + updatedCount + ", detectedCount=" + templateRegistrationValidationSummary.DetectedFileCount + ", excludedCount=" + templateRegistrationValidationSummary.ExcludedTemplateCount + ", warningCount=" + templateRegistrationValidationSummary.WarningFileCount + ", masterVersion=" + masterVersion);
+					PublicationExecutor.PublicationSideEffectResult publicationResult = _publicationExecutor.PublishValidatedTemplates (openKernelWorkbook, worksheet, systemRoot, validTemplates);
+					_logger.Info ("Kernel template sync completed. updatedCount=" + publicationResult.UpdatedCount + ", detectedCount=" + templateRegistrationValidationSummary.DetectedFileCount + ", excludedCount=" + templateRegistrationValidationSummary.ExcludedTemplateCount + ", warningCount=" + templateRegistrationValidationSummary.WarningFileCount + ", masterVersion=" + publicationResult.MasterVersion);
 					return new KernelTemplateSyncResult {
 						Success = true,
-						UpdatedCount = updatedCount,
+						UpdatedCount = publicationResult.UpdatedCount,
 						DetectedCount = templateRegistrationValidationSummary.DetectedFileCount,
 						ExcludedCount = templateRegistrationValidationSummary.ExcludedTemplateCount,
 						WarningCount = templateRegistrationValidationSummary.WarningFileCount,
-						MasterVersion = masterVersion,
+						MasterVersion = publicationResult.MasterVersion,
 						TemplateDirectory = text,
 						TemplateResults = templateRegistrationValidationSummary.TemplateResults,
-						BaseSyncError = errorMessage,
-						Message = BuildCompletedMessage (text, updatedCount, templateRegistrationValidationSummary, stopwatch.Elapsed, masterVersion, baseSyncSucceeded, errorMessage)
+						BaseSyncError = publicationResult.BaseSyncError,
+						Message = BuildCompletedMessage (text, publicationResult.UpdatedCount, templateRegistrationValidationSummary, stopwatch.Elapsed, publicationResult.MasterVersion, publicationResult.BaseSyncSucceeded, publicationResult.BaseSyncError)
 					};
 				} finally {
 					protectionRestoreScope?.Dispose ();

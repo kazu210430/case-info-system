@@ -17,7 +17,7 @@ namespace CaseInfoSystem.Tests
         private static readonly object IsolatedApplicationLock = new object();
 
         [Fact]
-        public void ReflectToAccountingSetOnly_WhenTemplateIsNotOpen_UsesIsolatedLifecycleAndRestoresSharedUiState()
+        public void ReflectToAccountingSetOnly_WhenTemplateIsNotOpen_UsesManagedHiddenReflectionSessionAndRestoresSharedUiState()
         {
             lock (IsolatedApplicationLock)
             {
@@ -41,6 +41,7 @@ namespace CaseInfoSystem.Tests
                     kernelWorkbook.Worksheets.Add(userDataWorksheet);
 
                     Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
+                    bool? hiddenVisibility = null;
                     Excel.Application.ConfigureNewApplication = application =>
                         application.Workbooks.OpenBehavior = (_, __, ___) => accountingWorkbook;
 
@@ -50,22 +51,35 @@ namespace CaseInfoSystem.Tests
                         OnFindWorksheetByCodeName = (_, __) => userDataWorksheet,
                         OnReadKeyValueMapFromColumnsAandB = _ => CreateUserDataValues()
                     };
-                    var service = CreateService(excelInteropService, templatePath, new AccountingWorkbookService(), new List<string>());
+                    var service = CreateService(
+                        excelInteropService,
+                        templatePath,
+                        new AccountingWorkbookService
+                        {
+                            OnSetWorkbookWindowsVisible = (_, visible) => hiddenVisibility = visible
+                        },
+                        new List<string>());
 
                     service.ReflectToAccountingSetOnly(CreateContext(kernelWorkbook, tempDirectory));
 
-                    Excel.Application isolatedApplication = Excel.Application.CreatedApplications.Last();
+                    Assert.Collection(
+                        Excel.Application.CreatedApplications,
+                        application => Assert.Same(kernelApplication, application),
+                        application => Assert.NotSame(kernelApplication, application));
+
+                    Excel.Application isolatedApplication = Excel.Application.CreatedApplications[1];
                     var properties = Assert.IsAssignableFrom<IDictionary<string, string>>(accountingWorkbook.CustomDocumentProperties);
 
-                    Assert.Equal(2, Excel.Application.CreatedApplications.Count);
-                    Assert.NotSame(kernelApplication, isolatedApplication);
+                    Assert.Same(isolatedApplication, accountingWorkbook.Application);
                     Assert.False(isolatedApplication.Visible);
                     Assert.False(isolatedApplication.DisplayAlerts);
                     Assert.False(isolatedApplication.ScreenUpdating);
                     Assert.False(isolatedApplication.EnableEvents);
+                    Assert.False(hiddenVisibility.GetValueOrDefault(true));
                     Assert.Equal(1, accountingWorkbook.SaveCallCount);
                     Assert.Equal(1, accountingWorkbook.CloseCallCount);
                     Assert.Equal(1, isolatedApplication.QuitCallCount);
+                    Assert.Equal(0, kernelApplication.QuitCallCount);
                     Assert.Equal(kernelWorkbook.FullName, properties[AccountingSetSpec.SourceKernelPathPropertyName]);
                     Assert.True(kernelApplication.DisplayAlerts);
                     Assert.True(kernelApplication.EnableEvents);
@@ -81,7 +95,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ReflectToAccountingSetOnly_WhenIsolatedWriteFails_StillCleansUpAndRestoresSharedUiState()
+        public void ReflectToAccountingSetOnly_WhenManagedHiddenReflectionWriteFails_StillCleansUpAndRestoresSharedUiState()
         {
             lock (IsolatedApplicationLock)
             {
@@ -124,14 +138,108 @@ namespace CaseInfoSystem.Tests
                     InvalidOperationException actual = Assert.Throws<InvalidOperationException>(
                         () => service.ReflectToAccountingSetOnly(CreateContext(kernelWorkbook, tempDirectory)));
 
-                    Excel.Application isolatedApplication = Excel.Application.CreatedApplications.Last();
-
                     Assert.Same(expected, actual);
-                    Assert.Equal(2, Excel.Application.CreatedApplications.Count);
-                    Assert.NotSame(kernelApplication, isolatedApplication);
+                    Assert.Collection(
+                        Excel.Application.CreatedApplications,
+                        application => Assert.Same(kernelApplication, application),
+                        application => Assert.NotSame(kernelApplication, application));
+                    Excel.Application isolatedApplication = Excel.Application.CreatedApplications[1];
+                    Assert.Same(isolatedApplication, accountingWorkbook.Application);
                     Assert.Equal(0, accountingWorkbook.SaveCallCount);
                     Assert.Equal(1, accountingWorkbook.CloseCallCount);
                     Assert.Equal(1, isolatedApplication.QuitCallCount);
+                    Assert.Equal(0, kernelApplication.QuitCallCount);
+                    Assert.True(kernelApplication.DisplayAlerts);
+                    Assert.True(kernelApplication.EnableEvents);
+                    Assert.True(kernelApplication.ScreenUpdating);
+                    Assert.Equal("ready", kernelApplication.StatusBar);
+                }
+                finally
+                {
+                    Excel.Application.ResetCreatedApplications();
+                    TryDeleteDirectory(tempDirectory);
+                }
+            }
+        }
+
+        [Fact]
+        public void ReflectToBaseHomeOnly_WhenBaseWorkbookIsNotOpenAndWriteFails_StillCleansUpManagedHiddenReflectionSessionAndRestoresSharedUiState()
+        {
+            lock (IsolatedApplicationLock)
+            {
+                string tempDirectory = CreateTempDirectory();
+                try
+                {
+                    Excel.Application.ResetCreatedApplications();
+
+                    string baseWorkbookPath = Path.Combine(tempDirectory, WorkbookFileNameResolver.BuildBaseWorkbookName(".xlsx"));
+                    File.WriteAllText(baseWorkbookPath, "base");
+
+                    Excel.Application kernelApplication = new Excel.Application
+                    {
+                        DisplayAlerts = true,
+                        EnableEvents = true,
+                        ScreenUpdating = true,
+                        StatusBar = "ready"
+                    };
+                    Excel.Workbook kernelWorkbook = CreateKernelWorkbook(tempDirectory, kernelApplication);
+                    Excel.Worksheet userDataWorksheet = CreateUserDataWorksheet();
+                    kernelWorkbook.Worksheets.Add(userDataWorksheet);
+
+                    Excel.Workbook baseWorkbook = CreateWorkbook(baseWorkbookPath);
+                    baseWorkbook.Worksheets.Add(new Excel.Worksheet
+                    {
+                        CodeName = "shHOME",
+                        Name = "ホーム"
+                    });
+
+                    bool? hiddenVisibility = null;
+                    Excel.Application.ConfigureNewApplication = application =>
+                        application.Workbooks.OpenBehavior = (_, __, ___) => baseWorkbook;
+
+                    Excel.Worksheet mappingWorksheet = new Excel.Worksheet
+                    {
+                        Name = "UserData_BaseMapping"
+                    };
+                    var excelInteropService = new ExcelInteropService
+                    {
+                        OnFindOpenWorkbook = _ => null,
+                        OnFindWorksheetByCodeName = (_, __) => userDataWorksheet,
+                        OnFindWorksheetByName = (_, sheetName) =>
+                            string.Equals(sheetName, "UserData_BaseMapping", StringComparison.OrdinalIgnoreCase)
+                                ? mappingWorksheet
+                                : null,
+                        OnReadKeyValueMapFromColumnsAandB = _ => CreateUserDataValues(),
+                        OnReadRecordsFromHeaderRow = _ => CreateBaseMappingRows()
+                    };
+                    var service = CreateService(
+                        excelInteropService,
+                        Path.Combine(tempDirectory, "unused-accounting-template.xlsx"),
+                        new AccountingWorkbookService
+                        {
+                            OnSetWorkbookWindowsVisible = (_, visible) => hiddenVisibility = visible
+                        },
+                        new List<string>());
+
+                    InvalidOperationException actual = Assert.Throws<InvalidOperationException>(
+                        () => service.ReflectToBaseHomeOnly(CreateContext(kernelWorkbook, tempDirectory)));
+
+                    Assert.Contains("Base HOME", actual.Message);
+                    Assert.Collection(
+                        Excel.Application.CreatedApplications,
+                        application => Assert.Same(kernelApplication, application),
+                        application => Assert.NotSame(kernelApplication, application));
+                    Excel.Application isolatedApplication = Excel.Application.CreatedApplications[1];
+                    Assert.Same(isolatedApplication, baseWorkbook.Application);
+                    Assert.False(isolatedApplication.Visible);
+                    Assert.False(isolatedApplication.DisplayAlerts);
+                    Assert.False(isolatedApplication.ScreenUpdating);
+                    Assert.False(isolatedApplication.EnableEvents);
+                    Assert.False(hiddenVisibility.GetValueOrDefault(true));
+                    Assert.Equal(0, baseWorkbook.SaveCallCount);
+                    Assert.Equal(1, baseWorkbook.CloseCallCount);
+                    Assert.Equal(1, isolatedApplication.QuitCallCount);
+                    Assert.Equal(0, kernelApplication.QuitCallCount);
                     Assert.True(kernelApplication.DisplayAlerts);
                     Assert.True(kernelApplication.EnableEvents);
                     Assert.True(kernelApplication.ScreenUpdating);
@@ -224,6 +332,19 @@ namespace CaseInfoSystem.Tests
                 ["当方_電話"] = "03-1111-2222",
                 ["銀行・支店"] = "みずほ銀行 東京支店",
                 ["口座番号・名義"] = "1234567 OpenAI"
+            };
+        }
+
+        private static IReadOnlyList<IReadOnlyDictionary<string, string>> CreateBaseMappingRows()
+        {
+            return new[]
+            {
+                (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Enabled"] = "1",
+                    ["SourceFieldKey"] = "当方_郵便番号",
+                    ["TargetFieldKey"] = "郵便番号"
+                }
             };
         }
 

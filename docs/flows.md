@@ -187,6 +187,28 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 各ファイルの除外理由
 - 各ファイルの警告内容
 
+## Kernel ユーザー情報反映
+
+Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` または `KernelCommandService` から `KernelUserDataReflectionService` を呼び出して実行されます。Kernel `shUserData` の値を Base HOME と会計書類セットへ反映する補助フローです。
+
+### フロー
+
+1. `KernelUserDataReflectionService` が `WorkbookContext` から Kernel workbook と `SYSTEM_ROOT` を確定します。
+2. shared Excel 側では quiet mode を適用し、Kernel `shUserData` の snapshot を読み取ります。
+3. Base / Accounting workbook が既に open なら、その workbook を再利用して反映し、save はしても close はしません。
+4. Base / Accounting workbook が未 open なら、`KernelUserDataReflectionService` が service-owned な `managed hidden reflection session` を開始します。
+5. session では hidden な isolated `Application` を生成し、対象 workbook を open して window を hidden のまま反映します。
+6. 反映後は自分で open した対象 workbook だけを save / close し、生成した isolated `Application` だけを `Quit` します。
+
+### managed hidden reflection session の境界
+
+- owner は `KernelUserDataReflectionService` です。
+- 対象 workbook が既に open なら hidden session は開始しません。
+- hidden session は shared Excel を `Quit` しません。
+- shared Excel 側の `DisplayAlerts` / `EnableEvents` / `ScreenUpdating` は quiet mode の restore まで含めて呼び出し側で閉じます。
+- hidden session 側の workbook / window は画面に出しません。
+- session の目的は、未 open の Base / Accounting workbook へ反映するための owner 付き hidden 作業を、処理後に EXCEL.EXE を残さず閉じることです。
+
 ## 会計書類セット
 
 会計書類セットは `AccountingSetCommandService` を起点として処理されます。CASE では `AccountingSetCreateService` が作成処理を実行します。
@@ -305,7 +327,8 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 
 ### 既知の残課題
 
-- helper 非経由 close が `KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などに残っています。
+- helper 非経由 close が `MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などに残っています。
+- `KernelUserDataReflectionService` の未 open Base / Accounting 反映は、上記の `managed hidden reflection session` として明文化した例外です。
 - `WorkbookPromptSuppressionHelper` の `Workbook.Saved` 操作は今回対象外です。
 - これらは別途棚卸し対象であり、今回 docs の確定範囲外です。
 

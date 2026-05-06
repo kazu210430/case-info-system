@@ -128,32 +128,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            Excel.Application isolatedApplication = null;
-            Excel.Workbook isolatedWorkbook = null;
-
-            try
-            {
-                isolatedApplication = CreateHiddenIsolatedApplication();
-                isolatedWorkbook = isolatedApplication.Workbooks.Open(baseWorkbookPath, UpdateLinks: 0, ReadOnly: false);
-                _accountingWorkbookService.SetWorkbookWindowsVisible(isolatedWorkbook, false);
-                _logger.Info("Kernel user data reflection hidden workbook opened for Base in isolated application. path=" + baseWorkbookPath);
-
-                ApplyBaseHomeReflectionPlan(isolatedWorkbook, reflectionPlan);
-                isolatedWorkbook.Save();
-            }
-            finally
-            {
-                if (isolatedWorkbook != null)
-                {
-                    CloseWorkbookQuietly(isolatedWorkbook);
-                    _logger.Info("Kernel user data reflection hidden workbook closed for Base in isolated application. path=" + baseWorkbookPath);
-                }
-
-                if (isolatedApplication != null)
-                {
-                    QuitApplicationQuietly(isolatedApplication);
-                }
-            }
+            ExecuteManagedHiddenReflectionSession(
+                baseWorkbookPath,
+                "Base",
+                workbook => ApplyBaseHomeReflectionPlan(workbook, reflectionPlan));
         }
 
         private void ReflectToAccountingSet(Excel.Workbook kernelWorkbook, UserDataSnapshot snapshot)
@@ -170,32 +148,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            Excel.Application isolatedApplication = null;
-            Excel.Workbook isolatedWorkbook = null;
-
-            try
-            {
-                isolatedApplication = CreateHiddenIsolatedApplication();
-                isolatedWorkbook = isolatedApplication.Workbooks.Open(accountingWorkbookPath, UpdateLinks: 0, ReadOnly: false);
-                _accountingWorkbookService.SetWorkbookWindowsVisible(isolatedWorkbook, false);
-                _logger.Info("Kernel user data reflection hidden workbook opened for Accounting in isolated application. path=" + accountingWorkbookPath);
-
-                ApplyAccountingReflectionPlan(isolatedWorkbook, reflectionPlan);
-                isolatedWorkbook.Save();
-            }
-            finally
-            {
-                if (isolatedWorkbook != null)
-                {
-                    CloseWorkbookQuietly(isolatedWorkbook);
-                    _logger.Info("Kernel user data reflection hidden workbook closed for Accounting in isolated application. path=" + accountingWorkbookPath);
-                }
-
-                if (isolatedApplication != null)
-                {
-                    QuitApplicationQuietly(isolatedApplication);
-                }
-            }
+            ExecuteManagedHiddenReflectionSession(
+                accountingWorkbookPath,
+                "Accounting",
+                workbook => ApplyAccountingReflectionPlan(workbook, reflectionPlan));
         }
 
         private void ExecuteReflection(WorkbookContext context, Action<Excel.Workbook, string, Excel.Worksheet, UserDataSnapshot> action)
@@ -341,6 +297,70 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return expectedSystemRoot;
         }
 
+        private void ExecuteManagedHiddenReflectionSession(
+            string workbookPath,
+            string workbookKind,
+            Action<Excel.Workbook> action)
+        {
+            if (action == null)
+            {
+                throw new ArgumentNullException(nameof(action));
+            }
+
+            if (string.IsNullOrWhiteSpace(workbookPath))
+            {
+                throw new InvalidOperationException(workbookKind + " workbook path could not be resolved.");
+            }
+
+            Excel.Application isolatedApplication = null;
+            Excel.Workbook isolatedWorkbook = null;
+
+            try
+            {
+                isolatedApplication = CreateHiddenIsolatedApplication();
+                _logger.Info(
+                    "Kernel user data reflection hidden session opening. target="
+                    + workbookKind
+                    + ", appHwnd="
+                    + SafeApplicationHwnd(isolatedApplication)
+                    + ", path="
+                    + workbookPath);
+
+                isolatedWorkbook = OpenWorkbookInManagedHiddenSession(isolatedApplication, workbookPath);
+                if (isolatedWorkbook == null)
+                {
+                    throw new InvalidOperationException(workbookKind + " workbook could not be opened. path=" + workbookPath);
+                }
+
+                _accountingWorkbookService.SetWorkbookWindowsVisible(isolatedWorkbook, false);
+                _logger.Info("Kernel user data reflection hidden workbook opened in managed session. target=" + workbookKind + ", path=" + workbookPath);
+
+                action(isolatedWorkbook);
+                isolatedWorkbook.Save();
+            }
+            finally
+            {
+                if (isolatedWorkbook != null)
+                {
+                    _logger.Info(
+                        "Kernel user data reflection hidden workbook closing in managed session. target="
+                        + workbookKind
+                        + ", appHwnd="
+                        + SafeApplicationHwnd(isolatedApplication)
+                        + ", path="
+                        + workbookPath);
+                    CloseWorkbookQuietly(isolatedWorkbook);
+                }
+
+                if (isolatedApplication != null)
+                {
+                    string applicationHwnd = SafeApplicationHwnd(isolatedApplication);
+                    QuitApplicationQuietly(isolatedApplication);
+                    _logger.Info("Kernel user data reflection hidden session quit. target=" + workbookKind + ", appHwnd=" + applicationHwnd + ", path=" + workbookPath);
+                }
+            }
+        }
+
         private static Excel.Application CreateHiddenIsolatedApplication()
         {
             return new Excel.Application
@@ -352,6 +372,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             };
         }
 
+        private static Excel.Workbook OpenWorkbookInManagedHiddenSession(Excel.Application application, string workbookPath)
+        {
+            return application.Workbooks.Open(workbookPath, UpdateLinks: 0, ReadOnly: false);
+        }
+
         private static void CloseWorkbookQuietly(Excel.Workbook workbook)
         {
             if (workbook == null)
@@ -361,15 +386,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                workbook.Close(SaveChanges: false);
+                WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
             }
             catch
             {
-                // isolated workbook cleanup failure must not mask the original exception.
+                // owned workbook cleanup failure must not mask the original exception.
             }
             finally
             {
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(workbook);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(workbook);
             }
         }
 
@@ -390,7 +415,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(application);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(application);
+            }
+        }
+
+        private static string SafeApplicationHwnd(Excel.Application application)
+        {
+            try
+            {
+                return application == null ? string.Empty : Convert.ToString(application.Hwnd) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 

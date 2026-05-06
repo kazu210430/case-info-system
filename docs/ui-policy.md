@@ -14,6 +14,7 @@
 - Window 状態は復旧処理を前提とする
 - TaskPane は遅延表示を前提とする
 - `WorkbookOpen` 直後の window-dependent refresh は shared policy で skip 判定する
+- `KernelUserDataReflectionService` の managed hidden reflection session は非表示処理として扱い、表示制御経路に昇格させない
 
 ## 禁止事項
 
@@ -63,6 +64,7 @@
 - Workbook Window の可視化
 - WindowActivate 後の TaskPane 再調整
 - Kernel HOME 表示直後の一時的なイベント抑止
+- `KernelUserDataReflectionService` の未 open Base / Accounting 反映は hidden workbook / hidden window のまま完結し、画面へ出さない
 
 ### Kernel HOME unbound 表示
 

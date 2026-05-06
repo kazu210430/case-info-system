@@ -49,7 +49,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             _workbookRoleResolver.RegisterKnownCasePath(caseWorkbookPath);
         }
 
-        internal void ShutdownLegacyHiddenApplication()
+        internal void ShutdownHiddenApplicationCache()
         {
             CachedHiddenApplicationSlot slotToDispose = null;
             lock (_hiddenApplicationCacheSync)

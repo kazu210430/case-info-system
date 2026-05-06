@@ -93,7 +93,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void OpenHiddenWorkbook_WithCacheEnabled_ReusesApplicationAcrossSessionsUntilShutdown()
+        public void OpenHiddenWorkbook_WithCacheEnabled_ReusesApplicationAcrossSessionsUntilHiddenApplicationCacheShutdown()
         {
             using (new HiddenRouteEnvironmentScope())
             {
@@ -119,7 +119,7 @@ namespace CaseInfoSystem.Tests
                 Assert.Same(cachedApplication, secondSession.Application);
                 secondSession.Close();
 
-                strategy.ShutdownLegacyHiddenApplication();
+                strategy.ShutdownHiddenApplicationCache();
 
                 Assert.Equal(1, cachedApplication.QuitCallCount);
                 Assert.Contains(cachedApplication, releasedObjects);
@@ -150,7 +150,7 @@ namespace CaseInfoSystem.Tests
 
                 bypassSession.Close();
                 cachedSession.Close();
-                strategy.ShutdownLegacyHiddenApplication();
+                strategy.ShutdownHiddenApplicationCache();
 
                 Assert.Equal(1, bypassApplication.QuitCallCount);
                 Assert.Equal(1, cachedApplication.QuitCallCount);
@@ -180,7 +180,7 @@ namespace CaseInfoSystem.Tests
                 CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession secondSession = strategy.OpenHiddenWorkbook(@"C:\Cases\after-abort.xlsx");
                 Assert.Same(secondApplication, secondSession.Application);
                 secondSession.Close();
-                strategy.ShutdownLegacyHiddenApplication();
+                strategy.ShutdownHiddenApplicationCache();
 
                 Assert.Equal(1, secondApplication.QuitCallCount);
                 Assert.Contains(logs, message => message.IndexOf("poisoned", StringComparison.OrdinalIgnoreCase) >= 0);

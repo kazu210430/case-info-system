@@ -234,7 +234,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 StopWordWarmupTimer();
-                _caseWorkbookOpenStrategy?.ShutdownLegacyHiddenApplication();
+                _caseWorkbookOpenStrategy?.ShutdownHiddenApplicationCache();
 
                 _logger.Info("ThisAddIn_Shutdown fired.");
                 return;

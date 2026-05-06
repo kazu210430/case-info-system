@@ -522,12 +522,28 @@ namespace CaseInfoSystem.ExcelAddIn
             ExcelWindowRecoveryService excelWindowRecoveryService,
             KernelCaseInteractionState kernelCaseInteractionState)
         {
-            var kernelWorkbookService = new KernelWorkbookService(
+            var kernelWorkbookBindingService = new KernelWorkbookBindingService(
+                _application,
+                excelInteropService,
+                pathCompatibilityService,
+                _logger);
+            var kernelWorkbookDisplayService = new KernelWorkbookDisplayService(
                 _application,
                 excelInteropService,
                 excelWindowRecoveryService,
                 kernelCaseInteractionState,
-                _logger);
+                _logger,
+                kernelWorkbookBindingService);
+            var kernelWorkbookCloseService = new KernelWorkbookCloseService(
+                _application,
+                kernelCaseInteractionState,
+                _logger,
+                kernelWorkbookBindingService,
+                kernelWorkbookDisplayService);
+            var kernelWorkbookService = new KernelWorkbookService(
+                kernelWorkbookBindingService,
+                kernelWorkbookDisplayService,
+                kernelWorkbookCloseService);
             var kernelWorkbookLifecycleService = new KernelWorkbookLifecycleService(
                 kernelWorkbookService,
                 _application,

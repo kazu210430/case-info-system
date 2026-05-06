@@ -177,6 +177,9 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookResolver.cs" Link="Source\App\KernelWorkbookResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookSettingsService.cs" Link="Source\App\KernelWorkbookSettingsService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookStateService.cs" Link="Source\App\KernelWorkbookStateService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookBindingService.cs" Link="Source\App\KernelWorkbookBindingService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookDisplayService.cs" Link="Source\App\KernelWorkbookDisplayService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookCloseService.cs" Link="Source\App\KernelWorkbookCloseService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingSetSpec.cs" Link="Source\Domain\AccountingSetSpec.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationMode.cs" Link="Source\Domain\KernelCaseCreationMode.cs" />

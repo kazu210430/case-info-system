@@ -242,6 +242,9 @@
     <Compile Include="App\KernelWorkbookResolver.cs" />
     <Compile Include="App\KernelWorkbookSettingsService.cs" />
     <Compile Include="App\KernelWorkbookStateService.cs" />
+    <Compile Include="App\KernelWorkbookBindingService.cs" />
+    <Compile Include="App\KernelWorkbookDisplayService.cs" />
+    <Compile Include="App\KernelWorkbookCloseService.cs" />
     <Compile Include="App\KernelWorkbookService.cs" />
     <Compile Include="App\MergeDataBuilder.cs" />
     <Compile Include="App\ManagedCloseState.cs" />

@@ -9,6 +9,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     {
         private static readonly IntPtr HwndTopMost = new IntPtr(-1);
         private static readonly IntPtr HwndNoTopMost = new IntPtr(-2);
+        private const int SwHide = 0;
         private const int SwShow = 5;
         private const int SwRestore = 9;
         private const uint SwpNoMove = 0x0002;
@@ -131,6 +132,72 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             Excel.Workbook activeWorkbook = _excelInteropService.GetActiveWorkbook();
             return activeWorkbook != null && TryRecoverWorkbookWindowWithoutShowing(activeWorkbook, reason, bringToFront);
+        }
+
+        /// <summary>
+        internal bool HideApplicationWindow(string reason, string workbookFullName)
+        {
+            try
+            {
+                IntPtr hwnd = new IntPtr(_application.Hwnd);
+                ShowWindow(hwnd, SwHide);
+                _application.Visible = false;
+                _logger.Info(
+                    "Excel application window hidden. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("HideApplicationWindow failed. reason=" + (reason ?? string.Empty) + ", workbook=" + (workbookFullName ?? string.Empty), ex);
+                return false;
+            }
+        }
+
+        internal bool ShowApplicationWindow(string reason, string workbookFullName)
+        {
+            try
+            {
+                _application.Visible = true;
+                IntPtr hwnd = new IntPtr(_application.Hwnd);
+                ShowWindow(hwnd, SwRestore);
+                ShowWindow(hwnd, SwShow);
+                _logger.Info(
+                    "Excel application window shown. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("ShowApplicationWindow failed. reason=" + (reason ?? string.Empty) + ", workbook=" + (workbookFullName ?? string.Empty), ex);
+                return false;
+            }
+        }
+
+        internal bool TryBringApplicationToForeground(string reason, string workbookFullName)
+        {
+            try
+            {
+                IntPtr hwnd = new IntPtr(_application.Hwnd);
+                bool promoted = SetForegroundWindow(hwnd);
+                _logger.Info(
+                    "Excel application foreground requested. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + (workbookFullName ?? string.Empty)
+                    + ", promoted="
+                    + promoted.ToString());
+                return promoted;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("TryBringApplicationToForeground failed. reason=" + (reason ?? string.Empty) + ", workbook=" + (workbookFullName ?? string.Empty), ex);
+                return false;
+            }
         }
 
         /// <summary>

@@ -186,6 +186,28 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
+        internal bool HideApplicationWindow(string reason, string workbookFullName)
+        {
+            if (_application != null)
+            {
+                _application.Visible = false;
+            }
+
+            return true;
+        }
+
+        internal bool ShowApplicationWindow(string reason, string workbookFullName)
+        {
+            if (_application != null)
+            {
+                _application.Visible = true;
+            }
+
+            return true;
+        }
+
+        internal bool TryBringApplicationToForeground(string reason, string workbookFullName) => true;
+
         internal bool TryRestoreMainWindow(bool bringToFront) => true;
 
         internal bool TryRestoreWorkbookWindow(Excel.Workbook workbook, bool bringToFront) => true;

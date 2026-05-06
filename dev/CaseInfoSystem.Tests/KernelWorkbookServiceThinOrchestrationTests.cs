@@ -884,6 +884,40 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void HideExcelMainWindow_DelegatesVisibilityExecutionWithoutChangingScreenUpdating()
+        {
+            var application = new Excel.Application
+            {
+                Visible = true,
+                ScreenUpdating = false,
+                Hwnd = 1
+            };
+            var service = CreateRealService(application);
+
+            InvokePrivate(service, "HideExcelMainWindow");
+
+            Assert.False(application.Visible);
+            Assert.False(application.ScreenUpdating);
+        }
+
+        [Fact]
+        public void ShowExcelMainWindow_DelegatesVisibilityExecutionWithoutChangingScreenUpdating()
+        {
+            var application = new Excel.Application
+            {
+                Visible = false,
+                ScreenUpdating = false,
+                Hwnd = 1
+            };
+            var service = CreateRealService(application);
+
+            InvokePrivate(service, "ShowExcelMainWindow");
+
+            Assert.True(application.Visible);
+            Assert.False(application.ScreenUpdating);
+        }
+
+        [Fact]
         public void CloseKernelWorkbookWithoutLifecycleCore_UsesInteropHelperOptionalArgumentsAndRestoresDisplayAlerts()
         {
             var application = new Excel.Application

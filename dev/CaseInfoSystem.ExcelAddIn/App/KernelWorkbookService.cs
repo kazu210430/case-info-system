@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -14,9 +13,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class KernelWorkbookService
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
-        private const int SwHide = 0;
-        private const int SwShow = 5;
-        private const int SwRestore = 9;
 
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
@@ -35,13 +31,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private PendingHomeSessionClose _pendingHomeSessionClose;
         private Action _homeSessionCloseReadyToCloseForm;
         private Action _homeSessionCloseFailed;
-
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-        [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
 
         /// <summary>
         /// メソッド: Kernel Workbook の close 制御に利用する lifecycle service を設定する。
@@ -1165,9 +1154,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             try
             {
                 LogHideExcelMainWindowState("before");
-                IntPtr hwnd = new IntPtr(_application.Hwnd);
-                ShowWindow(hwnd, SwHide);
-                _application.Visible = false;
+                _excelWindowRecoveryService.HideApplicationWindow(
+                    "KernelWorkbookService.HideExcelMainWindow",
+                    SafeActiveWorkbookDescriptor());
                 LogHideExcelMainWindowState("after");
             }
             catch
@@ -1475,10 +1464,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             try
             {
-                _application.Visible = true;
-                IntPtr hwnd = new IntPtr(_application.Hwnd);
-                ShowWindow(hwnd, SwRestore);
-                ShowWindow(hwnd, SwShow);
+                _excelWindowRecoveryService.ShowApplicationWindow(
+                    "KernelWorkbookService.EnsureExcelApplicationVisible",
+                    SafeActiveWorkbookDescriptor());
             }
             catch
             {
@@ -1490,8 +1478,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             try
             {
                 EnsureExcelApplicationVisible();
-                IntPtr hwnd = new IntPtr(_application.Hwnd);
-                SetForegroundWindow(hwnd);
+                _excelWindowRecoveryService.TryBringApplicationToForeground(
+                    "KernelWorkbookService.ShowExcelMainWindow",
+                    SafeActiveWorkbookDescriptor());
             }
             catch
             {

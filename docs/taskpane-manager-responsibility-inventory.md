@@ -965,3 +965,122 @@
   - workbook-window visibility ensure,
   - CASE activation suppression preparation,
   - ready-show request.
+
+## B2.9 Status: Event Unbinding Behavior Inventory (2026-05-07)
+
+### Scope
+
+- This is a docs-only current-state inventory before any runtime surgery.
+- The target boundary is limited to:
+  - `ActionInvoked` binding timing and owner,
+  - explicit unbinding owner presence/absence,
+  - dispose-driven teardown convergence,
+  - retained/reused host event-state retention,
+  - workbook-close / stale cleanup / replacement interaction with event lifetime,
+  - ready-show / retry / foreground paths that can keep or observe an already-bound host.
+- This section does not change event binding order, event unbinding behavior, create/remove timing, metadata timing, `WorkbookOpen` downstream flow, ready-show / retry, visibility retention, foreground recovery, visible pane early-complete, or `_hostsByWindowKey` ownership.
+
+### Binding inventory
+
+| Binding point | Current owner | Current-state timing / sequence | Current consumer |
+| --- | --- | --- | --- |
+| compose-time delegate supply | `TaskPaneManagerRuntimeGraphFactory.CreateTaskPaneHostFactory(...)` | compose-time only; it passes delegates into the factory but does not subscribe to control events itself | `TaskPaneNonCaseActionHandler` and `TaskPaneActionDispatcher` callback surfaces |
+| Kernel `ActionInvoked` bind | `TaskPaneHostFactory.CreateKernelHost(...)` | `KernelNavigationControl.ActionInvoked += ...` runs before `new TaskPaneHost(...)` | `TaskPaneNonCaseActionHandler.HandleKernelActionInvoked(...)` through a `windowKey`-capturing lambda |
+| Accounting `ActionInvoked` bind | `TaskPaneHostFactory.CreateAccountingHost(...)` | `AccountingNavigationControl.ActionInvoked += ...` runs before `new TaskPaneHost(...)` | `TaskPaneNonCaseActionHandler.HandleAccountingActionInvoked(...)` through a `windowKey`-capturing lambda |
+| CASE `ActionInvoked` bind | `TaskPaneHostFactory.CreateCaseHost(...)` | `new TaskPaneHost(...)` runs first, then `DocumentButtonsControl.ActionInvoked += ...` runs | `TaskPaneActionDispatcher.HandleCaseControlActionInvoked(...)` through a `windowKey`- and `caseControl`-capturing lambda |
+| retained host reuse / show-existing | no new owner | compatible host reuse, display-request show-existing, and CASE no-render reuse do not recreate the control and do not rebind the event | existing inline delegate remains on the retained control instance |
+
+### Explicit unbinding inventory
+
+| Surface | Explicit unbinding owner in current state? | Evidence | Current-state meaning |
+| --- | --- | --- | --- |
+| factory-installed TaskPane control handlers | no | repo code shows no `ActionInvoked -= ...` callsite outside `DocumentButtonsControl`'s event accessor | binding is one-way at create time and is not explicitly reversed by the TaskPane runtime |
+| `TaskPaneHost.Dispose()` | no | current code is `Hide()` -> `ThisAddIn.RemoveTaskPane(_pane)` -> `_pane = null`; there is no `ActionInvoked -= ...` and no explicit `control.Dispose()` call | host teardown depends on outer host disposal plus lower-layer pane/control teardown |
+| `ThisAddIn.RemoveTaskPane(...)` | no | current code only calls `CustomTaskPanes.Remove(pane)` | VSTO adapter removal is not the explicit `ActionInvoked` unbind owner |
+| Excel Application event wiring | yes, but separate boundary | `ThisAddIn.UnhookApplicationEvents()` -> `ApplicationEventSubscriptionService.Unsubscribe()` | explicit Excel event unwiring exists, but it is not TaskPane control-event unwiring |
+
+- `DocumentButtonsControl` exposes `add/remove` forwarding accessors for `ActionInvoked`, but the TaskPane runtime does not call the `remove` side for the factory-installed handler.
+- `KernelNavigationControl`, `AccountingNavigationControl`, `DocumentButtonsControl`, and `DocTaskPaneControl` do not add a repo-local custom dispose/unbind phase for `ActionInvoked`.
+
+### Teardown convergence inventory
+
+| Trigger | Current teardown path | Event-lifetime implication |
+| --- | --- | --- |
+| incompatible replacement | `TaskPaneHostRegistry.GetOrReplaceHost(...)` -> `DisposeThenUnregisterHostForReplacement(...)` -> `TaskPaneHost.Dispose()` -> old map entry removal -> new host creation/bind | old inline delegate stays on the old control until dispose-driven teardown; replacement gets a fresh control and a fresh inline bind |
+| standard remove-by-window | `TaskPaneHostRegistry.RemoveHost(...)` -> log -> shared-map removal -> `TaskPaneHost.Dispose()` | the host becomes unobservable through `_hostsByWindowKey` before dispose completes; there is no separate unbind phase between removal and dispose |
+| workbook close cleanup | `WorkbookLifecycleCoordinator.OnWorkbookBeforeClose(...)` -> `TaskPaneManager.RemoveWorkbookPanes(...)` -> `TaskPaneHostLifecycleService.RemoveWorkbookPanes(...)` -> `TaskPaneHostRegistry.RemoveWorkbookPanes(...)` -> per-window `RemoveHost(...)` | event lifetime ends only for hosts selected by `WorkbookFullName`; workbook close is an explicit Excel event boundary that converges onto the same dispose-driven host teardown |
+| stale Kernel cleanup | `TaskPaneHostLifecycleService.RemoveStaleKernelHostsForRefresh(...)` -> `TaskPaneHostRegistry.RemoveHost(...)` | stale host event state is dropped only through normal registry remove/dispose flow |
+| show/hide failure fallback | `TaskPaneDisplayCoordinator.TryShowHost(...)` / `SafeHideHost(...)` -> lifecycle remove callback -> registry remove/dispose | visibility failure escalates to full host teardown rather than to detached event cleanup |
+| shutdown cleanup | `ThisAddIn_Shutdown(...)` -> `TaskPaneManager.DisposeAll()` -> `TaskPaneHostLifecycleService.DisposeAll()` -> `TaskPaneHostRegistry.DisposeAll()` | retained hosts are snapshotted, disposed, and only then removed from the live shared map by the final clear step |
+
+### Retained / reused host event-state inventory
+
+| Flow | Host recreated? | Binding recreated? | Current-state meaning |
+| --- | --- | --- | --- |
+| compatible same-window reuse in `GetOrReplaceHost(...)` | no | no | the same control instance and its original `windowKey`-capturing delegate remain attached |
+| CASE no-render reuse in `TaskPaneHostFlowService.TryReuseCaseHostForRefresh(...)` | no | no | host show is retried on the retained instance without a new bind step |
+| display-request show-existing in `TaskPaneDisplayCoordinator.TryShowExistingPaneForDisplayRequest(...)` | no | no | explicit display requests can keep the original binding alive without re-entering create flow |
+| CASE post-action fallback rerender in `TaskPaneActionDispatcher.RefreshCaseHostAfterAction(...)` | no | no | local rerender/signature rewrite happens on the same control instance, so event state stays as-is |
+| incompatible replacement | yes | yes | replacement is the only current-state path here that guarantees a fresh control and a fresh inline binding |
+
+### Implicit teardown dependency and unknowns
+
+- Repo-local current state stops the explicit teardown chain at `TaskPaneHost.Dispose()` -> `ThisAddIn.RemoveTaskPane(...)` -> `CustomTaskPanes.Remove(pane)`.
+- No repo-local callsite explicitly disposes the TaskPane control object, and no repo-local control class in this boundary adds a custom `Dispose` override for `ActionInvoked` cleanup.
+- Therefore this inventory fixes only the facts that:
+  - explicit TaskPane-side unbinding ownership is absent,
+  - teardown is dispose-driven from the host side,
+  - the exact lower-layer moment when VSTO/WinForms releases the control and delegate graph is not asserted from repository code here.
+
+### `WorkbookOpen` / close boundary relation
+
+- `WorkbookLifecycleCoordinator.OnWorkbookOpen(...)` currently does workbook-side lifecycle/setup only and does not create a TaskPane host or bind `ActionInvoked` by itself.
+- The first TaskPane control-event bind opportunity remains downstream of the window-safe refresh/display path:
+  - `RequestTaskPaneDisplayForTargetWindow(...)`
+  - refresh orchestration
+  - `TaskPaneHostRegistry.GetOrReplaceHost(...)`
+  - `TaskPaneHostFactory.CreateHost(...)`
+- The inverse boundary is explicit workbook close:
+  - `WorkbookLifecycleCoordinator.OnWorkbookBeforeClose(...)` does not unbind TaskPane control events directly,
+  - it selects hosts for teardown through workbook metadata and converges onto registry remove/dispose instead.
+
+### Ready-show / retry / foreground coupling
+
+| Flow | Direct `ActionInvoked` involvement | Current-state implicit dependency |
+| --- | --- | --- |
+| ready-show early-complete | none | `WorkbookTaskPaneReadyShowAttemptWorker` can complete on a retained visible CASE host, which bypasses `GetOrReplaceHost(...)` / `CreateHost(...)` and therefore bypasses any recreate/rebind opportunity on that path |
+| ready retry `80ms` | none | retry scheduling re-observes the same retained host state until refresh or fallback is needed; it does not create a new binding by itself |
+| pending retry `400ms` | none | only a later successful refresh re-enters host lifecycle and can create/rebind a host; pending retry itself does not unbind or rebind |
+| final foreground recovery / CASE protection start | none | both remain downstream of refresh success in `TaskPaneRefreshCoordinator`; if ready-show early-complete succeeds on a retained host, those downstream steps and any recreate/rebind opportunity are skipped together |
+
+### Runtime-sensitive coupling summary
+
+- binding timing is asymmetric by role:
+  - Kernel / Accounting bind before `TaskPaneHost` construction,
+  - CASE binds after `TaskPaneHost` construction.
+- event lifetime is coupled to host lifetime, not to an explicit unbind phase.
+- retained host reuse is coupled to current binding state because reuse/show-existing paths do not recreate the control.
+- workbook-close cleanup and stale Kernel cleanup are coupled to metadata timing because they choose which already-bound hosts to tear down by `WorkbookFullName`.
+- ready-show early-complete is coupled to retained event state because it can choose "keep the existing visible host" before any recreate/rebind path runs.
+- lower-layer control/event release timing below `CustomTaskPanes.Remove(...)` remains unasserted from repository code and must stay in the "unknown" bucket.
+
+### GO conditions for a later event-unbinding phase
+
+- GO only if the task is scoped to event unbinding behavior itself and keeps create/remove timing, metadata timing, `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` boundaries, ready-show / retry, visibility retention, foreground recovery, visible pane early-complete, and `_hostsByWindowKey` ownership frozen.
+- GO only if the planned diff can explain the before/after behavior for:
+  - the 3 factory bind points,
+  - incompatible replacement teardown,
+  - standard remove-by-window teardown,
+  - workbook-close cleanup,
+  - stale Kernel cleanup,
+  - shutdown cleanup,
+  - retained host reuse / show-existing,
+  - ready-show early-complete bypass.
+- GO only if validation keeps compile/build confirmation separate from runtime `Addins\` reflection and human-side smoke.
+
+### STOP conditions for a later event-unbinding phase
+
+- STOP if the change starts to move create timing, remove timing, metadata timing, `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` boundaries, ready-show / retry behavior, visibility retention, foreground recovery, or visible pane early-complete semantics in the same diff.
+- STOP if the change requires moving `_hostsByWindowKey`, redesigning `TaskPaneManager` / `TaskPaneHostRegistry` / `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn`, adding services, or introducing abstraction-first refactoring.
+- STOP if the change assumes a lower-layer control disposal guarantee below `CustomTaskPanes.Remove(...)` without proving it separately.
+- STOP if the change cannot state whether retained-host reuse still preserves the original binding or starts to force recreate/rebind on paths that are currently reuse-only.

@@ -143,6 +143,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _logger,
                 // UI / pane
                 ResolveWorkbookPaneWindow,
+                TryRefreshTaskPane,
                 IsTaskPaneRefreshSucceeded,
                 () => _kernelHomeForm,
                 () => _taskPaneRefreshSuppressionCount,

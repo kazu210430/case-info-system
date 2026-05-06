@@ -13,6 +13,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Excel.Application _application;
         private readonly Logger _logger;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
+        private readonly Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> _tryRefreshTaskPane;
         private readonly Func<string, Excel.Workbook, Excel.Window, bool> _isTaskPaneRefreshSucceeded;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
@@ -34,6 +35,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Excel.Application application,
             Logger logger,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
+            Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> tryRefreshTaskPane,
             Func<string, Excel.Workbook, Excel.Window, bool> isTaskPaneRefreshSucceeded,
             Func<KernelHomeForm> getKernelHomeForm,
             Func<int> getTaskPaneRefreshSuppressionCount,
@@ -54,6 +56,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _application = application;
             _logger = logger;
             _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow;
+            _tryRefreshTaskPane = tryRefreshTaskPane;
             _isTaskPaneRefreshSucceeded = isTaskPaneRefreshSucceeded;
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
@@ -314,6 +317,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _application,
                 _logger,
                 _resolveWorkbookPaneWindow,
+                _tryRefreshTaskPane,
                 _isTaskPaneRefreshSucceeded,
                 _handleExternalWorkbookDetected,
                 _shouldSuppressCasePaneRefresh,
@@ -545,6 +549,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Excel.Application _application;
         private readonly Logger _logger;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
+        private readonly Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> _tryRefreshTaskPane;
         private readonly Func<string, Excel.Workbook, Excel.Window, bool> _isTaskPaneRefreshSucceeded;
         private readonly Action<Excel.Workbook, string> _handleExternalWorkbookDetected;
         private readonly Func<string, Excel.Workbook, bool> _shouldSuppressCasePaneRefresh;
@@ -560,6 +565,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Excel.Application application,
             Logger logger,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
+            Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> tryRefreshTaskPane,
             Func<string, Excel.Workbook, Excel.Window, bool> isTaskPaneRefreshSucceeded,
             Action<Excel.Workbook, string> handleExternalWorkbookDetected,
             Func<string, Excel.Workbook, bool> shouldSuppressCasePaneRefresh,
@@ -574,6 +580,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _application = application;
             _logger = logger;
             _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow;
+            _tryRefreshTaskPane = tryRefreshTaskPane;
             _isTaskPaneRefreshSucceeded = isTaskPaneRefreshSucceeded;
             _handleExternalWorkbookDetected = handleExternalWorkbookDetected;
             _shouldSuppressCasePaneRefresh = shouldSuppressCasePaneRefresh;
@@ -620,7 +627,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 _isTaskPaneRefreshSucceeded);
             var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts);
             var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
-            TaskPaneRefreshOrchestrationService taskPaneRefreshOrchestrationServicePlaceholder = null;
             var workbookTaskPaneReadyShowAttemptWorker = new WorkbookTaskPaneReadyShowAttemptWorker(
                 excelInteropService,
                 _logger,
@@ -628,8 +634,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 workbookTaskPaneDisplayAttemptCoordinator,
                 workbookWindowVisibilityService,
                 (workbook, window) => _casePaneHostBridge.HasVisibleCasePaneForWorkbookWindow(workbook, window),
-                (reason, workbook, window) => taskPaneRefreshOrchestrationServicePlaceholder.TryRefreshTaskPane(reason, workbook, window),
-                (workbook, reason, activateWorkbook) => taskPaneRefreshOrchestrationServicePlaceholder.ResolveWorkbookPaneWindow(workbook, reason, activateWorkbook));
+                _tryRefreshTaskPane,
+                _resolveWorkbookPaneWindow);
             var taskPaneBusinessActionLauncher = new TaskPaneBusinessActionLauncher(
                 documentCommandService,
                 documentNamePromptService);
@@ -671,7 +677,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount,
                 _casePaneHostBridge);
-            taskPaneRefreshOrchestrationServicePlaceholder = taskPaneRefreshOrchestrationService;
             return new AddInTaskPaneComposition(
                 workbookCaseTaskPaneRefreshCommandService,
                 taskPaneManager,

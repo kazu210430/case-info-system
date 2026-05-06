@@ -395,6 +395,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 graphContext,
                 () => taskPaneNonCaseActionHandler,
                 () => taskPaneActionDispatcher);
+            // Compose-time owner only:
+            // this graph decides which collaborators are wired into remove-side ownership, but it does not own
+            // standard remove, replacement remove, or shutdown cleanup timing after composition completes.
             TaskPaneHostRegistry taskPaneHostRegistry = CreateTaskPaneHostRegistry(manager, graphContext, taskPaneHostFactory);
 
             var taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(

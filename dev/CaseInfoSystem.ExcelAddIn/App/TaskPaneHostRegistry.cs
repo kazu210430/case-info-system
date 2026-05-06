@@ -7,9 +7,10 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-    // Orchestrates replace/register/remove over the shared host map.
+    // Remove/replace/register orchestration owner over the shared host map.
     // The shared map itself is still owned by TaskPaneManager, concrete VSTO pane lifetime stays below TaskPaneHost/ThisAddIn,
     // TaskPaneHostFactory composition now lives outside this type, and the host descriptor formatter is consumed only for diagnostics.
+    // WorkbookFullName is used here only as a remove-selection input, not as metadata ownership.
     internal sealed class TaskPaneHostRegistry
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
@@ -41,7 +42,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (TryGetDifferentRegisteredHost(host, out TaskPaneHost existingHost))
             {
-                DisposeHostForReplacement(existingHost);
+                DisposeHostWithoutRegistryMutation(existingHost);
             }
 
             StoreRegisteredHost(host);
@@ -49,20 +50,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal TaskPaneHost GetOrReplaceHost(string windowKey, Excel.Window window, WorkbookRole role)
         {
-            // Registry is the create-side orchestration owner over the shared map:
-            // reuse if compatible, otherwise remove the registered host for replacement, then create+register a new host.
+            // Registry is the shared-map orchestration owner here:
+            // reuse if compatible, otherwise dispose+unregister for replacement, then create+register a new host.
             if (TryGetReusableRegisteredHost(windowKey, role, out TaskPaneHost existingHost))
             {
                 return existingHost;
             }
 
-            RemoveRegisteredHostForReplacement(windowKey);
-            return CreateHostAndRegister(windowKey, window, role);
+            DisposeThenUnregisterHostForReplacement(windowKey);
+            return CreateHostThenRegister(windowKey, window, role);
         }
 
         internal void RemoveWorkbookPanes(string workbookFullName)
         {
-            foreach (string windowKey in CollectWindowKeysForWorkbook(workbookFullName))
+            // WorkbookFullName is consumed only to choose which registered window keys should be removed.
+            foreach (string windowKey in CollectWindowKeysForWorkbookRemovalSelection(workbookFullName))
             {
                 RemoveHost(windowKey);
             }
@@ -70,9 +72,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void DisposeAll()
         {
+            // Shutdown cleanup fixed point:
+            // snapshot registered hosts -> dispose each host -> clear the shared map.
             foreach (TaskPaneHost host in SnapshotHosts())
             {
-                DisposeHostForReplacement(host);
+                DisposeHostWithoutRegistryMutation(host);
             }
 
             _hostsByWindowKey.Clear();
@@ -90,9 +94,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            // Standard remove fixed point:
+            // log while the host is still registered -> remove the shared-map entry -> dispose the now-unregistered host.
             LogHostRemoval(host);
             _hostsByWindowKey.Remove(windowKey);
-            DisposeHostAfterRemoval(windowKey, host);
+            DisposeHostAfterRegistryRemoval(windowKey, host);
         }
 
         private bool TryGetDifferentRegisteredHost(TaskPaneHost host, out TaskPaneHost existingHost)
@@ -127,7 +133,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 || (role == WorkbookRole.Accounting && host.Control is AccountingNavigationControl);
         }
 
-        private void RemoveRegisteredHostForReplacement(string windowKey)
+        private void DisposeThenUnregisterHostForReplacement(string windowKey)
         {
             if (!_hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost existingHost))
             {
@@ -136,11 +142,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             // Replacement remove ordering is intentionally fixed in current-state:
             // dispose first, then drop the shared-map entry.
-            DisposeHostForReplacement(existingHost);
+            DisposeHostWithoutRegistryMutation(existingHost);
             _hostsByWindowKey.Remove(windowKey);
         }
 
-        private TaskPaneHost CreateHostAndRegister(string windowKey, Excel.Window window, WorkbookRole role)
+        private TaskPaneHost CreateHostThenRegister(string windowKey, Excel.Window window, WorkbookRole role)
         {
             // Factory owns control creation and ActionInvoked binding.
             // Registry owns only the reuse/replace/register orchestration over the shared map.
@@ -150,7 +156,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return host;
         }
 
-        private List<string> CollectWindowKeysForWorkbook(string workbookFullName)
+        private List<string> CollectWindowKeysForWorkbookRemovalSelection(string workbookFullName)
         {
             // WorkbookFullName is consumed only for workbook-scope remove selection here.
             // Registry does not own metadata write timing; it only reads the already-populated value.
@@ -171,12 +177,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new List<TaskPaneHost>(_hostsByWindowKey.Values);
         }
 
-        private static void DisposeHostForReplacement(TaskPaneHost host)
+        private static void DisposeHostWithoutRegistryMutation(TaskPaneHost host)
         {
             host.Dispose();
         }
 
-        private void DisposeHostAfterRemoval(string windowKey, TaskPaneHost host)
+        private void DisposeHostAfterRegistryRemoval(string windowKey, TaskPaneHost host)
         {
             try
             {

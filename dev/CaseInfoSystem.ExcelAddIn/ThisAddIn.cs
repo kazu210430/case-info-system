@@ -545,7 +545,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         // Concrete VSTO adapter boundary for CustomTaskPane removal.
         // This remains separate from the display-entry above so create/remove adapter calls stay readable without changing timing.
-        // Current-state remove ordering is still owned by TaskPaneHost.Dispose().
+        // Standard remove, replacement remove, and shutdown cleanup all reach this adapter through TaskPaneHost.Dispose().
+        // Current-state remove ordering is still owned by TaskPaneHost.Dispose(), not by this method.
         internal void RemoveTaskPane(CustomTaskPane pane)
         {
             if (pane == null)

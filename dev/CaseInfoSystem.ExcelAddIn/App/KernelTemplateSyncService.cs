@@ -93,7 +93,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly CaseListFieldDefinitionRepository _caseListFieldDefinitionRepository;
 
-		private readonly WordTemplateRegistrationValidationService _wordTemplateRegistrationValidationService;
+		private readonly KernelTemplateSyncPreflightService _kernelTemplateSyncPreflightService;
 
 		private readonly MasterTemplateCatalogService _masterTemplateCatalogService;
 
@@ -101,7 +101,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly Logger _logger;
 
-		internal KernelTemplateSyncService (Application application, KernelWorkbookService kernelWorkbookService, ExcelInteropService excelInteropService, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, WordTemplateRegistrationValidationService wordTemplateRegistrationValidationService, MasterTemplateCatalogService masterTemplateCatalogService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, Logger logger)
+		internal KernelTemplateSyncService (Application application, KernelWorkbookService kernelWorkbookService, ExcelInteropService excelInteropService, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, CaseListFieldDefinitionRepository caseListFieldDefinitionRepository, KernelTemplateSyncPreflightService kernelTemplateSyncPreflightService, MasterTemplateCatalogService masterTemplateCatalogService, CaseWorkbookLifecycleService caseWorkbookLifecycleService, Logger logger)
 		{
 			_application = application ?? throw new ArgumentNullException ("application");
 			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
@@ -109,7 +109,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_caseListFieldDefinitionRepository = caseListFieldDefinitionRepository ?? throw new ArgumentNullException ("caseListFieldDefinitionRepository");
-			_wordTemplateRegistrationValidationService = wordTemplateRegistrationValidationService ?? throw new ArgumentNullException ("wordTemplateRegistrationValidationService");
+			_kernelTemplateSyncPreflightService = kernelTemplateSyncPreflightService ?? throw new ArgumentNullException ("kernelTemplateSyncPreflightService");
 			_masterTemplateCatalogService = masterTemplateCatalogService ?? throw new ArgumentNullException ("masterTemplateCatalogService");
 			_caseWorkbookLifecycleService = caseWorkbookLifecycleService ?? throw new ArgumentNullException ("caseWorkbookLifecycleService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
@@ -137,25 +137,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						worksheet.Unprotect (string.Empty);
 					}
 					ValidateMasterListSheet (worksheet);
-					string text = ResolveTemplateDirectory (openKernelWorkbook);
-					IReadOnlyCollection<string> readOnlyCollection = LoadDefinedTemplateTags (openKernelWorkbook);
-					if (readOnlyCollection.Count == 0) {
-						return new KernelTemplateSyncResult {
-							Success = false,
-							TemplateDirectory = text,
-							Message = "Kernelブックの管理シート CaseList_FieldInventory を読み取れません。"
-						};
+					KernelTemplateSyncPreflightResult kernelTemplateSyncPreflightResult = _kernelTemplateSyncPreflightService.Run (new KernelTemplateSyncPreflightRequest (ResolveSystemRoot (openKernelWorkbook), LoadDefinedTemplateTags (openKernelWorkbook)));
+					if (kernelTemplateSyncPreflightResult.Status != KernelTemplateSyncPreflightStatus.Succeeded) {
+						return CreatePreflightFailureResult (kernelTemplateSyncPreflightResult);
 					}
-					TemplateRegistrationValidationSummary templateRegistrationValidationSummary = _wordTemplateRegistrationValidationService.Validate (text, readOnlyCollection);
-					if (templateRegistrationValidationSummary.DetectedFileCount == 0) {
-						return new KernelTemplateSyncResult {
-							Success = false,
-							TemplateDirectory = text,
-							DetectedCount = 0,
-							TemplateResults = templateRegistrationValidationSummary.TemplateResults,
-							Message = "雛形フォルダに Word 雛形 (.docx / .dotx / .docm / .dotm) が見つかりませんでした。" + Environment.NewLine + "フォルダ: " + text
-						};
-					}
+					string text = kernelTemplateSyncPreflightResult.TemplateDirectory;
+					TemplateRegistrationValidationSummary templateRegistrationValidationSummary = kernelTemplateSyncPreflightResult.ValidationSummary;
 					IReadOnlyList<TemplateRegistrationValidationEntry> validTemplates = templateRegistrationValidationSummary.GetValidTemplates ();
 					int updatedCount = WriteToMasterList (worksheet, validTemplates);
 					int masterVersion = IncrementTaskPaneMasterVersion (openKernelWorkbook);
@@ -198,6 +185,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				.Where (key => !string.IsNullOrWhiteSpace (key))
 				.Select (key => key.Trim ())
 				.ToArray ();
+		}
+
+		private static KernelTemplateSyncResult CreatePreflightFailureResult (KernelTemplateSyncPreflightResult preflightResult)
+		{
+			ValidationFailureSummary failure = preflightResult?.Failure;
+			return new KernelTemplateSyncResult {
+				Success = false,
+				TemplateDirectory = preflightResult?.TemplateDirectory ?? string.Empty,
+				DetectedCount = failure?.DetectedCount ?? 0,
+				TemplateResults = failure?.TemplateResults ?? Array.Empty<TemplateRegistrationValidationEntry> (),
+				Message = failure?.Message ?? string.Empty
+			};
 		}
 
 		private int WriteToMasterList (Worksheet masterSheet, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
@@ -394,16 +393,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					.Append (baseSyncError ?? string.Empty);
 			}
 			return stringBuilder.ToString ();
-		}
-
-		private string ResolveTemplateDirectory (Workbook kernelWorkbook)
-		{
-			string left = ResolveSystemRoot (kernelWorkbook);
-			string text = _pathCompatibilityService.CombinePath (left, "雛形");
-			if (!Directory.Exists (text)) {
-				throw new InvalidOperationException ("雛形フォルダが見つかりません: " + text);
-			}
-			return text;
 		}
 
 		private string ResolveSystemRoot (Workbook kernelWorkbook)

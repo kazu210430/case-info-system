@@ -80,6 +80,7 @@
     <Compile Include="KernelUserDataReflectionServiceTests.cs" />
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
+    <Compile Include="KernelTemplateSyncPreflightServiceTests.cs" />
     <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
     <Compile Include="TaskPaneDisplayRetryCoordinatorTests.cs" />
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
@@ -141,6 +142,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\NavigationService.cs" Link="Source\App\NavigationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\PostCloseFollowUpScheduler.cs" Link="Source\App\PostCloseFollowUpScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateSyncPreflightService.cs" Link="Source\App\KernelTemplateSyncPreflightService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WordTemplateRegistrationValidationService.cs" Link="Source\App\WordTemplateRegistrationValidationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookPromptSuppressionHelper.cs" Link="Source\App\WorkbookPromptSuppressionHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRetryCoordinator.cs" Link="Source\App\TaskPaneDisplayRetryCoordinator.cs" />
@@ -171,8 +173,13 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationPlan.cs" Link="Source\Domain\KernelCaseCreationPlan.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationRequest.cs" Link="Source\Domain\KernelCaseCreationRequest.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationResult.cs" Link="Source\Domain\KernelCaseCreationResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncPreflightRequest.cs" Link="Source\Domain\KernelTemplateSyncPreflightRequest.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncPreflightResult.cs" Link="Source\Domain\KernelTemplateSyncPreflightResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncPreflightStatus.cs" Link="Source\Domain\KernelTemplateSyncPreflightStatus.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\TemplateRegistrationValidationEntry.cs" Link="Source\Domain\TemplateRegistrationValidationEntry.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\TemplateRegistrationValidationSummary.cs" Link="Source\Domain\TemplateRegistrationValidationSummary.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\ValidationFailureKind.cs" Link="Source\Domain\ValidationFailureKind.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\ValidationFailureSummary.cs" Link="Source\Domain\ValidationFailureSummary.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\UserDataBaseMappingDefinition.cs" Link="Source\Domain\UserDataBaseMappingDefinition.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookContext.cs" Link="Source\Domain\WorkbookContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />

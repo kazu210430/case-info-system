@@ -219,6 +219,7 @@
     <Compile Include="App\KernelCasePathService.cs" />
     <Compile Include="App\KernelCasePresentationService.cs" />
     <Compile Include="App\KernelNameRuleReader.cs" />
+    <Compile Include="App\KernelTemplateSyncPreflightService.cs" />
     <Compile Include="App\KernelTemplateSyncService.cs" />
     <Compile Include="App\KernelUserDataReflectionService.cs" />
     <Compile Include="App\KernelWorkbookLifecycleService.cs" />
@@ -308,12 +309,17 @@
     <Compile Include="Domain\KernelCaseCreationPlan.cs" />
     <Compile Include="Domain\KernelCaseCreationRequest.cs" />
     <Compile Include="Domain\KernelCaseCreationResult.cs" />
+    <Compile Include="Domain\KernelTemplateSyncPreflightRequest.cs" />
+    <Compile Include="Domain\KernelTemplateSyncPreflightResult.cs" />
+    <Compile Include="Domain\KernelTemplateSyncPreflightStatus.cs" />
     <Compile Include="Domain\KernelTemplateSyncResult.cs" />
     <Compile Include="Domain\KernelUserDataReflectionResult.cs" />
     <Compile Include="Domain\DocumentTemplateLookupResult.cs" />
     <Compile Include="Domain\MasterTemplateRecord.cs" />
     <Compile Include="Domain\TemplateRegistrationValidationEntry.cs" />
     <Compile Include="Domain\TemplateRegistrationValidationSummary.cs" />
+    <Compile Include="Domain\ValidationFailureKind.cs" />
+    <Compile Include="Domain\ValidationFailureSummary.cs" />
     <Compile Include="Domain\DocumentTemplateSpec.cs" />
     <Compile Include="Domain\WorkbookResetDefinition.cs" />
     <Compile Include="Domain\WorkbookResetResult.cs" />

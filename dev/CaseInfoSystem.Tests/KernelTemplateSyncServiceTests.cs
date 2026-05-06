@@ -85,6 +85,132 @@ namespace CaseInfoSystem.Tests
 			}
 		}
 
+		[Fact]
+		public void Execute_WhenMasterSheetStartsProtected_TemporarilyUnprotectsAndRestoresOriginalProtectionState ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: true, createValidTemplate: true, createBaseFile: true)) {
+				bool wasUnprotectedDuringWrite = false;
+				ConfigureMasterSheetAsProtected (harness.MasterSheet);
+				harness.AccountingWorkbookService.OnWriteRangeValues = (worksheet, address, values) =>
+				{
+					harness.Events.Add ("master-write");
+					wasUnprotectedDuringWrite = !harness.MasterSheet.ProtectContents
+						&& !harness.MasterSheet.ProtectDrawingObjects
+						&& !harness.MasterSheet.ProtectScenarios;
+					ClearMasterSheetProtectionFlags (harness.MasterSheet);
+				};
+				harness.KernelWorkbook.SaveBehavior = () => harness.Events.Add ("kernel-save");
+				harness.BaseWorkbook.SaveBehavior = () => harness.Events.Add ("base-save");
+
+				KernelTemplateSyncResult result = harness.Service.Execute (harness.Context);
+
+				Assert.True (result.Success);
+				Assert.True (wasUnprotectedDuringWrite);
+				Assert.Equal (1, harness.MasterSheet.UnprotectCallCount);
+				Assert.Equal (1, harness.MasterSheet.ProtectCallCount);
+				Assert.True (harness.MasterSheet.ProtectContents);
+				Assert.True (harness.MasterSheet.ProtectDrawingObjects);
+				Assert.True (harness.MasterSheet.ProtectScenarios);
+				Assert.Equal (Excel.XlEnableSelection.xlUnlockedCells, harness.MasterSheet.EnableSelection);
+				Assert.True (harness.MasterSheet.Protection.AllowFormattingCells);
+				Assert.False (harness.MasterSheet.Protection.AllowFormattingColumns);
+				Assert.True (harness.MasterSheet.Protection.AllowFormattingRows);
+				Assert.False (harness.MasterSheet.Protection.AllowInsertingColumns);
+				Assert.True (harness.MasterSheet.Protection.AllowInsertingRows);
+				Assert.False (harness.MasterSheet.Protection.AllowInsertingHyperlinks);
+				Assert.True (harness.MasterSheet.Protection.AllowDeletingColumns);
+				Assert.False (harness.MasterSheet.Protection.AllowDeletingRows);
+				Assert.True (harness.MasterSheet.Protection.AllowSorting);
+				Assert.False (harness.MasterSheet.Protection.AllowFiltering);
+				Assert.True (harness.MasterSheet.Protection.AllowUsingPivotTables);
+			}
+		}
+
+		[Fact]
+		public void Execute_WhenMasterSheetStartsUnprotected_DoesNotRunProtectionTransitions ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: true, createValidTemplate: true, createBaseFile: true)) {
+				bool wasUnprotectedDuringWrite = false;
+				harness.MasterSheet.EnableSelection = Excel.XlEnableSelection.xlNoRestrictions;
+				harness.AccountingWorkbookService.OnWriteRangeValues = (worksheet, address, values) =>
+				{
+					harness.Events.Add ("master-write");
+					wasUnprotectedDuringWrite = !harness.MasterSheet.ProtectContents
+						&& !harness.MasterSheet.ProtectDrawingObjects
+						&& !harness.MasterSheet.ProtectScenarios;
+				};
+				harness.KernelWorkbook.SaveBehavior = () => harness.Events.Add ("kernel-save");
+				harness.BaseWorkbook.SaveBehavior = () => harness.Events.Add ("base-save");
+
+				KernelTemplateSyncResult result = harness.Service.Execute (harness.Context);
+
+				Assert.True (result.Success);
+				Assert.True (wasUnprotectedDuringWrite);
+				Assert.Equal (0, harness.MasterSheet.UnprotectCallCount);
+				Assert.Equal (0, harness.MasterSheet.ProtectCallCount);
+				Assert.False (harness.MasterSheet.ProtectContents);
+				Assert.False (harness.MasterSheet.ProtectDrawingObjects);
+				Assert.False (harness.MasterSheet.ProtectScenarios);
+				Assert.Equal (Excel.XlEnableSelection.xlNoRestrictions, harness.MasterSheet.EnableSelection);
+			}
+		}
+
+		[Fact]
+		public void Execute_WhenMasterSheetRestoreFails_SwallowsRestoreFailure ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: true, createValidTemplate: true, createBaseFile: true)) {
+				KernelTemplateSyncResult result = null;
+				ConfigureMasterSheetAsProtected (harness.MasterSheet);
+				harness.MasterSheet.ProtectBehavior = () => throw new InvalidOperationException ("restore failed");
+				harness.KernelWorkbook.SaveBehavior = () => harness.Events.Add ("kernel-save");
+				harness.BaseWorkbook.SaveBehavior = () => harness.Events.Add ("base-save");
+
+				Exception exception = Record.Exception (() => result = harness.Service.Execute (harness.Context));
+
+				Assert.Null (exception);
+				Assert.NotNull (result);
+				Assert.True (result.Success);
+				Assert.Equal (new[] { "master-write", "kernel-version", "kernel-save", "base-save", "invalidate" }, harness.Events);
+				Assert.Equal (1, harness.MasterSheet.UnprotectCallCount);
+				Assert.Equal (1, harness.MasterSheet.ProtectCallCount);
+				Assert.False (harness.MasterSheet.ProtectContents);
+			}
+		}
+
+		private static void ConfigureMasterSheetAsProtected (Excel.Worksheet worksheet)
+		{
+			worksheet.ProtectContents = true;
+			worksheet.ProtectDrawingObjects = true;
+			worksheet.ProtectScenarios = true;
+			worksheet.EnableSelection = Excel.XlEnableSelection.xlNoSelection;
+			worksheet.Protection.AllowFormattingCells = true;
+			worksheet.Protection.AllowFormattingColumns = false;
+			worksheet.Protection.AllowFormattingRows = true;
+			worksheet.Protection.AllowInsertingColumns = false;
+			worksheet.Protection.AllowInsertingRows = true;
+			worksheet.Protection.AllowInsertingHyperlinks = false;
+			worksheet.Protection.AllowDeletingColumns = true;
+			worksheet.Protection.AllowDeletingRows = false;
+			worksheet.Protection.AllowSorting = true;
+			worksheet.Protection.AllowFiltering = false;
+			worksheet.Protection.AllowUsingPivotTables = true;
+		}
+
+		private static void ClearMasterSheetProtectionFlags (Excel.Worksheet worksheet)
+		{
+			worksheet.Protection.AllowFormattingCells = false;
+			worksheet.Protection.AllowFormattingColumns = false;
+			worksheet.Protection.AllowFormattingRows = false;
+			worksheet.Protection.AllowInsertingColumns = false;
+			worksheet.Protection.AllowInsertingRows = false;
+			worksheet.Protection.AllowInsertingHyperlinks = false;
+			worksheet.Protection.AllowDeletingColumns = false;
+			worksheet.Protection.AllowDeletingRows = false;
+			worksheet.Protection.AllowSorting = false;
+			worksheet.Protection.AllowFiltering = false;
+			worksheet.Protection.AllowUsingPivotTables = false;
+		}
+
 		private sealed class TestHarness : IDisposable
 		{
 			private const string SystemRootPropertyName = "SYSTEM_ROOT";
@@ -121,6 +247,8 @@ namespace CaseInfoSystem.Tests
 
 			internal Excel.Workbook BaseWorkbook { get; }
 
+			internal Excel.Worksheet MasterSheet { get; }
+
 			internal Dictionary<string, string> KernelProperties { get; }
 
 			internal List<string> Events { get; }
@@ -141,6 +269,7 @@ namespace CaseInfoSystem.Tests
 					[SystemRootPropertyName] = _systemRoot
 				};
 				KernelWorkbook = CreateKernelWorkbook (_systemRoot, KernelProperties);
+				MasterSheet = KernelWorkbook.Worksheets [1];
 				BaseWorkbook = CreateBaseWorkbook (_systemRoot);
 
 				if (includeDefinedTags) {

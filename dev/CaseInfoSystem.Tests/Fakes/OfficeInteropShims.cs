@@ -362,6 +362,14 @@ namespace Microsoft.Office.Interop.Excel
 
         public Protection Protection { get; } = new Protection();
 
+        public int UnprotectCallCount { get; private set; }
+
+        public Action UnprotectBehavior { get; set; }
+
+        public int ProtectCallCount { get; private set; }
+
+        public Action ProtectBehavior { get; set; }
+
         public WorksheetCellCollection Cells { get; } = new WorksheetCellCollection();
 
         public WorksheetRowCollection Rows { get; } = new WorksheetRowCollection();
@@ -376,6 +384,8 @@ namespace Microsoft.Office.Interop.Excel
 
         public void Unprotect(string Password = null)
         {
+            UnprotectCallCount++;
+            UnprotectBehavior?.Invoke();
             ProtectContents = false;
             ProtectDrawingObjects = false;
             ProtectScenarios = false;
@@ -399,6 +409,8 @@ namespace Microsoft.Office.Interop.Excel
             object Scenarios = null,
             bool UserInterfaceOnly = false)
         {
+            ProtectCallCount++;
+            ProtectBehavior?.Invoke();
             ProtectContents = true;
             ProtectDrawingObjects = true;
             ProtectScenarios = true;

@@ -41,6 +41,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			internal bool AllowUsingPivotTables { get; set; }
 		}
 
+		private sealed class TemporarySheetProtectionRestoreScope : IDisposable
+		{
+			private readonly Worksheet _worksheet;
+
+			private readonly SheetProtectionState _state;
+
+			private bool _disposed;
+
+			internal TemporarySheetProtectionRestoreScope (Worksheet worksheet)
+			{
+				_worksheet = worksheet ?? throw new ArgumentNullException ("worksheet");
+				_state = SaveSheetProtectionState (worksheet);
+				if (_state.IsProtected) {
+					worksheet.Unprotect (string.Empty);
+				}
+			}
+
+			public void Dispose ()
+			{
+				if (_disposed) {
+					return;
+				}
+				_disposed = true;
+				RestoreSheetProtectionState (_worksheet, _state);
+			}
+		}
+
 		private sealed class PublicationExecutor
 		{
 			private readonly Application _application;
@@ -308,13 +335,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				excelApplicationStateScope.SetScreenUpdating (false);
 				excelApplicationStateScope.SetEnableEvents (false);
 				Worksheet worksheet = null;
-				SheetProtectionState sheetProtectionState = null;
+				TemporarySheetProtectionRestoreScope protectionRestoreScope = null;
 				try {
 					worksheet = GetMasterListSheet (openKernelWorkbook);
-					sheetProtectionState = SaveSheetProtectionState (worksheet);
-					if (sheetProtectionState.IsProtected) {
-						worksheet.Unprotect (string.Empty);
-					}
+					protectionRestoreScope = new TemporarySheetProtectionRestoreScope (worksheet);
 					ValidateMasterListSheet (worksheet);
 					string systemRoot = ResolveSystemRoot (openKernelWorkbook);
 					KernelTemplateSyncPreflightResult kernelTemplateSyncPreflightResult = _kernelTemplateSyncPreflightService.Run (new KernelTemplateSyncPreflightRequest (systemRoot, LoadDefinedTemplateTags (openKernelWorkbook)));
@@ -346,9 +370,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						Message = BuildCompletedMessage (text, updatedCount, templateRegistrationValidationSummary, stopwatch.Elapsed, masterVersion, baseSyncSucceeded, errorMessage)
 					};
 				} finally {
-					if (worksheet != null && sheetProtectionState != null) {
-						RestoreSheetProtectionState (worksheet, sheetProtectionState);
-					}
+					protectionRestoreScope?.Dispose ();
 				}
 			}
 		}

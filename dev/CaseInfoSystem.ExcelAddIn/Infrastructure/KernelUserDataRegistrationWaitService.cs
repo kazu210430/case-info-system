@@ -50,8 +50,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     _isShowing = true;
                     _waitForm = new KernelUserDataRegistrationWaitForm();
                     _waitForm.Show();
-                    _waitForm.Activate();
-                    _waitForm.BringToFront();
+                    BringWaitFormToFront(_waitForm);
                     RefreshWaitForm(_waitForm);
                     _logger.Info("Kernel user data registration wait UI shown. elapsedMs=" + GetElapsedMilliseconds(commandStopwatch));
                 }
@@ -143,6 +142,29 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     }
                     catch (InvalidOperationException)
                     {
+                    }
+                }
+            }
+
+            private static void BringWaitFormToFront(KernelUserDataRegistrationWaitForm waitForm)
+            {
+                if (waitForm == null || waitForm.IsDisposed)
+                {
+                    return;
+                }
+
+                bool originalTopMost = waitForm.TopMost;
+                try
+                {
+                    waitForm.TopMost = true;
+                    waitForm.Activate();
+                    waitForm.BringToFront();
+                }
+                finally
+                {
+                    if (!waitForm.IsDisposed)
+                    {
+                        waitForm.TopMost = originalTopMost;
                     }
                 }
             }

@@ -16,7 +16,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterScreen;
             ShowInTaskbar = false;
-            TopMost = true;
             ControlBox = false;
             MaximizeBox = false;
             MinimizeBox = false;

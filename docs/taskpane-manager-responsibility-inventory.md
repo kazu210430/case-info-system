@@ -559,6 +559,100 @@
   - metadata reads as consumer-only touchpoints.
 - Do not combine logging cleanup with metadata timing changes, host identity changes, visible pane early-complete changes, or `WorkbookOpen` downstream behavior changes.
 
+## B2.6 Status: Create/Remove Adapter Timing Inventory (2026-05-06)
+
+### Scope
+
+- This is a docs-only current-state inventory for create/remove adapter timing before any runtime surgery.
+- The target boundary is limited to `ThisAddIn`, `TaskPaneHost`, `TaskPaneHostRegistry`, `TaskPaneHostFactory`, `TaskPaneManager`, and runtime-graph-adjacent lifecycle/display flows.
+- This section does not change create/remove timing, metadata timing, visibility retention, `WorkbookOpen` flow, ready-show / retry, foreground recovery, visible pane early-complete, event unbinding order, or `_hostsByWindowKey` ownership.
+
+### Create timing inventory
+
+| Concern | Current owner | Current-state timing / sequence | Risk |
+| --- | --- | --- | --- |
+| display entry to refresh | `ThisAddIn.RequestTaskPaneDisplayForTargetWindow(...)` -> `TaskPaneRefreshOrchestrationService` -> `TaskPaneRefreshCoordinator` | when `PaneDisplayPolicy` does not resolve to `ShowExisting` or `Hide`, the request re-enters `RefreshTaskPane(...)` and reaches `TaskPaneManager.RefreshPane(...)` | `WorkbookOpen-sensitive` |
+| refresh-time create decision | `TaskPaneHostFlowService.RefreshPane(...)` | `RemoveStaleKernelHostsForRefresh(...)` runs first, then `TaskPaneHostLifecycleService.GetOrReplaceHost(...)` decides reuse vs replacement for the target `windowKey` | `Runtime-sensitive` |
+| reusable host short-circuit | `TaskPaneHostRegistry.TryGetReusableHost(...)` | if the existing host on the same `windowKey` is compatible with the requested role, no new host and no new `CustomTaskPane` are created | `Runtime-sensitive` |
+| replacement-before-create path | `TaskPaneHostRegistry.RemoveExistingHostForReplacement(...)` | if the existing host is incompatible, `host.Dispose()` runs before the old map entry is removed, and only after that does the flow continue to new host creation | `Runtime-sensitive` |
+| concrete control create + binding | `TaskPaneHostFactory.CreateHost(...)` | the factory creates the role-specific control and wires `ActionInvoked`; for Case the host is constructed before the inline event subscription, while Kernel / Accounting bind before `TaskPaneHost` construction | `Runtime-sensitive` |
+| concrete `CustomTaskPane` create | `TaskPaneHost` constructor -> `ThisAddIn.CreateTaskPane(...)` | host construction crosses the VSTO boundary immediately; `ThisAddIn.CreateTaskPane(...)` calls `CustomTaskPanes.Add(control, TaskPaneTitle, window)` and sets the dock position | `VSTO lifecycle-sensitive` |
+| registry registration timing | `TaskPaneHostRegistry.CreateAndRegisterHost(...)` | the new host is inserted into `_hostsByWindowKey` only after `TaskPaneHostFactory.CreateHost(...)` returns; registration logging happens after `_hostsByWindowKey.Add(...)` | `Runtime-sensitive` |
+| first visibility after create | `TaskPaneDisplayCoordinator.TryShowHost(...)` | pane creation and registry registration happen before `host.Show()`; visibility becomes true only later on the refresh/display path | `Visibility-sensitive` |
+| first metadata write after create | `TaskPaneManager.RenderHost(...)` and `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)` | `WorkbookFullName` is written during render, and `LastRenderSignature` is written after render; concrete pane creation itself does not write those fields | `Metadata-timing-sensitive` |
+
+### Remove timing inventory
+
+| Remove trigger | Current owner | Current-state timing / sequence | Risk |
+| --- | --- | --- | --- |
+| incompatible replacement | `TaskPaneHostRegistry.RemoveExistingHostForReplacement(...)` | replacement dispose runs first, then the old `windowKey` entry is removed, and only then can the new host be created | `Runtime-sensitive` |
+| workbook close cleanup | `WorkbookLifecycleCoordinator.OnWorkbookBeforeClose(...)` -> `TaskPaneManager.RemoveWorkbookPanes(...)` -> `TaskPaneHostLifecycleService.RemoveWorkbookPanes(...)` -> `TaskPaneHostRegistry.RemoveWorkbookPanes(...)` | registry selects `windowKey` values by `WorkbookFullName`, then removes each host | `WorkbookOpen-sensitive` |
+| stale Kernel host cleanup during refresh | `TaskPaneHostLifecycleService.RemoveStaleKernelHostsForRefresh(...)` | before create/reuse for the active target window, stale Kernel hosts for the same workbook are removed through registry-owned remove calls | `Runtime-sensitive` |
+| explicit remove-by-window | `TaskPaneHostLifecycleService.RemoveHost(...)` -> `TaskPaneHostRegistry.RemoveHost(...)` | the normal remove path logs while the host is still present, removes the map entry, then disposes the host | `Runtime-sensitive` |
+| show/hide failure fallback | `TaskPaneDisplayCoordinator.TryShowHost(...)` / `SafeHideHost(...)` | if `host.Show()` or `host.Hide()` throws, the coordinator removes the host through the lifecycle callback instead of trying a partial recovery in place | `visibility/foreground-sensitive` |
+| shutdown cleanup | `ThisAddIn_Shutdown(...)` -> `TaskPaneManager.DisposeAll(...)` -> `TaskPaneHostLifecycleService.DisposeAll(...)` -> `TaskPaneHostRegistry.DisposeAll(...)` | shutdown snapshots all current hosts, disposes them, then clears the shared map | `VSTO lifecycle-sensitive` |
+
+### Current-state teardown ownership
+
+- Shared registry state:
+  - `TaskPaneHostRegistry.RemoveHost(...)` logs first, removes the `windowKey` entry second, and disposes the host last.
+  - `TaskPaneHostRegistry.RemoveExistingHostForReplacement(...)` disposes first and removes the old `windowKey` entry second.
+  - `TaskPaneHostRegistry.DisposeAll(...)` snapshots hosts, disposes the snapshot, and clears `_hostsByWindowKey` after disposal completes.
+- Concrete pane lifetime:
+  - `TaskPaneHost.Dispose()` is still the concrete remove wrapper for a live host.
+  - The current remove order inside `TaskPaneHost.Dispose()` is `Hide()` -> `ThisAddIn.RemoveTaskPane(_pane)` -> `_pane = null`.
+  - `ThisAddIn.RemoveTaskPane(...)` remains the only concrete VSTO `CustomTaskPanes.Remove(...)` caller.
+- Control and event binding lifetime:
+  - `TaskPaneHostFactory` owns control creation and inline `ActionInvoked` subscription timing.
+  - An explicit event-unbinding owner is still not present in current state.
+  - Current-state teardown therefore remains implicit and dispose-driven; this inventory does not infer a separate event-unbinding phase.
+
+### Adapter boundary inventory
+
+| Boundary | Current owner | Current-state contract | Not owner of | Risk |
+| --- | --- | --- | --- | --- |
+| `ThisAddIn` | VSTO adapter boundary | owns concrete `CustomTaskPane` create/remove entrypoints and display-request entry surface | shared host map, control binding ownership, host metadata timing | `VSTO lifecycle-sensitive` |
+| `TaskPaneHost` | concrete pane lifetime holder | holds `window`, `control`, `view`, and concrete pane instance; crosses into `ThisAddIn.CreateTaskPane(...)` at construction and `RemoveTaskPane(...)` at dispose | shared host map, create/reuse decision, metadata write timing | `Runtime-sensitive` |
+| `TaskPaneHostFactory` | control creation + `ActionInvoked` binding owner | builds role-specific controls, wires action delegates, then returns a constructed host | shared host map, workbook-scope remove selection, visibility policy | `Runtime-sensitive` |
+| `TaskPaneHostRegistry` | replace/register/remove orchestration owner over the shared map | decides reuse vs replacement, performs registration, and drives concrete host teardown by calling `TaskPaneHost.Dispose()` | `_hostsByWindowKey` ownership, control binding ownership, metadata writes | `Runtime-sensitive` |
+| `TaskPaneManagerRuntimeGraphFactory.Compose(...)` | runtime graph compose owner | wires factory, registry, lifecycle, display coordinator, and callbacks around the shared map | runtime state ownership, create/remove timing ownership after composition | `Runtime-sensitive` |
+| `TaskPaneManager` | facade + `_hostsByWindowKey` owner | owns the shared host map, render seam, and downstream facade entrypoints | concrete VSTO `CustomTaskPane` API calls, inline control binding ownership | `Metadata-timing-sensitive` |
+
+### Runtime-sensitive danger boundaries
+
+| Touchpoint | Why it is dangerous | Current-state dependency |
+| --- | --- | --- |
+| `WorkbookOpen` downstream host availability | `WorkbookOpen` itself is workbook-only, so moving create/remove timing earlier or later can violate the documented `WorkbookActivate` / `WindowActivate` window-safe boundary | create/reuse/remove must stay observable only in downstream refresh/lifecycle flows |
+| ready-show early-complete | `WorkbookTaskPaneReadyShowAttemptWorker` can short-circuit if `HasVisibleCasePaneForWorkbookWindow(...)` sees a visible Case host for the workbook window | host-map contents plus `WorkbookFullName` and `IsVisible` must stay stable at the observed timing |
+| visibility / hide vs remove | `PaneDisplayPolicy` and `TaskPaneDisplayCoordinator` distinguish hiding an existing host from replacing or removing it | a created host is not yet a visible host, and hide failure can escalate to remove |
+| foreground recovery adjacency | show/hide failure paths already remove hosts through lifecycle callbacks | changing remove timing here can leak into foreground-recovery behavior even without touching that code directly |
+| metadata timing | `WorkbookFullName` and `LastRenderSignature` are written after create and are read by render-state, workbook-scope remove, and visible-pane checks | create/remove cleanup must not silently move metadata read/write timing |
+| event unbinding ambiguity | current teardown does not expose a separate unbind phase | making unbinding explicit would change teardown order and is therefore outside this inventory |
+
+### GO conditions for the next code phase
+
+- GO only if the task isolates one runtime-sensitive boundary and keeps the other frozen.
+- GO only if the owner map stays intact:
+  - `TaskPaneManager` keeps `_hostsByWindowKey` ownership,
+  - `TaskPaneHostRegistry` keeps replace/register/remove orchestration ownership,
+  - `TaskPaneHostFactory` keeps control creation and `ActionInvoked` binding ownership,
+  - `TaskPaneHost` keeps concrete pane lifetime ownership,
+  - `ThisAddIn` remains the concrete VSTO adapter boundary unless that single boundary is the explicit subject of the runtime-surgery task.
+- GO only if the planned diff can explain the before/after timing for:
+  - incompatible replacement remove,
+  - standard remove-by-window,
+  - shutdown dispose,
+  - ready-show visible-pane observation,
+  - and `WorkbookOpen` downstream host availability.
+- GO only if validation distinguishes compile/build success from runtime `Addins\` reflection and human-side smoke.
+
+### STOP conditions for the next code phase
+
+- STOP if the change starts to touch metadata timing, visibility retention, `WorkbookOpen` flow, ready-show / retry, foreground recovery, visible pane early-complete, or event unbinding order.
+- STOP if the change requires moving `_hostsByWindowKey` ownership, redesigning `TaskPaneManager` / `TaskPaneHostRegistry` / `TaskPaneHost` / `TaskPaneHostFactory`, adding services, or introducing abstraction-first refactoring.
+- STOP if the change needs to move create timing and remove timing together instead of isolating one boundary.
+- STOP if the change cannot state which layer owns `CustomTaskPane`, control binding, registry state, and metadata timing both before and after the diff.
+
 ## B2 Checkpoint Status (2026-05-06)
 
 ### Final owner map at the end of B2

@@ -818,3 +818,150 @@
 - STOP if the change requires moving `_hostsByWindowKey`, redesigning `TaskPaneManager` / `TaskPaneHostFlowService` / `TaskPaneDisplayCoordinator` / `TaskPaneHostRegistry`, adding services, or introducing abstraction-first refactoring.
 - STOP if the change cannot preserve and explain how `WorkbookFullName` remains observable for workbook-scope remove, stale Kernel cleanup, and action dispatch.
 - STOP if the change cannot preserve and explain how `LastRenderSignature` remains coherent for render skip, display-request render-current checks, and CASE host reuse.
+
+## B2.8 Status: Ready-Show / Visibility / Foreground Dependency Inventory (2026-05-07)
+
+### Scope
+
+- This is a docs-only current-state inventory before any runtime surgery.
+- The target boundary is limited to:
+  - ready-show entry / ready retry / pending retry fallback,
+  - visibility retention over existing hosts,
+  - final foreground recovery and CASE protection start,
+  - visible-pane early-complete preconditions,
+  - the connection back to `WorkbookOpen` downstream host availability.
+- This section does not change ready-show / retry, visibility retention, foreground recovery, visible pane early-complete, `WorkbookOpen` flow, metadata timing, create/remove timing, event unbinding behavior, or `_hostsByWindowKey` ownership.
+
+### Ready-show entry inventory
+
+| Entry | Current owner | Dependency state before the request | Current-state note |
+| --- | --- | --- | --- |
+| created CASE ready-show | `KernelCasePresentationService.ExecuteDeferredPresentationEnhancements(...)` | transient suppression released, workbook non-null, workbook window visibility ensure attempted, one-shot CASE activation suppression prepared | current order is `ReleaseWorkbook(...) -> EnsureWorkbookWindowVisibleBeforeReadyShow(...) -> SuppressUpcomingCasePaneActivationRefresh(...) -> ShowWorkbookTaskPaneWhenReady(...)` |
+| accounting-set ready-show | `AccountingSetCreateService.Execute(...)` | transient suppression released, workbook non-null, invoice-entry activation already requested | current path does not introduce a separate TaskPane-only visibility policy before the ready-show request |
+| TaskPane ready-show entry | `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` | workbook non-null | entry is workbook-targeted, not window-targeted; it passes scheduling/fallback delegates into `WorkbookTaskPaneReadyShowAttemptWorker` |
+
+### Ready-show / retry execution inventory
+
+| Step | Current owner | Dependency state | Current-state behavior |
+| --- | --- | --- | --- |
+| attempt orchestration | `TaskPaneDisplayRetryCoordinator.ShowWhenReady(...)` | workbook, reason, `maxAttempts=2` | attempt 1 runs immediately, attempt 2 is the only scheduled retry, and later fallback starts only after attempts are exhausted |
+| attempt 1 pre-visibility ensure | `WorkbookTaskPaneReadyShowAttemptWorker.EnsureWorkbookWindowVisibleForTaskPaneDisplay(...)` | `attemptNumber == 1`, workbook non-null | `WorkbookWindowVisibilityService.EnsureVisible(...)` is called only on attempt 1 |
+| workbook-window resolve | `WorkbookTaskPaneReadyShowAttemptWorker` -> `ResolveWorkbookPaneWindow(..., activateWorkbook: true)` | workbook non-null; either workbook visible window exists, or active workbook matches and active window exists | ready-show uses the same resolver boundary as refresh, but asks it to activate the workbook first |
+| ready retry scheduling | `TaskPaneRefreshOrchestrationService.ScheduleTaskPaneReadyRetry(...)` | retry action non-null | schedules a WinForms timer with `WorkbookPaneWindowResolveDelayMs = 80` |
+| fallback prepare | `TaskPaneRefreshOrchestrationService.ScheduleWorkbookTaskPaneRefresh(...)` | workbook full name trackable, `WorkbookOpen` skip policy not triggered | fallback records workbook target first, tries one immediate refresh, and only then starts pending retry |
+| pending retry | `PendingPaneRefreshRetryService` | `PendingPaneRefreshIntervalMs = 400`, `PendingPaneRefreshMaxAttempts = 3` | workbook-target retry resolves the workbook again by full name; if the workbook is gone, active CASE context fallback can still call `TryRefreshTaskPane(reason, null, null)` |
+
+### Visibility retention dependency inventory
+
+- current-state visibility retention is not backed by a standalone `VisibilityRetentionState`.
+- It is the combined behavior of:
+  - keeping the host registered in `_hostsByWindowKey`,
+  - keeping host-side workbook/render metadata on that same host instance,
+  - toggling concrete pane visibility through `TaskPaneHost.Show()` / `Hide()` instead of removing the host when reuse is still intended.
+
+| State / input | Current write owner | Current readers / consumers | Current-state meaning |
+| --- | --- | --- | --- |
+| host registration in `_hostsByWindowKey` | `TaskPaneHostRegistry` register/remove/replace/dispose-all paths | `PaneDisplayPolicy`, `TaskPaneDisplayCoordinator`, `TaskPaneHostFlowService`, `TaskPaneHostLifecycleService`, visible-pane early-complete | retention starts with host registration and ends with registry removal, not with metadata clearing |
+| concrete pane visible bit (`_pane.Visible`) | `TaskPaneHost.Show()` / `Hide()` / `Dispose()` via `TaskPaneDisplayCoordinator` or outer teardown | `TaskPaneHost.IsVisible` -> `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` | visibility is live VSTO state, not persisted metadata |
+| `TaskPaneHost.WorkbookFullName` | `TaskPaneManager.RenderHost(...)` | `TryShowExistingPane(...)`, visible-pane check, workbook-scope remove selection, stale Kernel cleanup, action target resolution | workbook identity join key for retained-host reuse and cleanup |
+| `TaskPaneHost.LastRenderSignature` | `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)`, forced-refresh invalidation, CASE post-action fallback rerender | display-request render-current checks, refresh-time render skip, CASE host reuse without render | render-current marker for retained hosts |
+| `KernelCaseInteractionState.IsKernelCaseCreationFlowActive` | outside this inventory | `TaskPaneHostPreparationPolicy` / `TaskPaneDisplayCoordinator.PrepareHostsBeforeShow(...)` | when true, CASE hosts keep CASE visibility while hiding non-CASE hosts; non-CASE hosts hide all except the active window |
+| workbook role / hosted control type | resolved at request time and on host instance | `PaneDisplayPolicy.ShouldDisplayPane(...)`, `GetHostedWorkbookRole(...)`, CASE-only early-complete | visibility retention is role-sensitive and CASE-only shortcuts stay CASE-only |
+
+### Visibility retention consumers
+
+| Consumer | What it depends on | Current-state expectation |
+| --- | --- | --- |
+| `PaneDisplayPolicy` + `TaskPaneDisplayCoordinator.TryShowExistingPaneForDisplayRequest(...)` | accepted request, non-null window, resolvable `windowKey`, managed host existence, same workbook, render signature current | explicit display requests prefer showing an already-retained host over rerendering |
+| `TaskPaneHostFlowService.ShouldReuseCaseHostWithoutRender(...)` | CASE role, Case host control type, non-empty `LastRenderSignature`, same `WorkbookFullName`, reason in `WorkbookActivate` / `WindowActivate` / `KernelHomeForm.FormClosed` | refresh-time CASE reuse is narrower than general host retention and is reason-sensitive |
+| `TaskPaneDisplayCoordinator.PrepareHostsBeforeShow(...)` | kernel-case-creation flow flag, active host role | retained hosts can still be hidden before another host is shown; retention and visibility are separate concerns |
+| show/hide failure fallback | `TaskPaneDisplayCoordinator.TryShowHost(...)` / `SafeHideHost(...)` exception path | a visibility failure escalates to `_removeHost(windowKey)`, so retention is intentionally lost rather than left partially inconsistent |
+
+### Foreground recovery and protection inventory
+
+| Step | Current owner | Required state | Current-state behavior |
+| --- | --- | --- | --- |
+| post-refresh foreground trigger | `TaskPaneRefreshCoordinator.TryRefreshTaskPane(...)` | `refreshed == true`, `window != null`, `_excelWindowRecoveryService != null` | `GuaranteeFinalForegroundAfterRefresh(...)` runs only after a successful refresh with a resolved pane window |
+| final foreground recovery | `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` | resolved `WorkbookContext` and/or target workbook | calls `TryRecoverWorkbookWindow(..., bringToFront: true)` for the target workbook, or `TryRecoverActiveWorkbookWindow(..., bringToFront: true)` when workbook input is null |
+| CASE protection start | `TaskPaneRefreshCoordinator` -> `ICasePaneHostBridge.BeginCaseWorkbookActivateProtection(...)` -> `KernelHomeCasePaneSuppressionCoordinator.BeginCaseWorkbookActivateProtection(...)` | context role is `Case`, protected workbook non-null, protected window non-null, workbook role re-resolves to `Case`, workbook full name non-empty, window hwnd non-empty | writes protected workbook/window target and `SuppressionDuration = 5 seconds` |
+| `WorkbookActivate` protection ignore | `WorkbookLifecycleCoordinator` -> `ShouldIgnoreWorkbookActivateDuringCaseProtection(...)` | protected workbook full name matches input workbook, active window hwnd matches protected window hwnd | ignore is narrower than general workbook match because active window must also match |
+| `WindowActivate` protection ignore | `WindowActivatePaneHandlingService` -> `ShouldIgnoreWindowActivateDuringCaseProtection(...)` | protected workbook full name matches input workbook, event window hwnd matches protected window hwnd | window-event path uses event window identity directly |
+| `TaskPaneRefresh` protection ignore | `TaskPaneRefreshOrchestrationService.RefreshPreconditionEvaluator` -> `ShouldIgnoreTaskPaneRefreshDuringCaseProtection(...)` | protection active and current active window hwnd matches protected window hwnd | refresh-side ignore is keyed by active window, not by input workbook/window equality |
+
+### Visible-pane early-complete conditions
+
+| Condition | Current source | Why it matters |
+| --- | --- | --- |
+| workbook is non-null | `WorkbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(...)` | no ready-show path exists without a workbook target |
+| resolved pane window exists | `ResolveWorkbookPaneWindow(..., activateWorkbook: true)` | early-complete does not run until workbook-window resolution succeeds |
+| `windowKey` resolves and the host is still registered | `_safeGetWindowKey(window)` + `_hostsByWindowKey.TryGetValue(...)` | visibility retention must still expose the host through the shared map |
+| target workbook full name matches `host.WorkbookFullName` | `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` | protects against reusing a visible pane that belongs to another workbook |
+| hosted role is `Case` | `GetHostedWorkbookRole(host)` | current shortcut is CASE-only |
+| `host.IsVisible == true` | `TaskPaneHost.IsVisible` | early-complete is a visible-pane shortcut, not a hidden-host shortcut |
+
+### Visible-pane early-complete danger points
+
+- early-complete is looser than display-request show-existing.
+- `HasVisibleCasePaneForWorkbookWindow(...)` does not read `LastRenderSignature`, so the shortcut does not prove that the host is render-current.
+- therefore early-complete also does not compare:
+  - active sheet identity,
+  - `CASELIST_REGISTERED`,
+  - `TASKPANE_SNAPSHOT_CACHE_COUNT`,
+  because those inputs exist only inside the render signature.
+- when early-complete succeeds, the worker returns success before `_tryRefreshTaskPane(...)` runs.
+- that means the current attempt does not perform:
+  - refresh-time rerender,
+  - `LastRenderSignature` rewrite,
+  - `GuaranteeFinalForegroundAfterRefresh(...)`,
+  - a new `BeginCaseWorkbookActivateProtection(...)`.
+- if show/hide failure has already escalated to `_removeHost(windowKey)`, early-complete observes `NoHost` rather than a partially cleared host.
+- this shortcut is current-state CASE-only and must not be widened to accounting by adjacency.
+
+### `WorkbookOpen` downstream host availability connection
+
+| Boundary | Current owner | Current-state implication |
+| --- | --- | --- |
+| pure `WorkbookOpen` event | `WorkbookLifecycleCoordinator.OnWorkbookOpen(...)` | runs workbook-side lifecycle/setup only and does not directly call `_refreshTaskPane(...)` |
+| shared `WorkbookOpen` skip/defer boundary | `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` | keeps `WorkbookOpen` with `workbook != null` and `window == null` on the non-window-safe side of the boundary |
+| first window-safe refresh path | `WorkbookLifecycleCoordinator.OnWorkbookActivate(...)` | `WorkbookActivate` is the first built-in path here that can call `_refreshTaskPane("WorkbookActivate", workbook, null)` |
+| first display-entry path | `WindowActivatePaneHandlingService.Handle(...)` / post-action callers | `RequestTaskPaneDisplayForTargetWindow(...)` decides show-existing / hide / render only after a window is already available |
+| first create/reuse host path | `TaskPaneHostFlowService.RefreshPane(...)` | host creation or reuse does not happen until context is accepted, `windowKey` is non-empty, and the host lifecycle path is entered |
+| concrete create boundary | `TaskPaneHostLifecycleService` -> `TaskPaneHostRegistry` -> `TaskPaneHostFactory` -> `TaskPaneHost` -> `ThisAddIn.CreateTaskPane(...)` | host availability is downstream of refresh/display flow, not a direct `WorkbookOpen` side effect |
+
+- Current-state reading:
+  - pure `WorkbookOpen` does not guarantee host existence,
+  - pure `WorkbookOpen` does not guarantee visible-pane observability,
+  - pure `WorkbookOpen` does not guarantee foreground recovery eligibility,
+  - ready-show / display-request / retry paths are all downstream consumers of the later window-safe boundary.
+
+### GO conditions for a later ready-show / visibility / foreground phase
+
+- GO only if the task isolates this boundary and keeps metadata timing, create/remove timing, `WorkbookOpen` flow, event unbinding behavior, and `_hostsByWindowKey` ownership frozen.
+- GO only if the planned diff can explain the before/after behavior for:
+  - ready-show entry order in `KernelCasePresentationService` and `AccountingSetCreateService`,
+  - `80ms` ready retry and `2` ready-show attempts,
+  - `400ms` pending retry, `3` attempts, and active CASE fallback,
+  - visible-pane early-complete success and failure paths,
+  - final foreground recovery trigger,
+  - protection start plus the 3 ignore readers,
+  - show/hide failure fallback remove.
+- GO only if the planned diff can preserve and explain the current distinction between:
+  - retained host existence,
+  - live pane visibility,
+  - render-current state.
+- GO only if validation keeps compile/build confirmation separate from runtime `Addins\` reflection and human-side smoke.
+
+### STOP conditions for a later ready-show / visibility / foreground phase
+
+- STOP if the change starts to move metadata timing, create timing, remove timing, `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` boundaries, or event unbinding order in the same diff.
+- STOP if the change requires moving `_hostsByWindowKey`, redesigning `TaskPaneManager` / `TaskPaneDisplayCoordinator` / `TaskPaneHostFlowService` / `TaskPaneHostRegistry` / `ThisAddIn`, adding services, or introducing abstraction-first refactoring.
+- STOP if the change cannot state whether visible-pane early-complete continues to bypass:
+  - render-current checks,
+  - refresh-time rerender,
+  - final foreground recovery,
+  - protection start.
+- STOP if the change cannot preserve and explain the current `KernelCasePresentationService` handoff order:
+  - transient suppression release,
+  - workbook-window visibility ensure,
+  - CASE activation suppression preparation,
+  - ready-show request.

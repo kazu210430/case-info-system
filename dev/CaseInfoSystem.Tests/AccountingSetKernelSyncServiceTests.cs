@@ -54,6 +54,7 @@ namespace CaseInfoSystem.Tests
                 var properties = Assert.IsAssignableFrom<IDictionary<string, string>>(accountingWorkbook.CustomDocumentProperties);
                 Assert.Equal(kernelWorkbook.FullName, properties[AccountingSetSpec.SourceKernelPathPropertyName]);
                 Assert.Equal(1, accountingWorkbook.SaveCallCount);
+                Assert.Equal(0, accountingWorkbook.CloseCallCount);
                 Assert.Contains(rangeWrites, write =>
                     write.Address == AccountingSetSpec.AccountingAddressCellAddress
                     && write.Sheets.SequenceEqual(new[]
@@ -190,21 +191,28 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void Execute_WhenTemplateIsNotOpen_UsesIsolatedLifecycleAndQuietsApplication()
+        public void Execute_WhenTemplateIsNotOpen_OpensHiddenInCurrentApplicationAndRestoresState()
         {
             string tempDirectory = CreateTempDirectory();
             try
             {
                 string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
                 File.WriteAllText(templatePath, "template");
+                Excel.Application sharedApplication = new Excel.Application
+                {
+                    DisplayAlerts = true,
+                    ScreenUpdating = true,
+                    EnableEvents = true
+                };
                 Excel.Workbook kernelWorkbook = CreateWorkbook(Path.Combine(tempDirectory, "kernel.xlsx"));
+                kernelWorkbook.Application = sharedApplication;
+                sharedApplication.ActiveWorkbook = kernelWorkbook;
                 kernelWorkbook.Worksheets.Add(CreateUserDataWorksheet());
                 Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
-                Excel.Application isolatedApplication = CreateIsolatedApplication(accountingWorkbook);
-                isolatedApplication.Visible = true;
-                isolatedApplication.DisplayAlerts = true;
-                isolatedApplication.ScreenUpdating = true;
-                isolatedApplication.EnableEvents = true;
+                bool? displayAlertsDuringOpen = null;
+                bool? screenUpdatingDuringOpen = null;
+                bool? enableEventsDuringOpen = null;
+                bool? hiddenVisibility = null;
 
                 var service = new AccountingSetKernelSyncService(
                     new ExcelInteropService(),
@@ -212,20 +220,34 @@ namespace CaseInfoSystem.Tests
                     {
                         OnResolveTemplatePath = _ => templatePath
                     },
-                    new AccountingWorkbookService(),
+                    new AccountingWorkbookService
+                    {
+                        OnOpenInCurrentApplication = path =>
+                        {
+                            Assert.Equal(templatePath, path);
+                            displayAlertsDuringOpen = sharedApplication.DisplayAlerts;
+                            screenUpdatingDuringOpen = sharedApplication.ScreenUpdating;
+                            enableEventsDuringOpen = sharedApplication.EnableEvents;
+                            accountingWorkbook.Application = sharedApplication;
+                            return accountingWorkbook;
+                        },
+                        OnSetWorkbookWindowsVisible = (_, visible) => hiddenVisibility = visible
+                    },
                     new PathCompatibilityService(),
-                    OrchestrationTestSupport.CreateLogger(new List<string>()),
-                    () => isolatedApplication);
+                    OrchestrationTestSupport.CreateLogger(new List<string>()));
 
                 service.Execute(kernelWorkbook);
 
-                Assert.False(isolatedApplication.Visible);
-                Assert.False(isolatedApplication.DisplayAlerts);
-                Assert.False(isolatedApplication.ScreenUpdating);
-                Assert.False(isolatedApplication.EnableEvents);
+                Assert.False(displayAlertsDuringOpen.GetValueOrDefault(true));
+                Assert.False(screenUpdatingDuringOpen.GetValueOrDefault(true));
+                Assert.False(enableEventsDuringOpen.GetValueOrDefault(true));
+                Assert.False(hiddenVisibility.GetValueOrDefault(true));
+                Assert.True(sharedApplication.DisplayAlerts);
+                Assert.True(sharedApplication.ScreenUpdating);
+                Assert.True(sharedApplication.EnableEvents);
                 Assert.Equal(1, accountingWorkbook.SaveCallCount);
                 Assert.Equal(1, accountingWorkbook.CloseCallCount);
-                Assert.Equal(1, isolatedApplication.QuitCallCount);
+                Assert.Equal(0, sharedApplication.QuitCallCount);
             }
             finally
             {
@@ -234,17 +256,23 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void Execute_WhenIsolatedWorkbookWriteFails_StillClosesWorkbookAndQuitsApplication()
+        public void Execute_WhenCurrentApplicationFallbackWriteFails_StillClosesWorkbookAndRestoresState()
         {
             string tempDirectory = CreateTempDirectory();
             try
             {
                 string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
                 File.WriteAllText(templatePath, "template");
+                Excel.Application sharedApplication = new Excel.Application
+                {
+                    DisplayAlerts = true,
+                    ScreenUpdating = true,
+                    EnableEvents = true
+                };
                 Excel.Workbook kernelWorkbook = CreateWorkbook(Path.Combine(tempDirectory, "kernel.xlsx"));
+                kernelWorkbook.Application = sharedApplication;
                 kernelWorkbook.Worksheets.Add(CreateUserDataWorksheet());
                 Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
-                Excel.Application isolatedApplication = CreateIsolatedApplication(accountingWorkbook);
                 InvalidOperationException expected = new InvalidOperationException("write failed");
 
                 var service = new AccountingSetKernelSyncService(
@@ -255,18 +283,25 @@ namespace CaseInfoSystem.Tests
                     },
                     new AccountingWorkbookService
                     {
+                        OnOpenInCurrentApplication = _ =>
+                        {
+                            accountingWorkbook.Application = sharedApplication;
+                            return accountingWorkbook;
+                        },
                         OnWriteCell = (_, __, ___, ____) => throw expected
                     },
                     new PathCompatibilityService(),
-                    OrchestrationTestSupport.CreateLogger(new List<string>()),
-                    () => isolatedApplication);
+                    OrchestrationTestSupport.CreateLogger(new List<string>()));
 
                 InvalidOperationException actual = Assert.Throws<InvalidOperationException>(() => service.Execute(kernelWorkbook));
 
                 Assert.Same(expected, actual);
+                Assert.True(sharedApplication.DisplayAlerts);
+                Assert.True(sharedApplication.ScreenUpdating);
+                Assert.True(sharedApplication.EnableEvents);
                 Assert.Equal(0, accountingWorkbook.SaveCallCount);
                 Assert.Equal(1, accountingWorkbook.CloseCallCount);
-                Assert.Equal(1, isolatedApplication.QuitCallCount);
+                Assert.Equal(0, sharedApplication.QuitCallCount);
             }
             finally
             {
@@ -314,13 +349,6 @@ namespace CaseInfoSystem.Tests
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow1Offset, "B", 123);
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow2Offset, "B", "001");
             return worksheet;
-        }
-
-        private static Excel.Application CreateIsolatedApplication(Excel.Workbook workbook)
-        {
-            var application = new Excel.Application();
-            application.Workbooks.OpenBehavior = (_, __, ___) => workbook;
-            return application;
         }
 
         private static string CreateTempDirectory()

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
 
@@ -67,16 +66,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly Logger _logger;
 
-		private readonly Func<Application> _isolatedApplicationFactory;
-
-		internal AccountingSetKernelSyncService (ExcelInteropService excelInteropService, AccountingTemplateResolver accountingTemplateResolver, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, Logger logger, Func<Application> isolatedApplicationFactory = null)
+		internal AccountingSetKernelSyncService (ExcelInteropService excelInteropService, AccountingTemplateResolver accountingTemplateResolver, AccountingWorkbookService accountingWorkbookService, PathCompatibilityService pathCompatibilityService, Logger logger)
 		{
 			_excelInteropService = excelInteropService ?? throw new ArgumentNullException ("excelInteropService");
 			_accountingTemplateResolver = accountingTemplateResolver ?? throw new ArgumentNullException ("accountingTemplateResolver");
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 			_pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException ("pathCompatibilityService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
-			_isolatedApplicationFactory = isolatedApplicationFactory ?? (() => (Application)Activator.CreateInstance (Marshal.GetTypeFromCLSID (new Guid ("00024500-0000-0000-C000-000000000046"))));
 		}
 
 		internal void Execute (Workbook kernelWorkbook)
@@ -106,30 +102,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("Accounting set kernel sync completed. path=" + text2 + ", alreadyOpen=" + flag);
 					return;
 				}
-				Application application = null;
-				Workbook isolatedWorkbook = null;
-				try {
-					application = _isolatedApplicationFactory ();
-					if (application == null) {
-						throw new InvalidOperationException ("会計書類セット用の Excel.Application を作成できませんでした。");
+				Application application = kernelWorkbook.Application;
+				if (application == null) {
+					throw new InvalidOperationException ("現在の Excel.Application を解決できませんでした。");
+				}
+				using (var applicationStateScope = new ExcelApplicationStateScope (application, suppressRestoreExceptions: true)) {
+					Workbook ownedWorkbook = null;
+					applicationStateScope.SetDisplayAlerts (false);
+					applicationStateScope.SetScreenUpdating (false);
+					applicationStateScope.SetEnableEvents (false);
+					try {
+						_logger.Info ("Accounting set kernel sync current application fallback opening. appHwnd=" + SafeApplicationHwnd (application));
+						ownedWorkbook = _accountingWorkbookService.OpenInCurrentApplication (text2);
+						if (ownedWorkbook == null) {
+							throw new InvalidOperationException ("会計書類セットを開けませんでした: " + text2);
+						}
+						_accountingWorkbookService.SetWorkbookWindowsVisible (ownedWorkbook, visible: false);
+						_logger.Debug ("AccountingSetKernelSyncService", "Template opened in current Excel application with hidden window.");
+						ApplyTransferPlan (ownedWorkbook, transferPlan);
+						ownedWorkbook.Save ();
+						_logger.Info ("Accounting set kernel sync completed. path=" + text2 + ", alreadyOpen=" + flag);
+					} finally {
+						CloseWorkbookQuietly (ownedWorkbook);
+						_logger.Info ("Accounting set kernel sync current application fallback closed. appHwnd=" + SafeApplicationHwnd (application));
 					}
-					application.Visible = false;
-					application.DisplayAlerts = false;
-					application.ScreenUpdating = false;
-					application.EnableEvents = false;
-					_logger.Info ("Accounting set kernel sync hidden Excel session created. appHwnd=" + SafeApplicationHwnd (application));
-					isolatedWorkbook = application.Workbooks.Open (text2, 0, false, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
-					_logger.Debug ("AccountingSetKernelSyncService", "Template opened in hidden Excel application.");
-					if (isolatedWorkbook == null) {
-						throw new InvalidOperationException ("会計書類セットを開けませんでした: " + text2);
-					}
-					ApplyTransferPlan (isolatedWorkbook, transferPlan);
-					isolatedWorkbook.Save ();
-					_logger.Info ("Accounting set kernel sync completed. path=" + text2 + ", alreadyOpen=" + flag);
-				} finally {
-					CloseWorkbookQuietly (isolatedWorkbook);
-					_logger.Info ("Accounting set kernel sync hidden Excel session quitting. appHwnd=" + SafeApplicationHwnd (application));
-					QuitApplicationQuietly (application);
 				}
 			} catch (Exception exception) {
 				_logger.Error ("Accounting set kernel sync failed. kernelWorkbook=" + workbookFullName + ", template=" + text + ", localTemplate=" + text2 + ", alreadyOpen=" + flag, exception);
@@ -220,26 +216,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			try {
-				workbook.Close (false, Type.Missing, Type.Missing);
+				WorkbookCloseInteropHelper.CloseWithoutSave (workbook);
 			} catch {
 			} finally {
 				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (workbook);
 			}
 		}
-
-		private static void QuitApplicationQuietly (Application application)
-		{
-			if (application == null) {
-				return;
-			}
-			try {
-				application.Quit ();
-			} catch {
-			} finally {
-				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (application);
-			}
-		}
-
 
 		private static string SafeApplicationHwnd (Application application)
 		{

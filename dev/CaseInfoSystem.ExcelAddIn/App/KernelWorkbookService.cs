@@ -1060,7 +1060,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + visibleNonKernelWindows
                 + ", kernelWindowTargets="
                 + kernelWindowTargets);
-            if (hasVisibleNonKernelWorkbook)
+
+            Excel.Workbook activeWorkbook = null;
+            bool isActiveWorkbookKernel = false;
+            int visibleWorkbookCount = -1;
+            try
+            {
+                activeWorkbook = _application == null ? null : _application.ActiveWorkbook;
+                isActiveWorkbookKernel = activeWorkbook != null && IsKernelWorkbook(activeWorkbook);
+                visibleWorkbookCount = CountVisibleWorkbooksSafe();
+            }
+            catch
+            {
+                activeWorkbook = null;
+                isActiveWorkbookKernel = false;
+                visibleWorkbookCount = -1;
+            }
+
+            KernelWorkbookHomeDisplayVisibilityAction visibilityAction = KernelWorkbookHomeDisplayVisibilityPolicy.DecideAction(
+                hasVisibleNonKernelWorkbook: hasVisibleNonKernelWorkbook,
+                isActiveWorkbookKernel: isActiveWorkbookKernel,
+                visibleWorkbookCount: visibleWorkbookCount);
+
+            if (visibilityAction == KernelWorkbookHomeDisplayVisibilityAction.MinimizeKernelWindows)
             {
                 LogKernelFlickerTrace(
                     "source=KernelWorkbookService action=apply-home-display-decision trigger="
@@ -1090,28 +1112,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            Excel.Workbook activeWorkbook = null;
-            bool shouldSkipHideExcelMainWindow = false;
-            try
-            {
-                activeWorkbook = _application == null ? null : _application.ActiveWorkbook;
-                shouldSkipHideExcelMainWindow = activeWorkbook != null
-                    && IsKernelWorkbook(activeWorkbook)
-                    && CountVisibleWorkbooksSafe() >= 1;
-            }
-            catch
-            {
-                shouldSkipHideExcelMainWindow = false;
-            }
-
-            if (shouldSkipHideExcelMainWindow)
+            if (visibilityAction == KernelWorkbookHomeDisplayVisibilityAction.ConcealKernelWindowsAndHideExcelMainWindow)
             {
                 Excel.Workbook workbookToConceal = kernelWorkbook ?? activeWorkbook;
                 LogKernelFlickerTrace(
                     "source=KernelWorkbookService action=apply-home-display-decision trigger="
                     + (triggerReason ?? string.Empty)
                     + ", decision=conceal-kernel-windows-and-hide-excel-main-window, reason=active-kernel-workbook-still-visible, visibleWorkbookCount="
-                    + CountVisibleWorkbooksSafe().ToString()
+                    + visibleWorkbookCount.ToString()
                     + ", activeWorkbook="
                     + FormatWorkbookDescriptor(activeWorkbook)
                     + ", concealTarget="
@@ -1126,7 +1134,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             LogKernelFlickerTrace(
                 "source=KernelWorkbookService action=apply-home-display-decision trigger="
                 + (triggerReason ?? string.Empty)
-                + ", decision=hide-excel-main-window, reason=no-visible-non-kernel-workbook, kernelWindowTargets="
+                + ", decision="
+                + (visibilityAction == KernelWorkbookHomeDisplayVisibilityAction.HideExcelMainWindowOnly
+                    ? "hide-excel-main-window-only"
+                    : "hide-excel-main-window")
+                + ", reason=no-visible-non-kernel-workbook, kernelWindowTargets="
                 + kernelWindowTargets);
             HideExcelMainWindow();
             LogKernelFlickerTrace(

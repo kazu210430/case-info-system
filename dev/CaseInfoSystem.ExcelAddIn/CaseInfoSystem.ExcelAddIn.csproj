@@ -196,6 +196,7 @@
     <Compile Include="App\DocumentCommandExecutionDecisionPolicy.cs" />
     <Compile Include="App\DocumentCommandPreconditionPolicy.cs" />
     <Compile Include="App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />
+    <Compile Include="App\KernelWorkbookHomeDisplayVisibilityPolicy.cs" />
     <Compile Include="App\KernelHomeSessionDisplayPolicy.cs" />
     <Compile Include="App\KernelWorkbookPromotionPolicy.cs" />
     <Compile Include="App\KernelWorkbookStartupDisplayPolicy.cs" />

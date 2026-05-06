@@ -562,3 +562,11 @@
 - cache は参照補助であり、保存・生成・実行判断の正本ではない
 - 開いている CASE が後から行われた雛形登録・更新に追随しないことは現行仕様として維持する
 - `TASKPANE_MASTER_VERSION` の雛形登録・更新成功時 `+1` は差分判定付きに変えない
+
+### 14.1 eligibility / resolver の固定ガード
+
+- `DocumentExecutionEligibilityService` は fail-closed を維持し、lookup miss、template dir 未導出、template file 不在、output folder 不在、case context null、case snapshot 空では実行へ進めない。
+- `.doc` / `.docm` は実行対象に含めない。`.dotm` は resolver の supported extension に残すが、macro reject は eligibility 側の責務として維持する。
+- `DocumentName` 空は単独では warning であり、他の基本適格性が満たされる場合まで hard fail に広げない。
+- `DocumentTemplateResolver` は key trim / normalize、lookup miss -> `null`、`WORD_TEMPLATE_DIR` 優先、`SYSTEM_ROOT\雛形` fallback、`ResolutionSource` 引き継ぎを固定点とする。
+- template directory が未導出でも resolver は `DocumentTemplateSpec` 全体を `null` で握りつぶさず、空の path spec を後段 fail-closed 判定へ渡し得る前提を維持する。

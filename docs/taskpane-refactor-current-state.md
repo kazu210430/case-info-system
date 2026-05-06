@@ -8,6 +8,7 @@
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
+- A4 / C2 checkpoint: `docs/a4-c2-current-state.md`
 - Startup / TaskPane 初期表示の実機チェック: `docs/thisaddin-startup-test-checklist.md`
 - 優先度A棚卸し: `docs/a-priority-service-responsibility-inventory.md`
 - TaskPane refresh policy 正本: `docs/taskpane-refresh-policy.md`
@@ -16,7 +17,7 @@
   - `docs/taskpane-protection-baseline.md`
   - `docs/taskpane-protection-observation-checklist.md`
 
-この文書は設計正本を置き換えるものではありません。TaskPane 優先度Aで「どこまで main に固定済みか」「どこが helper 分離・bridge 化まで完了し、どこが未確定・実機未確認として残るか」を明示するための補助文書です。
+この文書は設計正本を置き換えるものではありません。TaskPane 優先度Aで「どこまで main に固定済みか」「どこが helper 分離・bridge 化まで完了し、どこが未確定・実機未確認として残るか」を明示するための補助文書です。B1 / B2-1 / A4 / C1 / C2 をまたぐ広い checkpoint は `docs/a4-c2-current-state.md` に分けて記録します。
 
 ## 今回固定する到達点
 

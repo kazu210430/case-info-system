@@ -8,6 +8,7 @@
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
 - TaskPane refresh policy: `docs/taskpane-refresh-policy.md`
+- A4 / C2 checkpoint: `docs/a4-c2-current-state.md`
 - 優先度A現在地の補足: `docs/taskpane-refactor-current-state.md`
 - metadata / cache / snapshot の補足: `docs/template-metadata-inventory.md`
 - 読取経路の補足: `docs/template-metadata-read-path-inventory.md`
@@ -64,6 +65,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - Kernel `雛形一覧` を更新する
 - `TASKPANE_MASTER_VERSION` を成功時に無条件で `+1` する
 - Base 用 snapshot と version を再生成して埋め込む
+- publication side effects は `PublicationExecutor` に集約し、`WriteToMasterList -> TASKPANE_MASTER_VERSION +1 -> Kernel save -> Base snapshot sync -> InvalidateCache` の順序と失敗意味を維持する
 
 ### `TaskPaneSnapshotBuilderService`
 
@@ -316,6 +318,12 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 ## 今後課題として残すもの
 
+- `CasePaneCacheRefreshNotificationService`
+  - notification service に見えるが、`workbook.Saved` restore、cache refresh side effect、`WorkbookOpen` / `WorkbookActivate` timing、policy gating を束ねています。
+  - TaskPane lifecycle ownership に近い危険領域であり、B2-1 完了には含めません。
+- TaskPane timing / lifecycle 本線
+  - `CASE ready-show policy`、protection timing、protection retry semantics、`WorkbookOpen` timing、visible window resolve 統一は未着手として残します。
+  - helper 分離や bridge 化の完了と、挙動変更の完了を混同しない方針を維持します。
 - `TaskPaneHostRegistry`
   - 独立クラスとして host 生成、差し替え、破棄、workbook 単位掃除を担います。
   - `ThisAddIn` を通した VSTO `CustomTaskPane` 生成と action event 配線に関わるため、分離リスクが高い領域です。

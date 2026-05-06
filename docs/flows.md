@@ -92,6 +92,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 文書実行時の主防御は runtime allowlist gating ではなく、雛形登録前 validation です。
 - `KernelTemplateSyncService` と `WordTemplateRegistrationValidationService` が、不正な雛形や不正な定義を登録前に排除します。
 - 実行時は、登録済み `templateSpec` を前提に `DocumentExecutionEligibilityService` が基本適格性を確認します。
+- `DocumentExecutionEligibilityService` は fail-closed を維持し、template 解決、template path、出力先、CASE context のいずれかが欠ける場合は実行へ進めません。
 - allowlist / review の旧 runtime policy サービスは撤去済みで、文書作成本線の runtime 実行可否には関与しません。
 
 ### 実行モードと制御ファイル
@@ -106,7 +107,8 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 - `DocumentTemplateResolver` は `WORD_TEMPLATE_DIR` が設定されている場合はそちらを優先し、未設定時は `SYSTEM_ROOT\雛形` をテンプレート配置先として解決します。
 - `DocumentTemplateResolver` は `.docx`、`.dotx`、`.dotm` を対応テンプレートとして扱います。
-- `DocumentExecutionEligibilityService` は VSTO 実行可否判定時に、マクロ有効テンプレートを制限対象として扱います。
+- `DocumentExecutionEligibilityService` は VSTO 実行可否判定時に、`.doc` / `.docm` を実行対象にせず、`.dotm` をマクロ有効テンプレートとして制限対象に扱います。
+- したがって `.dotm` 対応は resolver 側の lookup 補助であり、そのまま実行許可を意味しません。
 
 ### 不明点
 
@@ -131,6 +133,15 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 10. `MasterTemplateCatalogService` の当該 `SYSTEM_ROOT` 文脈に対応する master catalog cache を無効化します。
 
 この登録前 validation が、現行実装における文書作成フローの主防御です。runtime 側の allowlist / review 判定は、登録済みテンプレートの実行可否を直接制御していません。
+
+### publication side effects の固定点
+
+- publication side effects は `PublicationExecutor` に集約されます。
+- 順序は `WriteToMasterList -> TASKPANE_MASTER_VERSION +1 -> Kernel save -> Base snapshot sync -> InvalidateCache` で固定します。
+- preflight failure では副作用を発生させません。
+- kernel save failure では Base sync / invalidate へ進めません。
+- base sync failure では invalidate は実行し、success + warning の扱いを維持します。
+- `SYSTEM_ROOT` 文脈、invalidate API、cache key 解決方式は変えません。
 
 ### Kernel workbook 選択仕様
 

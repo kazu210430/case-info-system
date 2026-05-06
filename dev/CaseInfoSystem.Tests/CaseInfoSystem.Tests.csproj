@@ -59,6 +59,7 @@
     <Compile Include="KernelWorkbookHomeReleaseFallbackPolicyTests.cs" />
     <Compile Include="KernelWorkbookPromotionPolicyTests.cs" />
     <Compile Include="KernelWorkbookServicePolicyTests.cs" />
+    <Compile Include="KernelTemplateSyncServiceTests.cs" />
     <Compile Include="KernelStartupContextInspectorTests.cs" />
     <Compile Include="KernelHomeWindowIndependencePolicyTests.cs" />
     <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
@@ -156,6 +157,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseWorkbookLifecycleService.cs" Link="Source\App\CaseWorkbookLifecycleService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseTaskPaneViewStateBuilder.cs" Link="Source\App\CaseTaskPaneViewStateBuilder.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateSyncService.cs" Link="Source\App\KernelTemplateSyncService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookService.cs" Link="Source\App\KernelWorkbookService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" Link="Source\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelOpenWorkbookLocator.cs" Link="Source\App\KernelOpenWorkbookLocator.cs" />
@@ -173,9 +175,11 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationPlan.cs" Link="Source\Domain\KernelCaseCreationPlan.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationRequest.cs" Link="Source\Domain\KernelCaseCreationRequest.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationResult.cs" Link="Source\Domain\KernelCaseCreationResult.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncResult.cs" Link="Source\Domain\KernelTemplateSyncResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncPreflightRequest.cs" Link="Source\Domain\KernelTemplateSyncPreflightRequest.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncPreflightResult.cs" Link="Source\Domain\KernelTemplateSyncPreflightResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelTemplateSyncPreflightStatus.cs" Link="Source\Domain\KernelTemplateSyncPreflightStatus.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\CaseListFieldDefinition.cs" Link="Source\Domain\CaseListFieldDefinition.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\TemplateRegistrationValidationEntry.cs" Link="Source\Domain\TemplateRegistrationValidationEntry.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\TemplateRegistrationValidationSummary.cs" Link="Source\Domain\TemplateRegistrationValidationSummary.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\ValidationFailureKind.cs" Link="Source\Domain\ValidationFailureKind.cs" />
@@ -184,6 +188,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookContext.cs" Link="Source\Domain\WorkbookContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\WorkbookRole.cs" Link="Source\Domain\WorkbookRole.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookFileNameResolver.cs" Link="Source\Infrastructure\WorkbookFileNameResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseListFieldDefinitionRepository.cs" Link="Source\Infrastructure\CaseListFieldDefinitionRepository.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReader.cs" Link="Source\Infrastructure\MasterTemplateSheetReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotParser.cs" Link="Source\Infrastructure\TaskPaneSnapshotParser.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IExcelInteropService.cs" Link="Source\Infrastructure\IExcelInteropService.cs" />

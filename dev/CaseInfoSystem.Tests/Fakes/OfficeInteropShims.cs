@@ -360,6 +360,8 @@ namespace Microsoft.Office.Interop.Excel
 
         public XlEnableSelection EnableSelection { get; set; }
 
+        public Protection Protection { get; } = new Protection();
+
         public WorksheetCellCollection Cells { get; } = new WorksheetCellCollection();
 
         public WorksheetRowCollection Rows { get; } = new WorksheetRowCollection();
@@ -379,11 +381,38 @@ namespace Microsoft.Office.Interop.Excel
             ProtectScenarios = false;
         }
 
-        public void Protect(string Password = null, bool UserInterfaceOnly = false, bool AllowFiltering = false, bool AllowSorting = false)
+        public void Protect(
+            string Password = null,
+            bool AllowFormattingCells = false,
+            bool AllowFormattingColumns = false,
+            bool AllowFormattingRows = false,
+            bool AllowInsertingColumns = false,
+            bool AllowInsertingRows = false,
+            bool AllowInsertingHyperlinks = false,
+            bool AllowDeletingColumns = false,
+            bool AllowDeletingRows = false,
+            bool AllowSorting = false,
+            bool AllowFiltering = false,
+            bool AllowUsingPivotTables = false,
+            object DrawingObjects = null,
+            object Contents = null,
+            object Scenarios = null,
+            bool UserInterfaceOnly = false)
         {
             ProtectContents = true;
             ProtectDrawingObjects = true;
             ProtectScenarios = true;
+            Protection.AllowFormattingCells = AllowFormattingCells;
+            Protection.AllowFormattingColumns = AllowFormattingColumns;
+            Protection.AllowFormattingRows = AllowFormattingRows;
+            Protection.AllowInsertingColumns = AllowInsertingColumns;
+            Protection.AllowInsertingRows = AllowInsertingRows;
+            Protection.AllowInsertingHyperlinks = AllowInsertingHyperlinks;
+            Protection.AllowDeletingColumns = AllowDeletingColumns;
+            Protection.AllowDeletingRows = AllowDeletingRows;
+            Protection.AllowSorting = AllowSorting;
+            Protection.AllowFiltering = AllowFiltering;
+            Protection.AllowUsingPivotTables = AllowUsingPivotTables;
         }
     }
 
@@ -418,6 +447,36 @@ namespace Microsoft.Office.Interop.Excel
             get => Convert.ToString(Value2) ?? string.Empty;
             set => Value2 = value;
         }
+
+        public void ClearContents()
+        {
+            Value2 = null;
+        }
+    }
+
+    public sealed class Protection
+    {
+        public bool AllowFormattingCells { get; set; }
+
+        public bool AllowFormattingColumns { get; set; }
+
+        public bool AllowFormattingRows { get; set; }
+
+        public bool AllowInsertingColumns { get; set; }
+
+        public bool AllowInsertingRows { get; set; }
+
+        public bool AllowInsertingHyperlinks { get; set; }
+
+        public bool AllowDeletingColumns { get; set; }
+
+        public bool AllowDeletingRows { get; set; }
+
+        public bool AllowSorting { get; set; }
+
+        public bool AllowFiltering { get; set; }
+
+        public bool AllowUsingPivotTables { get; set; }
     }
 
     public sealed class RangeEndAccessor
@@ -430,6 +489,8 @@ namespace Microsoft.Office.Interop.Excel
         }
 
         public Range this[XlDirection direction] => _owner;
+
+        public Range this[object direction] => _owner;
     }
 
     public sealed class WorksheetRowCollection

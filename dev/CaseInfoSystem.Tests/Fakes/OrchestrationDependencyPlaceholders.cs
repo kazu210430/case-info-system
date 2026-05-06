@@ -32,6 +32,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal Func<string, Excel.Workbook> OnFindOpenWorkbook { get; set; }
 
+        internal Action<Excel.Workbook, string, string> OnSetDocumentProperty { get; set; }
+
         internal Func<Excel.Worksheet, IReadOnlyDictionary<string, string>> OnReadKeyValueMapFromColumnsAandB { get; set; }
 
         internal Func<Excel.Worksheet, IReadOnlyList<IReadOnlyDictionary<string, string>>> OnReadRecordsFromHeaderRow { get; set; }
@@ -79,6 +81,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             properties[propertyName] = value ?? string.Empty;
+            OnSetDocumentProperty?.Invoke(workbook, propertyName, value ?? string.Empty);
         }
 
         internal Excel.Window GetFirstVisibleWindow(Excel.Workbook workbook) => workbook == null ? null : workbook.Windows.FirstOrDefault(window => window.Visible);
@@ -221,6 +224,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             window.Visible = true;
             window.Activate();
             return true;
+        }
+    }
+
+    internal sealed class MasterTemplateCatalogService
+    {
+        internal Action<Excel.Workbook> OnInvalidateCache { get; set; }
+
+        internal void InvalidateCache(Excel.Workbook workbook)
+        {
+            OnInvalidateCache?.Invoke(workbook);
         }
     }
 
@@ -569,6 +582,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Action<Excel.Worksheet, string, object> OnWriteCellValue { get; set; }
 
+        internal Action<Excel.Worksheet, string, object[,]> OnWriteRangeValues { get; set; }
+
         internal Func<Excel.Workbook, string, AccountingLawyerMappingResult> OnReflectLawyers { get; set; }
 
         internal Action<Excel.Workbook> OnActivateInvoiceEntry { get; set; }
@@ -601,6 +616,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal void WriteCellValue(Excel.Worksheet worksheet, string address, object value)
         {
             OnWriteCellValue?.Invoke(worksheet, address, value);
+        }
+
+        internal void WriteRangeValues(Excel.Worksheet worksheet, string address, object[,] values)
+        {
+            OnWriteRangeValues?.Invoke(worksheet, address, values);
         }
 
         internal AccountingLawyerMappingResult ReflectLawyers(Excel.Workbook workbook, string lawyerLinesText)

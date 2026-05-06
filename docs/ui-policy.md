@@ -14,14 +14,19 @@
 - Window 状態は復旧処理を前提とする
 - TaskPane は遅延表示を前提とする
 - `WorkbookOpen` 直後の window-dependent refresh は shared policy で skip 判定する
+- 裏Excel / hidden session を表示制御の一般手段として使わない
+- hidden session を許容するのは、`KernelUserDataReflectionService` の未 open Base / Accounting 反映と、CASE新規作成専用 hidden create session だけに限定する
 - `KernelUserDataReflectionService` の managed hidden reflection session は非表示処理として扱い、表示制御経路に昇格させない
+- `AccountingSetKernelSyncService` へ補助処理専用の別 `Excel.Application` fallback を再導入しない
 
 ## CASE新規作成専用 managed hidden create session と表示境界
 
 - CASE新規作成の hidden create session は非表示の作業経路であり、表示完了や foreground の最終責務を持ちません。
 - interactive な CASE 表示は、hidden create session close 後に shared app の `OpenHiddenForCaseDisplay(...)`、`KernelCasePresentationService`、`WorkbookWindowVisibilityService` が引き継ぎます。
 - `KernelHomeForm` / `KernelWorkbookCloseService` は CASE 作成フロー中の Kernel HOME close で display restore を skip し、表示済み CASE より前に Kernel を戻さない契約で動作します。
-- `CreateCaseBatch` だけは保存前に workbook window の normal / visible 正規化を明示的に行います。interactive route は reopen 後の window recovery を前提にしており、保存ファイルへの window state 非残留はこの文書では一般化しません。
+- interactive route と `CreateCaseBatch` はどちらも save 前に owned workbook window を `normal + visible` へ正規化します。
+- interactive route の save 前正規化は保存状態の正規化であり、最終表示責務は shared/current app への handoff 後にだけ成立します。
+- `app-cache` は `CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外であり、裏Excel一般化の根拠にしません。
 
 ## 禁止事項
 
@@ -71,7 +76,7 @@
 - Workbook Window の可視化
 - WindowActivate 後の TaskPane 再調整
 - Kernel HOME 表示直後の一時的なイベント抑止
-- `KernelUserDataReflectionService` の未 open Base / Accounting 反映は hidden workbook / hidden window のまま完結し、画面へ出さない
+- `KernelUserDataReflectionService` の未 open Base / Accounting 反映は managed hidden reflection session で閉じ、save 前の owned workbook window visibility restore を含めても shared/current app の表示経路へは昇格させない
 
 ### Kernel HOME unbound 表示
 

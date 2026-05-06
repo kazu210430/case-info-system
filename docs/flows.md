@@ -38,15 +38,17 @@
 
 1. `KernelCaseCreationService.CreateSavedCase(...)` は現コードで `ShouldUseHiddenCreateSession() == true` のため、全モードで `CreateSavedCaseWithoutShowing(...)` を通します。
 2. `CaseWorkbookOpenStrategy.OpenHiddenWorkbook(...)` が hidden create route を選びます。優先順は `app-cache`、未使用時は `legacy-isolated`、環境変数 `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` 指定時だけ `experimental-isolated-inner-save` です。
-3. `NewCaseDefault` / `CreateCaseSingle` は hidden create session で `InitializeForVisibleCreate(...)`、save、hidden session close を完了したあと、`KernelCasePresentationService` が shared app の `OpenHiddenForCaseDisplay(...)` で CASE を reopen します。
+3. `NewCaseDefault` / `CreateCaseSingle` は hidden create session で `InitializeForVisibleCreate(...)` を実行し、`NormalizeInteractiveWorkbookWindowStateBeforeSave(...)` で save 前に workbook window を `visible + normal` へ正規化してから save / hidden session close を完了します。
 4. interactive 表示開始後は `KernelHomeForm.CloseKernelAfterCaseCreation()` と `KernelWorkbookCloseService` が Kernel HOME close を完了します。CASE 作成フロー中は `KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(...)` により Kernel を前景へ戻しません。
-5. `CreateCaseBatch` は hidden create session で `InitializeForHiddenCreate(...)` を使い、`NormalizeBatchWorkbookWindowStateBeforeSave(...)` のあとに save / close して完了します。CASE workbook の reopen は行わず、フォルダ表示と HOME 継続へ分岐します。
+5. interactive route の hidden session close 後は、`KernelCasePresentationService` が shared app の `OpenHiddenForCaseDisplay(...)` で CASE を reopen し、表示責務を shared/current app 側へ渡します。
+6. `CreateCaseBatch` は hidden create session で `InitializeForHiddenCreate(...)` を使い、`NormalizeBatchWorkbookWindowStateBeforeSave(...)` で save 前に workbook window を `visible + normal` へ正規化したあとに save / close して完了します。CASE workbook の reopen は行わず、フォルダ表示と HOME 継続へ分岐します。
 
 補足:
 
+- hidden create session の owner は `KernelCaseCreationService` です。hidden workbook open / close mechanics は `CaseWorkbookOpenStrategy` が担い、retained hidden app-cache を使う場合だけ cached `Application` 自体の owner は `CaseWorkbookOpenStrategy` に残ります。
 - `experimental-isolated-inner-save` は route 名どおり、current/shared app ではなく dedicated hidden `Application` を生成し、close 時の inner save を含む経路です。
 - 互換のため旧環境変数 `CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL` でも同 route に到達しますが、契約上の正本は `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` です。
-- `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app cache の例外です。
+- `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外です。
 
 ### 不明点
 
@@ -212,16 +214,17 @@ Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` 
 3. Base / Accounting workbook が既に open なら、その workbook を再利用して反映し、save はしても close はしません。
 4. Base / Accounting workbook が未 open なら、`KernelUserDataReflectionService` が service-owned な `managed hidden reflection session` を開始します。
 5. session では hidden な isolated `Application` を生成し、対象 workbook を open して window を hidden のまま反映します。
-6. 反映後は自分で open した対象 workbook だけを save / close し、生成した isolated `Application` だけを `Quit` します。
+6. 反映後は save 前に owned workbook window visibility を restore し、自分で open した対象 workbook だけを save / close し、生成した isolated `Application` だけを `Quit` します。
 
 ### managed hidden reflection session の境界
 
 - owner は `KernelUserDataReflectionService` です。
-- 対象 workbook が既に open なら hidden session は開始しません。
+- 対象 workbook が既に open なら hidden session は開始せず、その workbook を再利用します。
 - hidden session は shared Excel を `Quit` しません。
 - shared Excel 側の `DisplayAlerts` / `EnableEvents` / `ScreenUpdating` は quiet mode の restore まで含めて呼び出し側で閉じます。
-- hidden session 側の workbook / window は画面に出しません。
-- session の目的は、未 open の Base / Accounting workbook へ反映するための owner 付き hidden 作業を、処理後に EXCEL.EXE を残さず閉じることです。
+- save 前の visibility restore は保存状態正規化のための owner-side cleanup であり、shared/current app の表示経路へ昇格させる意味ではありません。
+- cleanup は `CloseWorkbookQuietly`、`Application.Quit`、`ComObjectReleaseService.FinalRelease` まで含めて hidden session 内で完結します。
+- session の目的は、未 open の Base / Accounting workbook へ反映するための owner 付き hidden 作業を、処理後に orphaned `EXCEL.EXE` を残さず閉じることです。
 
 ## 会計書類セット
 
@@ -265,6 +268,19 @@ Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` 
 - `AccountingWorkbookService` の cell write / range 操作には、`WriteCell`、`WriteSameValueToSheets`、range copy、named range write / clear、print area / alignment / sort などが含まれる。
 - 現行テストで呼び出し観測が確認できる会計 workbook 書込は、`AccountingSetCreateService` と `AccountingSetKernelSyncService` が使う `WriteCell` と `WriteSameValueToSheets` が中心である。
 - named range / copy / clear / format / print area / sort 系の操作は、現行テストから直接の観測点を確認できない。
+
+### Kernel からの会計書類セット同期（`AccountingSetKernelSyncService`）
+
+1. `AccountingSetKernelSyncService` は Kernel workbook から会計書類セット template path を解決し、対象 workbook が既に open かを確認します。
+2. 対象 workbook が既に open なら、それを再利用して反映 / save し、close はしません。
+3. 対象 workbook が未 open なら、別 `Excel.Application` は生成せず、`kernelWorkbook.Application` を shared/current app として使い、`AccountingWorkbookService.OpenInCurrentApplication(...)` で open します。
+4. 自分で open した workbook は hidden window のまま反映 / save し、最後に owned workbook だけを quiet close します。
+5. `DisplayAlerts` / `ScreenUpdating` / `EnableEvents` の restore は `ExcelApplicationStateScope` の局所スコープに閉じます。
+
+補足:
+
+- この経路は managed hidden session の例外には含めません。shared/current app 前提の補助処理として固定します。
+- 不要な別 `Excel.Application` fallback は撤去済みで、今後の docs 上も再許容しません。
 
 ### 不明点
 

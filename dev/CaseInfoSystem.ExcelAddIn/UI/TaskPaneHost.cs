@@ -5,6 +5,8 @@ using Microsoft.Office.Tools;
 
 namespace CaseInfoSystem.ExcelAddIn.UI
 {
+	// Holds the concrete CustomTaskPane lifetime for one window-bound host.
+	// Host-map ownership and metadata write timing stay outside this type in current-state.
 	internal sealed class TaskPaneHost : IDisposable
 	{
 		private readonly ThisAddIn _addIn;
@@ -46,6 +48,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			_control = control ?? throw new ArgumentNullException ("control");
 			_view = view ?? throw new ArgumentNullException ("view");
 			_windowKey = windowKey ?? throw new ArgumentNullException ("windowKey");
+			// This is the point where host lifetime crosses the VSTO adapter boundary into ThisAddIn.
 			_pane = _addIn.CreateTaskPane (window, _control);
 		}
 
@@ -66,6 +69,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		public void Dispose ()
 		{
+			// Current-state remove order is hide -> remove pane. Event unbinding stays implicit via disposal and is not clarified here.
 			try {
 				Hide ();
 			} catch {

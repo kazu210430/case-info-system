@@ -59,8 +59,10 @@
   - doc prompt / business action: `TaskPaneBusinessActionLauncher`
   - render 後副作用: `CasePaneCacheRefreshNotificationService`
   - CASE pane UIイベント dispatch: `TaskPaneActionDispatcher`
-- 軽量 helper / policy として、`TaskPaneRefreshFlowCoordinator`、`TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` が main に反映済みです。
+- refresh-time orchestration は `TaskPaneHostFlowService` へ外出し済みです。
+- 軽量 helper / policy として、`TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` が main に反映済みです。
 - `TaskPaneHostRegistry` は外出し済みで、host 生成、差し替え、破棄、workbook 単位 cleanup の内部整理が main に反映済みです。
+- 一方で `TaskPaneManager` constructor は、`CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry`、`TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`TaskPaneHostFlowService` などの internal wiring をまだ内部で保持しており、runtime composition 整理は次フェーズ候補です。
 
 ### 1-3. TaskPane refresh orchestration の到達点
 
@@ -161,3 +163,196 @@
 TaskPane 側の優先度Aは、設計正本・責務棚卸し・危険領域の事実整理に加え、Master access の一本化、`TaskPaneManager` の helper 分離、`TaskPaneHostRegistry` の外出し、`TaskPaneRefreshOrchestrationService` の順序調停化、refresh policy 正本化までは `main` に固定済みです。
 
 一方で、ready-show / protection / retry / host 再利用を含む本線ロジックの簡素化、実機未確認事項の確定、`TaskPaneHostRegistry` / `ThisAddIn` の VSTO 境界整理は、まだ完了済みとは扱わず、安定化後に慎重に進める課題として残します。
+## B1 Update (2026-05-06)
+
+- Production runtime composition owner for the TaskPaneManager constructor graph moved to `AddInTaskPaneCompositionFactory`.
+- `TaskPaneManager` still owns `_hostsByWindowKey` and remains the facade / orchestration boundary.
+- The moved graph includes `CasePaneCacheRefreshNotificationService`, `TaskPaneHostRegistry`, `TaskPaneHostLifecycleService`, `TaskPaneDisplayCoordinator`, `TaskPaneActionDispatcher`, and `TaskPaneHostFlowService`.
+- `WorkbookOpen`, `WindowActivatePaneHandlingService`, ready-show retry, protection flow, and VSTO create/remove boundaries were not changed in this phase.
+- Remaining composition inside `TaskPaneManager` is limited to test-only construction paths that call the same external runtime-graph factory after manager creation.
+
+## B1.1 Update (2026-05-06)
+
+- `TaskPaneManager` runtime graph entry is now fixed behind `TaskPaneManagerRuntimeBootstrap.CreateAttached(...)`.
+- The old split entrypoints (`new TaskPaneManager(...)`, `TaskPaneManagerRuntimeGraphFactory.Compose(...)`, `AttachRuntimeGraph(...)`) no longer appear at production or test callsites.
+- `TaskPaneManagerRuntimeGraphFactory` now receives a passive compose context instead of reading the manager as a dependency bag.
+- `TaskPaneManager` still owns `_hostsByWindowKey` and the facade/orchestration surface; this phase did not move state ownership, `WorkbookOpen`, visibility, ready-show, retry, or VSTO lifecycle boundaries.
+
+## B1.2 Update (2026-05-06)
+
+- `TaskPaneManagerRuntimeBootstrap.CreateAttached(...)` is now the production runtime entrypoint, while test harnesses use explicit `CreateAttachedForTests(...)` or `CreateThinAttachedForTests(...)`.
+- Raw `TaskPaneManager` constructors and graph attach are no longer visible as general internal entrypoints; bootstrap reaches them through manager-local bootstrap access only.
+- The removed convenience constructors were unused after the bootstrap shift, so cleanup did not change runtime behavior or attach timing.
+- `WorkbookOpen`, visibility, ready-show, retry, foreground recovery, VSTO lifecycle, and host metadata timing remain untouched in this phase.
+
+## B1.3 Update (2026-05-06)
+
+- The old bootstrap compose context is now split into `TaskPaneManagerRuntimeEntryContext` and a smaller `TaskPaneManagerRuntimeGraphComposeContext`.
+- Entry context owns only bootstrap-time construction input, while graph compose context carries only the dependencies needed to build the runtime graph.
+- `TaskPaneManager.RuntimeBootstrapAccess` remains the sole bridge to private constructors and private attach, and is explicitly documented as bootstrap-only.
+
+## B2 Prep Update: VSTO Boundary Inventory (2026-05-06)
+
+- Current VSTO create/remove ownership is still split across four layers:
+  - `TaskPaneManager` owns `_hostsByWindowKey` and remains the host existence state owner.
+  - `TaskPaneHostRegistry` owns replace/register/remove orchestration over that shared map.
+  - `TaskPaneHostFactory` owns control creation and `ActionInvoked` binding for Case / Kernel / Accounting hosts.
+  - `TaskPaneHost` owns the concrete `CustomTaskPane` instance lifetime and reaches the actual VSTO boundary through `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)`.
+- Event unbinding does not have an explicit owner today; handler lifetime is still coupled to control disposal and host teardown.
+- Host metadata timing is also split intentionally in current-state:
+  - `TaskPaneManager.RenderHost(...)` writes `host.WorkbookFullName` before role render.
+  - `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)` writes `host.LastRenderSignature` after refresh-time render succeeds.
+  - `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` and `TaskPaneRenderStateEvaluator` both consume that metadata.
+- visible pane early-complete is therefore not just a display concern. It depends on `windowKey`, `host.WorkbookFullName`, and `host.IsVisible`, and is consumed by `WorkbookTaskPaneReadyShowAttemptWorker`.
+- This phase does not move `_hostsByWindowKey`, does not redesign registry/factory/host ownership, and does not alter `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)`.
+
+### Implications for the next implementation phase
+
+- Do not cut create/remove, event binding, metadata timing, and ready-show / retry in one task.
+- The smallest safe next unit is a VSTO adapter boundary clarification that preserves all current owners while making the create/remove call chain explicit in code comments and docs.
+- Any future extraction that touches `TaskPaneHostRegistry` or `TaskPaneHostFactory` should keep `_hostsByWindowKey` where it is and avoid changing visible pane early-complete semantics.
+
+## B2.1 Update: VSTO Adapter Boundary Clarification (2026-05-06)
+
+- Code comments now align with the current owner map without changing behavior:
+  - `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)` are clarified as the concrete VSTO adapter boundary.
+  - `TaskPaneHost` is clarified as the concrete `CustomTaskPane` lifetime holder.
+  - `TaskPaneHostFactory` is clarified as the control creation and `ActionInvoked` binding owner.
+  - `TaskPaneHostRegistry` is clarified as the replace/register/remove orchestration owner over the shared host map.
+- Event unbinding remains intentionally unchanged. Current-state still relies on dispose-driven teardown, and the ambiguity is documented as debt rather than redesigned here.
+- `_hostsByWindowKey`, metadata timing, ready-show / retry, visibility, foreground recovery, and `WorkbookOpen` downstream behavior all remain untouched in this clarification phase.
+
+## B2.2 Update: Host Factory Compose Owner Shift (2026-05-06)
+
+- `TaskPaneHostRegistry` no longer creates `TaskPaneHostFactory` inside its constructor.
+- `TaskPaneManagerRuntimeGraphFactory.Compose(...)` now composes `TaskPaneHostFactory` and passes it into the registry, which reduces one layer of secondary composition-root behavior without changing registry orchestration semantics.
+- This phase does not change:
+  - factory role ownership,
+  - `ActionInvoked` binding behavior,
+  - event unbinding ambiguity,
+  - `TaskPaneHost` lifetime ownership,
+  - `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)`,
+  - `_hostsByWindowKey`,
+  - metadata timing,
+  - visible pane early-complete,
+  - ready-show / retry / protection / foreground,
+  - `WorkbookOpen` / `WindowActivate` downstream behavior.
+
+## B2.3 Update: Registry Logging and Metadata Mini Inventory (2026-05-06)
+
+- `TaskPaneHostRegistry` constructor surface is now small but still runtime-adjacent:
+  - shared host map handle
+  - logger
+  - host descriptor formatter
+  - composed `TaskPaneHostFactory`
+- current-state owner split around logging and metadata is:
+  - registry owns registration/remove log timing,
+  - factory owns create-host log timing,
+  - descriptor source stays in `TaskPaneManagerDiagnosticHelper`,
+  - registry reads `WorkbookFullName` but does not write host metadata,
+  - visible pane early-complete and render-current checks remain outside the registry.
+- registry's direct decision surface is still limited to:
+  - `windowKey` reuse lookup,
+  - control-type compatibility by role,
+  - replacement disposal,
+  - workbook-scope remove selection by `WorkbookFullName`.
+- Because descriptor content includes `WorkbookFullName`, registry logging is diagnostic-only in purpose but metadata-timing-adjacent in content. That is why constructor cleanup and logging cleanup should not be mixed with metadata timing changes.
+- This phase remains docs-only. No runtime behavior, logging timing, metadata timing, visible pane early-complete, retry, foreground, `WorkbookOpen`, or `WindowActivate` behavior changed.
+
+## B2.4 Update: Diagnostic-only Descriptor Dependency Clarification (2026-05-06)
+
+- `TaskPaneHostRegistry` now makes the formatter dependency intent explicit in code:
+  - the dependency is diagnostic-only,
+  - it is not a host identity source,
+  - it is not a metadata timing owner,
+  - it is not part of replace/remove decisions.
+- `TaskPaneManagerRuntimeGraphFactory.Compose(...)` also labels the callsite the same way, so the dependency meaning is visible at both compose time and consume time.
+- This phase does not change descriptor content, call order, logging timing, metadata timing, visible pane early-complete, retry, foreground, `WorkbookOpen`, or `WindowActivate` behavior.
+
+## B2.5 Update: Registry Registration/Remove Logging Inventory (2026-05-06)
+
+- `TaskPaneHostRegistry` current-state around logging is now fixed as:
+  - registration logging timing owner for `TaskPane host registered...`,
+  - remove logging timing owner for `action=remove-host`,
+  - diagnostic consumer of upstream descriptor output,
+  - metadata consumer of `WorkbookFullName` only for workbook-scope remove selection.
+- registration logging occurs after concrete host creation and after insertion into the shared host map.
+- remove logging occurs before removal from the shared host map and before host dispose completes.
+- descriptor consume timing remains removal-time only. It is diagnostic-only in purpose, but metadata-timing-adjacent because descriptor content includes `WorkbookFullName`.
+- replace/remove decisions remain descriptor-independent and continue to rely on `windowKey`, control-type compatibility, and workbook-scope selection.
+- visible pane early-complete, `WorkbookOpen` downstream flows, and retry/foreground paths remain indirect dependencies only. They were documented as sensitive touchpoints, not changed behaviors.
+- This phase is docs-only. No logging timing, metadata timing, visibility behavior, or lifecycle behavior changed.
+
+## B2 Checkpoint Update (2026-05-06)
+
+### Architecture snapshot
+
+- `TaskPaneManagerRuntimeBootstrap`
+  - production runtime entry owner
+  - attach-order owner
+  - bridge between raw manager construction and attached runtime graph
+- `TaskPaneManagerRuntimeGraphFactory`
+  - passive runtime-graph builder
+  - compose owner for runtime-only dependencies such as `TaskPaneHostFactory`
+- `TaskPaneManager`
+  - facade / orchestration boundary
+  - shared host-map state owner via `_hostsByWindowKey`
+  - final render seam owner for Case / Kernel / Accounting panes
+- `TaskPaneHostRegistry`
+  - replace/register/remove orchestration owner
+  - registration/remove logging timing owner
+  - diagnostic consumer and `WorkbookFullName` metadata consumer only
+- `TaskPaneHostFactory`
+  - control creation owner
+  - `ActionInvoked` binding owner
+  - create-host logging timing owner
+- `TaskPaneHost`
+  - concrete `CustomTaskPane` lifetime holder
+- `ThisAddIn`
+  - concrete VSTO adapter boundary for `CreateTaskPane(...)` / `RemoveTaskPane(...)`
+
+### Runtime-sensitive boundary
+
+- The next step beyond B2 is no longer composition cleanup. It is runtime surgery.
+- The risk boundary starts where a change would affect any of:
+  - host existence timing,
+  - metadata write/read timing,
+  - visible pane early-complete preconditions,
+  - ready-show / retry behavior,
+  - foreground recovery timing,
+  - VSTO create/remove timing,
+  - event unbinding behavior.
+- B2 intentionally stopped before those changes. Current-state is now fixed so later work can isolate one runtime-sensitive unit at a time.
+
+### Intentionally untouched in B2
+
+- `WorkbookOpen` downstream flow
+- ready-show / retry
+- foreground recovery
+- visibility retention and visible pane early-complete behavior
+- metadata timing
+- remove timing
+- event unbinding behavior
+- `_hostsByWindowKey` ownership
+
+### Manual smoke checkpoint
+
+- Human-side manual smoke for the B2 checkpoint was reported as OK.
+- This checkpoint assumes external/manual validation for the previously tracked pane scenarios:
+  - CASE pane
+  - non-case pane
+  - post-action refresh
+  - visibility
+  - `WorkbookOpen`
+  - ready-show
+  - pane remove / recreate
+
+### Next-phase warning
+
+- Do not treat the next phase as "small cleanup". The remaining work sits on runtime-sensitive boundaries.
+- If runtime surgery starts, keep the unit narrower than "VSTO boundary redesign". Examples of acceptable future slicing are:
+  - create/remove adapter timing only,
+  - event unbinding debt only,
+  - metadata timing only,
+  - ready-show / visibility only.
+- Do not mix those units in the same change.

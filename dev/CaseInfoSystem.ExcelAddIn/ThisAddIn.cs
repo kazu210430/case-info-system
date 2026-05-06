@@ -532,6 +532,8 @@ namespace CaseInfoSystem.ExcelAddIn
             _taskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(workbook, reason);
         }
 
+        // Concrete VSTO adapter boundary for CustomTaskPane creation.
+        // Higher-level ownership stays in TaskPaneHostFactory/TaskPaneHost/TaskPaneHostRegistry/TaskPaneManager.
         internal CustomTaskPane CreateTaskPane(Excel.Window window, System.Windows.Forms.UserControl control)
         {
             CustomTaskPane pane = CustomTaskPanes.Add(control, TaskPaneTitle, window);
@@ -539,6 +541,8 @@ namespace CaseInfoSystem.ExcelAddIn
             return pane;
         }
 
+        // Concrete VSTO adapter boundary for CustomTaskPane removal.
+        // Current-state remove ordering is still owned by TaskPaneHost.Dispose().
         internal void RemoveTaskPane(CustomTaskPane pane)
         {
             if (pane == null)

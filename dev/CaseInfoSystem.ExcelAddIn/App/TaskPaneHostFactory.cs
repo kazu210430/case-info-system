@@ -6,6 +6,8 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    // Owns TaskPane control construction and ActionInvoked binding for each role.
+    // Event unbinding is not explicit in current-state; handler lifetime is still coupled to host/control disposal.
     internal sealed class TaskPaneHostFactory
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
@@ -35,6 +37,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal TaskPaneHost CreateHost(string windowKey, Excel.Window window, WorkbookRole role, out string paneRoleName)
         {
+            // Current-state boundary: binding happens here, while concrete pane lifetime is owned by TaskPaneHost and VSTO create/remove stays in ThisAddIn.
             if (role == WorkbookRole.Kernel)
             {
                 var kernelControl = new KernelNavigationControl();

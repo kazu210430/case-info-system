@@ -195,7 +195,7 @@ fallback path の route、post-action refresh、display request の順序を別 
 `TaskPaneManager` に残っている host 管理中心責務と refresh flow 中心責務をさらに分割することを検討した。
 
 ### 現状
-`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`CasePaneSnapshotRenderService`、`CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry` などは既に分離済みである。一方で `TaskPaneManager` には host 選択、role 別 render 切替、CASE host 再利用、`TaskPaneRefreshFlowCoordinator`、`RemoveStaleKernelHosts(...)` などが残っている。
+`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`CasePaneSnapshotRenderService`、`CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry`、`TaskPaneHostFlowService` などは既に分離済みである。一方で `TaskPaneManager` には role 別 render 切替、shared host map owner、dispatcher / display / lifecycle / flow の internal composition、CASE host 再利用を支える facade surface などが残っている。
 
 ### 見送った理由
 - `docs/taskpane-manager-responsibility-inventory.md` は host 再利用、visible pane early-complete、Workbook / Window 境界を危険度 `A` として扱っている。

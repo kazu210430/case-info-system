@@ -2,9 +2,17 @@
 
 ## 目的
 
-`TaskPaneManager` の現行責務を、`main` に反映済みの実装と既存 docs を前提に棚卸しする。
+`TaskPaneManager` 周辺の current-state を、現行 `main` のコードと既存 docs を前提に再棚卸しする。
 
-現時点では `TaskPaneHostRegistry` の外出しと、`TaskPaneManager` 周辺の lightweight helper / policy split まで反映済みとし、inventory は現コードを前提に整理する。
+今回の目的は「巨大クラスを小さく見せること」ではなく、次フェーズで安全に切れる単位を決めるために、
+
+- ownership
+- 変更理由
+- runtime state owner
+- composition root 候補
+- UX / WorkbookOpen / visibility 依存
+
+を事実ベースで整理することです。
 
 ## 参照した docs
 
@@ -12,145 +20,589 @@
 - `docs/flows.md`
 - `docs/ui-policy.md`
 - `docs/taskpane-architecture.md`
+- `docs/taskpane-refresh-policy.md`
 - `docs/taskpane-refactor-current-state.md`
-- `docs/a-priority-service-responsibility-inventory.md`
+- `docs/taskpane-refactor-deferred-items.md`
+- `docs/workbook-window-activation-notes.md`
 - `docs/taskpane-protection-ready-show-investigation.md`
+- `docs/thisaddin-boundary-inventory.md`
+- `docs/a4-c2-current-state.md`
+- `docs/a-priority-service-responsibility-inventory.md`
 
 ## 調査対象コード
 
+- `dev/CaseInfoSystem.ExcelAddIn/AddInCompositionRoot.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/ThisAddIn.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneManager.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneHostRegistry.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneHostFactory.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneHostLifecycleService.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneHostFlowService.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneDisplayCoordinator.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneActionDispatcher.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneNonCaseActionHandler.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneRefreshCoordinator.cs`
 - `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneRefreshOrchestrationService.cs`
-- `dev/CaseInfoSystem.ExcelAddIn/App/WorkbookLifecycleCoordinator.cs`
-- `dev/CaseInfoSystem.ExcelAddIn/App/WindowActivatePaneHandlingService.cs`
-- `dev/CaseInfoSystem.ExcelAddIn/App/TaskPaneBusinessActionLauncher.cs`
-- `dev/CaseInfoSystem.ExcelAddIn/App/CasePaneSnapshotRenderService.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/WorkbookTaskPaneReadyShowAttemptWorker.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/App/CasePaneCacheRefreshNotificationService.cs`
+- `dev/CaseInfoSystem.ExcelAddIn/UI/TaskPaneHost.cs`
+
+## current-state 補足
+
+- 現行コードでは `TaskPaneRefreshFlowCoordinator` は存在せず、`RefreshPane(...)` 主経路の owner は `TaskPaneHostFlowService` です。
+- `TryReuseCaseHostForRefresh(...)` は `TaskPaneManager` ではなく `TaskPaneHostFlowService` にあります。
+- `RemoveStaleKernelHosts(...)` は `TaskPaneManager` ではなく `TaskPaneHostLifecycleService` にあります。
+- したがって、旧 docs に残る `TaskPaneRefreshFlowCoordinator` / `TaskPaneManager.TryReuseCaseHostForRefresh(...)` / `TaskPaneManager.RemoveStaleKernelHosts(...)` は current-state とはずれています。
 
 ## 対象フロー要約
 
-- `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` は `WorkbookLifecycleCoordinator` と `WindowActivatePaneHandlingService` を入口にし、TaskPane refresh を直接 `TaskPaneManager` に渡さず、`TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` を経由する。
-- window 依存処理は `WorkbookOpen` 直後に確定させず、`ResolveWorkbookPaneWindow(...)` と `EnsurePaneWindowForWorkbook(...)` を通した後で `WorkbookContext` を確定させる。
-- `TaskPaneManager` は最終的な host 解決、role 別描画、既存 host 再利用、CASE pane render/show orchestration を担う。
-- `doc` 実行前の prompt 初期値準備は `TaskPaneBusinessActionLauncher` が `DocumentNamePromptService.TryPrepare(...)` を先に呼ぶ順序で固定されている。
+- `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` は `WorkbookLifecycleCoordinator` と `WindowActivatePaneHandlingService` から入り、TaskPane 本線は `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` を経由して `TaskPaneManager.RefreshPane(...)` に到達する。
+- `WorkbookOpen` は workbook-only 境界であり、window-dependent な pane 対象決定は `ResolveWorkbookPaneWindow(...)` と後続イベントへ委ねる。
+- `TaskPaneManager` 自体は event 入口を持たず、host lifecycle / display / role 別 render / action dispatch の facade 面として振る舞う。
+- CASE ready-show は `WorkbookTaskPaneReadyShowAttemptWorker` が担当し、既存 visible CASE pane があれば `HasVisibleCasePaneForWorkbookWindow(...)` を使って success 相当で early-complete する。
 
-## 危険度定義
+## 責務棚卸し
 
-- `A`: 今は触らない方がよい
-- `B`: 小さく切り出せる可能性がある
-- `C`: docs整理または命名整理で足りる
-- `D`: 既に分離済み、または今回の追加対応は不要
+| 分類 | 現在の owner | runtime state owner | 変更理由 | AddInCompositionRoot 側候補 | manager / facade に残すべきか | 危険度 |
+| --- | --- | --- | --- | --- | --- | --- |
+| runtime composition / wiring | `AddInTaskPaneCompositionFactory` と `TaskPaneManager` constructor と `TaskPaneHostRegistry` constructor に分散 | なし | helper / handler / registry / display / flow の wiring を変える時に変わる | はい。最終的には `AddInTaskPaneCompositionFactory` 側へ寄せるのが自然 | いいえ。facade の変更理由ではない | `Safe extraction` |
+| facade entry surface | `TaskPaneManager` | `TaskPaneManager` | `ThisAddIn` / bridge / test から呼ぶ surface を変える時に変わる | いいえ | はい。`RefreshPane`、`Hide*`、`Has*`、`DisposeAll` などの薄い入口は残してよい | `Runtime-sensitive` |
+| host registry data | 実装上は `TaskPaneManager` が `_hostsByWindowKey` を所有し、`TaskPaneHostRegistry` / `TaskPaneHostLifecycleService` / `TaskPaneDisplayCoordinator` / action resolver 群が共有利用 | 実装上は `TaskPaneManager` | host 集合の持ち方や lookup 方式を変える時に変わる | 条件付き。まず owner を docs で固定しないと危険 | facade 直下に state を持つのは薄い facade と相性が悪い | `Runtime-sensitive` |
+| host lifecycle primitive | `TaskPaneHostLifecycleService` | registry 共有 host map | get-or-replace / remove / dispose / workbook 単位 cleanup の semantics を変える時に変わる | composition だけ root 側へ寄せられる | facade には残さない | `Runtime-sensitive` |
+| stale kernel host cleanup | `TaskPaneHostLifecycleService` | registry 共有 host map | Kernel host cleanup 条件を変える時に変わる | composition だけ root 側へ寄せられる | facade には残さない | `WorkbookOpen-sensitive` |
+| refresh-time host flow | `TaskPaneHostFlowService` | registry 共有 host map と host metadata | host 選択 / reuse / render 要否 / show 順序を変える時に変わる | composition だけ root 側へ寄せられる | facade には残さない | `Runtime-sensitive` |
+| display coordinator | `TaskPaneDisplayCoordinator` | registry 共有 host map と host visibility | hide/show / prepare-before-show / visible pane 判定を変える時に変わる | composition だけ root 側へ寄せられる | facade には残さない | `UX-sensitive` |
+| pane creation / VSTO 実体生成 | `TaskPaneHostRegistry` -> `TaskPaneHostFactory` -> `TaskPaneHost` -> `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)` | `TaskPaneHost` / `CustomTaskPane` 実体 | VSTO pane の create / dispose / dock / action event 配線を変える時に変わる | すぐには寄せない方がよい | facade に残さない。VSTO 境界として別扱い | `今は触るべきでない` |
+| control binding / UI event subscription | `TaskPaneHostFactory` | host / control 実体 | control 種別と `ActionInvoked` 配線を変える時に変わる | すぐには寄せない方がよい | facade に残さない | `Runtime-sensitive` |
+| CASE action dispatch | `TaskPaneActionDispatcher` と handler 群 | host lookup は registry 共有 host map、post-action refresh は `ThisAddIn` 再入あり | action route / post-action refresh order / error handling を変える時に変わる | はい。dispatcher subtree の composition は root 側候補 | facade には残さない | `UX-sensitive` |
+| non-case action dispatch | `TaskPaneNonCaseActionHandler` | host lookup は registry 共有 host map | Kernel / Accounting action handling を変える時に変わる | composition だけ root 側へ寄せられる | facade には残さない | `Runtime-sensitive` |
+| role 別 render 最終切替 | `TaskPaneManager.RenderHost(...)` | host metadata (`WorkbookFullName`, `LastRenderSignature`) | role ごとの render seam を変える時に変わる | 条件付き。まず render seam を facade の外側へ出す根拠が必要 | 当面は yes。facade の最後の role switch として残してよい | `Runtime-sensitive` |
+| CASE snapshot render / view state | `CasePaneSnapshotRenderService`、`ICaseTaskPaneSnapshotReader`、`CaseTaskPaneViewStateBuilder` | CASE workbook / snapshot build result | CASE pane content の生成方法を変える時に変わる | 既に root 側で一部 compose 済み | facade には残さない | `Safe extraction` |
+| CASE render 後副作用 | `CasePaneCacheRefreshNotificationService` | workbook `Saved` 状態と build result | cache 更新通知、`WorkbookOpen` / `WorkbookActivate` timing、`Saved` restore を変える時に変わる | composition だけ root 側へ寄せられる | manager 本体に残さない方が筋は良いが、意味的には lifecycle 寄り | `WorkbookOpen-sensitive` |
+| WorkbookOpen / Activate / WindowActivate reaction | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator` | refresh retry / suppression / protection state | event 境界や defer 条件を変える時に変わる | いいえ。既に root で compose 済み | manager に残さない | `WorkbookOpen-sensitive` |
+| visible pane early-complete | `WorkbookTaskPaneReadyShowAttemptWorker` + `ICasePaneHostBridge` + `TaskPaneManager.HasVisibleCasePaneForWorkbookWindow(...)` | host metadata (`WorkbookFullName`, `IsVisible`, windowKey) | ready-show success 判定を変える時に変わる | いいえ | manager facade には `HasVisibleCasePaneForWorkbookWindow(...)` surface だけ残る余地あり | `visibility/foreground-sensitive` |
+| foreground / protection / final recovery | `TaskPaneRefreshCoordinator`、`KernelHomeCasePaneSuppressionCoordinator` | protection state, active window state | foreground 保証や protection 入口を変える時に変わる | いいえ | manager に残さない | `visibility/foreground-sensitive` |
+| CASE hidden create handoff 後の pane 表示 | owner は `KernelCasePresentationService` 側。TaskPane 側は ready-show の downstream | hidden create session 自体は TaskPane owner ではない | hidden create -> shared app handoff 後 UX を変える時に変わる | いいえ | manager に残さない | `hidden-session-sensitive` |
+| logging / diagnostic helper | `TaskPaneManagerDiagnosticHelper` と各 coordinator | なし | trace 形式や descriptor を変える時に変わる | 任意 | 当面はどちらでもよい | `C` 相当 |
 
-## 責務分類
+## ownership 混在
 
-| 分類 | 現在の主担当 | 現状 | 危険度 | 判断 |
-| --- | --- | --- | --- | --- |
-| Pane生成 | `TaskPaneHostRegistry` | `App/TaskPaneHostRegistry.cs` が `RegisterHost` / `GetOrReplaceHost` / `RemoveHost` / `RemoveWorkbookPanes` / `DisposeAll` を持つ | `B` | VSTO `TaskPaneHost` 生成と action event 配線を 1 箇所に寄せている。外出し済みだが、`ThisAddIn` をまたぐ VSTO 境界としては引き続き慎重に扱う |
-| Pane表示・非表示 | `TaskPaneDisplayCoordinator` | `HideAll` / `HideKernelPanes` / `HideAllExcept` / `HidePaneForWindow` / `TryShowHost` / `PrepareHostsBeforeShow` を担当 | `D` | 主責務は既に別サービスへ分離済み。`TaskPaneManager` 側は薄い委譲のみ |
-| Pane再利用 | `TaskPaneDisplayCoordinator`、`TaskPaneRenderStateEvaluator`、`TaskPaneHostReusePolicy`、`TaskPaneManager.TryReuseCaseHostForRefresh(...)` | 既存 host 再表示、render signature 判定、`WorkbookActivate` / `WindowActivate` 時の CASE host 再利用が混在 | `A` | visible pane early-complete と activate 時の再利用が ready-show / protection に直結している |
-| Workbook / Window との対応管理 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`TaskPaneManager.SafeGetWindowKey(...)` | event 入口、window 解決、context 解決、windowKey 単位 host 管理に分散 | `A` | `WorkbookOpen` を window 安定境界にしない前提を壊しやすい |
-| TaskPane refresh 起動 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator` | `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` / ready-show / fallback timer の入口調停を担当 | `D` | refresh 起動責務は `TaskPaneManager` 本体から外へ出ている |
-| ViewState / Snapshot 関連 | `ICaseTaskPaneSnapshotReader`、`CasePaneSnapshotRenderService`、`CaseTaskPaneViewStateBuilder`、`TaskPaneSnapshotParser` | snapshot build / parse / view state build は分離済み。`TaskPaneManager` には通知と `Saved` 復元が残る | `B` | 主経路は切れている。残存責務は後処理として小さく切れる |
-| Document command / ボタン連携 | `TaskPaneBusinessActionLauncher`、`TaskPaneActionDispatcher`、`TaskPanePostActionRefreshPolicy` | prompt 準備順序、CASE pane button dispatch、post-action refresh 調停は別サービス化済み | `D` | UIイベント起点処理は `TaskPaneManager` 本体から分離済み |
-| Excelイベント境界との関係 | `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator` | `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` の境界をまたいで動く | `A` | 今回の棚卸し対象ではあるが、次の分割単位にはしない方がよい |
-| ログ・診断 | `TaskPaneManager` と周辺 coordinator | `KernelFlickerTrace`、host/context/window descriptor 生成、可視 pane 判定ログ | `C` | まずは docs 上で意味を固定すれば足りる。挙動変更を伴う分離優先度は低い |
+### 1. runtime composition owner が分裂している
 
-## 既に分離済みと見なせるもの
+- `AddInTaskPaneCompositionFactory.Compose(...)` が `TaskPaneManager`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshCoordinator`、`TaskPaneRefreshOrchestrationService` を組み立てる。
+- 同時に `TaskPaneManager` constructor 自身が `CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry`、`TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`TaskPaneHostFlowService` などを `new` している。
+- さらに `TaskPaneHostRegistry` constructor も `TaskPaneHostFactory` を内部で `new` している。
 
-- TaskPane 表示・非表示の主処理は `TaskPaneDisplayCoordinator` に分離済み
-- refresh 起動の入口調停は `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` に分離済み
-- WindowActivate 境界の判定は `WindowActivatePaneHandlingService` 側に分離済み
-- `doc` 実行前の prompt 初期値準備順序は `TaskPaneBusinessActionLauncher` に分離済み
-- CASE pane の snapshot build / parse / view state build は `CasePaneSnapshotRenderService` と関連 reader / builder に分離済み
-- CASE cache 更新後処理は `CasePaneCacheRefreshNotificationService` に分離済み
-- CASE pane の UIイベント dispatch と post-action refresh 調停は `TaskPaneActionDispatcher` に分離済み
-- `TaskPaneRefreshFlowCoordinator` により `RefreshPane(...)` 主経路の調停責務は helper 化済み
-- `TaskPaneManagerDiagnosticHelper` により descriptor / trace 補助は helper 化済み
-- `TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` により reuse / render 判定の lightweight helper split が main に反映済み
+事実として、TaskPane 周辺には
 
-## まだ TaskPaneManager に残っているもの
+- composition root
+- secondary composition root
+- VSTO host wiring root
 
-- nested class のまま残っている `TaskPaneRefreshFlowCoordinator`
-- `RemoveStaleKernelHosts(...)` による Kernel host の掃除
-- `RenderHost(...)` から role 別 render を切り替える最終責務
-- host / workbook / window / context の descriptor 生成と trace 出力
+が 3 層で存在します。
 
-## 今は触らない方がよい領域
+### 2. state owner と behavior owner がずれている
 
-- `ResolveWorkbookPaneWindow(...)` と `EnsurePaneWindowForWorkbook(...)`
-- `HasVisibleCasePaneForWorkbookWindow(...)` を使う visible pane early-complete
-- `WorkbookActivate` / `WindowActivate` / `TaskPaneRefresh` をまたぐ protection / suppression
-- `WorkbookOpen` を window 安定境界として扱う方向の変更
+- host 集合 `_hostsByWindowKey` は `TaskPaneManager` が生成・所有している。
+- しかし mutate / lookup / cleanup / visibility 判定は `TaskPaneHostRegistry`、`TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、action resolver 群に分散している。
 
-## 次に切るべき最小単位
+これは「runtime state owner は manager、変更理由 owner は周辺 service 群」というねじれです。
 
-### 候補1
+### 3. CASE / non-case 境界は handler で分かれているが wiring では混ざっている
 
-`CasePaneCacheRefreshNotificationService` 相当の切り出し
+- CASE action は `TaskPaneActionDispatcher` と handler 群へ流れる。
+- Kernel / Accounting action は `TaskPaneNonCaseActionHandler` へ流れる。
+- ただし control 作成と `ActionInvoked` 配線は `TaskPaneHostFactory` が一括で持ち、その delegate 元は `TaskPaneManager` である。
 
-- 対象は `NotifyCasePaneUpdatedIfNeeded(...)`、`TryGetWorkbookSavedState(...)`、`RestoreWorkbookSavedState(...)`
-- 1 責務で閉じており、window 境界や ready-show に触れない
-- `WorkbookOpen` / `WorkbookActivate` 時だけ通知する現在ルールをそのまま移せる
-- 失敗時も戻しやすく、`TaskPaneManager` の render 後処理が見通しよくなる
-- 実施済み。render 後にだけ走る副作用境界として、refresh フロー本線や window 解決から分離した
+したがって「処理 owner は分離済み」でも「binding owner は未分離」です。
 
-### 候補2
+### 4. CASE post-action refresh は dispatcher から VSTO display 入口へ直接戻る
 
-`TaskPaneHostRegistry` の外出し
+- `TaskPaneActionDispatcher.RefreshCaseHostAfterAction(...)` は `ThisAddIn.RequestTaskPaneDisplayForTargetWindow(...)` を直接呼ぶ。
+- CASE dispatch subtree は action dispatch だけで閉じず、display 入口まで再入しています。
 
-- 対象は host の生成、差し替え、破棄、workbook 単位の掃除だけ
-- VSTO `TaskPaneHost` 生成境界を 1 箇所へ固定しやすい
-- ただし `ThisAddIn` と action event 配線を持つため、すでに分離済みの action dispatch より慎重に扱う
-- 実施済み。refresh 本線、window 解決、render/show 順序には触れず、`TaskPaneManager` から独立クラスへ外出しした
+これは CASE action dispatch と display surface の ownership 混在です。
+
+### 5. notification service が notification だけでは閉じていない
+
+- `CasePaneCacheRefreshNotificationService` は message 表示だけでなく `workbook.Saved` restore と `WorkbookOpen` / `WorkbookActivate` timing 依存を持つ。
+- 名前よりも実体は render 後 side effect / lifecycle adjacency です。
+
+## composition root 化している箇所
+
+### 実装上の composition root 候補
+
+1. `AddInTaskPaneCompositionFactory`
+   - すでに TaskPane 周辺の top-level compose owner です。
+   - `TaskPaneManager` 内部 `new` を引き上げる自然な受け皿になります。
+
+2. `TaskPaneManager` constructor
+   - 現状では subgraph の大半を内部 compose しており、secondary composition root になっています。
+   - facade / orchestration owner と wiring owner が同居しています。
+
+3. `TaskPaneHostRegistry` constructor
+   - `TaskPaneHostFactory` を内部 compose しており、VSTO host wiring root になっています。
+   - ただしここは create / dispose / control event 配線の危険領域なので、今すぐ root 側へ押し戻す対象とは言い切れません。
+
+## facade / orchestration / composition の境界
+
+### facade に残すべきもの
+
+- `TaskPaneManager` の公開 surface
+  - `RefreshPane(...)`
+  - `TryShowExistingPane*`
+  - `HasManagedPaneForWindow(...)`
+  - `HasVisibleCasePaneForWorkbookWindow(...)`
+  - `Hide*`
+  - `RemoveWorkbookPanes(...)`
+  - `DisposeAll()`
+  - `PrepareTargetWindowForForcedRefresh(...)`
+- role 別 render の最終切替
+  - `RenderHost(...)` と `RenderKernelHost(...)` / `RenderAccountingHost(...)` / `RenderCaseHost(...)`
+  - host metadata 更新 (`WorkbookFullName`, `LastRenderSignature`) と近接しているため、現時点では facade の内側に残すほうが安全です。
+
+### orchestration に残すべきもの
+
+- refresh-time host flow: `TaskPaneHostFlowService`
+- visibility / show-hide 調停: `TaskPaneDisplayCoordinator`
+- CASE action dispatch と post-action refresh order: `TaskPaneActionDispatcher`
+- non-case action handling: `TaskPaneNonCaseActionHandler`
+
+### composition に寄せる候補
+
+- `TaskPaneManager` constructor 内の `new` 群
+  - `CasePaneCacheRefreshNotificationService`
+  - `TaskPaneCaseFallbackActionExecutor`
+  - `TaskPaneCaseActionTargetResolver`
+  - `TaskPaneCaseDocumentActionHandler`
+  - `TaskPaneCaseAccountingActionHandler`
+  - `TaskPaneActionDispatcher`
+  - `TaskPaneDisplayCoordinator`
+  - `TaskPaneHostLifecycleService`
+  - `TaskPaneHostFlowService`
+- これらは「どの helper / handler 実装を組み合わせるか」という wiring change に反応するため、facade の変更理由ではありません。
+
+## AddInCompositionRoot 側へ寄せる候補
+
+### 優先度が高い候補
+
+- `TaskPaneActionDispatcher` subtree の compose
+  - CASE action handler / resolver / fallback executor / dispatcher は runtime wiring change に反応する。
+  - `WorkbookOpen` / ready-show / protection 本線には直接触れない。
+
+- `TaskPaneDisplayCoordinator` / `TaskPaneHostLifecycleService` / `TaskPaneHostFlowService` の compose
+  - これらは current-state では既に独立 owner であり、manager 内に `new` で残す理由が薄い。
+  - ただし shared host state の owner をどう持つかは先に固定が必要です。
+
+- `CasePaneCacheRefreshNotificationService` の compose
+  - leaf に近いが、意味的には lifecycle adjacency を持つ。
+  - wiring change と side effect policy の境界を分けて扱うためにも、manager constructor からは外したほうが読みやすい。
+
+### まだ寄せない方がよい候補
+
+- `TaskPaneHostRegistry` / `TaskPaneHostFactory`
+  - `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)` と control event 配線を持つ。
+  - startup / shutdown / pane dispose 順序と密結合しており、別タスク化すべきです。
+
+- `TaskPaneHost` / `ThisAddIn` の VSTO boundary
+  - `CustomTaskPane` 実体生成・破棄です。
+  - facade / composition cleanup と同時に触るべきではありません。
+
+## CASE pane / non-case pane の責務線
+
+### 既に分かれている線
+
+- CASE action 実行
+  - `TaskPaneActionDispatcher`
+  - `TaskPaneCaseDocumentActionHandler`
+  - `TaskPaneCaseAccountingActionHandler`
+  - `TaskPaneCaseFallbackActionExecutor`
+
+- Kernel / Accounting action 実行
+  - `TaskPaneNonCaseActionHandler`
+
+- CASE pane content render
+  - `CasePaneSnapshotRenderService`
+  - `CasePaneCacheRefreshNotificationService`
+
+### まだ曖昧な線
+
+- control 作成と event 配線
+  - `TaskPaneHostFactory` が CASE / Kernel / Accounting 全部をまとめて配線する。
+- host store
+  - CASE / non-case 共通の `_hostsByWindowKey` を manager が所有する。
+- display 入口
+  - `RequestTaskPaneDisplayForTargetWindow(...)` は CASE post-action refresh と `WindowActivate` を同じ入口で受ける。
+
+## hidden assumptions
+
+- visible pane early-complete は host metadata に依存する
+  - `WorkbookFullName`
+  - `IsVisible`
+  - `windowKey`
+- CASE host reuse は `TaskPaneHostReusePolicy` の reason 文字列に依存する
+  - `WorkbookActivate`
+  - `WindowActivate`
+  - `KernelHomeForm.FormClosed`
+- display request 判定は host render signature の current 判定に依存する
+- `CasePaneCacheRefreshNotificationService` は `WorkbookOpen` / `WorkbookActivate` だけで通知する前提を持つ
+- post-action refresh は `ThisAddIn.RequestTaskPaneDisplayForTargetWindow(...)` 経由で display policy に再入する
+- `WorkbookOpen` 自体は manager owner ではないが、post-render side effect と ready-show early-complete が event timing に間接依存する
+
+## 危険度仕分け
+
+| 区分 | 対象 | 事実ベースの理由 |
+| --- | --- | --- |
+| `Safe extraction` | `TaskPaneManager` constructor 内の leaf / handler wiring の root 側移動 | runtime semantics を変えずに owner だけ整理できる可能性がある。対象は dispatcher subtree や notification service compose など |
+| `Runtime-sensitive` | shared host map owner、`TaskPaneHostLifecycleService` / `TaskPaneHostFlowService` compose、control binding delegate 受け渡し | host lookup / replace / render/show 直列順序に触れるため |
+| `UX-sensitive` | `TaskPaneDisplayCoordinator`、post-action refresh 再表示、`PaneDisplayPolicy` 入口 | 見え方、再表示、前面維持に直結するため |
+| `WorkbookOpen-sensitive` | `TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`CasePaneCacheRefreshNotificationService` timing、window resolve 近辺 | `WorkbookOpen` を window 安定境界にしない契約を壊しやすいため |
+| `visibility/foreground-sensitive` | visible pane early-complete、ready-show、final foreground guarantee、protection 3入口 | pane visible 判定と foreground 回復が連動しているため |
+| `hidden-session-sensitive` | CASE hidden create handoff 後の ready-show / final foreground 連鎖 | TaskPane owner 自体は hidden session を持たないが、shared app handoff 後 UX に依存しているため |
+| `今は触るべきでない` | `TaskPaneHostRegistry` / `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn.CreateTaskPane` / `RemoveTaskPane`、ready-show / protection / retry 本線 | VSTO 実体境界と実 UX 危険領域が重なるため |
+
+## 次に切るべき安全単位
+
+### 第1候補
+
+`TaskPaneManager` の internal composition を `AddInTaskPaneCompositionFactory` へ寄せるための docs / constructor graph 整理
+
+- 対象は runtime wiring だけに限定する
+- まずは dispatcher subtree と notification service から入る
+- host map の owner と VSTO create / dispose 境界はまだ変えない
+
+### 第2候補
+
+`TaskPaneManager` が内部 `new` している orchestration services の compose owner を root 側へ寄せる
+
+- `TaskPaneDisplayCoordinator`
+- `TaskPaneHostLifecycleService`
+- `TaskPaneHostFlowService`
+
+ただし、この段階では
+
+- `_hostsByWindowKey` owner
+- `TaskPaneHostRegistry`
+- `TaskPaneHostFactory`
+- `TaskPaneHost`
+
+には同時に触れないほうが安全です。
+
+### 第3候補
+
+`TaskPaneHostRegistry` / `TaskPaneHostFactory` / `ThisAddIn` の VSTO boundary 整理を独立タスク化する
+
+- create / remove
+- control event binding
+- startup / shutdown / dispose order
+
+を別検証に分けるべきです。
+
+## 推奨 refactor 順序
+
+1. docs current-state をコードへ同期する
+2. `TaskPaneManager` の internal composition owner を整理する
+3. shared host map の owner をどこに置くかを明文化する
+4. dispatcher subtree の compose を root 側へ寄せる
+5. display / lifecycle / host flow の compose を root 側へ寄せる
+6. VSTO host boundary は最後に独立して扱う
+7. ready-show / protection / retry は別フェーズのまま維持する
 
 ## 今回の結論
 
-- `TaskPaneManager` は「完全な巨大クラス」ではなく、display / refresh entry / snapshot render / prompt prepare / render 後副作用 / UIイベント dispatch の主責務は既に周辺サービスへ逃がされている
-- `TaskPaneHostRegistry` は外出し済みだが、`ThisAddIn` を通した VSTO `CustomTaskPane` 生成・破棄境界と action event 配線は引き続き同領域に残る
-- 次の 1 手は event 境界や ready-show に触らず、`TaskPaneHostRegistry` と `ThisAddIn` 境界の安定化確認を優先し、実装変更は小単位で進めるのが安全
+- 見つかった ownership 混在
+  - `TaskPaneManager` が facade でありながら shared host map owner と secondary composition root を兼ねている
+  - CASE action dispatch が post-action refresh で `ThisAddIn` の display 入口へ再入している
+  - `CasePaneCacheRefreshNotificationService` が notification 以上の lifecycle timing を持っている
 
-## 今後課題
+- composition root 化している箇所
+  - `AddInTaskPaneCompositionFactory`
+  - `TaskPaneManager` constructor
+  - `TaskPaneHostRegistry` constructor
 
-### `TaskPaneHostRegistry`
+- facade に残すべきもの
+  - `TaskPaneManager` の外部 surface
+  - role 別 render の最終切替
+  - visible pane / existing pane 参照の facade 入口
 
-- `TaskPaneManager` 周辺の主要責務として独立クラス化済みです。
-- host 生成、差し替え、破棄、workbook 単位の掃除を担います。
-- VSTO `TaskPaneHost` の生成と event 配線に関わるため、分離リスクが高い領域です。
-- 次に触る場合は `TaskPaneHostRegistry` だけを対象にし、action dispatch や refresh 本線には触れない方針を維持します。
+- AddInCompositionRoot へ寄せる候補
+  - dispatcher subtree
+  - notification service
+  - display / lifecycle / host flow の composition-time wiring
 
-### `ThisAddIn` 境界
+- “今はまだ触るべきでない” 箇所
+  - `TaskPaneHostRegistry` / `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)`
+  - visible pane early-complete
+  - ready-show / retry / protection
+  - `WorkbookOpen` window-safe boundary
 
-- `ThisAddIn` は VSTO lifecycle、application event、custom task pane 生成、TaskPane 表示要求の入口です。
-- `TaskPaneManager` / `TaskPaneHostRegistry` との依存境界を急に変えると起動、終了、pane 表示に影響しやすいです。
-- `ThisAddIn` 整理は HostRegistry 分離よりさらに慎重に扱い、先に現状メモと依存関係棚卸しを行う段階とします。
+- 実UXリスク
+  - foreground 回復
+  - visible pane early-complete
+  - CASE create hidden route handoff 後の ready-show
+  - `WorkbookActivate` / `WindowActivate` 再利用経路
+
+- 事実として言える次フェーズ候補
+  - まずは runtime behavior を変えずに「composition owner の移動」だけを切る
+  - VSTO boundary と ready-show 本線は次の別タスクに分ける
 
 ## 不明点
 
-- 既存テストが候補1から候補3をどこまで直接保護しているかは、この調査では網羅確認していない
-- visible pane early-complete、retry 値、protection 秒数の正式な仕様根拠は、既存 docs とコードだけでは確定しない
-- 実機観測時の体感差分が最も出やすいのが候補2か候補3かは、コードだけでは断定しない
+- retry `80ms` / pending retry `400ms` / `3 attempts` / protection `5秒` の正式な仕様根拠
+- visible pane early-complete の最終 UX 定義
+- shared host map を manager 外へ出すときの最小 state holder が何か
+- `TaskPaneHostRegistry` / `TaskPaneHostFactory` / `ThisAddIn` 境界をどの形で整理するのが最小差分か
 
-## 設計指針（SOLID 準拠）
+これらは current docs とコードだけでは断定しません。
+## B1 Status (2026-05-06)
 
-本リファクタリングは、振る舞い不変を前提に SOLID 原則へ沿って段階的に進める。
+- Production compose owner for the TaskPaneManager constructor graph moved from `TaskPaneManager` to `AddInTaskPaneCompositionFactory`.
+- `TaskPaneManager` still owns `_hostsByWindowKey`, host existence state, and the facade/orchestration entry surface.
+- The extracted compose set is: notification wiring, host registry/lifecycle/display wiring, dispatcher subtree wiring, and host-flow wiring.
+- `WorkbookOpen`, ready-show retry, protection flow, visibility/foreground handling, `ThisAddIn.CreateTaskPane`, `RemoveTaskPane`, and `TaskPaneHostRegistry` ownership redesign remain untouched.
+- Test paths now use the same external runtime-graph factory after manager construction; this is the only remaining manager-adjacent compose path in this phase.
 
-### Single Responsibility Principle（単一責任）
+## B1.1 Status (2026-05-06)
 
-- `TaskPaneManager` は複数責務を持つ状態から、段階的に責務を分離する。
-- 「観測」「判定」「副作用」「UI制御」を同じ単位に混在させない。
+- Compose entry is reduced to one bootstrap boundary: `TaskPaneManagerRuntimeBootstrap.CreateAttached(...)`.
+- Attach timing is now explicit at the bootstrap boundary instead of being repeated at each caller.
+- Graph composition now reads a passive compose context, so the manager no longer exposes most runtime dependencies just to feed graph assembly.
+- The manager still owns host state, render callbacks, and facade/orchestration behavior; this phase did not redesign `TaskPaneHostRegistry`, VSTO lifecycle, or any visibility / ready-show / retry flow.
 
-### Dependency Direction（依存方向）
+## B1.2 Status (2026-05-06)
 
-- 上位のフロー制御は、下位の詳細処理へ直接依存しない形へ寄せる。
-- 特に副作用処理は独立サービスとして切り出し、表示調停や event 境界から疎結合に保つ。
+- Production runtime entry is now bootstrap-only in name and access pattern: `CreateAttached(...)` for production, `CreateAttachedForTests(...)` / `CreateThinAttachedForTests(...)` for harness paths.
+- Unused convenience constructors were removed, and raw construction/attach now sit behind `TaskPaneManager.RuntimeBootstrapAccess` instead of remaining general internal seams.
+- Test and snapshot ergonomics remain supported through explicit harness entrypoints that preserve the same build/attach order as production.
 
-### Side Effect Isolation（副作用の隔離）
+## B1.3 Status (2026-05-06)
 
-- 状態変更、キャッシュ更新、通知は明確な副作用境界に閉じる。
-- これらを event 境界や window 解決ロジックと混在させない。
+- `RuntimeBootstrapAccess` is documented and scoped as a bootstrap-only bridge to private manager construction and private attach.
+- The compose input is split into entry-time and graph-compose-time contexts so the graph factory no longer receives manager-construction-only dependencies.
+- `TaskPaneManagerRuntimeGraph` remains a passive bundle and still does not own runtime state, lifecycle, or orchestration.
 
-### Incremental Refactoring（段階的分離）
+## B2 Prep Status: VSTO Boundary Inventory (2026-05-06)
 
-- 1回の変更では 1 責務だけを切り出す。
-- 常に振る舞い不変を最優先とする。
+### Current owner map
+
+| Concern | Current owner | Runtime state owner | Notes |
+| --- | --- | --- | --- |
+| pane creation request | `TaskPaneHostRegistry` -> `TaskPaneHostFactory` -> `TaskPaneHost` | `_hostsByWindowKey` is still owned by `TaskPaneManager`; `CustomTaskPane` instance is owned by `TaskPaneHost` | `TaskPaneHostRegistry.GetOrReplaceHost(...)` decides reuse vs replace, then `TaskPaneHostFactory.CreateHost(...)` constructs the host. |
+| VSTO `CustomTaskPane` create | `ThisAddIn.CreateTaskPane(...)` | `TaskPaneHost` | `TaskPaneHost` constructor calls into `ThisAddIn` immediately, so registry/factory cleanup and VSTO create timing are coupled today. |
+| pane remove request | `TaskPaneHostRegistry.RemoveHost(...)` / `RemoveWorkbookPanes(...)` / `DisposeAll()` | `_hostsByWindowKey` is still owned by `TaskPaneManager`; `CustomTaskPane` instance is still owned by `TaskPaneHost` until dispose | Remove paths are orchestrated by registry and lifecycle service, but the actual VSTO remove is still delegated to `TaskPaneHost.Dispose()`. |
+| VSTO `CustomTaskPane` remove | `ThisAddIn.RemoveTaskPane(...)` via `TaskPaneHost.Dispose()` | `TaskPaneHost` | Current-state remove order is `Hide()` -> `RemoveTaskPane(...)` -> null out `_pane`. |
+| host existence state | `TaskPaneManager` | `TaskPaneManager` | `_hostsByWindowKey` remains the shared state holder and should not move during VSTO boundary work. |
+| control creation | `TaskPaneHostFactory` | control instance lives under `TaskPaneHost` / WinForms control tree | Kernel, Accounting, and Case controls are all created here. |
+| `ActionInvoked` binding | `TaskPaneHostFactory` | bound handler lifetime is implicit in control / host lifetime | Factory wires `windowKey`-capturing handlers inline during control creation. |
+| event unbinding | implicit dispose path only | implicit in control / pane teardown | There is no explicit unbinding owner today; this is one reason create/remove and binding should not be split casually. |
+| host metadata storage | `TaskPaneHost` | `TaskPaneHost` | `WorkbookFullName` and `LastRenderSignature` live on the host, but write timing is owned elsewhere. |
+| host metadata write timing | `TaskPaneManager.RenderHost(...)` and `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)` | `TaskPaneHost` | `WorkbookFullName` is written before role render, and `LastRenderSignature` is written after refresh-time render evaluation succeeds. |
+| visible pane / early-complete evaluation | `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` | reads `TaskPaneHost.WorkbookFullName`, `TaskPaneHost.IsVisible`, `windowKey` | This is the direct dependency point for ready-show early-complete. |
+| ready-show retry touchpoint | `WorkbookTaskPaneReadyShowAttemptWorker` | external retry state is outside the host map | The worker does not own host state, but it depends on the display coordinator result staying semantically stable. |
+| foreground recovery touchpoint | `TaskPaneRefreshCoordinator` / `ExcelWindowRecoveryService` | outside host map | Foreground recovery is downstream UX stabilization and should not be bundled with host creation cleanup. |
+
+### Why `_hostsByWindowKey` should not move yet
+
+- Host create, replace, remove, hide, reuse, stale cleanup, visible-pane lookup, and action-target resolution all still observe the same map.
+- Moving the map owner now would mix a state-owner refactor with VSTO create/remove timing, which would make regressions hard to localize.
+- Ready-show early-complete currently depends on `windowKey` lookup plus host metadata plus visibility state; that chain should stay stable while the VSTO boundary is only being inventoried.
+
+### Risk classification
+
+| Category | Scope | Why |
+| --- | --- | --- |
+| `Safe documentation only` | owner map, metadata timing map, create/remove call chain, early-complete touchpoint map | These are fact-finding updates with no runtime impact. |
+| `Safe naming/comment cleanup` | comments around `TaskPaneHostFactory`, `TaskPaneHost`, `ThisAddIn.CreateTaskPane(...)`, `RemoveTaskPane(...)` | Safe only if limited to intent clarification and no behavior change. |
+| `Low-risk extraction` | none recommended yet beyond doc-backed helper naming | Even small code moves are likely to cross control binding and dispose timing. |
+| `Runtime-sensitive` | `TaskPaneHostRegistry` replace/create/remove chain, `TaskPaneHostFactory` binding path, host metadata write timing | Create/remove and event binding are coupled to actual pane existence and render reuse. |
+| `UX-sensitive` | `TaskPaneDisplayCoordinator` show/hide behavior, post-action display re-entry | User-visible pane behavior can regress even if state ownership stays unchanged. |
+| `Visibility-sensitive` | `TaskPaneHost.IsVisible`, visible pane early-complete, display coordinator visibility checks | Any timing drift here can cause duplicate refresh or hidden pane failures. |
+| `WorkbookOpen-sensitive` | host availability timing observed from `WorkbookOpen` downstream flows | `WorkbookOpen` itself is not the owner, but downstream window-safe timing is sensitive to host existence. |
+| `VSTO lifecycle-sensitive` | `ThisAddIn.CreateTaskPane(...)`, `RemoveTaskPane(...)`, `TaskPaneHost.Dispose()` | These are the real COM/VSTO create-remove boundaries. |
+| `Do not touch yet` | ready-show retry, protection-ready-show, foreground recovery, `_hostsByWindowKey` owner move, event unbinding behavior changes | These combine VSTO timing with existing UX stabilization logic and should stay frozen during the next boundary cut. |
+
+### Next safe unit
+
+- Keep the next implementation phase narrower than "VSTO boundary redesign".
+- The safest next unit is an owner-preserving inventory-backed cleanup that isolates only the create/remove adapter story:
+  - document `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)` as the VSTO adapter boundary,
+  - document `TaskPaneHost` as the wrapper that owns the concrete `CustomTaskPane` instance lifetime,
+  - document `TaskPaneHostFactory` as the control creation and event binding owner,
+  - document `TaskPaneHostRegistry` as the replace/register/remove orchestration owner.
+- Do not combine create/remove cleanup with event unbinding changes, metadata timing changes, ready-show retry changes, or foreground recovery changes in the same implementation step.
+
+## B2.1 Status: VSTO Adapter Boundary Clarification (2026-05-06)
+
+- Code comments now mirror the current owner map at the actual code seams:
+  - `ThisAddIn` marks concrete VSTO create/remove.
+  - `TaskPaneHost` marks concrete pane lifetime ownership.
+  - `TaskPaneHostFactory` marks control creation and `ActionInvoked` binding ownership.
+  - `TaskPaneHostRegistry` marks replace/register/remove orchestration over the shared map.
+- Event unbinding is still not given an explicit owner. The code now treats that as a documented current-state ambiguity, not as something silently "fixed".
+- This clarification phase does not move `_hostsByWindowKey`, change metadata timing, or alter ready-show / retry / visibility / foreground behavior.
+
+## B2.2 Status: Host Factory Compose Owner Shift (2026-05-06)
+
+- `TaskPaneHostRegistry` constructor no longer composes `TaskPaneHostFactory`.
+- `TaskPaneHostFactory` compose owner moved outward to `TaskPaneManagerRuntimeGraphFactory.Compose(...)`, so the registry now receives a composed factory and stays focused on replace/register/remove orchestration.
+- `TaskPaneHostFactory` still owns control creation and `ActionInvoked` binding behavior exactly as before.
+- `TaskPaneHost`, `ThisAddIn.CreateTaskPane(...)`, `RemoveTaskPane(...)`, `_hostsByWindowKey`, metadata timing, ready-show / retry / visibility / foreground, and `WorkbookOpen` downstream behavior remain unchanged.
+
+## B2.3 Status: Registry Logging and Metadata Mini Inventory (2026-05-06)
+
+### Constructor surface
+
+| Dependency | Current owner | Why registry sees it | Risk |
+| --- | --- | --- | --- |
+| `Dictionary<string, TaskPaneHost>` | `TaskPaneManager` | registry orchestrates replace/register/remove against the shared host map | `Runtime-sensitive` |
+| `Logger` | registry log emission timing is owned by `TaskPaneHostRegistry` | registry logs registration and remove-host timing itself | `Safe docs/comment only` |
+| `Func<TaskPaneHost, string> formatHostDescriptor` | descriptor source owner is `TaskPaneManager.FormatHostDescriptor(...)` -> `TaskPaneManagerDiagnosticHelper` | registry needs a host descriptor only for remove-host trace output | `Metadata-timing-sensitive` |
+| `TaskPaneHostFactory` | compose owner is `TaskPaneManagerRuntimeGraphFactory.Compose(...)` | registry needs a composed factory to create a replacement host after decision-making | `Runtime-sensitive` |
+
+### Mini inventory
+
+| Concern | Current owner | What registry does today | Risk |
+| --- | --- | --- | --- |
+| logging owner | `TaskPaneHostRegistry` for `TaskPane host registered...` and `action=remove-host`; `TaskPaneHostFactory` for `action=create-host` | registry owns log timing for register/remove, but not descriptor construction | `Safe docs/comment only` |
+| descriptor source owner | `TaskPaneManager.FormatHostDescriptor(...)` -> `TaskPaneManagerDiagnosticHelper.FormatHostDescriptor(...)` | registry receives a formatter and does not build host identity strings itself | `Metadata-timing-sensitive` |
+| metadata write timing owner | `TaskPaneManager.RenderHost(...)` for `WorkbookFullName`; `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)` and `TaskPaneActionDispatcher.RefreshCaseHostAfterAction(...)` for `LastRenderSignature`; `TaskPaneDisplayCoordinator` invalidates `LastRenderSignature` for forced refresh | registry does not write host metadata | `Metadata-timing-sensitive` |
+| metadata read timing owner | `TaskPaneHostRegistry.CollectWindowKeysForWorkbook(...)` reads `WorkbookFullName`; `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` reads `WorkbookFullName` and `IsVisible`; `TaskPaneRenderStateEvaluator` reads `WorkbookFullName` and `LastRenderSignature` | registry only reads `WorkbookFullName` for workbook-scope remove selection | `Metadata-timing-sensitive` |
+| host identity owner | upstream `SafeGetWindowKey(...)` / `TaskPaneHost.WindowKey` and control type on the host | registry keys by `windowKey` and treats control type compatibility as role identity | `Runtime-sensitive` |
+| replace/remove decision owner | `TaskPaneHostRegistry` | `TryGetReusableHost(...)`, `IsHostCompatibleWithRole(...)`, `RemoveExistingHostForReplacement(...)`, `RemoveHost(...)`, `CollectWindowKeysForWorkbook(...)` | `Runtime-sensitive` |
+| visible pane early-complete touchpoint | direct owner is `TaskPaneDisplayCoordinator` / `WorkbookTaskPaneReadyShowAttemptWorker` | registry is only an indirect prerequisite through host-map contents and `WorkbookFullName` retention | `Visibility-sensitive` |
+| WorkbookOpen downstream touchpoint | direct owners are `TaskPaneRefreshOrchestrationService` / `TaskPaneRefreshCoordinator` / `TaskPaneHostFlowService` | registry is reached indirectly via `TaskPaneHostLifecycleService.GetOrReplaceHost(...)` after downstream refresh dispatch, and via lifecycle cleanup through `RemoveWorkbookPanes(...)` | `WorkbookOpen-sensitive` |
+| retry / foreground touchpoint | direct owners are ready-show worker, display coordinator, and foreground recovery services | registry has no direct retry/foreground logic; it is reached only if downstream flows create/remove hosts or remove a failed host | `Do not touch yet` |
+
+### Current-state notes
+
+- `TaskPaneHostRegistry` does not read `LastRenderSignature` or `IsVisible`.
+- `TaskPaneHostRegistry` does read `WorkbookFullName`, so it is already adjacent to metadata timing even though it does not own metadata writes.
+- `FormatHostDescriptor(...)` includes `windowKey`, pane role, `WorkbookFullName`, and window descriptor. That makes descriptor logs diagnostic-only in intent, but metadata-adjacent in content.
+- The remove-host trace is emitted before the host is removed from the map, so it still sees the current host descriptor state at removal time.
+
+### Risk classification
+
+| Category | Scope | Why |
+| --- | --- | --- |
+| `Safe docs/comment only` | constructor-surface inventory, logging owner map, metadata touchpoint map | Fact-finding only. |
+| `Safe naming clarification` | clarifying that `formatHostDescriptor` is a diagnostic dependency, not an identity owner | Safe only if behavior and logging timing stay unchanged. |
+| `Runtime-sensitive` | `windowKey` reuse logic, control-type compatibility, replace/remove orchestration | These directly affect which host instance survives. |
+| `Metadata-timing-sensitive` | `WorkbookFullName` reads in registry, descriptor content, `LastRenderSignature` adjacency in neighboring services | These couple diagnostics and workbook-scope remove behavior to upstream write timing. |
+| `Visibility-sensitive` | indirect dependency on visible-pane early-complete through map contents and host metadata | Changing registry timing can alter the preconditions observed by visibility logic. |
+| `WorkbookOpen-sensitive` | indirect host creation/removal after downstream refresh dispatch | `WorkbookOpen` itself does not call registry directly, but downstream refresh host availability depends on it. |
+| `Do not touch yet` | logging timing, metadata write timing, visible-pane early-complete prerequisites, retry/foreground-adjacent host removal timing | These sit too close to current UX stabilization logic. |
+
+### Next safe unit
+
+- The next safe unit is still not a behavior change.
+- If we clarify code further, the narrowest safe step is to document or lightly name the registry's descriptor formatter dependency as a diagnostic-only input without changing:
+  - when logs are emitted,
+  - what metadata is written,
+  - how replace/remove is decided,
+  - or how visible pane early-complete sees the host map.
+
+## B2.4 Status: Diagnostic-only Descriptor Dependency Clarification (2026-05-06)
+
+- `TaskPaneHostRegistry` now names its formatter dependency as a diagnostic-only input instead of a generic host-descriptor dependency.
+- The clarified intent is:
+  - registry consumes descriptor output only for logging,
+  - registry does not become a host identity owner through that dependency,
+  - registry does not become a metadata timing owner through that dependency,
+  - replace/remove behavior does not consult descriptor output.
+- Descriptor content, descriptor creation timing, registration/remove log timing, metadata read/write timing, and all runtime behavior remain unchanged.
+
+## B2.5 Status: Registry Registration/Remove Logging Inventory (2026-05-06)
+
+### Ownership and timing map
+
+| Concern | Current owner | Current-state timing / touchpoint | Risk |
+| --- | --- | --- | --- |
+| registration logging timing | `TaskPaneHostRegistry` | emitted after `TaskPaneHostFactory.CreateHost(...)` returns and after `_hostsByWindowKey.Add(windowKey, host)` completes | `Runtime-sensitive` |
+| remove logging timing | `TaskPaneHostRegistry` | emitted in `RemoveHost(...)` before `_hostsByWindowKey.Remove(windowKey)` and before host dispose completes | `Runtime-sensitive` |
+| create-host logging timing | `TaskPaneHostFactory` | emitted during concrete host creation path, outside registry-owned register/remove logging | `Safe docs/comment only` |
+| descriptor input source | `TaskPaneManager.FormatHostDescriptor(...)` -> `TaskPaneManagerDiagnosticHelper` | registry consumes upstream formatter output only at remove-host log time | `Diagnostic-only` |
+| descriptor consume timing | `TaskPaneHostRegistry.LogHostRemoval(...)` | formatter reads the host while it is still in the shared map and before teardown nulls the VSTO pane | `Metadata-timing-sensitive` |
+| metadata read timing | `TaskPaneHostRegistry.CollectWindowKeysForWorkbook(...)` | registry reads `WorkbookFullName` only for workbook-scope remove selection | `Metadata consumer` |
+| replace/remove decision relation | `TaskPaneHostRegistry` | reuse / compatibility / replacement decisions are based on `windowKey`, control type, and workbook-scope selection, not descriptor output | `Orchestration-only` |
+| visible pane early-complete indirect dependency | `TaskPaneDisplayCoordinator` / `WorkbookTaskPaneReadyShowAttemptWorker` | early-complete observes host-map contents plus `WorkbookFullName` and `IsVisible`; registry logging shares the same host state at removal time | `Visibility-sensitive` |
+| WorkbookOpen downstream indirect dependency | refresh/lifecycle coordinators downstream of `WorkbookOpen` | registry register/remove timing affects when downstream flows can observe a host, even though `WorkbookOpen` is not the direct caller | `WorkbookOpen-sensitive` |
+| retry / foreground indirect dependency | ready-show worker / display coordinator / foreground recovery services | registry has no direct retry or foreground ownership, but host removal timing can still be observed downstream | `Do not touch yet` |
+
+### Current-state clarifications
+
+- `TaskPaneHostRegistry` is a diagnostic consumer, not a descriptor source owner.
+- `TaskPaneHostRegistry` is a metadata consumer for `WorkbookFullName` only; it is not a metadata owner and does not write `WorkbookFullName`, `LastRenderSignature`, or `IsVisible`.
+- registration logging is orchestration-adjacent because it happens after the host has been inserted into the shared map.
+- remove logging is metadata-timing-adjacent because it formats the host before removal from the shared map and before dispose completes.
+- descriptor output is not consulted for reuse, compatibility, replacement, or workbook-scope remove decisions.
+
+### Risk classification
+
+| Category | Scope | Why |
+| --- | --- | --- |
+| `Diagnostic-only` | formatter dependency and remove-host descriptor output | The dependency exists only to describe host state for logs. |
+| `Orchestration-only` | register/remove log emission timing inside registry | Registry owns when these logs are emitted, alongside register/remove orchestration. |
+| `Metadata consumer` | `WorkbookFullName` read for workbook-scope remove selection | Registry consumes metadata but does not own write timing. |
+| `Metadata owner ではない` | `WorkbookFullName`, `LastRenderSignature`, `IsVisible` writes | Those writes are owned upstream and downstream of registry. |
+| `Runtime-sensitive` | registration/remove timing around map insertion/removal | Moving log timing casually could hide or reorder state transitions around host existence. |
+| `Metadata-timing-sensitive` | remove-host descriptor formatting and workbook-scope metadata read | Both are adjacent to the timing of `WorkbookFullName` retention and teardown. |
+| `Visibility-sensitive` | indirect dependency with visible pane early-complete | Shared host-map contents and metadata are observed by visibility logic. |
+| `WorkbookOpen-sensitive` | indirect dependency through downstream host availability | Downstream refresh/lifecycle flows rely on stable host register/remove timing. |
+| `Do not touch yet` | retry / foreground-adjacent removal timing and any log cleanup that reorders register/remove | These sit too close to current UX stabilization logic. |
+
+### Next safe unit
+
+- The next safe unit remains clarification-only unless a later phase explicitly accepts runtime-sensitive work.
+- If code comments are added later, keep them limited to:
+  - registration/remove logging as registry-owned orchestration timing,
+  - descriptor formatting as diagnostic-only input,
+  - metadata reads as consumer-only touchpoints.
+- Do not combine logging cleanup with metadata timing changes, host identity changes, visible pane early-complete changes, or `WorkbookOpen` downstream behavior changes.
+
+## B2 Checkpoint Status (2026-05-06)
+
+### Final owner map at the end of B2
+
+| Component | Current responsibility at checkpoint | Notes |
+| --- | --- | --- |
+| `TaskPaneManagerRuntimeBootstrap` | runtime entry + attach-order owner | runtime graph knowledge is localized here |
+| `TaskPaneManagerRuntimeGraphFactory` | passive graph builder + compose owner | does not own runtime state or orchestration |
+| `TaskPaneManager` | facade/orchestration boundary + `_hostsByWindowKey` owner | state owner intentionally not moved |
+| `TaskPaneHostRegistry` | replace/register/remove orchestration + registration/remove logging timing | consumes diagnostics and metadata, but does not own them |
+| `TaskPaneHostFactory` | control creation + `ActionInvoked` binding + create-host logging timing | role unchanged through B2 |
+| `TaskPaneHost` | concrete `CustomTaskPane` lifetime holder | current remove path stays `Hide -> RemoveTaskPane -> teardown` |
+| `ThisAddIn` | VSTO adapter boundary | concrete create/remove entrypoint remains here |
+
+### Runtime-sensitive and metadata-sensitive boundary
+
+| Boundary | Why it is sensitive | B2 treatment |
+| --- | --- | --- |
+| host-map existence timing | observed by reuse, remove, refresh, and visible-pane checks | frozen |
+| metadata timing | `WorkbookFullName`, `LastRenderSignature`, `IsVisible` participate in downstream decisions | frozen |
+| remove timing | logging, map removal, and dispose are tightly adjacent | frozen |
+| visible pane early-complete | depends on map contents, `WorkbookFullName`, and `IsVisible` | frozen |
+| `WorkbookOpen` downstream host availability | host creation/removal is observed after downstream refresh/lifecycle dispatch | frozen |
+| ready-show / retry / foreground | downstream UX stabilization depends on stable host state and visibility semantics | frozen |
+| event unbinding behavior | still implicit in dispose-driven teardown | frozen as debt |
+
+### Do not touch yet
+
+- `_hostsByWindowKey` ownership move
+- `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)` timing cleanup
+- `TaskPaneHost.Dispose()` behavior cleanup
+- metadata timing cleanup
+- registration/remove logging reordering
+- visible pane early-complete cleanup
+- `WorkbookOpen` / `WindowActivate` downstream cleanup
+- ready-show / retry / foreground cleanup
+- event unbinding redesign
+
+### Runtime surgery warning
+
+- B2 ended at the point where owner maps are explicit but runtime-sensitive timings are still shared across multiple layers.
+- The next phase should be treated as runtime surgery because even "small" cleanups can change:
+  - which host exists at a given point,
+  - which metadata is still readable at log / remove time,
+  - whether visible-pane early-complete short-circuits,
+  - whether downstream `WorkbookOpen` refresh sees a host.
+- Any later implementation phase should name one sensitive boundary up front and keep the others frozen.

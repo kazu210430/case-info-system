@@ -7,11 +7,20 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    internal interface IKernelUserDataReflectionService
+    {
+        void ReflectAll(WorkbookContext context);
+
+        void ReflectToAccountingSetOnly(WorkbookContext context);
+
+        void ReflectToBaseHomeOnly(WorkbookContext context);
+    }
+
     /// <summary>
     /// Kernel のユーザー情報を Base HOME と会計セットへ反映するサービス。
     /// shUserData の値を読み取り、転記先ブックへ静かに書き戻す。
     /// </summary>
-    internal sealed class KernelUserDataReflectionService
+    internal sealed class KernelUserDataReflectionService : IKernelUserDataReflectionService
     {
         private const string CaseHomeSheetCodeName = "shHOME";
         private const string CaseHomeSheetName = "ホーム";
@@ -65,6 +74,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 });
         }
 
+        void IKernelUserDataReflectionService.ReflectAll(WorkbookContext context)
+        {
+            ReflectAll(context);
+        }
+
         internal void ReflectToAccountingSetOnly(WorkbookContext context)
         {
             ExecuteReflection(
@@ -76,6 +90,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 });
         }
 
+        void IKernelUserDataReflectionService.ReflectToAccountingSetOnly(WorkbookContext context)
+        {
+            ReflectToAccountingSetOnly(context);
+        }
+
         internal void ReflectToBaseHomeOnly(WorkbookContext context)
         {
             ExecuteReflection(
@@ -85,6 +104,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     ReflectToBaseHome(systemRoot, kernelWorkbook, userDataWorksheet, snapshot);
                     _logger.Info("Kernel user data reflected to base home.");
                 });
+        }
+
+        void IKernelUserDataReflectionService.ReflectToBaseHomeOnly(WorkbookContext context)
+        {
+            ReflectToBaseHomeOnly(context);
         }
 
         private void ReflectToBaseHome(string systemRoot, Excel.Workbook kernelWorkbook, Excel.Worksheet userDataWorksheet, UserDataSnapshot snapshot)

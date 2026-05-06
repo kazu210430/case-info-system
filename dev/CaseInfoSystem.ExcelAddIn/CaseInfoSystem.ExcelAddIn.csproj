@@ -222,6 +222,7 @@
     <Compile Include="App\KernelNameRuleReader.cs" />
     <Compile Include="App\KernelTemplateSyncPreflightService.cs" />
     <Compile Include="App\KernelTemplateSyncService.cs" />
+    <Compile Include="App\KernelUserDataRegistrationExecutionService.cs" />
     <Compile Include="App\KernelUserDataReflectionService.cs" />
     <Compile Include="App\KernelWorkbookLifecycleService.cs" />
     <Compile Include="App\KernelCommandService.cs" />
@@ -363,6 +364,7 @@
     <Compile Include="Infrastructure\CreatedCasePresentationWaitService.cs" />
     <Compile Include="Infrastructure\AccountingSetPresentationWaitService.cs" />
     <Compile Include="Infrastructure\DocumentPresentationWaitService.cs" />
+    <Compile Include="Infrastructure\KernelUserDataRegistrationWaitService.cs" />
     <Compile Include="Infrastructure\UserErrorService.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotParser.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" />
@@ -451,6 +453,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\DocumentPresentationWaitForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\KernelUserDataRegistrationWaitForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\CompletionNoticeForm.cs">

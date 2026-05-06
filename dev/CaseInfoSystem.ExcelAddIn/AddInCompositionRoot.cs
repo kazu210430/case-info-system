@@ -257,6 +257,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var caseWorkbookOpenStrategy = new CaseWorkbookOpenStrategy(_application, WorkbookRoleResolver, _logger);
             CaseWorkbookOpenStrategy = caseWorkbookOpenStrategy;
             var createdCasePresentationWaitService = new CreatedCasePresentationWaitService(_logger);
+            var kernelUserDataRegistrationWaitService = new KernelUserDataRegistrationWaitService(_logger);
             var casePaneHostBridge = new ThisAddInCasePaneHostBridge(_addIn);
             var kernelCasePresentationService = new KernelCasePresentationService(_application, caseWorkbookOpenStrategy, ExcelInteropService, excelWindowRecoveryService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, folderWindowService, createdCasePresentationWaitService, transientPaneSuppressionService, casePaneHostBridge, workbookWindowVisibilityService, _logger);
             var kernelCaseCreationService = new KernelCaseCreationService(KernelWorkbookService, kernelCasePathService, caseWorkbookInitializer, caseWorkbookOpenStrategy, transientPaneSuppressionService, caseWorkbookLifecycleService, ExcelInteropService, _logger);
@@ -269,6 +270,10 @@ namespace CaseInfoSystem.ExcelAddIn
                 pathCompatibilityService,
                 new UserDataBaseMappingRepository(ExcelInteropService),
                 _logger);
+            var kernelUserDataRegistrationExecutionService = new KernelUserDataRegistrationExecutionService(
+                KernelUserDataReflectionService,
+                kernelUserDataRegistrationWaitService,
+                _logger);
             var kernelTemplateSyncService = new KernelTemplateSyncService(
                 _application,
                 KernelWorkbookService,
@@ -280,7 +285,13 @@ namespace CaseInfoSystem.ExcelAddIn
                 masterTemplateCatalogService,
                     caseWorkbookLifecycleService,
                     _logger);
-            var kernelCommandService = new KernelCommandService(KernelWorkbookService, KernelUserDataReflectionService, kernelTemplateSyncService, _showKernelHomeFromKernelCommand, _logger);
+            var kernelCommandService = new KernelCommandService(
+                KernelWorkbookService,
+                KernelUserDataReflectionService,
+                kernelUserDataRegistrationExecutionService,
+                kernelTemplateSyncService,
+                _showKernelHomeFromKernelCommand,
+                _logger);
             var kernelSheetCommandTriggerService = new KernelSheetCommandTriggerService(
                 kernelCommandService,
                 KernelWorkbookService,

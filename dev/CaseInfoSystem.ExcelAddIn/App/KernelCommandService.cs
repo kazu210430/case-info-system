@@ -16,7 +16,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly KernelWorkbookService _kernelWorkbookService;
 
-		private readonly KernelUserDataReflectionService _kernelUserDataReflectionService;
+		private readonly IKernelUserDataReflectionService _kernelUserDataReflectionService;
+
+		private readonly KernelUserDataRegistrationExecutionService _kernelUserDataRegistrationExecutionService;
 
 		private readonly KernelTemplateSyncService _kernelTemplateSyncService;
 
@@ -24,10 +26,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly Logger _logger;
 
-		internal KernelCommandService (KernelWorkbookService kernelWorkbookService, KernelUserDataReflectionService kernelUserDataReflectionService, KernelTemplateSyncService kernelTemplateSyncService, Action showKernelHomeAction, Logger logger)
+		internal KernelCommandService (
+			KernelWorkbookService kernelWorkbookService,
+			IKernelUserDataReflectionService kernelUserDataReflectionService,
+			KernelUserDataRegistrationExecutionService kernelUserDataRegistrationExecutionService,
+			KernelTemplateSyncService kernelTemplateSyncService,
+			Action showKernelHomeAction,
+			Logger logger)
 		{
 			_kernelWorkbookService = kernelWorkbookService ?? throw new ArgumentNullException ("kernelWorkbookService");
 			_kernelUserDataReflectionService = kernelUserDataReflectionService ?? throw new ArgumentNullException ("kernelUserDataReflectionService");
+			_kernelUserDataRegistrationExecutionService = kernelUserDataRegistrationExecutionService ?? throw new ArgumentNullException ("kernelUserDataRegistrationExecutionService");
 			_kernelTemplateSyncService = kernelTemplateSyncService ?? throw new ArgumentNullException ("kernelTemplateSyncService");
 			_showKernelHomeAction = showKernelHomeAction ?? throw new ArgumentNullException ("showKernelHomeAction");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
@@ -102,7 +111,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private void ExecuteRegisterUserInfo (WorkbookContext context)
 		{
 			try {
-				_kernelUserDataReflectionService.ReflectAll (context);
+				_kernelUserDataRegistrationExecutionService.Execute (context);
 				UserErrorService.ShowOkNotification ("ユーザー情報を反映しました", "案件情報System", MessageBoxIcon.Asterisk);
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteRegisterUserInfo failed.", exception);

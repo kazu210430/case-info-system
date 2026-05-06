@@ -79,6 +79,7 @@
     <Compile Include="AccountingNumericCellReaderTests.cs" />
     <Compile Include="AccountingSetCreateServiceTests.cs" />
     <Compile Include="AccountingSetKernelSyncServiceTests.cs" />
+    <Compile Include="KernelUserDataRegistrationExecutionServiceTests.cs" />
     <Compile Include="KernelUserDataReflectionServiceTests.cs" />
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
     <Compile Include="ContentControlBatchReplaceServiceTests.cs" />
@@ -91,6 +92,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetKernelSyncService.cs" Link="Source\App\AccountingSetKernelSyncService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelUserDataRegistrationExecutionService.cs" Link="Source\App\KernelUserDataRegistrationExecutionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelUserDataReflectionService.cs" Link="Source\App\KernelUserDataReflectionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationService.cs" Link="Source\App\CasePaneCacheRefreshNotificationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneCacheRefreshNotificationPolicy.cs" Link="Source\App\CasePaneCacheRefreshNotificationPolicy.cs" />

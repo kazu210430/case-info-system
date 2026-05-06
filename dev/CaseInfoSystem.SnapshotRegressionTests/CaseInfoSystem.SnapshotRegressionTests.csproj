@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="DocumentExecutionEligibilityServiceTests.cs" />
     <Compile Include="DocumentTemplateLookupServiceTests.cs" />
     <Compile Include="SnapshotOutputRegressionTests.cs" />
     <Compile Include="TaskPaneSnapshotChunkHelperTests.cs" />
@@ -34,8 +35,11 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\IDocumentTemplateLookupReader.cs" Link="Source\App\IDocumentTemplateLookupReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs" Link="Source\App\DocumentNamePromptService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionEligibilityService.cs" Link="Source\App\DocumentExecutionEligibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs" Link="Source\App\DocumentTemplateLookupService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateResolver.cs" Link="Source\App\DocumentTemplateResolver.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\CaseContext.cs" Link="Source\Domain\CaseContext.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentExecutionEligibility.cs" Link="Source\Domain\DocumentExecutionEligibility.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateLookupResult.cs" Link="Source\Domain\DocumentTemplateLookupResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateResolutionSource.cs" Link="Source\Domain\DocumentTemplateResolutionSource.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateSpec.cs" Link="Source\Domain\DocumentTemplateSpec.cs" />

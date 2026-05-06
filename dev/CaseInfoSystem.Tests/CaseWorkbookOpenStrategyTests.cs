@@ -16,7 +16,8 @@ namespace CaseInfoSystem.Tests
     [Collection("CaseWorkbookOpenStrategy")]
     public class CaseWorkbookOpenStrategyTests
     {
-        private const string SharedHiddenExcelEnvironmentVariableName = "CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL";
+        private const string DedicatedHiddenInnerSaveEnvironmentVariableName = "CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE";
+        private const string LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName = "CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL";
         private const string HiddenApplicationCacheEnvironmentVariableName = "CASEINFO_EXPERIMENT_HIDDEN_APP_CACHE";
         private const string HiddenApplicationCacheIdleSecondsEnvironmentVariableName = "CASEINFO_EXPERIMENT_HIDDEN_APP_CACHE_IDLE_SECONDS";
 
@@ -47,11 +48,11 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void OpenHiddenWorkbook_UsesSharedRoute_WhenSharedHiddenExcelFlagIsEnabled()
+        public void OpenHiddenWorkbook_UsesIsolatedInnerSaveRoute_WhenDedicatedHiddenInnerSaveFlagIsEnabled()
         {
             using (new HiddenRouteEnvironmentScope())
             {
-                Environment.SetEnvironmentVariable(SharedHiddenExcelEnvironmentVariableName, "1");
+                Environment.SetEnvironmentVariable(DedicatedHiddenInnerSaveEnvironmentVariableName, "1");
                 var logs = new List<string>();
                 var releasedObjects = new List<object>();
                 Excel.Application hiddenApplication = CreateHiddenApplication();
@@ -60,7 +61,7 @@ namespace CaseInfoSystem.Tests
                 CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession session = strategy.OpenHiddenWorkbook(@"C:\Cases\shared.xlsx");
                 Excel.Workbook workbook = session.Workbook;
 
-                Assert.Equal("experimental-shared", session.RouteName);
+                Assert.Equal("experimental-isolated-inner-save", session.RouteName);
 
                 session.Close();
 
@@ -69,6 +70,25 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.Contains(workbook, releasedObjects);
                 Assert.Contains(hiddenApplication, releasedObjects);
+            }
+        }
+
+        [Fact]
+        public void OpenHiddenWorkbook_UsesIsolatedInnerSaveRoute_WhenLegacyAliasFlagIsEnabled()
+        {
+            using (new HiddenRouteEnvironmentScope())
+            {
+                Environment.SetEnvironmentVariable(LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName, "1");
+                var logs = new List<string>();
+                var releasedObjects = new List<object>();
+                Excel.Application hiddenApplication = CreateHiddenApplication();
+                var strategy = CreateStrategy(logs, releasedObjects, hiddenApplication);
+
+                CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession session = strategy.OpenHiddenWorkbook(@"C:\Cases\legacy-alias.xlsx");
+
+                Assert.Equal("experimental-isolated-inner-save", session.RouteName);
+
+                session.Close();
             }
         }
 
@@ -295,16 +315,19 @@ namespace CaseInfoSystem.Tests
 
         private sealed class HiddenRouteEnvironmentScope : IDisposable
         {
-            private readonly string _sharedHiddenExcel;
+            private readonly string _dedicatedHiddenInnerSave;
+            private readonly string _legacyDedicatedHiddenInnerSaveAlias;
             private readonly string _hiddenApplicationCache;
             private readonly string _hiddenApplicationCacheIdleSeconds;
 
             internal HiddenRouteEnvironmentScope()
             {
-                _sharedHiddenExcel = Environment.GetEnvironmentVariable(SharedHiddenExcelEnvironmentVariableName);
+                _dedicatedHiddenInnerSave = Environment.GetEnvironmentVariable(DedicatedHiddenInnerSaveEnvironmentVariableName);
+                _legacyDedicatedHiddenInnerSaveAlias = Environment.GetEnvironmentVariable(LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName);
                 _hiddenApplicationCache = Environment.GetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName);
                 _hiddenApplicationCacheIdleSeconds = Environment.GetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName);
-                Environment.SetEnvironmentVariable(SharedHiddenExcelEnvironmentVariableName, null);
+                Environment.SetEnvironmentVariable(DedicatedHiddenInnerSaveEnvironmentVariableName, null);
+                Environment.SetEnvironmentVariable(LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName, null);
                 Environment.SetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName, null);
                 Environment.SetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName, null);
                 Excel.Application.ResetCreatedApplications();
@@ -312,7 +335,8 @@ namespace CaseInfoSystem.Tests
 
             public void Dispose()
             {
-                Environment.SetEnvironmentVariable(SharedHiddenExcelEnvironmentVariableName, _sharedHiddenExcel);
+                Environment.SetEnvironmentVariable(DedicatedHiddenInnerSaveEnvironmentVariableName, _dedicatedHiddenInnerSave);
+                Environment.SetEnvironmentVariable(LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName, _legacyDedicatedHiddenInnerSaveAlias);
                 Environment.SetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName, _hiddenApplicationCache);
                 Environment.SetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName, _hiddenApplicationCacheIdleSeconds);
                 Excel.Application.ResetCreatedApplications();

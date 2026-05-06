@@ -11,11 +11,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     /// <summary>
     internal sealed class CaseWorkbookOpenStrategy
     {
-        private const string SharedHiddenExcelEnvironmentVariableName = "CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL";
+        private const string DedicatedHiddenInnerSaveEnvironmentVariableName = "CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE";
+        private const string LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName = "CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL";
         private const string HiddenApplicationCacheEnvironmentVariableName = "CASEINFO_EXPERIMENT_HIDDEN_APP_CACHE";
         private const string HiddenApplicationCacheIdleSecondsEnvironmentVariableName = "CASEINFO_EXPERIMENT_HIDDEN_APP_CACHE_IDLE_SECONDS";
         private const string LegacyHiddenRouteName = "legacy-isolated";
-        private const string SharedHiddenRouteName = "experimental-shared";
+        private const string ExperimentalIsolatedInnerSaveRouteName = "experimental-isolated-inner-save";
         private const string CreatedCaseDisplayHiddenRouteName = "created-case-display";
         private const string HiddenApplicationCacheRouteName = "app-cache";
         private const string HiddenApplicationCacheBypassInUseRouteName = "app-cache-bypass-inuse";
@@ -112,14 +113,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return OpenHiddenWorkbookWithApplicationCache(caseWorkbookPath);
             }
 
-            if (!IsSharedHiddenExcelEnabled())
+            if (!IsDedicatedHiddenInnerSaveEnabled())
             {
                 _logger.Info("Case workbook hidden route selected. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + LegacyHiddenRouteName);
                 return OpenHiddenWorkbookWithDedicatedApplication(caseWorkbookPath);
             }
 
-            _logger.Info("Case workbook hidden route selected. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + SharedHiddenRouteName);
-            return OpenHiddenWorkbookWithSharedApplication(caseWorkbookPath);
+            _logger.Info("Case workbook hidden route selected. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + ExperimentalIsolatedInnerSaveRouteName);
+            return OpenHiddenWorkbookWithIsolatedInnerSave(caseWorkbookPath);
         }
 
         private HiddenCaseWorkbookSession OpenHiddenWorkbookWithApplicationCache(string caseWorkbookPath)
@@ -336,9 +337,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return OpenDedicatedHiddenWorkbookSession(caseWorkbookPath, LegacyHiddenRouteName, saveBeforeClose: false);
         }
 
-        private HiddenCaseWorkbookSession OpenHiddenWorkbookWithSharedApplication(string caseWorkbookPath)
+        private HiddenCaseWorkbookSession OpenHiddenWorkbookWithIsolatedInnerSave(string caseWorkbookPath)
         {
-            return OpenDedicatedHiddenWorkbookSession(caseWorkbookPath, SharedHiddenRouteName, saveBeforeClose: true);
+            return OpenDedicatedHiddenWorkbookSession(caseWorkbookPath, ExperimentalIsolatedInnerSaveRouteName, saveBeforeClose: true);
         }
 
         private HiddenCaseWorkbookSession OpenDedicatedHiddenWorkbookSession(string caseWorkbookPath, string routeName, bool saveBeforeClose)
@@ -382,9 +383,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private static bool IsSharedHiddenExcelEnabled()
+        private static bool IsDedicatedHiddenInnerSaveEnabled()
         {
-            string value = Environment.GetEnvironmentVariable(SharedHiddenExcelEnvironmentVariableName);
+            return IsEnabledEnvironmentVariable(DedicatedHiddenInnerSaveEnvironmentVariableName)
+                || IsEnabledEnvironmentVariable(LegacyDedicatedHiddenInnerSaveAliasEnvironmentVariableName);
+        }
+
+        private static bool IsEnabledEnvironmentVariable(string variableName)
+        {
+            string value = Environment.GetEnvironmentVariable(variableName);
             return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
         }

@@ -700,3 +700,121 @@
   - whether visible-pane early-complete short-circuits,
   - whether downstream `WorkbookOpen` refresh sees a host.
 - Any later implementation phase should name one sensitive boundary up front and keep the others frozen.
+
+## B2.7 Status: Metadata Timing Inventory (2026-05-07)
+
+### Scope
+
+- This is a docs-only current-state inventory for metadata timing before any runtime surgery.
+- The target boundary is limited to `TaskPaneHost.WorkbookFullName`, `TaskPaneHost.LastRenderSignature`, and the adjacent visible-pane observation inputs that are read with that metadata: `windowKey` and `TaskPaneHost.IsVisible`.
+- This section does not change metadata timing, create/remove timing, `WorkbookOpen` downstream behavior, ready-show / retry, visible pane early-complete, visibility retention, foreground recovery, event unbinding behavior, or `_hostsByWindowKey` ownership.
+
+### Metadata and adjacent runtime inputs
+
+| State / input | Current owner | Current write owner | Current readers | Notes |
+| --- | --- | --- | --- | --- |
+| `TaskPaneHost.WorkbookFullName` | `TaskPaneHost` | `TaskPaneManager.RenderHost(...)` | render-state checks, visible-pane check, workbook-scope remove selection, stale Kernel cleanup, action target resolution | current-state workbook identity join key for host-side decisions |
+| `TaskPaneHost.LastRenderSignature` | `TaskPaneHost` | `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)`, `TaskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(...)`, `TaskPaneActionDispatcher` fallback post-action rerender | render-state checks, display-request render-current checks, CASE host reuse without render | current-state render cache key for the host |
+| `TaskPaneHost.IsVisible` | concrete pane state below `TaskPaneHost` | no separate metadata write; computed from `_pane.Visible` at read time | `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` | not host metadata, but part of the same early-complete precondition |
+| `windowKey` | `_hostsByWindowKey` / `TaskPaneManager` | window-bound host registration path | visible-pane lookup, display-request lookup, remove/reuse lookup | not metadata, but the first lookup gate before metadata can be read |
+
+### Metadata write inventory
+
+| State | Current write owner | Current-state timing | Downstream dependency | Risk |
+| --- | --- | --- | --- | --- |
+| `WorkbookFullName` initial write | `TaskPaneManager.RenderHost(...)` | written at the start of render, before role-specific `RenderKernelHost(...)`, `RenderAccountingHost(...)`, or `RenderCaseHost(...)` | makes the host joinable to the current workbook before later visible-pane, remove-selection, and action-target reads | `Metadata-timing-sensitive` |
+| `LastRenderSignature` refresh-time write | `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)` | `TaskPaneRenderStateEvaluator.EvaluateRenderState(...)` runs first; if render is required, host render runs and the signature is written afterward | render-current checks and CASE host reuse depend on this write already having happened | `Metadata-timing-sensitive` |
+| `LastRenderSignature` forced-refresh invalidation | `TaskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(...)` | clears the signature before forced refresh / target-window rerender is attempted | forces later render-state evaluation to observe the host as stale | `Metadata-timing-sensitive` |
+| `LastRenderSignature` fallback post-action rewrite | `TaskPaneActionDispatcher` CASE post-action fallback path | when the fallback rerenders a CASE host locally, it rebuilds the signature after render and before `TryShowHost(...)` completes | keeps post-action refresh behavior aligned with later render-current checks even without a full add-in refresh round-trip | `Metadata-timing-sensitive` |
+| host metadata teardown | no field-level clear; host removal drops the whole host from `_hostsByWindowKey` | remove / replacement / failure cleanup stop future readers by removing the host, not by clearing `WorkbookFullName` or `LastRenderSignature` first | later consumers either still see the old host or do not see a host at all; there is no intermediate metadata-only cleanup phase | `Runtime-sensitive` |
+
+### Metadata read / consumer inventory
+
+| Consumer | What it reads | Current-state expectation | Why it matters |
+| --- | --- | --- | --- |
+| `TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(...)` | `windowKey`, `WorkbookFullName`, `LastRenderSignature` | display-request show/reuse decisions assume the host for that window is already bound to the same workbook and that a non-empty signature means "render-current" is testable | drives `PaneDisplayPolicy` decisions for show-existing vs rerender |
+| `TaskPaneRenderStateEvaluator.EvaluateRenderState(...)` | `LastRenderSignature` | refresh-time render skip assumes signature equality means the host is already current for the resolved `WorkbookContext` | direct render/no-render decision |
+| `TaskPaneHostFlowService.ShouldReuseCaseHostWithoutRender(...)` | `WorkbookFullName`, `LastRenderSignature` | CASE host reuse without render requires same workbook, non-empty signature, Case control type, and a reuse-allowed reason | moving either write changes reuse semantics |
+| `TaskPaneDisplayCoordinator.HasVisibleCasePaneForWorkbookWindow(...)` | `windowKey`, `WorkbookFullName`, `IsVisible`, hosted role | visible Case pane exists only when lookup succeeds, workbook matches, host role is Case, and the concrete pane is visible | direct early-complete predicate |
+| `WorkbookTaskPaneReadyShowAttemptWorker` | consumes `HasVisibleCasePaneForWorkbookWindow(...)` result | ready-show attempt can short-circuit successfully without refresh only if the visible-pane predicate is already true | this is the runtime-sensitive bridge from metadata to ready-show behavior |
+| `TaskPaneHostRegistry.RemoveWorkbookPanes(...)` | `WorkbookFullName` | workbook-close cleanup expects the host metadata already identifies which registered windows belong to that workbook | workbook-scope remove selection is metadata-driven |
+| `TaskPaneHostLifecycleService.RemoveStaleKernelHostsForRefresh(...)` | `WorkbookFullName` | stale Kernel cleanup expects the active `WorkbookContext` and stale host metadata to join on workbook identity before removal | refresh-time cleanup is metadata-driven |
+| `TaskPaneCaseActionTargetResolver` and `TaskPaneNonCaseActionHandler` | `WorkbookFullName` | action dispatch assumes `FindOpenWorkbook(host.WorkbookFullName)` can resolve the workbook tied to the host | action routing depends on metadata already being populated |
+
+### Render-signature dependency inventory
+
+- `TaskPaneRenderStateEvaluator.BuildRenderSignature(...)` currently derives the signature from:
+  - `WorkbookContext.Role`
+  - `WorkbookContext.WorkbookFullName`
+  - `WorkbookContext.ActiveSheetCodeName`
+  - CASE-only document property `CASELIST_REGISTERED`
+  - CASE-only document property `TASKPANE_SNAPSHOT_CACHE_COUNT`
+- That means `LastRenderSignature` is not just a render marker. It is the cache key for workbook identity, active sheet identity, and selected CASE workbook document-property state.
+- `WorkbookFullName` is therefore both:
+  - an input into signature generation,
+  - and a separate host identity key for visible-pane checks, remove selection, stale cleanup, and action-target resolution.
+
+### `WorkbookOpen` downstream expectation
+
+- `WorkbookLifecycleCoordinator.OnWorkbookOpen(...)` currently does workbook-side lifecycle/setup work only:
+  - external workbook detection,
+  - Kernel / Accounting / Case workbook lifecycle handlers,
+  - accounting sheet control ensure,
+  - Kernel home availability notification.
+- `OnWorkbookOpen(...)` does not directly call `_refreshTaskPane(...)`.
+- `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` keeps `WorkbookOpen` with `workbook != null` and `window == null` on the skip/defer side of the boundary.
+- Current-state implication:
+  - pure `WorkbookOpen` does not guarantee that host metadata already exists,
+  - the first reliable metadata population point is still downstream render on a window-safe path such as `WorkbookActivate`, `WindowActivate`, explicit display refresh, ready-show refresh, or pending retry fallback.
+
+### Ready-show / retry / foreground coupling
+
+| Flow | Metadata dependency | Current-state behavior |
+| --- | --- | --- |
+| ready-show attempt | direct | `WorkbookTaskPaneReadyShowAttemptWorker` attempt 1 can early-complete only after workbook-window resolve succeeds and `HasVisibleCasePaneForWorkbookWindow(...)` sees `windowKey` hit + `WorkbookFullName` match + Case role + `IsVisible == true`. |
+| ready retry `80ms` | direct but read-only | retry scheduling does not write metadata; it re-observes the same visible-pane predicate and otherwise falls back to refresh. |
+| pending retry `400ms` | indirect | `PendingPaneRefreshRetryService` tracks workbook full name separately from host metadata, but it depends on refresh-time metadata semantics staying stable once refresh succeeds and the host becomes observable again. |
+| final foreground recovery | indirect | `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` runs only after refresh success. It does not read host metadata directly, but metadata-sensitive early-complete and refresh-success boundaries determine whether foreground recovery runs at all. |
+
+### Stale cleanup / remove / replacement coupling
+
+| Flow | Metadata dependency | Current-state coupling |
+| --- | --- | --- |
+| stale Kernel cleanup before refresh | direct `WorkbookFullName` read | `TaskPaneHostLifecycleService.RemoveStaleKernelHostsForRefresh(...)` removes other Kernel hosts for the same workbook before the target window host is reused or replaced. |
+| workbook-scope remove | direct `WorkbookFullName` read | `TaskPaneHostRegistry.RemoveWorkbookPanes(...)` first selects target `windowKey` values by workbook metadata, then delegates to normal remove-by-window behavior. |
+| standard remove-by-window | no new metadata read after target selection | once `RemoveHost(windowKey)` starts, the shared-map entry is removed and later metadata readers no longer see that host through the map. |
+| replacement remove | indirect observability coupling | incompatible replacement does not use metadata to decide compatibility, but it disposes the old host before removing the old map entry, so metadata observability remains tied to this frozen ordering. |
+| show/hide failure fallback remove | indirect observability coupling | `TaskPaneDisplayCoordinator` failure recovery removes the host instead of clearing metadata in place, so later visible-pane and render-state readers switch from "old metadata" to "no host" rather than to a partially cleared host. |
+
+### Runtime-sensitive coupling summary
+
+- metadata timing is coupled to visible-pane timing because `WorkbookFullName` and `IsVisible` are read together under the same `windowKey` lookup.
+- metadata timing is coupled to render-cache semantics because `LastRenderSignature` is both a refresh skip key and a display-request render-current key.
+- metadata timing is coupled to workbook cleanup because workbook-scope remove and stale Kernel cleanup both depend on `WorkbookFullName` already being written on the host they are about to remove.
+- metadata timing is coupled to action dispatch because both Case and non-Case action target resolution locate the workbook through `FindOpenWorkbook(host.WorkbookFullName)`.
+- metadata timing is coupled to `WorkbookOpen` downstream availability because `WorkbookOpen` does not populate host metadata itself; later window-safe flows are the first consumers that can rely on the metadata existing.
+
+### GO conditions for a later metadata-timing surgery phase
+
+- GO only if the task is scoped to metadata timing itself and keeps create/remove timing, visibility retention, `WorkbookOpen` flow, ready-show / retry, foreground recovery, visible pane early-complete, event unbinding behavior, and `_hostsByWindowKey` ownership frozen.
+- GO only if the planned diff can explain the before/after read timing for:
+  - `EvaluateDisplayRequestPaneState(...)`
+  - `EvaluateRenderState(...)`
+  - `ShouldReuseCaseHostWithoutRender(...)`
+  - `HasVisibleCasePaneForWorkbookWindow(...)`
+  - workbook-scope remove selection
+  - stale Kernel cleanup
+  - action target resolution
+- GO only if the planned diff can explain the before/after write timing for:
+  - `TaskPaneManager.RenderHost(...)`
+  - `TaskPaneHostFlowService.RenderAndShowHostForRefresh(...)`
+  - forced-refresh invalidation
+  - post-action fallback signature rewrite
+- GO only if validation keeps compile/build confirmation separate from runtime `Addins\` reflection and human-side smoke.
+
+### STOP conditions for a later metadata-timing surgery phase
+
+- STOP if the change starts to move create timing, remove timing, `WorkbookOpen` / `WorkbookActivate` / `WindowActivate` boundaries, ready-show retry timing, pending retry timing, foreground recovery timing, or visible pane early-complete semantics in the same diff.
+- STOP if the change requires moving `_hostsByWindowKey`, redesigning `TaskPaneManager` / `TaskPaneHostFlowService` / `TaskPaneDisplayCoordinator` / `TaskPaneHostRegistry`, adding services, or introducing abstraction-first refactoring.
+- STOP if the change cannot preserve and explain how `WorkbookFullName` remains observable for workbook-scope remove, stale Kernel cleanup, and action dispatch.
+- STOP if the change cannot preserve and explain how `LastRenderSignature` remains coherent for render skip, display-request render-current checks, and CASE host reuse.

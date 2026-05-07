@@ -667,6 +667,8 @@
 | `TaskPaneHost` | concrete `CustomTaskPane` lifetime holder | current remove path stays `Hide -> RemoveTaskPane -> teardown` |
 | `ThisAddIn` | VSTO adapter boundary | concrete create/remove entrypoint remains here |
 
+As of 2026-05-07, `TaskPaneManagerRuntimeGraphFactory.Compose(...)` receives a bootstrap-created `TaskPaneManagerRuntimeGraphComposeSurface` instead of reading `TaskPaneManager` directly. This clarifies graph assembly ownership without moving `_hostsByWindowKey`, formatter ownership, or the manager render seam.
+
 ### Runtime-sensitive and metadata-sensitive boundary
 
 | Boundary | Why it is sensitive | B2 treatment |

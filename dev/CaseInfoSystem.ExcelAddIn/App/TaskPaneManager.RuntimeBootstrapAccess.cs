@@ -42,6 +42,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 manager.AttachRuntimeGraph(runtimeGraph);
             }
+
+            internal static TaskPaneManagerRuntimeGraphComposeSurface CreateGraphComposeSurfaceForBootstrap(TaskPaneManager manager)
+            {
+                if (manager == null)
+                {
+                    throw new ArgumentNullException(nameof(manager));
+                }
+
+                return new TaskPaneManagerRuntimeGraphComposeSurface(
+                    manager._hostsByWindowKey,
+                    manager.FormatContextDescriptor,
+                    manager.FormatHostDescriptor,
+                    manager.FormatWorkbookDescriptor,
+                    manager.RenderHost);
+            }
         }
     }
 }

@@ -125,6 +125,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneHostLifecycleService.RemoveWorkbookPanes(workbook);
         }
 
+        internal void RegisterHost(TaskPaneHost host)
+        {
+            _taskPaneHostLifecycleService.RegisterHost(host);
+        }
+
         /// <summary>
         /// メソッド: 指定 window に紐づく pane だけを非表示にする。
         /// 引数: window - 対象 window。
@@ -141,13 +146,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneHostLifecycleService.DisposeAll();
         }
 
-        internal void RegisterHost(TaskPaneHost host)
-        {
-            _taskPaneHostLifecycleService.RegisterHost(host);
-        }
-
         // Render 制御責務: role ごとの描画と signature 更新対象を分離し、再描画条件は上位から受け取る。
-        internal void RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
+        private void RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
         {
             host.WorkbookFullName = context.WorkbookFullName;
 
@@ -202,7 +202,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneDisplayCoordinator.PrepareTargetWindowForForcedRefresh(targetWindow);
         }
 
-        internal string FormatContextDescriptor(WorkbookContext context)
+        private string FormatContextDescriptor(WorkbookContext context)
         {
             return TaskPaneManagerDiagnosticHelper.FormatContextDescriptor(
                 context,
@@ -210,14 +210,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 context == null ? string.Empty : TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(context.Window));
         }
 
-        internal string FormatHostDescriptor(TaskPaneHost host)
+        private string FormatHostDescriptor(TaskPaneHost host)
         {
             return TaskPaneManagerDiagnosticHelper.FormatHostDescriptor(
                 host,
                 TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(host == null ? null : host.Window));
         }
 
-        internal string FormatWorkbookDescriptor(Excel.Workbook workbook)
+        private string FormatWorkbookDescriptor(Excel.Workbook workbook)
         {
             return FormatWorkbookDescriptor(workbook, null);
         }
@@ -254,11 +254,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal static string FormatWindowDescriptor(Excel.Window window)
         {
             return TaskPaneManagerDiagnosticHelper.FormatWindowDescriptor(window);
-        }
-
-        internal Dictionary<string, TaskPaneHost> HostsByWindowKey
-        {
-            get { return _hostsByWindowKey; }
         }
 
         private static class TaskPaneManagerDiagnosticHelper

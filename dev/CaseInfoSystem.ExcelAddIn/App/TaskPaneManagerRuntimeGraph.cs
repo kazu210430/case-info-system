@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.ExcelAddIn.UI;
@@ -254,6 +255,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneManager.TaskPaneManagerTestHooks TestHooks { get; }
     }
 
+    // Bootstrap-created compose surface over the manager-owned runtime state and render seam.
+    // Graph assembly reads this explicit surface instead of treating TaskPaneManager itself as a dependency bag.
+    internal sealed class TaskPaneManagerRuntimeGraphComposeSurface
+    {
+        internal TaskPaneManagerRuntimeGraphComposeSurface(
+            Dictionary<string, TaskPaneHost> hostsByWindowKey,
+            Func<WorkbookContext, string> formatContextDescriptor,
+            Func<TaskPaneHost, string> formatHostDescriptor,
+            Func<Excel.Workbook, string> formatWorkbookDescriptor,
+            Action<TaskPaneHost, WorkbookContext, string> renderHost)
+        {
+            HostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
+            FormatContextDescriptor = formatContextDescriptor ?? throw new ArgumentNullException(nameof(formatContextDescriptor));
+            FormatHostDescriptor = formatHostDescriptor ?? throw new ArgumentNullException(nameof(formatHostDescriptor));
+            FormatWorkbookDescriptor = formatWorkbookDescriptor ?? throw new ArgumentNullException(nameof(formatWorkbookDescriptor));
+            RenderHost = renderHost ?? throw new ArgumentNullException(nameof(renderHost));
+        }
+
+        internal Dictionary<string, TaskPaneHost> HostsByWindowKey { get; }
+
+        internal Func<WorkbookContext, string> FormatContextDescriptor { get; }
+
+        internal Func<TaskPaneHost, string> FormatHostDescriptor { get; }
+
+        internal Func<Excel.Workbook, string> FormatWorkbookDescriptor { get; }
+
+        internal Action<TaskPaneHost, WorkbookContext, string> RenderHost { get; }
+    }
+
     internal static class TaskPaneManagerRuntimeBootstrap
     {
         // Production runtime entrypoint. AddInCompositionRoot should use this path so graph build/attach timing
@@ -343,21 +373,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 ? TaskPaneManager.RuntimeBootstrapAccess.CreateUnattachedFullForBootstrap(entryContext)
                 : TaskPaneManager.RuntimeBootstrapAccess.CreateUnattachedThinForBootstrap(entryContext);
             TaskPaneManagerRuntimeGraphComposeContext graphContext = entryContext.CreateGraphComposeContext();
+            TaskPaneManagerRuntimeGraphComposeSurface graphSurface = TaskPaneManager.RuntimeBootstrapAccess.CreateGraphComposeSurfaceForBootstrap(manager);
 
             TaskPaneManager.RuntimeBootstrapAccess.AttachRuntimeGraphForBootstrap(
                 manager,
-                TaskPaneManagerRuntimeGraphFactory.Compose(manager, graphContext));
+                TaskPaneManagerRuntimeGraphFactory.Compose(graphSurface, graphContext));
             return manager;
         }
     }
 
     internal static class TaskPaneManagerRuntimeGraphFactory
     {
-        internal static TaskPaneManagerRuntimeGraph Compose(TaskPaneManager manager, TaskPaneManagerRuntimeGraphComposeContext graphContext)
+        internal static TaskPaneManagerRuntimeGraph Compose(
+            TaskPaneManagerRuntimeGraphComposeSurface graphSurface,
+            TaskPaneManagerRuntimeGraphComposeContext graphContext)
         {
-            if (manager == null)
+            if (graphSurface == null)
             {
-                throw new ArgumentNullException(nameof(manager));
+                throw new ArgumentNullException(nameof(graphSurface));
             }
 
             if (graphContext == null)
@@ -381,34 +414,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // Once refresh/lifecycle code calls into GetOrReplaceHost/CreateHost, the concrete timing still belongs to the
             // existing TaskPaneHostRegistry -> TaskPaneHostFactory -> TaskPaneHost -> ThisAddIn chain.
             TaskPaneHostFactory taskPaneHostFactory = CreateTaskPaneHostFactory(
-                manager,
+                graphSurface,
                 graphContext,
                 () => taskPaneNonCaseActionHandler,
                 () => taskPaneActionDispatcher);
             // Compose-time owner only:
             // this graph decides which collaborators are wired into remove-side ownership, but it does not own
             // standard remove, replacement remove, or shutdown cleanup timing after composition completes.
-            TaskPaneHostRegistry taskPaneHostRegistry = CreateTaskPaneHostRegistry(manager, graphContext, taskPaneHostFactory);
+            TaskPaneHostRegistry taskPaneHostRegistry = CreateTaskPaneHostRegistry(graphSurface, graphContext, taskPaneHostFactory);
 
             var taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
-                manager.HostsByWindowKey,
+                graphSurface.HostsByWindowKey,
                 graphContext.KernelCaseInteractionState,
                 graphContext.Logger,
                 graphContext.TestHooks,
                 TaskPaneManager.SafeGetWindowKey,
-                manager.FormatHostDescriptor,
-                manager.FormatWorkbookDescriptor,
+                graphSurface.FormatHostDescriptor,
+                graphSurface.FormatWorkbookDescriptor,
                 TaskPaneManager.FormatWindowDescriptor,
                 windowKey => taskPaneHostLifecycleService.RemoveHost(windowKey));
 
             taskPaneHostLifecycleService = new TaskPaneHostLifecycleService(
-                manager.HostsByWindowKey,
+                graphSurface.HostsByWindowKey,
                 taskPaneHostRegistry,
                 graphContext.ExcelInteropService,
                 graphContext.Logger);
 
             Func<string, TaskPaneHost> resolveHost =
-                windowKey => manager.HostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null;
+                windowKey => graphSurface.HostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null;
 
             if (CanComposeNonCaseActionHandler(graphContext))
             {
@@ -420,7 +453,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     graphContext.UserErrorService,
                     graphContext.Logger,
                     resolveHost,
-                    manager.RenderHost,
+                    graphSurface.RenderHost,
                     (host, reason) => taskPaneDisplayCoordinator.TryShowHost(host, reason));
             }
 
@@ -468,10 +501,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 taskPaneDisplayCoordinator,
                 taskPaneHostLifecycleService,
                 graphContext.Logger,
-                manager.FormatContextDescriptor,
-                manager.FormatHostDescriptor,
+                graphSurface.FormatContextDescriptor,
+                graphSurface.FormatHostDescriptor,
                 TaskPaneManager.SafeGetWindowKey,
-                manager.RenderHost);
+                graphSurface.RenderHost);
 
             return new TaskPaneManagerRuntimeGraph(
                 casePaneCacheRefreshNotificationService,
@@ -481,7 +514,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         private static TaskPaneHostFactory CreateTaskPaneHostFactory(
-            TaskPaneManager manager,
+            TaskPaneManagerRuntimeGraphComposeSurface graphSurface,
             TaskPaneManagerRuntimeGraphComposeContext graphContext,
             Func<TaskPaneNonCaseActionHandler> resolveNonCaseActionHandler,
             Func<TaskPaneActionDispatcher> resolveCaseActionDispatcher)
@@ -490,22 +523,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new TaskPaneHostFactory(
                 graphContext.AddIn,
                 graphContext.Logger,
-                manager.FormatHostDescriptor,
+                graphSurface.FormatHostDescriptor,
                 (windowKey, e) => resolveNonCaseActionHandler()?.HandleKernelActionInvoked(windowKey, e),
                 (windowKey, e) => resolveNonCaseActionHandler()?.HandleAccountingActionInvoked(windowKey, e),
                 (windowKey, control, e) => resolveCaseActionDispatcher()?.HandleCaseControlActionInvoked(windowKey, control, e));
         }
 
         private static TaskPaneHostRegistry CreateTaskPaneHostRegistry(
-            TaskPaneManager manager,
+            TaskPaneManagerRuntimeGraphComposeSurface graphSurface,
             TaskPaneManagerRuntimeGraphComposeContext graphContext,
             TaskPaneHostFactory taskPaneHostFactory)
         {
             return new TaskPaneHostRegistry(
-                manager.HostsByWindowKey,
+                graphSurface.HostsByWindowKey,
                 graphContext.Logger,
                 // Diagnostic-only input for remove-host trace output. Registry does not own identity or metadata timing through this formatter.
-                manager.FormatHostDescriptor,
+                graphSurface.FormatHostDescriptor,
                 taskPaneHostFactory);
         }
 

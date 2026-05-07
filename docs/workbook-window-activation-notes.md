@@ -93,10 +93,43 @@
 - window 未確定を例外扱いせず、正常な timing 差として扱うこと
 - workbook-only と window-dependent の責務を混ぜないこと
 
+## Window Placement / Restore Update (2026-05-07)
+
+### 症状
+
+- Human-side observation reported a placement regression for snapped CASE windows:
+  - CASE① を左半分に配置
+  - CASE② を右半分に配置
+  - その後の re-activate で中央中サイズへ戻る
+  - CASE close 後の follow-up activate でも再発する
+
+### trace で確定したこと
+
+- rect が最初に変化した step は `ExcelWindowRecoveryService` mutation trace の `promote-showwindow-restore-after` です。
+- `showCmd` は restore 前から `SW_SHOWNORMAL` でした。
+- minimized / maximized ではありませんでした。
+- 変化後 rect は `rcNormalPosition` と整合していました。
+- `WindowState=xlNormal`、`Activate`、`SetForegroundWindow` は近接していますが、現 trace では最初の rect mutation としては弱いです。
+
+### current-state interpretation
+
+- `WorkbookOpen` 境界ルール自体は変えていません。今回の placement 調査対象は、window-safe downstream 側の foreground promotion path です。
+- 現時点の最有力仮説は、visible + `SW_SHOWNORMAL` な snapped window に対する `ShowWindow(SW_RESTORE)` の restore / normalize side effect です。
+- current `main` は `ExcelWindowRecoveryService.EvaluateRestoreDecision(...)` で、
+  - visible
+  - `SW_SHOWNORMAL`
+  - not minimized
+  - not maximized
+  の window では `ShowWindow(SW_RESTORE)` を skip します。
+- hidden / minimized / maximized / placement-read-failed / other show-state cases では restore を維持します。
+- rect persistence や「位置を保存して戻す」方式は導入していません。
+
 ## 不明として残す事項
 
 - すべての Excel 実行環境で `WorkbookActivate` と `WindowActivate` のどちらを最終安全境界とするのが最適か
 - active workbook 未確定が出る環境差や OneDrive 同期状態との相関
 - ready-show retry と protection の最適秒数
+- `rcNormalPosition` がいつ / 何を契機に保存・更新されるか
+- 他の Excel / Windows 実行条件でも rect の最初の mutation step が同じか
 
 これらはコードだけでは確定せず、実機観測を前提に扱います。

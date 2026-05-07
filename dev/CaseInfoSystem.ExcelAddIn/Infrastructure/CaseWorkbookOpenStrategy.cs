@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.App;
@@ -839,7 +840,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private void ReleaseComObject(object comObject)
+        private void ReleaseComObject(object comObject, [CallerMemberName] string callerMemberName = null)
         {
             if (comObject == null)
             {
@@ -858,18 +859,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 }
             }
 
-            try
-            {
-                if (Marshal.IsComObject(comObject))
-                {
-                    // Hidden Excel セッション由来の所有参照は完全解放の方針を維持する。
-                    ComObjectReleaseService.FinalRelease(comObject);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("ReleaseComObject failed.", ex);
-            }
+            // Hidden Excel セッション由来の所有参照は完全解放の方針を維持する。
+            ComObjectReleaseService.FinalRelease(
+                comObject,
+                _logger,
+                nameof(CaseWorkbookOpenStrategy) + "." + (callerMemberName ?? nameof(ReleaseComObject)));
         }
 
         private static string SafeApplicationHwnd(Excel.Application application)
@@ -1046,7 +1040,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     }
                     finally
                     {
-                        ComObjectReleaseService.Release(window);
+                        ComObjectReleaseService.Release(window, _logger);
                     }
                 }
             }
@@ -1056,7 +1050,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             finally
             {
-                ComObjectReleaseService.Release(windows);
+                ComObjectReleaseService.Release(windows, _logger);
             }
         }
 

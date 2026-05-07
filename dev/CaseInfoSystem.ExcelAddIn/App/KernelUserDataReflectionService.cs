@@ -350,13 +350,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + SafeApplicationHwnd(isolatedApplication)
                         + ", path="
                         + workbookPath);
-                    CloseWorkbookQuietly(isolatedWorkbook);
+                    CloseWorkbookQuietly(isolatedWorkbook, workbookKind, workbookPath);
                 }
 
                 if (isolatedApplication != null)
                 {
                     string applicationHwnd = SafeApplicationHwnd(isolatedApplication);
-                    QuitApplicationQuietly(isolatedApplication);
+                    QuitApplicationQuietly(isolatedApplication, workbookKind, workbookPath);
                     _logger.Info("Kernel user data reflection hidden session quit. target=" + workbookKind + ", appHwnd=" + applicationHwnd + ", path=" + workbookPath);
                 }
             }
@@ -393,7 +393,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + workbookPath);
         }
 
-        private static void CloseWorkbookQuietly(Excel.Workbook workbook)
+        private void CloseWorkbookQuietly(Excel.Workbook workbook, string workbookKind, string workbookPath)
         {
             if (workbook == null)
             {
@@ -410,11 +410,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(workbook);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(
+                    workbook,
+                    _logger,
+                    nameof(KernelUserDataReflectionService)
+                    + ".CloseWorkbookQuietly target="
+                    + (workbookKind ?? string.Empty)
+                    + ", path="
+                    + (workbookPath ?? string.Empty));
             }
         }
 
-        private static void QuitApplicationQuietly(Excel.Application application)
+        private void QuitApplicationQuietly(Excel.Application application, string workbookKind, string workbookPath)
         {
             if (application == null)
             {
@@ -431,7 +438,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(application);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease(
+                    application,
+                    _logger,
+                    nameof(KernelUserDataReflectionService)
+                    + ".QuitApplicationQuietly target="
+                    + (workbookKind ?? string.Empty)
+                    + ", appHwnd="
+                    + SafeApplicationHwnd(application)
+                    + ", path="
+                    + (workbookPath ?? string.Empty));
             }
         }
 
@@ -731,14 +747,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     }
 
                     _accountingWorkbookService.WriteCellValue(homeWorksheet, "B" + rowNumber.ToString(), pair.Value ?? string.Empty);
-                    CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(targetCell);
+                    CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(targetCell, _logger);
                     targetCell = null;
                 }
             }
             finally
             {
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(targetCell);
-                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(keyRange);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(targetCell, _logger);
+                CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release(keyRange, _logger);
             }
         }
 

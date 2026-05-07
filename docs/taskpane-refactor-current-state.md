@@ -163,6 +163,31 @@
 TaskPane 側の優先度Aは、設計正本・責務棚卸し・危険領域の事実整理に加え、Master access の一本化、`TaskPaneManager` の helper 分離、`TaskPaneHostRegistry` の外出し、`TaskPaneRefreshOrchestrationService` の順序調停化、refresh policy 正本化までは `main` に固定済みです。
 
 一方で、ready-show / protection / retry / host 再利用を含む本線ロジックの簡素化、実機未確認事項の確定、`TaskPaneHostRegistry` / `ThisAddIn` の VSTO 境界整理は、まだ完了済みとは扱わず、安定化後に慎重に進める課題として残します。
+
+## TaskPaneManager 周辺の最終棚卸し判断 (2026-05-08)
+
+- 現行 `main` `6e367db0e6865a35d8bda422c151f4b9faa26689` を基準に再棚卸しした結果、compose-side / bootstrap-side で安全に削れる ownership unit は、B1.7 までで概ね出し切ったと扱います。
+
+### A/B/C/D
+
+- `A. まだ安全単位で削る価値がある`
+  - なし。
+- `B. 残っているが runtime-sensitive に近いため見送る`
+  - `TaskPaneManager` の `_hostsByWindowKey` shared state owner。
+  - `TaskPaneHostFlowService` の refresh-time host flow。
+  - `TaskPaneActionDispatcher` の post-action display re-entry。
+  - いずれも metadata timing、ready-show、visibility retention、foreground / protection、`WorkbookOpen -> WorkbookActivate -> WindowActivate` 境界と近接しているため、この棚卸しでは見送ります。
+- `C. 既に docs の責務線と概ね一致している`
+  - `TaskPaneManagerRuntimeBootstrap` / `TaskPaneManagerRuntimeGraphFactory` の compose / attach 境界。
+  - `TaskPaneNonCaseActionHandler`、`TaskPaneRefreshPreconditionPolicy`、`TaskPaneHostReusePolicy`、`PaneDisplayPolicy`、`TaskPaneRenderStateEvaluator` の責務線。
+- `D. モニター配布前に触るより、実運用で観察すべき`
+  - `TaskPaneHostRegistry` / `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn` の VSTO create-remove と event lifetime。
+  - `TaskPaneDisplayCoordinator` の visible-pane early-complete / show-hide failure remove。
+  - これらは runtime-sensitive boundary に近いため、ここで削るより実運用観察を優先します。
+
+- したがって、TaskPaneManager 周辺 refactor はこの時点で「一旦完了扱い」とします。
+- 再開条件は、実運用観察で追加根拠が出るか、または runtime-sensitive unit を 1 boundary だけ単独で扱う必要が明確になった場合に限定します。
+- この追記は docs-only です。known issue の白 Excel フラッシュ、ready-show / retry / foreground sequencing、VSTO create-remove timing、既存 docs の大枠は変更しません。
 ## B1 Update (2026-05-06)
 
 - Production runtime composition owner for the TaskPaneManager constructor graph moved to `AddInTaskPaneCompositionFactory`.

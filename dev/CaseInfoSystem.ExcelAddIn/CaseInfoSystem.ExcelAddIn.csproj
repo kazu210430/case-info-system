@@ -344,6 +344,7 @@
     <Compile Include="Infrastructure\CaseListMappingRepository.cs" />
     <Compile Include="Infrastructure\CaseWorkbookInitializer.cs" />
     <Compile Include="Infrastructure\CaseWorkbookOpenStrategy.cs" />
+    <Compile Include="Infrastructure\NewCaseVisibilityObservation.cs" />
     <Compile Include="Infrastructure\ComObjectReleaseService.cs" />
     <Compile Include="Infrastructure\ExcelValidationService.cs" />
     <Compile Include="Infrastructure\ExcelApplicationStateScope.cs" />

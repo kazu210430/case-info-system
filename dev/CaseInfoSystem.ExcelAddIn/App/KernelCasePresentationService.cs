@@ -119,9 +119,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (workbook == null) {
 					throw new InvalidOperationException ("CASE workbook could not be opened.");
 				}
+				string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
+				NewCaseVisibilityObservation.AttachAlias (result.CaseWorkbookPath, workbookFullName);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
-					NewCaseDefaultTimingLogHelper.AttachWorkbookAlias (result.CaseWorkbookPath, _excelInteropService.GetWorkbookFullName (workbook));
+					NewCaseDefaultTimingLogHelper.AttachWorkbookAlias (result.CaseWorkbookPath, workbookFullName);
 				}
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "display-handoff-open-completed", "KernelCasePresentationService.OpenCreatedCase", result.CaseWorkbookPath);
 				result.CreatedWorkbook = workbook;
 				ShowCreatedCase (workbook, waitSession);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
@@ -136,6 +139,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Kernel prompt CASE presentation completed. path=" + result.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return result;
 			} catch {
+				NewCaseVisibilityObservation.Complete (result.CaseWorkbookPath);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
 					NewCaseDefaultTimingLogHelper.Clear (result.CaseWorkbookPath);
 				}
@@ -177,6 +181,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing (workbook, "KernelCasePresentationService.ShowCreatedCase", bringToFront: false);
 				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "tryRecoverWorkbookWindowWithoutShowing", stopwatch2.ElapsedMilliseconds);
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=InitialRecoveryCompleted, workbook=" + workbookFullName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "initial-recovery-completed", "KernelCasePresentationService.ShowCreatedCase", workbookFullName);
 				_logger.Info ("ShowCreatedCase workbook activated. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				ExecuteDeferredPresentationEnhancements (workbook, stopwatch, waitSession);
 			} catch (Exception exception) {
@@ -211,10 +216,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					NewCaseDefaultTimingLogHelper.LogDetail (_logger, _excelInteropService.GetWorkbookFullName (workbook), "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeReadyShow", stopwatch2.ElapsedMilliseconds);
 					_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("ShowCreatedCase post-release activation suppression prepared. elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "post-release-suppression-prepared", "KernelCasePresentationService.ExecuteDeferredPresentationEnhancements", _excelInteropService.GetWorkbookFullName (workbook));
 				NewCaseDefaultTimingLogHelper.StartTaskPaneReadyWait (_excelInteropService.GetWorkbookFullName (workbook));
 				_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady (workbook, "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=ReadyShowRequested, workbook=" + _excelInteropService.GetWorkbookFullName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("ShowCreatedCase task pane ready-show requested. elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "ready-show-requested", "KernelCasePresentationService.ExecuteDeferredPresentationEnhancements", _excelInteropService.GetWorkbookFullName (workbook));
 				try {
 					MoveInitialCursorToHomeCell (workbook);
 					_logger.Info ("ShowCreatedCase cursor positioned. elapsedMs=" + stopwatch.ElapsedMilliseconds);

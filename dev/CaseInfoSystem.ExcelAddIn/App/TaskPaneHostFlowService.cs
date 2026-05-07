@@ -144,6 +144,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _logger.Info("TaskPane reused. reason=" + (reason ?? string.Empty) + ", role=" + context.Role + ", windowKey=" + windowKey);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? null : context.Workbook,
+                context == null ? null : context.Window,
+                "taskpane-reused-shown",
+                "TaskPaneHostFlowService.TryReuseCaseHostWithoutRender",
+                context == null ? null : context.WorkbookFullName,
+                "reason=" + (reason ?? string.Empty));
             return true;
         }
 
@@ -186,6 +196,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + _formatHostDescriptor(host)
                 + ", result=Shown");
             _logger.Info("TaskPane refreshed. reason=" + (reason ?? string.Empty) + ", role=" + role + ", windowKey=" + windowKey);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? null : context.Workbook,
+                context == null ? null : context.Window,
+                "taskpane-refreshed-shown",
+                "TaskPaneHostFlowService.RenderAndShowHostForRefresh",
+                context == null ? null : context.WorkbookFullName,
+                "reason=" + (reason ?? string.Empty));
             return true;
         }
 

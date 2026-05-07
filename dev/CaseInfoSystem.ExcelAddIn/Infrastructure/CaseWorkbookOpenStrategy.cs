@@ -198,12 +198,32 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 + SafeApplicationHwnd(hiddenApplication)
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                null,
+                hiddenApplication,
+                null,
+                null,
+                "isolated-excel-acquired",
+                "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
+                caseWorkbookPath,
+                "route=" + HiddenApplicationCacheRouteName + ",reused=" + reusedApplication.ToString());
 
             try
             {
                 PrepareHiddenApplicationForUse(hiddenApplication);
                 workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
                 HideOpenedWorkbookWindow(workbook);
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    hiddenApplication,
+                    workbook,
+                    null,
+                    "hidden-session-workbook-opened",
+                    "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
+                    caseWorkbookPath,
+                    "route=" + HiddenApplicationCacheRouteName);
                 _logger.Info(
                     "Case workbook hidden Excel session opened. path="
                     + (caseWorkbookPath ?? string.Empty)
@@ -295,6 +315,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 	                    + CreatedCaseDisplayHiddenRouteName
 	                    + ", screenUpdating=false, enableEvents=false, displayAlerts=false, elapsedMs="
 	                    + stopwatch.ElapsedMilliseconds.ToString());
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    _application,
+                    null,
+                    null,
+                    "shared-display-state-applied",
+                    "CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay",
+                    caseWorkbookPath,
+                    "route=" + CreatedCaseDisplayHiddenRouteName);
 	                Stopwatch stopwatch2 = Stopwatch.StartNew();
 	                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "workbooksOpen", stopwatch2.ElapsedMilliseconds, "route=" + CreatedCaseDisplayHiddenRouteName);
@@ -314,6 +344,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + SafeApplicationHwnd(_application)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    _application,
+                    workbook,
+                    null,
+                    "display-handoff-open-completed",
+                    "CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay",
+                    caseWorkbookPath,
+                    "route=" + CreatedCaseDisplayHiddenRouteName);
                 return workbook;
             }
             catch
@@ -371,6 +411,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 hiddenApplication = CreateDedicatedHiddenApplication(caseWorkbookPath, routeName, stopwatch);
                 workbook = hiddenApplication.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
                 HideOpenedWorkbookWindow(workbook);
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    hiddenApplication,
+                    workbook,
+                    null,
+                    "hidden-session-workbook-opened",
+                    "CaseWorkbookOpenStrategy.OpenDedicatedHiddenWorkbookSession",
+                    caseWorkbookPath,
+                    "route=" + routeName);
                 _logger.Info(
                     "Case workbook hidden Excel session opened. path="
                     + (caseWorkbookPath ?? string.Empty)
@@ -453,6 +503,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + displayAlerts.ToString()
                     + ", elapsedMs="
                     + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    _application,
+                    null,
+                    null,
+                    "shared-display-state-restored",
+                    "CaseWorkbookOpenStrategy.RestoreSharedApplicationState",
+                    caseWorkbookPath,
+                    "route=" + (routeName ?? string.Empty));
             }
             catch (Exception ex)
             {
@@ -487,6 +547,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + (routeName ?? string.Empty)
                     + ", visible=false, displayAlerts=false, screenUpdating=false, userControl=false, enableEvents=false, elapsedMs="
                     + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    hiddenApplication,
+                    null,
+                    null,
+                    "isolated-excel-created",
+                    "CaseWorkbookOpenStrategy.CreateDedicatedHiddenApplication",
+                    caseWorkbookPath,
+                    "route=" + (routeName ?? string.Empty));
                 return hiddenApplication;
             }
             catch
@@ -518,6 +588,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 	            finally
 	            {
+                    NewCaseVisibilityObservation.Log(
+                        _logger,
+                        null,
+                        application,
+                        null,
+                        null,
+                        "post-create-cleanup",
+                        "CaseWorkbookOpenStrategy.CleanupDedicatedHiddenSession",
+                        caseWorkbookPath,
+                        "route=" + (routeName ?? string.Empty));
 	                TryQuitApplication(application);
 	                Stopwatch stopwatch3 = Stopwatch.StartNew();
 	                ReleaseComObject(workbook);
@@ -621,6 +701,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _cachedHiddenApplication.IdleSinceUtc = DateTime.UtcNow;
                 ScheduleHiddenApplicationIdleTimerUnlocked();
                 _logger.Info("hidden-app-cache returned-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application) + ", idleTimeoutSeconds=" + ResolveHiddenApplicationCacheIdleSeconds().ToString() + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    application,
+                    null,
+                    null,
+                    "post-create-cleanup",
+                    "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
+                    caseWorkbookPath,
+                    "route=" + (routeName ?? string.Empty));
                 return true;
             }
         }

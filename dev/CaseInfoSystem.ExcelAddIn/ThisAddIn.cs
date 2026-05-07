@@ -313,6 +313,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 + ", activeState="
                 + FormatActiveExcelState());
             _logger?.Info("TaskPane event entry. event=WindowActivate, workbook=" + SafeWorkbookFullName(workbook) + ", windowHwnd=" + SafeWindowHwnd(window) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+            NewCaseVisibilityObservation.Log(_logger, _excelInteropService, Application, workbook, window, "WindowActivate-event", "ThisAddIn.HandleWindowActivateEvent");
             _windowActivatePaneHandlingService?.Handle(workbook, window);
         }
 

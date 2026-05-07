@@ -199,6 +199,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
+            if (string.Equals(reason, NewCaseDefaultTimingLogHelper.PostReleaseReason, StringComparison.OrdinalIgnoreCase))
+            {
+                string observedWorkbookPath = context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName);
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    null,
+                    null,
+                    context == null ? workbook : context.Workbook,
+                    context == null ? window : context.Window,
+                    "case-display-completed",
+                    "TaskPaneRefreshCoordinator.TryRefreshTaskPane",
+                    observedWorkbookPath,
+                    "reason=" + (reason ?? string.Empty) + ",result=" + (refreshed ? "Succeeded" : "Failed"));
+                NewCaseVisibilityObservation.Complete(observedWorkbookPath);
+            }
             return refreshed
                 ? TaskPaneRefreshAttemptResult.Succeeded()
                 : TaskPaneRefreshAttemptResult.Failed();
@@ -322,6 +337,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + (refreshed && context != null && context.Role == WorkbookRole.Case).ToString()
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                null,
+                null,
+                context == null ? null : context.Workbook,
+                context == null ? null : context.Window,
+                "taskpane-refresh-completed",
+                "TaskPaneRefreshCoordinator.TryRefreshPaneAndScheduleWarmup",
+                context == null ? null : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
+                "reason=" + (reason ?? string.Empty) + ",refreshed=" + refreshed.ToString());
             if (refreshed && context != null && context.Role == WorkbookRole.Case)
             {
                 _scheduleWordWarmup();
@@ -363,6 +388,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + recovered.ToString()
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                null,
+                null,
+                context == null ? workbook : context.Workbook,
+                context == null ? null : context.Window,
+                "final-foreground-guarantee-completed",
+                "TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh",
+                context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
+                "reason=" + (reason ?? string.Empty) + ",recovered=" + recovered.ToString());
 
             Excel.Workbook protectedWorkbook = context == null ? workbook : context.Workbook;
             Excel.Window protectedWindow = context == null ? null : context.Window;

@@ -75,6 +75,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook())
                 + ", activeWindowHwnd="
                 + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+            NewCaseVisibilityObservation.Log(_logger, _excelInteropService, null, workbook, null, "WorkbookOpen-event", "WorkbookLifecycleCoordinator.OnWorkbookOpen");
 
             _handleExternalWorkbookDetected?.Invoke(workbook, "WorkbookOpen");
             _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
@@ -106,6 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook())
                 + ", activeWindowHwnd="
                 + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+            NewCaseVisibilityObservation.Log(_logger, _excelInteropService, null, workbook, null, "WorkbookActivate-event", "WorkbookLifecycleCoordinator.OnWorkbookActivate");
 
             if (_casePaneHostBridge.ShouldIgnoreWorkbookActivateDuringCaseProtection(workbook))
             {

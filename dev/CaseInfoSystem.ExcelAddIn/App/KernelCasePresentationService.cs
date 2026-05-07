@@ -171,6 +171,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				Stopwatch stopwatch = Stopwatch.StartNew ();
 				string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
 				Stopwatch stopwatch2 = Stopwatch.StartNew ();
+				EnsureWorkbookWindowVisibleBeforeInitialRecovery (workbook, stopwatch);
+				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeInitialRecovery", stopwatch2.ElapsedMilliseconds);
+				stopwatch2 = Stopwatch.StartNew ();
 				_excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing (workbook, "KernelCasePresentationService.ShowCreatedCase", bringToFront: false);
 				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "tryRecoverWorkbookWindowWithoutShowing", stopwatch2.ElapsedMilliseconds);
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=InitialRecoveryCompleted, workbook=" + workbookFullName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
@@ -178,6 +181,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				ExecuteDeferredPresentationEnhancements (workbook, stopwatch, waitSession);
 			} catch (Exception exception) {
 				_logger.Error ("ShowCreatedCase failed.", exception);
+			}
+		}
+
+		private void EnsureWorkbookWindowVisibleBeforeInitialRecovery (Workbook workbook, Stopwatch stopwatch)
+		{
+			if (workbook == null) {
+				return;
+			}
+			WorkbookWindowVisibilityEnsureResult result = _workbookWindowVisibilityService.EnsureVisible (workbook, "KernelCasePresentationService.EnsureWorkbookWindowVisibleBeforeInitialRecovery");
+			if (result.Outcome == WorkbookWindowVisibilityEnsureOutcome.MadeVisible) {
+				_logger.Info ("ShowCreatedCase workbook window primed before shared application visibility recovery. workbook=" + result.WorkbookFullName + ", windowHwnd=" + result.WindowHwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 			}
 		}
 

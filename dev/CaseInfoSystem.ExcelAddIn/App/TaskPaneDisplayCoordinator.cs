@@ -97,14 +97,44 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook,
                 window);
 
-            if (!TaskPaneShowExistingPolicy.ShouldShowExisting(
+            bool shouldShowExisting = TaskPaneShowExistingPolicy.ShouldShowExisting(
                 hasExistingHost: paneState.HasExistingHost,
                 isSameWorkbook: paneState.IsSameWorkbook,
-                isRenderSignatureCurrent: paneState.IsRenderSignatureCurrent))
+                isRenderSignatureCurrent: paneState.IsRenderSignatureCurrent);
+            if (!shouldShowExisting)
             {
                 return false;
             }
 
+            string windowKey = _safeGetWindowKey(window);
+            bool lastRenderSignaturePresent = false;
+            WorkbookRole hostRole = WorkbookRole.Unknown;
+            if (!string.IsNullOrWhiteSpace(windowKey)
+                && _hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                lastRenderSignaturePresent = !string.IsNullOrWhiteSpace(host.LastRenderSignature);
+                hostRole = GetHostedWorkbookRole(host);
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=display-entry-decision"
+                + ", decision=ShowExisting"
+                + ", hasExistingHost="
+                + paneState.HasExistingHost.ToString()
+                + ", isSameWorkbook="
+                + paneState.IsSameWorkbook.ToString()
+                + ", isRenderSignatureCurrent="
+                + paneState.IsRenderSignatureCurrent.ToString()
+                + ", lastRenderSignaturePresent="
+                + lastRenderSignaturePresent.ToString()
+                + ", hostRole="
+                + hostRole.ToString()
+                + ", windowKey="
+                + windowKey
+                + ", renderCurrentRequired="
+                + (!paneState.IsRenderSignatureCurrent).ToString()
+                + ", visiblePaneEarlyCompleteBypassesSignatureCheck=true");
             return TryShowExistingPane(excelInteropService, workbook, window, "DisplayRequest.ShowExisting");
         }
 
@@ -116,10 +146,45 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook,
                 window);
 
-            return TaskPaneShowWithRenderPolicy.ShouldShowWithRender(
+            bool shouldShowWithRender = TaskPaneShowWithRenderPolicy.ShouldShowWithRender(
                 paneState.HasExistingHost,
                 paneState.IsSameWorkbook,
                 paneState.IsRenderSignatureCurrent);
+            if (!shouldShowWithRender)
+            {
+                return false;
+            }
+
+            string windowKey = _safeGetWindowKey(window);
+            bool lastRenderSignaturePresent = false;
+            WorkbookRole hostRole = WorkbookRole.Unknown;
+            if (!string.IsNullOrWhiteSpace(windowKey)
+                && _hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
+            {
+                lastRenderSignaturePresent = !string.IsNullOrWhiteSpace(host.LastRenderSignature);
+                hostRole = GetHostedWorkbookRole(host);
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=display-entry-decision"
+                + ", decision=ShowWithRender"
+                + ", hasExistingHost="
+                + paneState.HasExistingHost.ToString()
+                + ", isSameWorkbook="
+                + paneState.IsSameWorkbook.ToString()
+                + ", isRenderSignatureCurrent="
+                + paneState.IsRenderSignatureCurrent.ToString()
+                + ", lastRenderSignaturePresent="
+                + lastRenderSignaturePresent.ToString()
+                + ", hostRole="
+                + hostRole.ToString()
+                + ", windowKey="
+                + windowKey
+                + ", renderCurrentRequired="
+                + (!paneState.IsRenderSignatureCurrent).ToString()
+                + ", visiblePaneEarlyCompleteBypassesSignatureCheck=true");
+            return true;
         }
 
         internal bool HasManagedPaneForWindow(Excel.Window window)

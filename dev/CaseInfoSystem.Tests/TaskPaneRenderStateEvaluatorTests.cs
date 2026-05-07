@@ -12,7 +12,7 @@ namespace CaseInfoSystem.Tests
     public class TaskPaneRenderStateEvaluatorTests
     {
         [Fact]
-        public void EvaluateDisplayRequestPaneState_WhenSameWorkbookAndSignatureMatches_ReturnsCurrent()
+        public void EvaluateDisplayEntryState_WhenSameWorkbookAndSignatureMatches_ReturnsCurrent()
         {
             var excelInteropService = new ExcelInteropService();
             var workbook = CreateCaseWorkbook("shHOME", caseListRegistered: "0", snapshotCacheCount: "2");
@@ -27,19 +27,22 @@ namespace CaseInfoSystem.Tests
                 ["101"] = host
             };
 
-            TaskPaneDisplayRequestPaneState result = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+            TaskPaneDisplayEntryState result = TaskPaneRenderStateEvaluator.EvaluateDisplayEntryState(
                 excelInteropService,
                 hostsByWindowKey,
                 workbook,
                 window);
 
+            Assert.True(result.HasTargetWindow);
+            Assert.True(result.HasResolvableWindowKey);
+            Assert.True(result.HasManagedPane);
             Assert.True(result.HasExistingHost);
             Assert.True(result.IsSameWorkbook);
             Assert.True(result.IsRenderSignatureCurrent);
         }
 
         [Fact]
-        public void EvaluateDisplayRequestPaneState_WhenActiveSheetChanges_ReturnsSignatureOutdated()
+        public void EvaluateDisplayEntryState_WhenActiveSheetChanges_ReturnsSignatureOutdated()
         {
             var excelInteropService = new ExcelInteropService();
             var workbook = CreateCaseWorkbook("shHOME", caseListRegistered: "0", snapshotCacheCount: "2");
@@ -55,19 +58,22 @@ namespace CaseInfoSystem.Tests
                 ["101"] = host
             };
 
-            TaskPaneDisplayRequestPaneState result = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+            TaskPaneDisplayEntryState result = TaskPaneRenderStateEvaluator.EvaluateDisplayEntryState(
                 excelInteropService,
                 hostsByWindowKey,
                 workbook,
                 window);
 
+            Assert.True(result.HasTargetWindow);
+            Assert.True(result.HasResolvableWindowKey);
+            Assert.True(result.HasManagedPane);
             Assert.True(result.HasExistingHost);
             Assert.True(result.IsSameWorkbook);
             Assert.False(result.IsRenderSignatureCurrent);
         }
 
         [Fact]
-        public void EvaluateDisplayRequestPaneState_WhenCaseListRegisteredChanges_ReturnsSignatureOutdated()
+        public void EvaluateDisplayEntryState_WhenCaseListRegisteredChanges_ReturnsSignatureOutdated()
         {
             var excelInteropService = new ExcelInteropService();
             var workbook = CreateCaseWorkbook("shHOME", caseListRegistered: "0", snapshotCacheCount: "2");
@@ -83,19 +89,22 @@ namespace CaseInfoSystem.Tests
                 ["101"] = host
             };
 
-            TaskPaneDisplayRequestPaneState result = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+            TaskPaneDisplayEntryState result = TaskPaneRenderStateEvaluator.EvaluateDisplayEntryState(
                 excelInteropService,
                 hostsByWindowKey,
                 workbook,
                 window);
 
+            Assert.True(result.HasTargetWindow);
+            Assert.True(result.HasResolvableWindowKey);
+            Assert.True(result.HasManagedPane);
             Assert.True(result.HasExistingHost);
             Assert.True(result.IsSameWorkbook);
             Assert.False(result.IsRenderSignatureCurrent);
         }
 
         [Fact]
-        public void EvaluateDisplayRequestPaneState_WhenSnapshotCacheCountChanges_ReturnsSignatureOutdated()
+        public void EvaluateDisplayEntryState_WhenSnapshotCacheCountChanges_ReturnsSignatureOutdated()
         {
             var excelInteropService = new ExcelInteropService();
             var workbook = CreateCaseWorkbook("shHOME", caseListRegistered: "0", snapshotCacheCount: "2");
@@ -111,12 +120,15 @@ namespace CaseInfoSystem.Tests
                 ["101"] = host
             };
 
-            TaskPaneDisplayRequestPaneState result = TaskPaneRenderStateEvaluator.EvaluateDisplayRequestPaneState(
+            TaskPaneDisplayEntryState result = TaskPaneRenderStateEvaluator.EvaluateDisplayEntryState(
                 excelInteropService,
                 hostsByWindowKey,
                 workbook,
                 window);
 
+            Assert.True(result.HasTargetWindow);
+            Assert.True(result.HasResolvableWindowKey);
+            Assert.True(result.HasManagedPane);
             Assert.True(result.HasExistingHost);
             Assert.True(result.IsSameWorkbook);
             Assert.False(result.IsRenderSignatureCurrent);

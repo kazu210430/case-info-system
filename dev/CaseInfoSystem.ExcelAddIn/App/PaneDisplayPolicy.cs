@@ -12,9 +12,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
         Hide = 3
     }
 
+    internal sealed class TaskPaneDisplayEntryDecision
+    {
+        internal TaskPaneDisplayEntryDecision(PaneDisplayPolicyResult result, TaskPaneDisplayEntryState state)
+        {
+            Result = result;
+            State = state;
+        }
+
+        internal PaneDisplayPolicyResult Result { get; }
+
+        internal TaskPaneDisplayEntryState State { get; }
+    }
+
     internal static class PaneDisplayPolicy
     {
-        internal static PaneDisplayPolicyResult Decide(
+        internal static TaskPaneDisplayEntryDecision Decide(
             TaskPaneDisplayRequest request,
             TaskPaneManager taskPaneManager,
             IWorkbookRoleResolver workbookRoleResolver,
@@ -29,7 +42,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 ShouldDisplayPane(workbookRoleResolver, workbook));
         }
 
-        internal static PaneDisplayPolicyResult Decide(
+        internal static TaskPaneDisplayEntryDecision Decide(
             TaskPaneDisplayRequest request,
             TaskPaneManager taskPaneManager,
             Excel.Workbook workbook,
@@ -38,41 +51,61 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (!IsAcceptedRequest(request))
             {
-                return PaneDisplayPolicyResult.Reject;
-            }
-
-            if (window == null)
-            {
-                return PaneDisplayPolicyResult.Reject;
-            }
-
-            if (!TryResolveWindowKey(window, out _))
-            {
-                return PaneDisplayPolicyResult.Reject;
+                return new TaskPaneDisplayEntryDecision(PaneDisplayPolicyResult.Reject, state: null);
             }
 
             if (taskPaneManager == null)
             {
-                return shouldDisplayPane
-                    ? PaneDisplayPolicyResult.ShowWithRender
-                    : PaneDisplayPolicyResult.Reject;
+                if (window == null)
+                {
+                    return new TaskPaneDisplayEntryDecision(PaneDisplayPolicyResult.Reject, state: null);
+                }
+
+                if (!TryResolveWindowKey(window, out _))
+                {
+                    return new TaskPaneDisplayEntryDecision(PaneDisplayPolicyResult.Reject, state: null);
+                }
+
+                return new TaskPaneDisplayEntryDecision(
+                    shouldDisplayPane
+                        ? PaneDisplayPolicyResult.ShowWithRender
+                        : PaneDisplayPolicyResult.Reject,
+                    state: null);
             }
 
-            bool hasManagedPane = taskPaneManager.HasManagedPaneForWindow(window);
-            bool showedExistingPane = false;
-            bool shouldShowWithRenderPane = false;
-            if (shouldDisplayPane)
+            TaskPaneDisplayEntryState state = taskPaneManager.EvaluateDisplayEntryState(workbook, window);
+            return Decide(request, state, shouldDisplayPane);
+        }
+
+        internal static TaskPaneDisplayEntryDecision Decide(
+            TaskPaneDisplayRequest request,
+            TaskPaneDisplayEntryState state,
+            bool shouldDisplayPane)
+        {
+            if (!IsAcceptedRequest(request)
+                || state == null
+                || !state.HasTargetWindow
+                || !state.HasResolvableWindowKey)
             {
-                showedExistingPane = taskPaneManager.TryShowExistingPaneForDisplayRequest(workbook, window);
-                shouldShowWithRenderPane = !showedExistingPane
-                    && taskPaneManager.ShouldShowWithRenderPaneForDisplayRequest(workbook, window);
+                return new TaskPaneDisplayEntryDecision(PaneDisplayPolicyResult.Reject, state);
             }
 
-            return Decide(
-                shouldDisplayPane,
-                hasManagedPane,
-                showedExistingPane,
-                shouldShowWithRenderPane);
+            bool shouldShowExisting = shouldDisplayPane && TaskPaneShowExistingPolicy.ShouldShowExisting(
+                hasExistingHost: state.HasExistingHost,
+                isSameWorkbook: state.IsSameWorkbook,
+                isRenderSignatureCurrent: state.IsRenderSignatureCurrent);
+            bool shouldShowWithRenderPane = shouldDisplayPane && !shouldShowExisting && TaskPaneShowWithRenderPolicy.ShouldShowWithRender(
+                state.HasExistingHost,
+                state.IsSameWorkbook,
+                state.IsRenderSignatureCurrent);
+
+            return new TaskPaneDisplayEntryDecision(
+                Decide(
+                    shouldDisplayPane,
+                    state.HasManagedPane,
+                    shouldShowExisting,
+                    shouldShowWithRenderPane),
+                state);
         }
 
         internal static bool ShouldDisplayPane(IWorkbookRoleResolver workbookRoleResolver, Excel.Workbook workbook)

@@ -66,14 +66,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return _taskPaneDisplayCoordinator.TryShowExistingPane(_excelInteropService, workbook, window, reason);
         }
 
-        internal bool TryShowExistingPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
+        internal TaskPaneDisplayEntryState EvaluateDisplayEntryState(Excel.Workbook workbook, Excel.Window window)
         {
-            return _taskPaneDisplayCoordinator.TryShowExistingPaneForDisplayRequest(_excelInteropService, workbook, window);
-        }
-
-        internal bool ShouldShowWithRenderPaneForDisplayRequest(Excel.Workbook workbook, Excel.Window window)
-        {
-            return _taskPaneDisplayCoordinator.ShouldShowWithRenderPaneForDisplayRequest(_excelInteropService, workbook, window);
+            return _taskPaneDisplayCoordinator.EvaluateDisplayEntryState(_excelInteropService, workbook, window);
         }
 
         internal bool HasManagedPaneForWindow(Excel.Window window)

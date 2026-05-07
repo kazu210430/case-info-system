@@ -7,14 +7,29 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-    internal sealed class TaskPaneDisplayRequestPaneState
+    internal sealed class TaskPaneDisplayEntryState
     {
-        internal TaskPaneDisplayRequestPaneState(bool hasExistingHost, bool isSameWorkbook, bool isRenderSignatureCurrent)
+        internal TaskPaneDisplayEntryState(
+            bool hasTargetWindow,
+            bool hasResolvableWindowKey,
+            bool hasManagedPane,
+            bool hasExistingHost,
+            bool isSameWorkbook,
+            bool isRenderSignatureCurrent)
         {
+            HasTargetWindow = hasTargetWindow;
+            HasResolvableWindowKey = hasResolvableWindowKey;
+            HasManagedPane = hasManagedPane;
             HasExistingHost = hasExistingHost;
             IsSameWorkbook = isSameWorkbook;
             IsRenderSignatureCurrent = isRenderSignatureCurrent;
         }
+
+        internal bool HasTargetWindow { get; }
+
+        internal bool HasResolvableWindowKey { get; }
+
+        internal bool HasManagedPane { get; }
 
         internal bool HasExistingHost { get; }
 
@@ -38,7 +53,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal static class TaskPaneRenderStateEvaluator
     {
-        internal static TaskPaneDisplayRequestPaneState EvaluateDisplayRequestPaneState(
+        internal static TaskPaneDisplayEntryState EvaluateDisplayEntryState(
             ExcelInteropService excelInteropService,
             IDictionary<string, TaskPaneHost> hostsByWindowKey,
             Excel.Workbook workbook,
@@ -54,11 +69,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 throw new ArgumentNullException(nameof(hostsByWindowKey));
             }
 
+            bool hasTargetWindow = window != null;
+            if (!hasTargetWindow)
+            {
+                return new TaskPaneDisplayEntryState(
+                    hasTargetWindow: false,
+                    hasResolvableWindowKey: false,
+                    hasManagedPane: false,
+                    hasExistingHost: false,
+                    isSameWorkbook: false,
+                    isRenderSignatureCurrent: false);
+            }
+
             string windowKey = SafeGetWindowKey(window);
-            if (string.IsNullOrWhiteSpace(windowKey)
+            bool hasResolvableWindowKey = !string.IsNullOrWhiteSpace(windowKey);
+            if (!hasResolvableWindowKey
                 || !hostsByWindowKey.TryGetValue(windowKey, out TaskPaneHost host))
             {
-                return new TaskPaneDisplayRequestPaneState(false, false, false);
+                return new TaskPaneDisplayEntryState(
+                    hasTargetWindow: true,
+                    hasResolvableWindowKey: hasResolvableWindowKey,
+                    hasManagedPane: false,
+                    hasExistingHost: false,
+                    isSameWorkbook: false,
+                    isRenderSignatureCurrent: false);
             }
 
             string workbookFullName = workbook == null ? string.Empty : excelInteropService.GetWorkbookFullName(workbook);
@@ -67,13 +101,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 && string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase);
             if (!isSameWorkbook)
             {
-                return new TaskPaneDisplayRequestPaneState(true, false, false);
+                return new TaskPaneDisplayEntryState(
+                    hasTargetWindow: true,
+                    hasResolvableWindowKey: true,
+                    hasManagedPane: true,
+                    hasExistingHost: true,
+                    isSameWorkbook: false,
+                    isRenderSignatureCurrent: false);
             }
 
             WorkbookRole role = GetHostedWorkbookRole(host);
             if (role == WorkbookRole.Unknown)
             {
-                return new TaskPaneDisplayRequestPaneState(true, true, false);
+                return new TaskPaneDisplayEntryState(
+                    hasTargetWindow: true,
+                    hasResolvableWindowKey: true,
+                    hasManagedPane: true,
+                    hasExistingHost: true,
+                    isSameWorkbook: true,
+                    isRenderSignatureCurrent: false);
             }
 
             string renderSignature = BuildRenderSignature(
@@ -88,7 +134,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool isRenderSignatureCurrent =
                 !string.IsNullOrWhiteSpace(host.LastRenderSignature)
                 && string.Equals(host.LastRenderSignature, renderSignature, StringComparison.Ordinal);
-            return new TaskPaneDisplayRequestPaneState(true, true, isRenderSignatureCurrent);
+            return new TaskPaneDisplayEntryState(
+                hasTargetWindow: true,
+                hasResolvableWindowKey: true,
+                hasManagedPane: true,
+                hasExistingHost: true,
+                isSameWorkbook: true,
+                isRenderSignatureCurrent: isRenderSignatureCurrent);
         }
 
         internal static TaskPaneRenderStateEvaluation EvaluateRenderState(

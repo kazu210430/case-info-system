@@ -155,47 +155,82 @@ namespace CaseInfoSystem.Tests
         [Fact]
         public void Decide_ReturnsReject_WhenRequestIsNotAccepted()
         {
-            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+            TaskPaneDisplayEntryDecision decision = PaneDisplayPolicy.Decide(
                 request: null,
                 taskPaneManager: null,
+                workbookRoleResolver: null,
                 workbook: null,
-                window: new Excel.Window { Hwnd = 101 },
-                shouldDisplayPane: true);
+                window: new Excel.Window { Hwnd = 101 });
 
-            Assert.Equal(PaneDisplayPolicyResult.Reject, result);
+            Assert.Equal(PaneDisplayPolicyResult.Reject, decision.Result);
         }
 
         [Fact]
         public void Decide_ReturnsReject_WhenTargetWindowIsMissing()
         {
-            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+            TaskPaneDisplayEntryDecision decision = PaneDisplayPolicy.Decide(
                 TaskPaneDisplayRequest.ForWindowActivate(),
                 taskPaneManager: null,
+                workbookRoleResolver: null,
                 workbook: null,
-                window: null,
-                shouldDisplayPane: true);
+                window: null);
 
-            Assert.Equal(PaneDisplayPolicyResult.Reject, result);
+            Assert.Equal(PaneDisplayPolicyResult.Reject, decision.Result);
         }
 
         [Fact]
         public void Decide_ReturnsHide_WhenRequestIsAccepted_AndManagedPaneRemains_ForNonDisplayTarget()
         {
-            var manager = TaskPaneManagerRuntimeBootstrap.CreateThinAttachedForTests(
-                OrchestrationTestSupport.CreateLogger(new System.Collections.Generic.List<string>()),
-                OrchestrationTestSupport.CreateKernelCaseInteractionState(new System.Collections.Generic.List<string>()),
-                testHooks: null);
-            var targetWindow = new Excel.Window { Hwnd = 123 };
-            manager.RegisterHost(OrchestrationTestSupport.CreateTaskPaneHost(new CaseInfoSystem.ExcelAddIn.UI.DocumentButtonsControl(), "123"));
-
-            PaneDisplayPolicyResult result = PaneDisplayPolicy.Decide(
+            TaskPaneDisplayEntryDecision decision = PaneDisplayPolicy.Decide(
                 TaskPaneDisplayRequest.ForWindowActivate(),
-                manager,
-                workbook: null,
-                window: targetWindow,
+                new TaskPaneDisplayEntryState(
+                    hasTargetWindow: true,
+                    hasResolvableWindowKey: true,
+                    hasManagedPane: true,
+                    hasExistingHost: true,
+                    isSameWorkbook: false,
+                    isRenderSignatureCurrent: false),
                 shouldDisplayPane: false);
 
-            Assert.Equal(PaneDisplayPolicyResult.Hide, result);
+            Assert.Equal(PaneDisplayPolicyResult.Hide, decision.Result);
+        }
+
+        [Fact]
+        public void Decide_ReturnsShowExisting_WhenStateIsCurrentForSameWorkbook()
+        {
+            TaskPaneDisplayEntryState state = new TaskPaneDisplayEntryState(
+                hasTargetWindow: true,
+                hasResolvableWindowKey: true,
+                hasManagedPane: true,
+                hasExistingHost: true,
+                isSameWorkbook: true,
+                isRenderSignatureCurrent: true);
+
+            TaskPaneDisplayEntryDecision decision = PaneDisplayPolicy.Decide(
+                TaskPaneDisplayRequest.ForWindowActivate(),
+                state,
+                shouldDisplayPane: true);
+
+            Assert.Equal(PaneDisplayPolicyResult.ShowExisting, decision.Result);
+        }
+
+        [Fact]
+        public void Decide_ReturnsShowWithRender_WhenStateRequiresRerender()
+        {
+            TaskPaneDisplayEntryState state = new TaskPaneDisplayEntryState(
+                hasTargetWindow: true,
+                hasResolvableWindowKey: true,
+                hasManagedPane: true,
+                hasExistingHost: true,
+                isSameWorkbook: true,
+                isRenderSignatureCurrent: false);
+
+            TaskPaneDisplayEntryDecision decision = PaneDisplayPolicy.Decide(
+                TaskPaneDisplayRequest.ForWindowActivate(),
+                state,
+                shouldDisplayPane: true);
+
+            Assert.Equal(PaneDisplayPolicyResult.ShowWithRender, decision.Result);
         }
 
         [Theory]

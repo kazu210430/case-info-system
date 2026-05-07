@@ -450,15 +450,16 @@ namespace CaseInfoSystem.ExcelAddIn
                 _taskPaneManager?.PrepareTargetWindowForForcedRefresh(targetWindow);
             }
 
-            PaneDisplayPolicyResult displayPolicyResult = PaneDisplayPolicy.Decide(
+            TaskPaneDisplayEntryDecision displayEntryDecision = PaneDisplayPolicy.Decide(
                 request,
                 _taskPaneManager,
                 _workbookRoleResolver,
                 workbook,
                 targetWindow);
-            switch (displayPolicyResult)
+            switch (displayEntryDecision.Result)
             {
                 case PaneDisplayPolicyResult.ShowExisting:
+                    _taskPaneManager?.TryShowExistingPane(workbook, targetWindow, "DisplayRequest.ShowExisting");
                     return;
 
                 case PaneDisplayPolicyResult.Hide:

@@ -39,7 +39,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private TaskPaneManagerRuntimeEntryContext(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -54,7 +53,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             AddIn = addIn;
             ExcelInteropService = excelInteropService;
-            CaseTaskPaneSnapshotReader = caseTaskPaneSnapshotReader;
             TaskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher;
             KernelCommandService = kernelCommandService;
             AccountingSheetCommandService = accountingSheetCommandService;
@@ -71,7 +69,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal static TaskPaneManagerRuntimeEntryContext CreateProductionFull(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -85,7 +82,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return CreateFullForTests(
                 addIn,
                 excelInteropService,
-                caseTaskPaneSnapshotReader,
                 taskPaneBusinessActionLauncher,
                 kernelCommandService,
                 accountingSheetCommandService,
@@ -101,7 +97,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal static TaskPaneManagerRuntimeEntryContext CreateFullForTests(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -116,7 +111,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new TaskPaneManagerRuntimeEntryContext(
                 addIn ?? throw new ArgumentNullException(nameof(addIn)),
                 excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService)),
-                caseTaskPaneSnapshotReader ?? throw new ArgumentNullException(nameof(caseTaskPaneSnapshotReader)),
                 taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher)),
                 kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService)),
                 accountingSheetCommandService ?? throw new ArgumentNullException(nameof(accountingSheetCommandService)),
@@ -138,7 +132,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new TaskPaneManagerRuntimeEntryContext(
                 addIn: null,
                 excelInteropService: null,
-                caseTaskPaneSnapshotReader: null,
                 taskPaneBusinessActionLauncher: null,
                 kernelCommandService: null,
                 accountingSheetCommandService: null,
@@ -172,8 +165,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal ThisAddIn AddIn { get; }
 
         internal ExcelInteropService ExcelInteropService { get; }
-
-        internal ICaseTaskPaneSnapshotReader CaseTaskPaneSnapshotReader { get; }
 
         internal TaskPaneBusinessActionLauncher TaskPaneBusinessActionLauncher { get; }
 
@@ -291,7 +282,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal static TaskPaneManager CreateAttached(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -306,7 +296,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 TaskPaneManagerRuntimeEntryContext.CreateProductionFull(
                     addIn,
                     excelInteropService,
-                    caseTaskPaneSnapshotReader,
                     taskPaneBusinessActionLauncher,
                     kernelCommandService,
                     accountingSheetCommandService,
@@ -323,7 +312,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal static TaskPaneManager CreateAttachedForTests(
             ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
             TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
             KernelCommandService kernelCommandService,
             AccountingSheetCommandService accountingSheetCommandService,
@@ -339,7 +327,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 TaskPaneManagerRuntimeEntryContext.CreateFullForTests(
                     addIn,
                     excelInteropService,
-                    caseTaskPaneSnapshotReader,
                     taskPaneBusinessActionLauncher,
                     kernelCommandService,
                     accountingSheetCommandService,

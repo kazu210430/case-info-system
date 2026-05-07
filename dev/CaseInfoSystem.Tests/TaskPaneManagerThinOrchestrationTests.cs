@@ -380,7 +380,6 @@ namespace CaseInfoSystem.Tests
             return TaskPaneManagerRuntimeBootstrap.CreateAttachedForTests(
                 new CaseInfoSystem.ExcelAddIn.ThisAddIn(),
                 new ExcelInteropService(),
-                caseTaskPaneSnapshotReader,
                 new TaskPaneBusinessActionLauncher(
                     CreateDocumentCommandService(),
                     new DocumentNamePromptService()),

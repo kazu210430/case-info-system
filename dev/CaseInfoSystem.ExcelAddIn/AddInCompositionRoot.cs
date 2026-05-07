@@ -676,7 +676,6 @@ namespace CaseInfoSystem.ExcelAddIn
             var taskPaneManager = TaskPaneManagerRuntimeBootstrap.CreateAttached(
                 _addIn,
                 excelInteropService,
-                caseTaskPaneSnapshotReader,
                 taskPaneBusinessActionLauncher,
                 kernelCommandService,
                 accountingSheetCommandService,

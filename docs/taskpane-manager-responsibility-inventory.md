@@ -379,6 +379,7 @@
 
 - `RuntimeBootstrapAccess` is documented and scoped as a bootstrap-only bridge to private manager construction and private attach.
 - The compose input is split into entry-time and graph-compose-time contexts so the graph factory no longer receives manager-construction-only dependencies.
+- As of 2026-05-08, the bootstrap entry payload also excludes `ICaseTaskPaneSnapshotReader`; attach orchestration now treats the render service, not the raw snapshot reader, as the last required snapshot-side input.
 - `TaskPaneManagerRuntimeGraph` remains a passive bundle and still does not own runtime state, lifecycle, or orchestration.
 
 ## B2 Prep Status: VSTO Boundary Inventory (2026-05-06)

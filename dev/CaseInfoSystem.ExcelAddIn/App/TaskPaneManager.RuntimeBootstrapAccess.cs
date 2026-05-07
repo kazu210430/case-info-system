@@ -17,19 +17,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 return new TaskPaneManager(
-                    context.AddIn,
                     context.ExcelInteropService,
-                    context.CaseTaskPaneSnapshotReader,
-                    context.TaskPaneBusinessActionLauncher,
-                    context.KernelCommandService,
-                    context.AccountingSheetCommandService,
-                    context.CaseTaskPaneViewStateBuilder,
                     context.CasePaneSnapshotRenderService,
-                    context.AccountingInternalCommandService,
-                    context.KernelCaseInteractionState,
-                    context.UserErrorService,
-                    context.Logger,
-                    context.TestHooks);
+                    context.Logger);
             }
 
             internal static TaskPaneManager CreateUnattachedThinForBootstrap(TaskPaneManagerRuntimeEntryContext context)
@@ -40,9 +30,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 return new TaskPaneManager(
-                    context.Logger,
-                    context.KernelCaseInteractionState,
-                    context.TestHooks);
+                    context.Logger);
             }
 
             internal static void AttachRuntimeGraphForBootstrap(TaskPaneManager manager, TaskPaneManagerRuntimeGraph runtimeGraph)

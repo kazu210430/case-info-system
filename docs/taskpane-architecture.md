@@ -86,8 +86,8 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 ### `TaskPaneManager`
 
-- TaskPane 側の facade / composition root である
-- `TaskPaneHostRegistry`、`TaskPaneDisplayCoordinator`、`TaskPaneHostLifecycleService`、`TaskPaneHostFlowService`、`TaskPaneActionDispatcher` などを組み立てる
+- TaskPane 側の facade であり、shared host-map owner と role 別 render seam owner である
+- runtime graph の compose / attach 境界は `TaskPaneManagerRuntimeBootstrap` / `TaskPaneManagerRuntimeGraphFactory` 側にあり、manager 自身は registration owner や action graph compose owner を持たない
 - role 別 render 切替、host-map facade surface、周辺 service への委譲入口を担う
 - `RefreshPane(...)` 本線は `TaskPaneHostFlowService` に委譲し、自身は retry / ready-show / protection / window resolve を持たない
 - lightweight helper / policy として `TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` を使う

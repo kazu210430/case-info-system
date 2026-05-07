@@ -6,25 +6,23 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    // Manager attach payload: only collaborators that TaskPaneManager directly consumes at runtime live here.
+    // Registration ownership stays on the compose/lifecycle side and is not routed back through manager attach.
     internal sealed class TaskPaneManagerRuntimeGraph
     {
         internal TaskPaneManagerRuntimeGraph(
             CasePaneCacheRefreshNotificationService casePaneCacheRefreshNotificationService,
-            TaskPaneHostRegistry taskPaneHostRegistry,
             TaskPaneHostLifecycleService taskPaneHostLifecycleService,
             TaskPaneDisplayCoordinator taskPaneDisplayCoordinator,
             TaskPaneHostFlowService taskPaneHostFlowService)
         {
             CasePaneCacheRefreshNotificationService = casePaneCacheRefreshNotificationService ?? throw new ArgumentNullException(nameof(casePaneCacheRefreshNotificationService));
-            TaskPaneHostRegistry = taskPaneHostRegistry ?? throw new ArgumentNullException(nameof(taskPaneHostRegistry));
             TaskPaneHostLifecycleService = taskPaneHostLifecycleService ?? throw new ArgumentNullException(nameof(taskPaneHostLifecycleService));
             TaskPaneDisplayCoordinator = taskPaneDisplayCoordinator ?? throw new ArgumentNullException(nameof(taskPaneDisplayCoordinator));
             TaskPaneHostFlowService = taskPaneHostFlowService ?? throw new ArgumentNullException(nameof(taskPaneHostFlowService));
         }
 
         internal CasePaneCacheRefreshNotificationService CasePaneCacheRefreshNotificationService { get; }
-
-        internal TaskPaneHostRegistry TaskPaneHostRegistry { get; }
 
         internal TaskPaneHostLifecycleService TaskPaneHostLifecycleService { get; }
 
@@ -477,7 +475,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             return new TaskPaneManagerRuntimeGraph(
                 casePaneCacheRefreshNotificationService,
-                taskPaneHostRegistry,
                 taskPaneHostLifecycleService,
                 taskPaneDisplayCoordinator,
                 taskPaneHostFlowService);

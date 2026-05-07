@@ -65,7 +65,7 @@
 
 | 分類 | 現在の owner | runtime state owner | 変更理由 | AddInCompositionRoot 側候補 | manager / facade に残すべきか | 危険度 |
 | --- | --- | --- | --- | --- | --- | --- |
-| runtime composition / wiring | `AddInTaskPaneCompositionFactory` と `TaskPaneManager` constructor と `TaskPaneHostRegistry` constructor に分散 | なし | helper / handler / registry / display / flow の wiring を変える時に変わる | はい。最終的には `AddInTaskPaneCompositionFactory` 側へ寄せるのが自然 | いいえ。facade の変更理由ではない | `Safe extraction` |
+| runtime composition / wiring | `AddInTaskPaneCompositionFactory` と `TaskPaneManagerRuntimeGraphFactory` に集約し、manager attach は runtime-consumed collaborator のみ | なし | helper / handler / registry / display / flow の wiring を変える時に変わる | はい。最終的には `AddInTaskPaneCompositionFactory` 側へ寄せるのが自然 | いいえ。facade の変更理由ではない | `Safe extraction` |
 | facade entry surface | `TaskPaneManager` | `TaskPaneManager` | `ThisAddIn` / bridge / test から呼ぶ surface を変える時に変わる | いいえ | はい。`RefreshPane`、`Hide*`、`Has*`、`DisposeAll` などの薄い入口は残してよい | `Runtime-sensitive` |
 | host registry data | 実装上は `TaskPaneManager` が `_hostsByWindowKey` を所有し、`TaskPaneHostRegistry` / `TaskPaneHostLifecycleService` / `TaskPaneDisplayCoordinator` / action resolver 群が共有利用 | 実装上は `TaskPaneManager` | host 集合の持ち方や lookup 方式を変える時に変わる | 条件付き。まず owner を docs で固定しないと危険 | facade 直下に state を持つのは薄い facade と相性が悪い | `Runtime-sensitive` |
 | host lifecycle primitive | `TaskPaneHostLifecycleService` | registry 共有 host map | get-or-replace / remove / dispose / workbook 単位 cleanup の semantics を変える時に変わる | composition だけ root 側へ寄せられる | facade には残さない | `Runtime-sensitive` |

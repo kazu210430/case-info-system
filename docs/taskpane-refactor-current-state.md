@@ -62,7 +62,7 @@
 - refresh-time orchestration は `TaskPaneHostFlowService` へ外出し済みです。
 - 軽量 helper / policy として、`TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` が main に反映済みです。
 - `TaskPaneHostRegistry` は外出し済みで、host 生成、差し替え、破棄、workbook 単位 cleanup の内部整理が main に反映済みです。
-- 一方で `TaskPaneManager` constructor は、`CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry`、`TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`TaskPaneHostFlowService` などの internal wiring をまだ内部で保持しており、runtime composition 整理は次フェーズ候補です。
+- `TaskPaneManager` には render seam と facade entry に必要な collaborator だけが attach され、`TaskPaneHostRegistry` を含む registration / handler compose は `TaskPaneManagerRuntimeGraphFactory` 側へ残す current-state に揃いました。
 
 ### 1-3. TaskPane refresh orchestration の到達点
 

@@ -9,73 +9,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed partial class TaskPaneManager
     {
-        private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
-        private readonly ICaseTaskPaneSnapshotReader _caseTaskPaneSnapshotReader;
-        private readonly TaskPaneBusinessActionLauncher _taskPaneBusinessActionLauncher;
-        private readonly KernelCommandService _kernelCommandService;
-        private readonly AccountingSheetCommandService _accountingSheetCommandService;
-        private readonly CaseTaskPaneViewStateBuilder _caseTaskPaneViewStateBuilder;
         private readonly CasePaneSnapshotRenderService _casePaneSnapshotRenderService;
-        private readonly AccountingInternalCommandService _accountingInternalCommandService;
-        private readonly UserErrorService _userErrorService;
-        private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly Dictionary<string, TaskPaneHost> _hostsByWindowKey;
-        private readonly TaskPaneManagerTestHooks _testHooks;
-        private TaskPaneHostRegistry _taskPaneHostRegistry;
         private TaskPaneHostLifecycleService _taskPaneHostLifecycleService;
         private TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
         private TaskPaneHostFlowService _taskPaneHostFlowService;
         private CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
 
         private TaskPaneManager(
-            ThisAddIn addIn,
             ExcelInteropService excelInteropService,
-            ICaseTaskPaneSnapshotReader caseTaskPaneSnapshotReader,
-            TaskPaneBusinessActionLauncher taskPaneBusinessActionLauncher,
-            KernelCommandService kernelCommandService,
-            AccountingSheetCommandService accountingSheetCommandService,
-            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
             CasePaneSnapshotRenderService casePaneSnapshotRenderService,
-            AccountingInternalCommandService accountingInternalCommandService,
-            KernelCaseInteractionState kernelCaseInteractionState,
-            UserErrorService userErrorService,
-            Logger logger,
-            TaskPaneManagerTestHooks testHooks)
+            Logger logger)
         {
-            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
-            _caseTaskPaneSnapshotReader = caseTaskPaneSnapshotReader ?? throw new ArgumentNullException(nameof(caseTaskPaneSnapshotReader));
-            _taskPaneBusinessActionLauncher = taskPaneBusinessActionLauncher ?? throw new ArgumentNullException(nameof(taskPaneBusinessActionLauncher));
-            _kernelCommandService = kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService));
-            _accountingSheetCommandService = accountingSheetCommandService ?? throw new ArgumentNullException(nameof(accountingSheetCommandService));
-            _caseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
             _casePaneSnapshotRenderService = casePaneSnapshotRenderService ?? throw new ArgumentNullException(nameof(casePaneSnapshotRenderService));
-            _accountingInternalCommandService = accountingInternalCommandService ?? throw new ArgumentNullException(nameof(accountingInternalCommandService));
-            _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
-            _userErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
-            _testHooks = testHooks;
         }
 
-        private TaskPaneManager(Logger logger, KernelCaseInteractionState kernelCaseInteractionState, TaskPaneManagerTestHooks testHooks)
+        private TaskPaneManager(Logger logger)
         {
-            _addIn = null;
-            _excelInteropService = null;
-            _caseTaskPaneSnapshotReader = null;
-            _taskPaneBusinessActionLauncher = null;
-            _kernelCommandService = null;
-            _accountingSheetCommandService = null;
-            _caseTaskPaneViewStateBuilder = null;
-            _casePaneSnapshotRenderService = null;
-            _accountingInternalCommandService = null;
-            _userErrorService = null;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
+            _excelInteropService = null;
+            _casePaneSnapshotRenderService = null;
             _hostsByWindowKey = new Dictionary<string, TaskPaneHost>(StringComparer.OrdinalIgnoreCase);
-            _testHooks = testHooks;
         }
 
         private void AttachRuntimeGraph(TaskPaneManagerRuntimeGraph runtimeGraph)
@@ -90,8 +49,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 throw new InvalidOperationException("TaskPaneManager runtime graph is already attached.");
             }
 
+            // Attach only runtime-consumed collaborators here. Registry ownership stays below lifecycle/compose layers.
             _casePaneCacheRefreshNotificationService = runtimeGraph.CasePaneCacheRefreshNotificationService ?? throw new ArgumentException("Case pane cache notification service is required.", nameof(runtimeGraph));
-            _taskPaneHostRegistry = runtimeGraph.TaskPaneHostRegistry ?? throw new ArgumentException("Task pane host registry is required.", nameof(runtimeGraph));
             _taskPaneHostLifecycleService = runtimeGraph.TaskPaneHostLifecycleService ?? throw new ArgumentException("Task pane host lifecycle service is required.", nameof(runtimeGraph));
             _taskPaneDisplayCoordinator = runtimeGraph.TaskPaneDisplayCoordinator ?? throw new ArgumentException("Task pane display coordinator is required.", nameof(runtimeGraph));
             _taskPaneHostFlowService = runtimeGraph.TaskPaneHostFlowService ?? throw new ArgumentException("Task pane host flow service is required.", nameof(runtimeGraph));

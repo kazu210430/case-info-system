@@ -7,7 +7,7 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-    internal sealed class TaskPaneManager
+    internal sealed partial class TaskPaneManager
     {
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
@@ -320,57 +320,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal Dictionary<string, TaskPaneHost> HostsByWindowKey
         {
             get { return _hostsByWindowKey; }
-        }
-
-        // Bridge used only by TaskPaneManagerRuntimeBootstrap. It exposes private construction/attach seams
-        // without reopening TaskPaneManager as a general runtime entrypoint.
-        internal static class RuntimeBootstrapAccess
-        {
-            internal static TaskPaneManager CreateUnattachedFullForBootstrap(TaskPaneManagerRuntimeEntryContext context)
-            {
-                if (context == null)
-                {
-                    throw new ArgumentNullException(nameof(context));
-                }
-
-                return new TaskPaneManager(
-                    context.AddIn,
-                    context.ExcelInteropService,
-                    context.CaseTaskPaneSnapshotReader,
-                    context.TaskPaneBusinessActionLauncher,
-                    context.KernelCommandService,
-                    context.AccountingSheetCommandService,
-                    context.CaseTaskPaneViewStateBuilder,
-                    context.CasePaneSnapshotRenderService,
-                    context.AccountingInternalCommandService,
-                    context.KernelCaseInteractionState,
-                    context.UserErrorService,
-                    context.Logger,
-                    context.TestHooks);
-            }
-
-            internal static TaskPaneManager CreateUnattachedThinForBootstrap(TaskPaneManagerRuntimeEntryContext context)
-            {
-                if (context == null)
-                {
-                    throw new ArgumentNullException(nameof(context));
-                }
-
-                return new TaskPaneManager(
-                    context.Logger,
-                    context.KernelCaseInteractionState,
-                    context.TestHooks);
-            }
-
-            internal static void AttachRuntimeGraphForBootstrap(TaskPaneManager manager, TaskPaneManagerRuntimeGraph runtimeGraph)
-            {
-                if (manager == null)
-                {
-                    throw new ArgumentNullException(nameof(manager));
-                }
-
-                manager.AttachRuntimeGraph(runtimeGraph);
-            }
         }
 
         private static class TaskPaneManagerDiagnosticHelper

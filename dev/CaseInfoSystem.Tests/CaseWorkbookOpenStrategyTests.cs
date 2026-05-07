@@ -232,6 +232,31 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void OpenHiddenForCaseDisplay_DoesNotRestorePreviousWindow_WhenSharedApplicationWasHidden()
+        {
+            using (new HiddenRouteEnvironmentScope())
+            {
+                var logs = new List<string>();
+                Excel.Window previousWindow = new Excel.Window { Visible = false };
+                Excel.Application application = new Excel.Application
+                {
+                    Visible = false,
+                    ScreenUpdating = true,
+                    EnableEvents = true,
+                    DisplayAlerts = true,
+                    ActiveWindow = previousWindow
+                };
+                var strategy = new CaseWorkbookOpenStrategy(application, new WorkbookRoleResolver(), OrchestrationTestSupport.CreateLogger(logs));
+
+                Excel.Workbook workbook = strategy.OpenHiddenForCaseDisplay(@"C:\Cases\display-hidden-app.xlsx");
+
+                Assert.NotNull(workbook);
+                Assert.False(previousWindow.Visible);
+                Assert.False(previousWindow.Activated);
+            }
+        }
+
+        [Fact]
         public void OpenHiddenForCaseDisplay_RestoresExcelState_OnOpenFailure()
         {
             using (new HiddenRouteEnvironmentScope())
@@ -240,6 +265,7 @@ namespace CaseInfoSystem.Tests
                 Excel.Window previousWindow = new Excel.Window { Visible = true };
                 Excel.Application application = new Excel.Application
                 {
+                    Visible = true,
                     ScreenUpdating = true,
                     EnableEvents = true,
                     DisplayAlerts = true,

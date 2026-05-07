@@ -264,6 +264,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             Stopwatch stopwatch = Stopwatch.StartNew();
             Excel.Window previousActiveWindow = null;
             Excel.Workbook workbook = null;
+            bool previousApplicationVisible = SafeApplicationVisible(_application);
             bool previousScreenUpdating = _application.ScreenUpdating;
             bool previousEnableEvents = _application.EnableEvents;
             bool previousDisplayAlerts = _application.DisplayAlerts;
@@ -301,7 +302,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 	                HideOpenedWorkbookWindow(workbook);
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "hideOpenedWorkbookWindow", stopwatch2.ElapsedMilliseconds, "route=" + CreatedCaseDisplayHiddenRouteName);
 	                stopwatch2 = Stopwatch.StartNew();
-	                RestorePreviousWindow(previousActiveWindow);
+	                RestorePreviousWindowForHiddenDisplay(previousActiveWindow, previousApplicationVisible, caseWorkbookPath, stopwatch);
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "restorePreviousWindow", stopwatch2.ElapsedMilliseconds, "route=" + CreatedCaseDisplayHiddenRouteName);
 	                _logger.Info(
                     "Case workbook hidden-for-display open completed. path="
@@ -317,7 +318,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             catch
             {
                 TryCloseWorkbookWithoutSaving(workbook);
-                RestorePreviousWindow(previousActiveWindow);
+                RestorePreviousWindowForHiddenDisplay(previousActiveWindow, previousApplicationVisible, caseWorkbookPath, stopwatch);
                 throw;
             }
             finally
@@ -330,6 +331,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     previousEnableEvents,
                     previousDisplayAlerts);
             }
+        }
+
+        private void RestorePreviousWindowForHiddenDisplay(Excel.Window previousActiveWindow, bool previousApplicationVisible, string caseWorkbookPath, Stopwatch stopwatch)
+        {
+            if (!previousApplicationVisible)
+            {
+                _logger.Info(
+                    "Case workbook hidden-for-display previous window restore skipped because shared application was hidden. path="
+                    + (caseWorkbookPath ?? string.Empty)
+                    + ", route="
+                    + CreatedCaseDisplayHiddenRouteName
+                    + ", elapsedMs="
+                    + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                return;
+            }
+
+            RestorePreviousWindow(previousActiveWindow);
         }
 
         private HiddenCaseWorkbookSession OpenHiddenWorkbookWithDedicatedApplication(string caseWorkbookPath)
@@ -894,6 +912,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        private static bool SafeApplicationVisible(Excel.Application application)
+        {
+            try
+            {
+                return application != null && application.Visible;
+            }
+            catch
+            {
+                return false;
             }
         }
 

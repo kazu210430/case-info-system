@@ -11,6 +11,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
     // 2. Keep a single entry point into the frozen fallback path.
     internal sealed class TaskPaneActionDispatcher
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private const string DocumentActionKind = "doc";
         private const string AccountingActionKind = "accounting";
 
@@ -125,6 +126,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal void HandlePostActionRefresh(TaskPaneHost host, Excel.Workbook workbook, DocumentButtonsControl control, string actionKind)
         {
             TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide(actionKind);
+            bool beforeSignaturePresent = host != null && !string.IsNullOrWhiteSpace(host.LastRenderSignature);
+            bool addInPresent = _addIn != null;
+            bool hostWindowPresent = host != null && host.Window != null;
             if (decision == TaskPanePostActionRefreshDecision.SkipForForegroundPreservation)
             {
                 string reason = string.Equals(actionKind, "accounting", StringComparison.OrdinalIgnoreCase)
@@ -137,6 +141,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (decision == TaskPanePostActionRefreshDecision.DeferAndInvalidateSignature)
             {
                 _invalidateHostRenderStateForForcedRefresh(host);
+                bool afterSignaturePresent = host != null && !string.IsNullOrWhiteSpace(host.LastRenderSignature);
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneActionDispatcher action=post-action-metadata actionKind="
+                    + (actionKind ?? string.Empty)
+                    + ", postActionInvalidation=true"
+                    + ", fallbackRewrite=false"
+                    + ", fallbackReason=\"CASE pane refresh after case-list action was deferred so Kernel navigation can take the foreground.\""
+                    + ", beforeSignaturePresent="
+                    + beforeSignaturePresent.ToString()
+                    + ", afterSignaturePresent="
+                    + afterSignaturePresent.ToString()
+                    + ", invalidateThenLocalRender=false"
+                    + ", tryShowHostAfterRewrite=false"
+                    + ", addInPresent="
+                    + addInPresent.ToString()
+                    + ", hostWindowPresent="
+                    + hostWindowPresent.ToString());
                 _logger.Info("CASE pane refresh after case-list action was deferred so Kernel navigation can take the foreground.");
                 return;
             }
@@ -151,7 +173,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            if (_addIn != null && host.Window != null)
+            bool beforeSignaturePresent = !string.IsNullOrWhiteSpace(host.LastRenderSignature);
+            bool addInPresent = _addIn != null;
+            bool hostWindowPresent = host.Window != null;
+            if (addInPresent && hostWindowPresent)
             {
                 _addIn.RequestTaskPaneDisplayForTargetWindow(
                     TaskPaneDisplayRequest.ForPostActionRefresh(actionKind),
@@ -160,6 +185,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            string fallbackReason = !addInPresent
+                ? "add-in was not available for post-action display request."
+                : "host window was not available for post-action display request.";
             _invalidateHostRenderStateForForcedRefresh(host);
             _renderCaseHostAfterAction(control, workbook);
             host.LastRenderSignature = TaskPaneRenderStateEvaluator.BuildRenderSignature(
@@ -171,7 +199,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT"),
                     _excelInteropService.GetWorkbookFullName(workbook),
                     _excelInteropService.GetActiveSheetCodeName(workbook)));
-            if (!_tryShowHost(host, "RefreshCaseHostAfterAction"))
+            bool afterSignaturePresent = !string.IsNullOrWhiteSpace(host.LastRenderSignature);
+            bool tryShowHostAfterRewrite = _tryShowHost(host, "RefreshCaseHostAfterAction");
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneActionDispatcher action=post-action-metadata actionKind="
+                + (actionKind ?? string.Empty)
+                + ", postActionInvalidation=true"
+                + ", fallbackRewrite=true"
+                + ", fallbackReason=\""
+                + fallbackReason
+                + "\""
+                + ", beforeSignaturePresent="
+                + beforeSignaturePresent.ToString()
+                + ", afterSignaturePresent="
+                + afterSignaturePresent.ToString()
+                + ", invalidateThenLocalRender=true"
+                + ", tryShowHostAfterRewrite="
+                + tryShowHostAfterRewrite.ToString()
+                + ", addInPresent="
+                + addInPresent.ToString()
+                + ", hostWindowPresent="
+                + hostWindowPresent.ToString());
+            if (!tryShowHostAfterRewrite)
             {
                 _logger.Warn("CASE pane refresh after action skipped because host could not be shown. workbook=" + (host.WorkbookFullName ?? string.Empty));
                 return;

@@ -66,6 +66,35 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void GetMode_WhenPathChangesToDisabled_ReloadsDisabledMode()
+        {
+            string currentPath = @"C:\runtime-a\DocumentExecutionMode.txt";
+            DateTime currentTimestamp = new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc);
+            var valuesByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [@"C:\runtime-a\DocumentExecutionMode.txt"] = "PilotOnly",
+                [@"C:\runtime-b\DocumentExecutionMode.txt"] = "Disabled"
+            };
+
+            var service = new DocumentExecutionModeService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new ExcelInteropService(),
+                new DocumentExecutionModeService.DocumentExecutionModeServiceTestHooks
+                {
+                    GetModeFileLastWriteTimeUtc = path => currentTimestamp,
+                    ModeFileExists = path => true,
+                    ReadModeFileLines = path => new[] { valuesByPath[path] },
+                    ResolveModeFilePath = () => currentPath
+                });
+
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileA, service.GetConfiguredMode());
+
+            currentPath = @"C:\runtime-b\DocumentExecutionMode.txt";
+
+            Assert.Equal(DocumentExecutionMode.Disabled, service.GetConfiguredMode());
+        }
+
+        [Fact]
         public void GetMode_WhenReloadFails_KeepsPreviousValidMode()
         {
             string modePath = @"C:\runtime\DocumentExecutionMode.txt";
@@ -116,6 +145,23 @@ namespace CaseInfoSystem.Tests
                 });
 
             Assert.True(service.IsWordWarmupEnabled());
+        }
+
+        [Fact]
+        public void IsWordWarmupEnabled_WhenModeIsDisabled_ReturnsFalse()
+        {
+            var service = new DocumentExecutionModeService(
+                OrchestrationTestSupport.CreateLogger(new List<string>()),
+                new ExcelInteropService(),
+                new DocumentExecutionModeService.DocumentExecutionModeServiceTestHooks
+                {
+                    GetModeFileLastWriteTimeUtc = path => new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc),
+                    ModeFileExists = path => true,
+                    ReadModeFileLines = path => new[] { "Disabled" },
+                    ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
+                });
+
+            Assert.False(service.IsWordWarmupEnabled());
         }
     }
 }

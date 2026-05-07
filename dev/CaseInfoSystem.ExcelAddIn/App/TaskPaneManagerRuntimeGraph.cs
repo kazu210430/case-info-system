@@ -275,6 +275,48 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal Action<TaskPaneHost, WorkbookContext, string> RenderHost { get; }
     }
 
+    // Create-side adapter compose input. This narrows host-factory wiring so the helper does not receive the
+    // whole runtime graph surface/context when it only needs VSTO adapter construction input.
+    internal sealed class TaskPaneHostFactoryComposeContext
+    {
+        internal TaskPaneHostFactoryComposeContext(
+            ThisAddIn addIn,
+            Logger logger,
+            Func<TaskPaneHost, string> formatHostDescriptor)
+        {
+            AddIn = addIn;
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            FormatHostDescriptor = formatHostDescriptor ?? throw new ArgumentNullException(nameof(formatHostDescriptor));
+        }
+
+        internal ThisAddIn AddIn { get; }
+
+        internal Logger Logger { get; }
+
+        internal Func<TaskPaneHost, string> FormatHostDescriptor { get; }
+    }
+
+    // Registry-side adapter compose input. This keeps shared-map and diagnostic formatter ownership explicit
+    // without routing the full graph context through registry helper compose.
+    internal sealed class TaskPaneHostRegistryComposeContext
+    {
+        internal TaskPaneHostRegistryComposeContext(
+            Dictionary<string, TaskPaneHost> hostsByWindowKey,
+            Logger logger,
+            Func<TaskPaneHost, string> formatHostDescriptorForDiagnostics)
+        {
+            HostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            FormatHostDescriptorForDiagnostics = formatHostDescriptorForDiagnostics ?? throw new ArgumentNullException(nameof(formatHostDescriptorForDiagnostics));
+        }
+
+        internal Dictionary<string, TaskPaneHost> HostsByWindowKey { get; }
+
+        internal Logger Logger { get; }
+
+        internal Func<TaskPaneHost, string> FormatHostDescriptorForDiagnostics { get; }
+    }
+
     internal static class TaskPaneManagerRuntimeBootstrap
     {
         // Production runtime entrypoint. AddInCompositionRoot should use this path so graph build/attach timing
@@ -395,20 +437,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneHostLifecycleService taskPaneHostLifecycleService = null;
             TaskPaneNonCaseActionHandler taskPaneNonCaseActionHandler = null;
             TaskPaneActionDispatcher taskPaneActionDispatcher = null;
+            var taskPaneHostFactoryComposeContext = new TaskPaneHostFactoryComposeContext(
+                graphContext.AddIn,
+                graphContext.Logger,
+                graphSurface.FormatHostDescriptor);
 
             // Create-side adapter composition only:
             // this graph factory decides who collaborates with the create path, but it does not own runtime create timing.
             // Once refresh/lifecycle code calls into GetOrReplaceHost/CreateHost, the concrete timing still belongs to the
             // existing TaskPaneHostRegistry -> TaskPaneHostFactory -> TaskPaneHost -> ThisAddIn chain.
             TaskPaneHostFactory taskPaneHostFactory = CreateTaskPaneHostFactory(
-                graphSurface,
-                graphContext,
+                taskPaneHostFactoryComposeContext,
                 () => taskPaneNonCaseActionHandler,
                 () => taskPaneActionDispatcher);
+            var taskPaneHostRegistryComposeContext = new TaskPaneHostRegistryComposeContext(
+                graphSurface.HostsByWindowKey,
+                graphContext.Logger,
+                graphSurface.FormatHostDescriptor);
             // Compose-time owner only:
             // this graph decides which collaborators are wired into remove-side ownership, but it does not own
             // standard remove, replacement remove, or shutdown cleanup timing after composition completes.
-            TaskPaneHostRegistry taskPaneHostRegistry = CreateTaskPaneHostRegistry(graphSurface, graphContext, taskPaneHostFactory);
+            TaskPaneHostRegistry taskPaneHostRegistry = CreateTaskPaneHostRegistry(taskPaneHostRegistryComposeContext, taskPaneHostFactory);
 
             var taskPaneDisplayCoordinator = new TaskPaneDisplayCoordinator(
                 graphSurface.HostsByWindowKey,
@@ -501,31 +550,39 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         private static TaskPaneHostFactory CreateTaskPaneHostFactory(
-            TaskPaneManagerRuntimeGraphComposeSurface graphSurface,
-            TaskPaneManagerRuntimeGraphComposeContext graphContext,
+            TaskPaneHostFactoryComposeContext composeContext,
             Func<TaskPaneNonCaseActionHandler> resolveNonCaseActionHandler,
             Func<TaskPaneActionDispatcher> resolveCaseActionDispatcher)
         {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
             // Compose-time intent only. Runtime ActionInvoked binding timing remains inside TaskPaneHostFactory/CreateHost(...).
             return new TaskPaneHostFactory(
-                graphContext.AddIn,
-                graphContext.Logger,
-                graphSurface.FormatHostDescriptor,
+                composeContext.AddIn,
+                composeContext.Logger,
+                composeContext.FormatHostDescriptor,
                 (windowKey, e) => resolveNonCaseActionHandler()?.HandleKernelActionInvoked(windowKey, e),
                 (windowKey, e) => resolveNonCaseActionHandler()?.HandleAccountingActionInvoked(windowKey, e),
                 (windowKey, control, e) => resolveCaseActionDispatcher()?.HandleCaseControlActionInvoked(windowKey, control, e));
         }
 
         private static TaskPaneHostRegistry CreateTaskPaneHostRegistry(
-            TaskPaneManagerRuntimeGraphComposeSurface graphSurface,
-            TaskPaneManagerRuntimeGraphComposeContext graphContext,
+            TaskPaneHostRegistryComposeContext composeContext,
             TaskPaneHostFactory taskPaneHostFactory)
         {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
             return new TaskPaneHostRegistry(
-                graphSurface.HostsByWindowKey,
-                graphContext.Logger,
+                composeContext.HostsByWindowKey,
+                composeContext.Logger,
                 // Diagnostic-only input for remove-host trace output. Registry does not own identity or metadata timing through this formatter.
-                graphSurface.FormatHostDescriptor,
+                composeContext.FormatHostDescriptorForDiagnostics,
                 taskPaneHostFactory);
         }
 

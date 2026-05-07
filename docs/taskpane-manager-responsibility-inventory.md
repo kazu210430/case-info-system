@@ -382,6 +382,15 @@
 - As of 2026-05-08, the bootstrap entry payload also excludes `ICaseTaskPaneSnapshotReader`; attach orchestration now treats the render service, not the raw snapshot reader, as the last required snapshot-side input.
 - `TaskPaneManagerRuntimeGraph` remains a passive bundle and still does not own runtime state, lifecycle, or orchestration.
 
+## B1.5 Status (2026-05-08)
+
+- `TaskPaneManagerRuntimeGraphFactory` now gives the create-side adapter helpers their own narrow compose payloads:
+  - `TaskPaneHostFactoryComposeContext`
+  - `TaskPaneHostRegistryComposeContext`
+- `TaskPaneHostFactory` helper compose no longer receives the full runtime graph compose context / surface just to reach `ThisAddIn`, `Logger`, and the host descriptor formatter.
+- `TaskPaneHostRegistry` helper compose no longer receives the full runtime graph compose context / surface just to reach the shared host map, `Logger`, and the diagnostic formatter.
+- `_hostsByWindowKey` ownership, registry replace/remove semantics, `ActionInvoked` bind timing, `ThisAddIn.CreateTaskPane(...)` / `RemoveTaskPane(...)`, `WorkbookOpen` downstream timing, ready-show, retry, and foreground recovery remain unchanged in this phase.
+
 ## B2 Prep Status: VSTO Boundary Inventory (2026-05-06)
 
 ### Current owner map

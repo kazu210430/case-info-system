@@ -7,6 +7,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 {
     internal sealed class WorkbookTaskPaneReadyShowAttemptWorker
     {
+        private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
+        private const int ReadyShowMaxAttempts = 2;
+        private const int ReadyShowRetryDelayMs = 80;
+
         private readonly ExcelInteropService _excelInteropService;
         private readonly Logger _logger;
         private readonly TaskPaneDisplayRetryCoordinator _taskPaneDisplayRetryCoordinator;
@@ -49,10 +53,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookTaskPaneReadyShowAttemptWorker action=wait-ready-entry reason="
+                + (reason ?? string.Empty)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + SafeWorkbookFullName(workbook)
+                + ", maxAttempts="
+                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
+                + ", retryDelayMs="
+                + ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture)
+                + ", activeWorkbook="
+                + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook())
+                + ", activeWindowHwnd="
+                + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+            _logger?.Info(
                 "TaskPane wait-ready start. reason="
                 + (reason ?? string.Empty)
                 + ", workbook="
                 + SafeWorkbookFullName(workbook)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", maxAttempts="
+                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
+                + ", retryDelayMs="
+                + ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture)
                 + ", activeWorkbook="
                 + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook())
                 + ", activeWindowHwnd="
@@ -69,12 +95,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private bool TryShowWorkbookTaskPaneOnce(Excel.Workbook workbook, string reason, int attemptNumber)
         {
             _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookTaskPaneReadyShowAttemptWorker action=wait-ready-attempt-start reason="
+                + (reason ?? string.Empty)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + SafeWorkbookFullName(workbook)
+                + ", attempt="
+                + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ", maxAttempts="
+                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture));
+            _logger?.Info(
                 "TaskPane wait-ready attempt start. reason="
                 + (reason ?? string.Empty)
                 + ", workbook="
                 + SafeWorkbookFullName(workbook)
                 + ", attempt="
-                + attemptNumber.ToString(CultureInfo.InvariantCulture));
+                + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ", maxAttempts="
+                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture));
             bool visibleCasePaneAlreadyShown = false;
             WorkbookTaskPaneDisplayAttemptResult result = _workbookTaskPaneDisplayAttemptCoordinator.TryShowOnce(
                 workbook,
@@ -92,10 +132,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + (targetReason ?? string.Empty)
                             + ", workbook="
                             + SafeWorkbookFullName(targetWorkbook)
+                            + ", readyShowReason="
+                            + (targetReason ?? string.Empty)
                             + ", attempt="
                             + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                            + ", maxAttempts="
+                            + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                             + ", windowHwnd="
                             + SafeWindowHwnd(resolvedWindow)
+                            + ", windowResolved=true"
                             + ", visibleCasePaneEarlyComplete=true"
                             + ", renderCurrentCheckBypassed=true"
                             + ", earlyCompleteBasis=retainedHost+metadataJoin+visibilityRetention");
@@ -108,8 +153,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + SafeWorkbookFullName(targetWorkbook)
                         + ", attempt="
                         + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                        + ", maxAttempts="
+                        + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                         + ", windowHwnd="
                         + SafeWindowHwnd(resolvedWindow)
+                        + ", windowResolved="
+                        + (resolvedWindow != null).ToString()
+                        + ", visibleCasePaneEarlyComplete="
+                        + visibleCasePaneAlreadyShown.ToString()
                         + ", activeWorkbookMatches="
                         + IsActiveWorkbookMatch(targetWorkbook).ToString()
                         + ", activeWindowHwnd="
@@ -131,10 +182,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + (targetReason ?? string.Empty)
                             + ", workbook="
                             + SafeWorkbookFullName(targetWorkbook)
+                            + ", readyShowReason="
+                            + (targetReason ?? string.Empty)
                             + ", attempt="
                             + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                            + ", maxAttempts="
+                            + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                             + ", windowHwnd="
                             + SafeWindowHwnd(targetWindow)
+                            + ", windowResolved="
+                            + (targetWindow != null).ToString()
                             + ", visibleCasePaneEarlyComplete=true"
                             + ", renderCurrentCheckBypassed=true"
                             + ", earlyCompleteBasis=retainedHost+metadataJoin+visibilityRetention");
@@ -150,11 +207,43 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + SafeWorkbookFullName(targetWorkbook)
                         + ", attempt="
                         + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                        + ", maxAttempts="
+                        + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
+                        + ", windowResolved="
+                        + (targetWindow != null).ToString()
+                        + ", visibleCasePaneEarlyComplete="
+                        + visibleCasePaneAlreadyShown.ToString()
                         + ", refreshed="
                         + attemptRefreshed.ToString());
                     return refreshAttemptResult;
                 });
-            return result.RefreshAttemptResult.IsRefreshSucceeded;
+            bool refreshed = result.RefreshAttemptResult.IsRefreshSucceeded;
+            bool windowResolved = result.WorkbookWindow != null;
+            if (!refreshed
+                && attemptNumber >= ReadyShowMaxAttempts)
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=WorkbookTaskPaneReadyShowAttemptWorker action=wait-ready-attempts-exhausted reason="
+                    + (reason ?? string.Empty)
+                    + ", readyShowReason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + SafeWorkbookFullName(workbook)
+                    + ", attempt="
+                    + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                    + ", maxAttempts="
+                    + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
+                    + ", windowResolved="
+                    + windowResolved.ToString()
+                    + ", windowHwnd="
+                    + SafeWindowHwnd(result.WorkbookWindow)
+                    + ", visibleCasePaneEarlyComplete="
+                    + visibleCasePaneAlreadyShown.ToString()
+                    + ", fallbackCause=AttemptsExhausted");
+            }
+
+            return refreshed;
         }
 
         private void EnsureWorkbookWindowVisibleForTaskPaneDisplay(Excel.Workbook workbook, string reason, int attemptNumber)

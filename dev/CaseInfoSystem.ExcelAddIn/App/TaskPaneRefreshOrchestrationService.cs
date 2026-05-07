@@ -164,6 +164,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
         {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=wait-ready-fallback-handoff reason="
+                + (reason ?? string.Empty)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", maxAttempts="
+                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + ", fallbackCause=AttemptsExhausted"
+                + ", fallbackHandoff=true"
+                + ", activeState="
+                + FormatActiveState());
+            _logger?.Info(
+                "TaskPane wait-ready fallback handoff. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + SafeWorkbookFullName(workbook)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", maxAttempts="
+                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + ", fallbackCause=AttemptsExhausted"
+                + ", fallbackHandoff=true");
             if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null))
             {
                 _logger?.Info(
@@ -187,11 +212,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + (reason ?? string.Empty)
                 + ", workbook="
                 + FormatWorkbookDescriptor(workbook)
+                + ", windowResolved="
+                + (workbookWindow != null).ToString()
                 + ", resolvedWindow="
                 + FormatWindowDescriptor(workbookWindow)
+                + ", fallbackCause=AttemptsExhausted"
+                + ", fallbackHandoff=true"
                 + ", activeState="
                 + FormatActiveState());
-            _logger?.Info("TaskPane timer fallback prepare. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", resolvedWindowHwnd=" + SafeWindowHwnd(workbookWindow));
+            _logger?.Info(
+                "TaskPane timer fallback prepare. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + SafeWorkbookFullName(workbook)
+                + ", windowResolved="
+                + (workbookWindow != null).ToString()
+                + ", resolvedWindowHwnd="
+                + SafeWindowHwnd(workbookWindow)
+                + ", fallbackCause=AttemptsExhausted"
+                + ", fallbackHandoff=true");
 
             if (TryRefreshTaskPane(reason, workbook, workbookWindow).IsRefreshSucceeded)
             {
@@ -245,13 +284,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry-scheduled reason="
                 + (reason ?? string.Empty)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
                 + ", workbook="
                 + FormatWorkbookDescriptor(workbook)
                 + ", attempt="
                 + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ", maxAttempts="
+                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + ", retryScheduled=true"
+                + ", retryDelayMs="
+                + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture)
                 + ", delayMs="
                 + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
-            _logger?.Info("TaskPane wait-ready retry scheduled. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
+            _logger?.Info(
+                "TaskPane wait-ready retry scheduled. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + SafeWorkbookFullName(workbook)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", attempt="
+                + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ", maxAttempts="
+                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + ", retryScheduled=true"
+                + ", retryDelayMs="
+                + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
 
             if (retryAction == null)
             {
@@ -270,7 +329,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 retryTimer.Tick -= tickHandler;
                 _waitReadyRetryTimers.Remove(retryTimer);
                 retryTimer.Dispose();
-                _logger?.Info("TaskPane wait-ready retry firing. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry-firing reason="
+                    + (reason ?? string.Empty)
+                    + ", readyShowReason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", attempt="
+                    + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                    + ", maxAttempts="
+                    + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                    + ", retryDelayMs="
+                    + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
+                _logger?.Info(
+                    "TaskPane wait-ready retry firing. reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + SafeWorkbookFullName(workbook)
+                    + ", readyShowReason="
+                    + (reason ?? string.Empty)
+                    + ", attempt="
+                    + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                    + ", maxAttempts="
+                    + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                    + ", retryDelayMs="
+                    + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
                 retryAction();
             };
 

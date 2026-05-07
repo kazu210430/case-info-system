@@ -88,7 +88,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 - TaskPane 側の facade / composition root である
 - `TaskPaneHostRegistry`、`TaskPaneDisplayCoordinator`、`TaskPaneHostLifecycleService`、`TaskPaneHostFlowService`、`TaskPaneActionDispatcher` などを組み立てる
-- role 別 render 切替、CASE pane action wiring、周辺 service への委譲入口を担う
+- role 別 render 切替、host-map facade surface、周辺 service への委譲入口を担う
 - `RefreshPane(...)` 本線は `TaskPaneHostFlowService` に委譲し、自身は retry / ready-show / protection / window resolve を持たない
 - lightweight helper / policy として `TaskPaneManagerDiagnosticHelper`、`TaskPaneHostReusePolicy`、`TaskPaneRenderStateEvaluator`、`TaskPaneShowExistingPolicy`、`TaskPaneShowWithRenderPolicy` を使う
 
@@ -216,7 +216,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 - Host flow
   - `TaskPaneManager.RefreshPane(...)` は `TaskPaneHostFlowService` に委譲し、同 service が `TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、role 別 render を順に調停する
 - Control event handling
-  - `TaskPaneHostRegistry` / `TaskPaneManager` が host と control の wiring を持ち、CASE pane UIイベントは `TaskPaneActionDispatcher`、非 CASE action は `TaskPaneNonCaseActionHandler` へ渡す
+  - `TaskPaneHostRegistry` / `TaskPaneHostFactory` / `TaskPaneManagerRuntimeGraphFactory` が host と control の wiring および compose-time delegate supply を持ち、CASE pane UIイベントは `TaskPaneActionDispatcher`、非 CASE action は `TaskPaneNonCaseActionHandler` へ渡す
 
 ## 禁止境界
 

@@ -26,8 +26,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private TaskPaneHostRegistry _taskPaneHostRegistry;
         private TaskPaneHostLifecycleService _taskPaneHostLifecycleService;
         private TaskPaneDisplayCoordinator _taskPaneDisplayCoordinator;
-        private TaskPaneNonCaseActionHandler _taskPaneNonCaseActionHandler;
-        private TaskPaneActionDispatcher _taskPaneActionDispatcher;
         private TaskPaneHostFlowService _taskPaneHostFlowService;
         private CasePaneCacheRefreshNotificationService _casePaneCacheRefreshNotificationService;
 
@@ -96,8 +94,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _taskPaneHostRegistry = runtimeGraph.TaskPaneHostRegistry ?? throw new ArgumentException("Task pane host registry is required.", nameof(runtimeGraph));
             _taskPaneHostLifecycleService = runtimeGraph.TaskPaneHostLifecycleService ?? throw new ArgumentException("Task pane host lifecycle service is required.", nameof(runtimeGraph));
             _taskPaneDisplayCoordinator = runtimeGraph.TaskPaneDisplayCoordinator ?? throw new ArgumentException("Task pane display coordinator is required.", nameof(runtimeGraph));
-            _taskPaneNonCaseActionHandler = runtimeGraph.TaskPaneNonCaseActionHandler;
-            _taskPaneActionDispatcher = runtimeGraph.TaskPaneActionDispatcher;
             _taskPaneHostFlowService = runtimeGraph.TaskPaneHostFlowService ?? throw new ArgumentException("Task pane host flow service is required.", nameof(runtimeGraph));
         }
 
@@ -245,22 +241,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)
         {
             _taskPaneDisplayCoordinator.PrepareTargetWindowForForcedRefresh(targetWindow);
-        }
-
-        private void KernelControl_ActionInvoked(string windowKey, KernelNavigationActionEventArgs e)
-        {
-            _taskPaneNonCaseActionHandler?.HandleKernelActionInvoked(windowKey, e);
-        }
-
-        /// <summary>
-        /// メソッド: 会計 pane のボタン押下を受けて内部処理を実行する。
-        /// 引数: windowKey - 対象 host の window key, e - アクション引数。
-        /// 戻り値: なし。
-        /// 副作用: 会計ブック内部処理を実行し、必要に応じて pane を再描画する。
-        /// </summary>
-        private void AccountingControl_ActionInvoked(string windowKey, AccountingNavigationActionEventArgs e)
-        {
-            _taskPaneNonCaseActionHandler?.HandleAccountingActionInvoked(windowKey, e);
         }
 
         internal string FormatContextDescriptor(WorkbookContext context)

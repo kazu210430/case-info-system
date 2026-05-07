@@ -13,16 +13,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneHostRegistry taskPaneHostRegistry,
             TaskPaneHostLifecycleService taskPaneHostLifecycleService,
             TaskPaneDisplayCoordinator taskPaneDisplayCoordinator,
-            TaskPaneNonCaseActionHandler taskPaneNonCaseActionHandler,
-            TaskPaneActionDispatcher taskPaneActionDispatcher,
             TaskPaneHostFlowService taskPaneHostFlowService)
         {
             CasePaneCacheRefreshNotificationService = casePaneCacheRefreshNotificationService ?? throw new ArgumentNullException(nameof(casePaneCacheRefreshNotificationService));
             TaskPaneHostRegistry = taskPaneHostRegistry ?? throw new ArgumentNullException(nameof(taskPaneHostRegistry));
             TaskPaneHostLifecycleService = taskPaneHostLifecycleService ?? throw new ArgumentNullException(nameof(taskPaneHostLifecycleService));
             TaskPaneDisplayCoordinator = taskPaneDisplayCoordinator ?? throw new ArgumentNullException(nameof(taskPaneDisplayCoordinator));
-            TaskPaneNonCaseActionHandler = taskPaneNonCaseActionHandler;
-            TaskPaneActionDispatcher = taskPaneActionDispatcher;
             TaskPaneHostFlowService = taskPaneHostFlowService ?? throw new ArgumentNullException(nameof(taskPaneHostFlowService));
         }
 
@@ -33,10 +29,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneHostLifecycleService TaskPaneHostLifecycleService { get; }
 
         internal TaskPaneDisplayCoordinator TaskPaneDisplayCoordinator { get; }
-
-        internal TaskPaneNonCaseActionHandler TaskPaneNonCaseActionHandler { get; }
-
-        internal TaskPaneActionDispatcher TaskPaneActionDispatcher { get; }
 
         internal TaskPaneHostFlowService TaskPaneHostFlowService { get; }
     }
@@ -488,8 +480,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 taskPaneHostRegistry,
                 taskPaneHostLifecycleService,
                 taskPaneDisplayCoordinator,
-                taskPaneNonCaseActionHandler,
-                taskPaneActionDispatcher,
                 taskPaneHostFlowService);
         }
 

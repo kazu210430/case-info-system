@@ -112,9 +112,9 @@
 
 - CASE action は `TaskPaneActionDispatcher` と handler 群へ流れる。
 - Kernel / Accounting action は `TaskPaneNonCaseActionHandler` へ流れる。
-- ただし control 作成と `ActionInvoked` 配線は `TaskPaneHostFactory` が一括で持ち、その delegate 元は `TaskPaneManager` である。
+- ただし control 作成と `ActionInvoked` 配線は `TaskPaneHostFactory` が一括で持ち、compose-time delegate supply は `TaskPaneManagerRuntimeGraphFactory` で閉じている。
 
-したがって「処理 owner は分離済み」でも「binding owner は未分離」です。
+したがって「処理 owner」と「compose-time delegate supply」は分離済みでも「binding owner」は未分離です。
 
 ### 4. CASE post-action refresh は dispatcher から VSTO display 入口へ直接戻る
 

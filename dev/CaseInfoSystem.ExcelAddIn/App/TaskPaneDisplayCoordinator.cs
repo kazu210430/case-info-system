@@ -137,6 +137,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger?.Info(
                     KernelFlickerTracePrefix
                     + " source=TaskPaneManager action=visible-case-pane-check result=NoWindowKey"
+                    + ", windowKeyResolved=false"
+                    + ", workbookFullNameMatched=false"
+                    + ", renderCurrentCheckBypassed=true"
+                    + ", visibleCasePaneEarlyComplete=false"
                     + ", workbook="
                     + _formatWorkbookDescriptor(workbook)
                     + ", inputWindow="
@@ -149,8 +153,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _logger?.Info(
                     KernelFlickerTracePrefix
                     + " source=TaskPaneManager action=visible-case-pane-check result=NoHost"
+                    + ", windowKeyResolved=true"
                     + ", windowKey="
                     + windowKey
+                    + ", workbookFullNameMatched=false"
+                    + ", renderCurrentCheckBypassed=true"
+                    + ", visibleCasePaneEarlyComplete=false"
                     + ", workbook="
                     + _formatWorkbookDescriptor(workbook));
                 return false;
@@ -159,35 +167,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
             string workbookFullName = workbook == null || excelInteropService == null
                 ? string.Empty
                 : excelInteropService.GetWorkbookFullName(workbook);
+            WorkbookRole hostedRole = GetHostedWorkbookRole(host);
+            bool hostVisible = host.IsVisible;
             if (string.IsNullOrWhiteSpace(workbookFullName)
                 || !string.Equals(host.WorkbookFullName, workbookFullName, StringComparison.OrdinalIgnoreCase))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
                     + " source=TaskPaneManager action=visible-case-pane-check result=WorkbookMismatch"
+                    + ", windowKeyResolved=true"
                     + ", windowKey="
                     + windowKey
+                    + ", workbookFullNameMatched=false"
+                    + ", lastRenderSignaturePresent="
+                    + (!string.IsNullOrWhiteSpace(host.LastRenderSignature)).ToString()
+                    + ", renderCurrentCheckBypassed=true"
+                    + ", visibleCasePaneEarlyComplete=false"
                     + ", host="
                     + _formatHostDescriptor(host)
+                    + ", hostRole="
+                    + hostedRole.ToString()
+                    + ", hostVisible="
+                    + hostVisible.ToString()
                     + ", workbook="
                     + _formatWorkbookDescriptor(workbook));
                 return false;
             }
 
-            WorkbookRole hostedRole = GetHostedWorkbookRole(host);
-            bool isVisibleCasePane = hostedRole == WorkbookRole.Case && host.IsVisible;
+            bool isVisibleCasePane = hostedRole == WorkbookRole.Case && hostVisible;
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneManager action=visible-case-pane-check result="
                 + (isVisibleCasePane ? "VisibleCasePaneFound" : "NotVisibleOrNotCase")
+                + ", windowKeyResolved=true"
                 + ", windowKey="
                 + windowKey
+                + ", workbookFullNameMatched=true"
+                + ", lastRenderSignaturePresent="
+                + (!string.IsNullOrWhiteSpace(host.LastRenderSignature)).ToString()
+                + ", renderCurrentCheckBypassed=true"
+                + ", visibleCasePaneEarlyComplete="
+                + isVisibleCasePane.ToString()
                 + ", host="
                 + _formatHostDescriptor(host)
-                + ", hostedRole="
+                + ", hostRole="
                 + hostedRole.ToString()
                 + ", hostVisible="
-                + host.IsVisible.ToString());
+                + hostVisible.ToString());
             return isVisibleCasePane;
         }
 

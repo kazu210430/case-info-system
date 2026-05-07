@@ -95,7 +95,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + ", attempt="
                             + attemptNumber.ToString(CultureInfo.InvariantCulture)
                             + ", windowHwnd="
-                            + SafeWindowHwnd(resolvedWindow));
+                            + SafeWindowHwnd(resolvedWindow)
+                            + ", visibleCasePaneEarlyComplete=true"
+                            + ", renderCurrentCheckBypassed=true"
+                            + ", earlyCompleteBasis=retainedHost+metadataJoin+visibilityRetention");
                     }
 
                     _logger?.Info(
@@ -131,7 +134,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + ", attempt="
                             + attemptNumber.ToString(CultureInfo.InvariantCulture)
                             + ", windowHwnd="
-                            + SafeWindowHwnd(targetWindow));
+                            + SafeWindowHwnd(targetWindow)
+                            + ", visibleCasePaneEarlyComplete=true"
+                            + ", renderCurrentCheckBypassed=true"
+                            + ", earlyCompleteBasis=retainedHost+metadataJoin+visibilityRetention");
                         return TaskPaneRefreshAttemptResult.Succeeded();
                     }
 

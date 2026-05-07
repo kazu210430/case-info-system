@@ -22,7 +22,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ExcelInteropService excelInteropService,
             PathCompatibilityService pathCompatibilityService,
             Logger logger,
-            KernelWorkbookService.KernelWorkbookServiceTestHooks testHooks = null)
+            TestHooks testHooks = null)
         {
             _application = application;
             _excelInteropService = excelInteropService;
@@ -470,6 +470,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
             None = 0,
             Valid = 1,
             Invalid = 2
+        }
+
+        internal sealed class TestHooks
+        {
+            internal Func<string, string> ResolveKernelWorkbookPath { get; set; }
+
+            internal Func<string, Excel.Workbook> FindOpenWorkbook { get; set; }
+
+            internal Func<Excel.Workbook, bool> HasOtherVisibleWorkbook { get; set; }
+
+            internal Func<Excel.Workbook, bool> HasOtherWorkbook { get; set; }
         }
     }
 }

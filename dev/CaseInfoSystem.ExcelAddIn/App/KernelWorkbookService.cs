@@ -244,12 +244,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             KernelWorkbookServiceTestHooks testHooks)
         {
             var pathCompatibilityService = new PathCompatibilityService();
+            var bindingTestHooks = testHooks == null ? null : testHooks.CreateBindingServiceTestHooks();
+            var displayTestHooks = testHooks == null ? null : testHooks.CreateDisplayServiceTestHooks();
+            var closeTestHooks = testHooks == null ? null : testHooks.CreateCloseServiceTestHooks();
             var bindingService = new KernelWorkbookBindingService(
                 application: null,
                 excelInteropService: null,
                 pathCompatibilityService,
                 logger,
-                testHooks);
+                bindingTestHooks);
             var displayService = new KernelWorkbookDisplayService(
                 application: null,
                 excelInteropService: null,
@@ -257,14 +260,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 kernelCaseInteractionState,
                 logger,
                 bindingService,
-                testHooks);
+                displayTestHooks);
             var closeService = new KernelWorkbookCloseService(
                 application: null,
                 kernelCaseInteractionState,
                 logger,
                 bindingService,
                 displayService,
-                testHooks);
+                closeTestHooks);
             return new KernelWorkbookFacadeServices(bindingService, displayService, closeService);
         }
 
@@ -317,6 +320,39 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal Action<Excel.Workbook> CloseKernelWorkbookWithoutLifecycle { get; set; }
 
             internal Action<Excel.Workbook> ConcealKernelWorkbookWindowsForCaseCreationClose { get; set; }
+
+            internal KernelWorkbookBindingService.TestHooks CreateBindingServiceTestHooks()
+            {
+                return new KernelWorkbookBindingService.TestHooks
+                {
+                    ResolveKernelWorkbookPath = ResolveKernelWorkbookPath,
+                    FindOpenWorkbook = FindOpenWorkbook,
+                    HasOtherVisibleWorkbook = HasOtherVisibleWorkbook,
+                    HasOtherWorkbook = HasOtherWorkbook
+                };
+            }
+
+            internal KernelWorkbookDisplayService.TestHooks CreateDisplayServiceTestHooks()
+            {
+                return new KernelWorkbookDisplayService.TestHooks
+                {
+                    ApplyHomeDisplayVisibility = ApplyHomeDisplayVisibility,
+                    ReleaseHomeDisplay = ReleaseHomeDisplay,
+                    DismissPreparedHomeDisplayState = DismissPreparedHomeDisplayState,
+                    ConcealKernelWorkbookWindowsForCaseCreationClose = ConcealKernelWorkbookWindowsForCaseCreationClose
+                };
+            }
+
+            internal KernelWorkbookCloseService.TestHooks CreateCloseServiceTestHooks()
+            {
+                return new KernelWorkbookCloseService.TestHooks
+                {
+                    QuitApplication = QuitApplication,
+                    RequestManagedCloseFromHomeExit = RequestManagedCloseFromHomeExit,
+                    SaveAndCloseKernelWorkbook = SaveAndCloseKernelWorkbook,
+                    CloseKernelWorkbookWithoutLifecycle = CloseKernelWorkbookWithoutLifecycle
+                };
+            }
         }
     }
 

@@ -12,7 +12,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Logger _logger;
         private readonly KernelWorkbookBindingService _bindingService;
         private readonly KernelWorkbookDisplayService _displayService;
-        private readonly KernelWorkbookService.KernelWorkbookServiceTestHooks _testHooks;
+        private readonly TestHooks _testHooks;
         private readonly KernelHomeSessionCloseCoordinator _homeSessionCloseCoordinator;
         private KernelWorkbookLifecycleService _kernelWorkbookLifecycleService;
         private PendingHomeSessionClose _pendingHomeSessionClose;
@@ -25,7 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Logger logger,
             KernelWorkbookBindingService bindingService,
             KernelWorkbookDisplayService displayService,
-            KernelWorkbookService.KernelWorkbookServiceTestHooks testHooks = null)
+            TestHooks testHooks = null)
         {
             _application = application;
             _kernelCaseInteractionState = kernelCaseInteractionState ?? throw new ArgumentNullException(nameof(kernelCaseInteractionState));
@@ -731,6 +731,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 BackendCloseCompleted = true;
             }
+        }
+
+        internal sealed class TestHooks
+        {
+            internal Action QuitApplication { get; set; }
+
+            internal Func<Excel.Workbook, bool> RequestManagedCloseFromHomeExit { get; set; }
+
+            internal Action<Excel.Workbook> SaveAndCloseKernelWorkbook { get; set; }
+
+            internal Action<Excel.Workbook> CloseKernelWorkbookWithoutLifecycle { get; set; }
         }
     }
 }

@@ -18,7 +18,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly KernelCaseInteractionState _kernelCaseInteractionState;
         private readonly Logger _logger;
         private readonly KernelWorkbookBindingService _bindingService;
-        private readonly KernelWorkbookService.KernelWorkbookServiceTestHooks _testHooks;
+        private readonly TestHooks _testHooks;
         private bool _isHomeDisplayPrepared;
 
         internal KernelWorkbookDisplayService(
@@ -28,7 +28,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             KernelCaseInteractionState kernelCaseInteractionState,
             Logger logger,
             KernelWorkbookBindingService bindingService,
-            KernelWorkbookService.KernelWorkbookServiceTestHooks testHooks = null)
+            TestHooks testHooks = null)
         {
             _application = application;
             _excelInteropService = excelInteropService;
@@ -1107,6 +1107,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return string.Empty;
+        }
+
+        internal sealed class TestHooks
+        {
+            internal Action ApplyHomeDisplayVisibility { get; set; }
+
+            internal Action<bool> ReleaseHomeDisplay { get; set; }
+
+            internal Action<string> DismissPreparedHomeDisplayState { get; set; }
+
+            internal Action<Excel.Workbook> ConcealKernelWorkbookWindowsForCaseCreationClose { get; set; }
         }
     }
 }

@@ -88,7 +88,7 @@
 
 | Flow | Responsibility | Current Owner | Mixed With | Runtime Sensitivity | Separation Difficulty | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| TaskPane lifecycle | TaskPane runtime composition wiring | `AddInTaskPaneCompositionFactory` + `TaskPaneManager` constructor + `TaskPaneHostRegistry` constructor | shared host map owner、VSTO host wiring | pure orchestration | 比較的安全に切り出せる | `taskpane-manager-responsibility-inventory.md` では最初の安全単位候補。 |
+| TaskPane lifecycle | TaskPane runtime composition wiring | `AddInTaskPaneCompositionFactory` + `TaskPaneManagerRuntimeGraphFactory` + `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn` create-remove chain | shared host map owner、VSTO host wiring | pure orchestration | 比較的安全に切り出せる | manager attach surface は runtime-consumed collaborator に縮小済み。 |
 | TaskPane lifecycle | refresh precondition 判定 | `TaskPaneRefreshPreconditionPolicy` + `TaskPaneRefreshOrchestrationService.RefreshPreconditionEvaluator` | protection/suppression entry | pure orchestration | 比較的安全に切り出せる | `WorkbookOpen` 直後の window-dependent refresh skip の正本。 |
 | TaskPane lifecycle | ready-show attempt / early-complete | `WorkbookTaskPaneReadyShowAttemptWorker` | visibility ensure、host metadata、retry fallback | ordering-sensitive, window-sensitive | runtime-sensitive のため後回し | visible CASE pane がある場合は success 相当で終える current-state。 |
 | TaskPane lifecycle | pending retry fallback | `PendingPaneRefreshRetryService` | active CASE context fallback、window resolve 再試行 | ordering-sensitive | runtime-sensitive のため後回し | workbook を見失っても active CASE context があれば継続する。 |
@@ -182,7 +182,7 @@
 
 | Focus Area | Current mixed owners | 何が混在しているか | future task で凍結すべきもの |
 | --- | --- | --- | --- |
-| `TaskPaneManager` | `TaskPaneManager`、`AddInTaskPaneCompositionFactory`、`TaskPaneHostRegistry`、`TaskPaneHostFlowService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher` | facade entry surface、shared host state owner、secondary composition root、role 別 render、CASE post-action display 再入、visible pane bridge | `_hostsByWindowKey` owner、`CreateTaskPane/RemoveTaskPane` 境界、ready-show / protection / retry 本線 |
+| `TaskPaneManager` | `TaskPaneManager`、`TaskPaneManagerRuntimeGraphFactory`、`TaskPaneHostRegistry`、`TaskPaneHostFlowService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher` | facade entry surface、shared host state owner、manager attach surface の外にある registration orchestration、role 別 render、CASE post-action display 再入、visible pane bridge | `_hostsByWindowKey` owner、`CreateTaskPane/RemoveTaskPane` 境界、ready-show / protection / retry 本線 |
 | `ThisAddIn` | `ThisAddIn`、`ApplicationEventSubscriptionService`、`TaskPaneRefreshOrchestrationService`、`KernelWorkbookService` | VSTO lifecycle、event handler、HOME form instance、TaskPane display entry、`CustomTaskPane` create/remove adapter、automation public surface、suppression / protection predicate bridge | startup/shutdown 順序、event 順序、`WorkbookOpen -> WorkbookActivate -> WindowActivate` 前提、`ScreenUpdating` restore |
 | Workbook lifecycle 系 | `KernelWorkbookCloseService`、`CaseWorkbookLifecycleService`、`PostCloseFollowUpScheduler`、各 owner service の finally | HOME close fail-closed handshake、dirty prompt、managed close、post-close quit、temporary COM release、CASE HOME 表示補正 | close 後再参照禁止、`Quit` 成功後 restore しない、`ExcelApplicationStateScope` を managed close / quit に持ち込まない |
 | CASE create / open | `KernelCaseCreationService`、`CaseWorkbookOpenStrategy`、`KernelCasePresentationService`、`WorkbookWindowVisibilityService`、`ExcelWindowRecoveryService` | create plan、hidden session route、save 前 window 正規化、wait UI、visibility recovery、ready-show handoff、initial cursor、final foreground | hidden create sessionを一般化しない、interactive handoff 前に close し切れない限り表示へ昇格しない |
@@ -203,7 +203,7 @@
 壊れにくさ優先で future task の順序を並べると、現時点では次の順になります。
 
 1. `pure orchestration` と wiring owner だけを切る。
-   - 例: `TaskPaneManager` 内部 compose、startup context fact collection、preflight orchestration、snapshot source selection。
+  - 例: `TaskPaneManagerRuntimeGraphFactory` wiring / manager attach surface 整理、startup context fact collection、preflight orchestration、snapshot source selection。
    - 条件: runtime order と public surface は固定のまま、owner だけを整理する。
 2. `pure business rule` と message/result build を切る。
    - 例: template registration validation rules、publication result/message build。

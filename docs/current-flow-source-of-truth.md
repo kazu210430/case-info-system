@@ -332,7 +332,7 @@
 2. 通常 refresh では `TaskPaneRefreshOrchestrationService.TryRefreshTaskPane(...)` が `RefreshPreconditionEvaluator` を通し、protection・suppression・`WorkbookOpen` skip を先に判定する。
 3. `WorkbookOpen` 直後かつ `workbook != null && window == null` なら `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` により skip する。
 4. refresh が許可された場合、`TaskPaneRefreshCoordinator` が `WorkbookContext` を解決して `TaskPaneManager.RefreshPane(...)` に渡す。
-5. `TaskPaneManager` / `TaskPaneHostFlowService` が hide / skip / stale cleanup / host reuse / render / show を調停する。
+5. `TaskPaneManager` / `TaskPaneHostFlowService` が hide / skip / stale cleanup / host reuse / render / show を調停する。host-flow entry の `hide-all / skip` reason 判定自体は `TaskPaneRefreshPreconditionPolicy` を正本として消費する。
 6. CASE 表示直後の ready-show は `WorkbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(...)` が担当し、attempt 1 でだけ `WorkbookWindowVisibilityService.EnsureVisible(...)` を実行する。
 7. worker は `ResolveWorkbookPaneWindow(...)` で window を解決し、visible CASE pane が既にあれば early-complete で成功相当終了する。
 8. early-complete しない場合だけ `TryRefreshTaskPane(...)` へ handoff する。

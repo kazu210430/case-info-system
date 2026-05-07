@@ -4,6 +4,13 @@ using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
+    internal enum TaskPaneHostFlowPreconditionDecision
+    {
+        Proceed = 0,
+        HideAllAndSkipForUnknownRole = 1,
+        HideAllAndSkipForMissingWindowKey = 2
+    }
+
     internal static class TaskPaneRefreshPreconditionPolicy
     {
         internal static bool ShouldSkipWorkbookOpenWindowDependentRefresh(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -13,14 +20,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 && window == null;
         }
 
-        internal static bool ShouldHideAllAndSkip(WorkbookRole role, string windowKey)
+        internal static TaskPaneHostFlowPreconditionDecision DecideHostFlowPrecondition(WorkbookRole role, string windowKey)
         {
             if (role == WorkbookRole.Unknown)
             {
-                return true;
+                return TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForUnknownRole;
             }
 
-            return windowKey != null && string.IsNullOrWhiteSpace(windowKey);
+            if (windowKey != null && string.IsNullOrWhiteSpace(windowKey))
+            {
+                return TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForMissingWindowKey;
+            }
+
+            return TaskPaneHostFlowPreconditionDecision.Proceed;
         }
     }
 }

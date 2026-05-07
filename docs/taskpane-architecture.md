@@ -191,7 +191,9 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 ### `TaskPaneRefreshPreconditionPolicy`
 
 - `ShouldSkipWorkbookOpenWindowDependentRefresh(...)` を `WorkbookOpen` 直後の window-dependent refresh skip 判定の正本として持つ
+- `DecideHostFlowPrecondition(...)` を `TaskPaneHostFlowService` 入口の `Unknown` role / empty `windowKey` に対する hide-all / skip decision 正本として持つ
 - `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy を利用し、skip 条件を重複保持しない
+- `TaskPaneHostFlowService` もこの policy を利用し、host-flow entry gate の理由分岐を重複保持しない
 - 判定は pure であり、ログ出力・状態変更・COMメンバーアクセス・UI操作を持たない
 
 ### `DocumentNamePromptService`

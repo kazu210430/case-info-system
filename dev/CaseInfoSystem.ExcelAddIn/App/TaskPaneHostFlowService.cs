@@ -76,37 +76,49 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             role = context == null ? WorkbookRole.Unknown : context.Role;
             windowKey = string.Empty;
-            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey: null))
+            TaskPaneHostFlowPreconditionDecision preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(role, windowKey: null);
+            if (preconditionDecision != TaskPaneHostFlowPreconditionDecision.Proceed)
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason=PreconditionPolicyRole"
-                    + ", role="
-                    + role.ToString());
-                _taskPaneDisplayCoordinator.HideAll();
+                HandleRejectedRefreshPaneRequest(preconditionDecision, reason, refreshPaneCallId, role, windowKey);
                 return false;
             }
 
             windowKey = _safeGetWindowKey(context == null ? null : context.Window);
-            if (TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(role, windowKey))
+            preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(role, windowKey);
+            if (preconditionDecision != TaskPaneHostFlowPreconditionDecision.Proceed)
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneManager action=hide-all refreshPaneCallId="
-                    + refreshPaneCallId.ToString()
-                    + ", reason=PreconditionPolicyWindowKey"
-                    + ", role="
-                    + role.ToString()
-                    + ", windowKey="
-                    + windowKey);
-                _taskPaneDisplayCoordinator.HideAll();
-                _logger.Warn("RefreshPane skipped because windowKey was empty. reason=" + (reason ?? string.Empty));
+                HandleRejectedRefreshPaneRequest(preconditionDecision, reason, refreshPaneCallId, role, windowKey);
                 return false;
             }
 
             return true;
+        }
+
+        private void HandleRejectedRefreshPaneRequest(
+            TaskPaneHostFlowPreconditionDecision preconditionDecision,
+            string reason,
+            int refreshPaneCallId,
+            WorkbookRole role,
+            string windowKey)
+        {
+            string policyReason = preconditionDecision == TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForUnknownRole
+                ? "PreconditionPolicyRole"
+                : "PreconditionPolicyWindowKey";
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=hide-all refreshPaneCallId="
+                + refreshPaneCallId.ToString()
+                + ", reason="
+                + policyReason
+                + ", role="
+                + role.ToString()
+                + ", windowKey="
+                + windowKey);
+            _taskPaneDisplayCoordinator.HideAll();
+            if (preconditionDecision == TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForMissingWindowKey)
+            {
+                _logger.Warn("RefreshPane skipped because windowKey was empty. reason=" + (reason ?? string.Empty));
+            }
         }
 
         private bool TryReuseCaseHostForRefresh(TaskPaneHost host, WorkbookContext context, string reason, string windowKey, int refreshPaneCallId)

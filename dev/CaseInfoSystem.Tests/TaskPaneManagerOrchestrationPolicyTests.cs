@@ -9,35 +9,53 @@ namespace CaseInfoSystem.Tests
     public class TaskPaneManagerOrchestrationPolicyTests
     {
         [Fact]
-        public void ShouldHideAllAndSkip_ReturnsTrue_WhenContextIsMissing()
+        public void DecideHostFlowPrecondition_ReturnsHideAllAndSkipForUnknownRole()
         {
-            bool result = TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(WorkbookRole.Unknown, windowKey: null);
+            TaskPaneHostFlowPreconditionDecision result = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(
+                WorkbookRole.Unknown,
+                windowKey: null);
 
-            Assert.True(result);
+            Assert.Equal(TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForUnknownRole, result);
         }
 
         [Fact]
-        public void ShouldHideAllAndSkip_ReturnsTrue_WhenWorkbookRoleIsUnknown()
+        public void DecideHostFlowPrecondition_ReturnsHideAllAndSkipForMissingWindowKey()
         {
-            bool result = TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(WorkbookRole.Unknown, windowKey: null);
+            TaskPaneHostFlowPreconditionDecision result = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(
+                WorkbookRole.Case,
+                windowKey: " ");
 
-            Assert.True(result);
+            Assert.Equal(TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForMissingWindowKey, result);
         }
 
         [Fact]
-        public void ShouldHideAllAndSkip_ReturnsTrue_WhenWindowKeyIsBlank()
+        public void DecideHostFlowPrecondition_ReturnsProceed_WhenRoleAndWindowKeyAreValid()
         {
-            bool result = TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(WorkbookRole.Case, windowKey: " ");
+            TaskPaneHostFlowPreconditionDecision result = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(
+                WorkbookRole.Kernel,
+                windowKey: "100");
 
-            Assert.True(result);
+            Assert.Equal(TaskPaneHostFlowPreconditionDecision.Proceed, result);
         }
 
         [Fact]
-        public void ShouldHideAllAndSkip_ReturnsFalse_WhenContextAndWindowKeyAreValid()
+        public void DecideHostFlowPrecondition_ReturnsProceed_WhenWindowKeyIsNotEvaluatedYet()
         {
-            bool result = TaskPaneRefreshPreconditionPolicy.ShouldHideAllAndSkip(WorkbookRole.Kernel, windowKey: "100");
+            TaskPaneHostFlowPreconditionDecision result = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(
+                WorkbookRole.Case,
+                windowKey: null);
 
-            Assert.False(result);
+            Assert.Equal(TaskPaneHostFlowPreconditionDecision.Proceed, result);
+        }
+
+        [Fact]
+        public void DecideHostFlowPrecondition_PrioritizesUnknownRole_OverMissingWindowKey()
+        {
+            TaskPaneHostFlowPreconditionDecision result = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(
+                WorkbookRole.Unknown,
+                windowKey: " ");
+
+            Assert.Equal(TaskPaneHostFlowPreconditionDecision.HideAllAndSkipForUnknownRole, result);
         }
 
         [Fact]

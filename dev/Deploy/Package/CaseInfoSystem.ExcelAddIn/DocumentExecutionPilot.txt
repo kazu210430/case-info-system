@@ -3,5 +3,5 @@
 #   key|templateFileName
 #
 # Notes:
-# - PilotOnly mode uses this file for parity comparison before PASS review exists.
-# - Keep this file empty until a specific pilot document is approved for testing.
+# - PilotOnly is kept only as a legacy compatibility label for DocumentExecutionMode.txt.
+# - Current runtime does not use this file for active document execution gating.

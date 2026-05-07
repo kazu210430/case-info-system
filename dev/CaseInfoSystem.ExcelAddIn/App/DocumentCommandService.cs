@@ -337,7 +337,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 _screenUpdatingExecutionBridge.Execute(() =>
                 {
-                    DocumentExecutionMode executionMode = _documentExecutionModeService.GetMode();
+                    DocumentExecutionMode executionMode = _documentExecutionModeService.GetConfiguredMode();
                     DocumentExecutionEligibility eligibility = _documentExecutionEligibilityService.Evaluate(workbook, DocumentActionKind, key);
                     _logger.Debug(
                         "ExecuteDocumentAction",

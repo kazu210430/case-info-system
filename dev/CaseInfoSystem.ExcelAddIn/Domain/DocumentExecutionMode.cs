@@ -1,4 +1,4 @@
-﻿namespace CaseInfoSystem.ExcelAddIn.Domain
+namespace CaseInfoSystem.ExcelAddIn.Domain
 {
     /// <summary>
     internal enum DocumentExecutionMode
@@ -7,9 +7,9 @@
         Disabled = 0,
 
         /// <summary>
-        PilotOnly = 1,
+        WarmupEnabledProfileA = 1,
 
         /// <summary>
-        AllowlistedOnly = 2
+        WarmupEnabledProfileB = 2
     }
 }

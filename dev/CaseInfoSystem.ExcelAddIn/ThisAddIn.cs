@@ -1329,7 +1329,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
-            if (_documentExecutionModeService == null || !_documentExecutionModeService.CanAttemptVstoExecution())
+            if (_documentExecutionModeService == null || !_documentExecutionModeService.IsWordWarmupEnabled())
             {
                 return;
             }

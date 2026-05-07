@@ -1,8 +1,12 @@
 # VSTO document execution mode
-# Allowed values:
+# Canonical values:
 #   Disabled
-#   PilotOnly
-#   AllowlistedOnly
+#   WarmupEnabledProfileA
+#   WarmupEnabledProfileB
+#
+# Legacy compatibility values:
+#   PilotOnly         -> WarmupEnabledProfileA
+#   AllowlistedOnly   -> WarmupEnabledProfileB
 #
 # Keep Disabled until VBA parity review is complete.
 AllowlistedOnly

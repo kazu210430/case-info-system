@@ -16,7 +16,7 @@ namespace CaseInfoSystem.Tests
             DateTime initialTimestamp = new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc);
             DateTime updatedTimestamp = initialTimestamp.AddMinutes(5);
             DateTime currentTimestamp = initialTimestamp;
-            string currentValue = "PilotOnly";
+            string currentValue = "WarmupEnabledProfileA";
 
             var service = new DocumentExecutionModeService(
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
@@ -28,12 +28,12 @@ namespace CaseInfoSystem.Tests
                     ReadModeFileLines = path => new[] { currentValue }
                 });
 
-            Assert.Equal(DocumentExecutionMode.PilotOnly, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileA, service.GetConfiguredMode());
 
             currentTimestamp = updatedTimestamp;
             currentValue = "AllowlistedOnly";
 
-            Assert.Equal(DocumentExecutionMode.AllowlistedOnly, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileB, service.GetConfiguredMode());
         }
 
         [Fact]
@@ -44,7 +44,7 @@ namespace CaseInfoSystem.Tests
             var valuesByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 [@"C:\runtime-a\DocumentExecutionMode.txt"] = "PilotOnly",
-                [@"C:\runtime-b\DocumentExecutionMode.txt"] = "Disabled"
+                [@"C:\runtime-b\DocumentExecutionMode.txt"] = "WarmupEnabledProfileB"
             };
 
             var service = new DocumentExecutionModeService(
@@ -58,11 +58,11 @@ namespace CaseInfoSystem.Tests
                     ResolveModeFilePath = () => currentPath
                 });
 
-            Assert.Equal(DocumentExecutionMode.PilotOnly, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileA, service.GetConfiguredMode());
 
             currentPath = @"C:\runtime-b\DocumentExecutionMode.txt";
 
-            Assert.Equal(DocumentExecutionMode.Disabled, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileB, service.GetConfiguredMode());
         }
 
         [Fact]
@@ -93,16 +93,16 @@ namespace CaseInfoSystem.Tests
                     ResolveModeFilePath = () => modePath
                 });
 
-            Assert.Equal(DocumentExecutionMode.PilotOnly, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileA, service.GetConfiguredMode());
 
             currentTimestamp = failingTimestamp;
             throwOnRead = true;
 
-            Assert.Equal(DocumentExecutionMode.PilotOnly, service.GetMode());
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileA, service.GetConfiguredMode());
         }
 
         [Fact]
-        public void CanAttemptVstoExecution_WhenModeIsAllowlistedOnly_ReturnsTrue()
+        public void IsWordWarmupEnabled_WhenModeIsAllowlistedOnlyAlias_ReturnsTrue()
         {
             var service = new DocumentExecutionModeService(
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
@@ -115,7 +115,7 @@ namespace CaseInfoSystem.Tests
                     ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
                 });
 
-            Assert.True(service.CanAttemptVstoExecution());
+            Assert.True(service.IsWordWarmupEnabled());
         }
     }
 }

@@ -145,7 +145,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // 受理された context を使って pane UI へ反映し、
             // CASE 成功時の warmup もこの最終段でまとめて扱う。
             bool refreshed = TryRefreshPaneAndScheduleWarmup(context, reason, stopwatch);
-            if (refreshed && window != null && _excelWindowRecoveryService != null)
+            bool foregroundRecoveryStarted = refreshed && window != null && _excelWindowRecoveryService != null;
+            string foregroundSkipReason = string.Empty;
+            if (!refreshed)
+            {
+                foregroundSkipReason = "refreshed=false";
+            }
+            else if (window == null)
+            {
+                foregroundSkipReason = "window=null";
+            }
+            else if (_excelWindowRecoveryService == null)
+            {
+                foregroundSkipReason = "recoveryService=null";
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=foreground-recovery-decision reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", refreshSucceeded="
+                + refreshed.ToString()
+                + ", resolvedWindowPresent="
+                + (window != null).ToString()
+                + ", recoveryServicePresent="
+                + (_excelWindowRecoveryService != null).ToString()
+                + ", foregroundRecoveryStarted="
+                + foregroundRecoveryStarted.ToString()
+                + ", foregroundRecoverySkipped="
+                + (!foregroundRecoveryStarted).ToString()
+                + ", foregroundSkipReason="
+                + foregroundSkipReason
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
+            if (foregroundRecoveryStarted)
             {
                 GuaranteeFinalForegroundAfterRefresh(context, workbook, reason, stopwatch);
             }
@@ -331,7 +366,40 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             Excel.Workbook protectedWorkbook = context == null ? workbook : context.Workbook;
             Excel.Window protectedWindow = context == null ? null : context.Window;
-            if (context != null && context.Role == WorkbookRole.Case && protectedWorkbook != null && protectedWindow != null)
+            bool protectionStartRequested = context != null && context.Role == WorkbookRole.Case && protectedWorkbook != null && protectedWindow != null;
+            string protectionSkipReason = string.Empty;
+            if (context == null || context.Role != WorkbookRole.Case)
+            {
+                protectionSkipReason = "context.Role!=Case";
+            }
+            else if (protectedWindow == null)
+            {
+                protectionSkipReason = "protectedWindow=null";
+            }
+            else if (protectedWorkbook == null)
+            {
+                protectionSkipReason = "protectedWorkbook=null";
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshCoordinator action=protection-decision reason="
+                + (reason ?? string.Empty)
+                + ", contextRole="
+                + (context == null ? "null" : context.Role.ToString())
+                + ", protectedWorkbookPresent="
+                + (protectedWorkbook != null).ToString()
+                + ", protectedWindowPresent="
+                + (protectedWindow != null).ToString()
+                + ", protectionStartRequested="
+                + protectionStartRequested.ToString()
+                + ", protectionSkipped="
+                + (!protectionStartRequested).ToString()
+                + ", protectionSkipReason="
+                + protectionSkipReason
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString());
+            if (protectionStartRequested)
             {
                 _casePaneHostBridge.BeginCaseWorkbookActivateProtection(
                     protectedWorkbook,

@@ -186,9 +186,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
             string workbookFullName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
             string windowHwnd = SafeWindowHwnd(window);
             WorkbookRole workbookRole = _workbookRoleResolver == null ? WorkbookRole.Unknown : _workbookRoleResolver.Resolve(workbook);
-            if (workbookRole != WorkbookRole.Case
-                || string.IsNullOrWhiteSpace(workbookFullName)
-                || string.IsNullOrWhiteSpace(windowHwnd))
+            bool protectionStartRequested = workbookRole == WorkbookRole.Case
+                && !string.IsNullOrWhiteSpace(workbookFullName)
+                && !string.IsNullOrWhiteSpace(windowHwnd);
+            string protectionSkipReason = string.Empty;
+            if (workbookRole != WorkbookRole.Case)
+            {
+                protectionSkipReason = "workbookRole!=Case";
+            }
+            else if (string.IsNullOrWhiteSpace(windowHwnd))
+            {
+                protectionSkipReason = "windowHwnd=empty";
+            }
+            else if (string.IsNullOrWhiteSpace(workbookFullName))
+            {
+                protectionSkipReason = "workbookFullName=empty";
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookActivateProtection action=evaluate reason="
+                + (reason ?? string.Empty)
+                + ", workbookRole="
+                + workbookRole.ToString()
+                + ", workbookPresent="
+                + (workbook != null).ToString()
+                + ", workbookFullNamePresent="
+                + (!string.IsNullOrWhiteSpace(workbookFullName)).ToString()
+                + ", protectedWindowPresent="
+                + (!string.IsNullOrWhiteSpace(windowHwnd)).ToString()
+                + ", protectionStartRequested="
+                + protectionStartRequested.ToString()
+                + ", protectionSkipped="
+                + (!protectionStartRequested).ToString()
+                + ", protectionSkipReason="
+                + protectionSkipReason);
+            if (!protectionStartRequested)
             {
                 return;
             }

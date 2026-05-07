@@ -4,6 +4,8 @@
 
 案件情報System は、Excel ブックと VSTO Add-in を中心に構成されています。主要な構成要素は `Kernel`、`Base`、`CASE`、会計書類セット、Excel Add-in、Word Add-in、Excel Launcher です。
 
+- 現行挙動・暗黙仕様・責務境界を横断して固定する正本: `docs/current-flow-source-of-truth.md`
+
 ## 主要構成要素
 
 - `Kernel`

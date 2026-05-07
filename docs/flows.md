@@ -5,6 +5,7 @@
 この文書では、コードから確認できる主要フローのみを扱います。帳票ごとの差し込み詳細や業務ルールは対象外です。
 
 - TaskPane refresh の policy 正本: `docs/taskpane-refresh-policy.md`
+- 現行処理フローの横断正本: `docs/current-flow-source-of-truth.md`
 
 ## 新規 CASE 作成
 

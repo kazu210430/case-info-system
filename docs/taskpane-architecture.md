@@ -8,6 +8,7 @@
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
 - TaskPane refresh policy: `docs/taskpane-refresh-policy.md`
+- フロー横断の現行挙動正本: `docs/current-flow-source-of-truth.md`
 - A4 / C2 checkpoint: `docs/a4-c2-current-state.md`
 - 優先度A現在地の補足: `docs/taskpane-refactor-current-state.md`
 - metadata / cache / snapshot の補足: `docs/template-metadata-inventory.md`

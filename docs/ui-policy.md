@@ -5,6 +5,7 @@
 案件情報System では、CASE 作成後の表示、文書作成中の表示、会計書類セット表示、TaskPane 表示、Excel ウィンドウ復旧を個別に制御しています。この文書では、コードから確認できる表示制御の方針を整理します。
 
 - TaskPane refresh の retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` です。
+- フロー横断の現行挙動正本は `docs/current-flow-source-of-truth.md` です。
 
 ## UI制御の原則
 

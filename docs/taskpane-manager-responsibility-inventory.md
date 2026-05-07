@@ -90,8 +90,8 @@
 ### 1. runtime composition owner が分裂している
 
 - `AddInTaskPaneCompositionFactory.Compose(...)` が `TaskPaneManager`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshCoordinator`、`TaskPaneRefreshOrchestrationService` を組み立てる。
-- 同時に `TaskPaneManager` constructor 自身が `CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry`、`TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`TaskPaneHostFlowService` などを `new` している。
-- さらに `TaskPaneHostRegistry` constructor も `TaskPaneHostFactory` を内部で `new` している。
+- 同時に `TaskPaneManagerRuntimeGraphFactory.Compose(...)` が `CasePaneCacheRefreshNotificationService`、`TaskPaneHostRegistry`、`TaskPaneHostLifecycleService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher`、`TaskPaneHostFlowService` などの manager-adjacent graph を compose する。
+- `TaskPaneHostFactory` compose はすでに `TaskPaneHostRegistry` constructor の外へ出ているが、control create / binding と VSTO host wiring root 自体は引き続き別境界で残る。
 
 事実として、TaskPane 周辺には
 
@@ -134,14 +134,14 @@
 
 1. `AddInTaskPaneCompositionFactory`
    - すでに TaskPane 周辺の top-level compose owner です。
-   - `TaskPaneManager` 内部 `new` を引き上げる自然な受け皿になります。
+   - `TaskPaneManagerRuntimeGraphFactory` wiring をさらに外側へ寄せる自然な受け皿になります。
 
-2. `TaskPaneManager` constructor
-   - 現状では subgraph の大半を内部 compose しており、secondary composition root になっています。
-   - facade / orchestration owner と wiring owner が同居しています。
+2. `TaskPaneManagerRuntimeGraphFactory`
+   - manager-adjacent runtime graph の compose owner です。
+   - attach payload と wiring owner を manager 本体から切り離す受け皿になっています。
 
-3. `TaskPaneHostRegistry` constructor
-   - `TaskPaneHostFactory` を内部 compose しており、VSTO host wiring root になっています。
+3. `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn`
+   - control create / `ActionInvoked` binding / concrete VSTO pane create-remove の wiring root です。
    - ただしここは create / dispose / control event 配線の危険領域なので、今すぐ root 側へ押し戻す対象とは言い切れません。
 
 ## facade / orchestration / composition の境界
@@ -170,7 +170,7 @@
 
 ### composition に寄せる候補
 
-- `TaskPaneManager` constructor 内の `new` 群
+- `TaskPaneManagerRuntimeGraphFactory` 内の wiring
   - `CasePaneCacheRefreshNotificationService`
   - `TaskPaneCaseFallbackActionExecutor`
   - `TaskPaneCaseActionTargetResolver`
@@ -191,12 +191,12 @@
   - `WorkbookOpen` / ready-show / protection 本線には直接触れない。
 
 - `TaskPaneDisplayCoordinator` / `TaskPaneHostLifecycleService` / `TaskPaneHostFlowService` の compose
-  - これらは current-state では既に独立 owner であり、manager 内に `new` で残す理由が薄い。
+  - これらは current-state では既に `TaskPaneManagerRuntimeGraphFactory` 側の compose owner 配下にあります。
   - ただし shared host state の owner をどう持つかは先に固定が必要です。
 
 - `CasePaneCacheRefreshNotificationService` の compose
   - leaf に近いが、意味的には lifecycle adjacency を持つ。
-  - wiring change と side effect policy の境界を分けて扱うためにも、manager constructor からは外したほうが読みやすい。
+  - wiring change と side effect policy の境界を分けて扱うためにも、manager attach surface へ戻さないほうが読みやすい。
 
 ### まだ寄せない方がよい候補
 
@@ -253,7 +253,7 @@
 
 | 区分 | 対象 | 事実ベースの理由 |
 | --- | --- | --- |
-| `Safe extraction` | `TaskPaneManager` constructor 内の leaf / handler wiring の root 側移動 | runtime semantics を変えずに owner だけ整理できる可能性がある。対象は dispatcher subtree や notification service compose など |
+| `Safe extraction` | `TaskPaneManagerRuntimeGraphFactory` wiring と manager attach surface の整理 | runtime semantics を変えずに owner と attach payload だけ整理できる可能性がある。対象は dispatcher subtree、notification service compose、registration-owner attach residue など |
 | `Runtime-sensitive` | shared host map owner、`TaskPaneHostLifecycleService` / `TaskPaneHostFlowService` compose、control binding delegate 受け渡し | host lookup / replace / render/show 直列順序に触れるため |
 | `UX-sensitive` | `TaskPaneDisplayCoordinator`、post-action refresh 再表示、`PaneDisplayPolicy` 入口 | 見え方、再表示、前面維持に直結するため |
 | `WorkbookOpen-sensitive` | `TaskPaneRefreshOrchestrationService`、`TaskPaneRefreshCoordinator`、`CasePaneCacheRefreshNotificationService` timing、window resolve 近辺 | `WorkbookOpen` を window 安定境界にしない契約を壊しやすいため |
@@ -265,7 +265,7 @@
 
 ### 第1候補
 
-`TaskPaneManager` の internal composition を `AddInTaskPaneCompositionFactory` へ寄せるための docs / constructor graph 整理
+`TaskPaneManagerRuntimeGraphFactory` wiring を top-level compose root 側へさらに寄せるための docs / graph 整理
 
 - 対象は runtime wiring だけに限定する
 - まずは dispatcher subtree と notification service から入る
@@ -273,7 +273,7 @@
 
 ### 第2候補
 
-`TaskPaneManager` が内部 `new` している orchestration services の compose owner を root 側へ寄せる
+`TaskPaneManagerRuntimeGraphFactory` が compose している orchestration services の owner map をさらに上位 root 側へ寄せる
 
 - `TaskPaneDisplayCoordinator`
 - `TaskPaneHostLifecycleService`
@@ -311,14 +311,14 @@
 ## 今回の結論
 
 - 見つかった ownership 混在
-  - `TaskPaneManager` が facade でありながら shared host map owner と secondary composition root を兼ねている
+  - `TaskPaneManager` が facade でありながら shared host map owner と render seam owner を兼ねている
   - CASE action dispatch が post-action refresh で `ThisAddIn` の display 入口へ再入している
   - `CasePaneCacheRefreshNotificationService` が notification 以上の lifecycle timing を持っている
 
 - composition root 化している箇所
   - `AddInTaskPaneCompositionFactory`
-  - `TaskPaneManager` constructor
-  - `TaskPaneHostRegistry` constructor
+  - `TaskPaneManagerRuntimeGraphFactory`
+  - `TaskPaneHostFactory` / `TaskPaneHost` / `ThisAddIn` create-remove chain
 
 - facade に残すべきもの
   - `TaskPaneManager` の外部 surface

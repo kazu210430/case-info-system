@@ -317,6 +317,51 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal Func<TaskPaneHost, string> FormatHostDescriptorForDiagnostics { get; }
     }
 
+    // Non-case action helper compose input. This keeps Kernel/Accounting action wiring explicit without
+    // routing the full runtime graph context through the non-case action helper compose.
+    internal sealed class TaskPaneNonCaseActionHandlerComposeContext
+    {
+        internal TaskPaneNonCaseActionHandlerComposeContext(
+            ExcelInteropService excelInteropService,
+            KernelCommandService kernelCommandService,
+            AccountingSheetCommandService accountingSheetCommandService,
+            AccountingInternalCommandService accountingInternalCommandService,
+            UserErrorService userErrorService,
+            Logger logger,
+            Func<string, TaskPaneHost> resolveHost,
+            Action<TaskPaneHost, WorkbookContext, string> renderHost,
+            Func<TaskPaneHost, string, bool> tryShowHost)
+        {
+            ExcelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
+            KernelCommandService = kernelCommandService ?? throw new ArgumentNullException(nameof(kernelCommandService));
+            AccountingSheetCommandService = accountingSheetCommandService ?? throw new ArgumentNullException(nameof(accountingSheetCommandService));
+            AccountingInternalCommandService = accountingInternalCommandService ?? throw new ArgumentNullException(nameof(accountingInternalCommandService));
+            UserErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            ResolveHost = resolveHost ?? throw new ArgumentNullException(nameof(resolveHost));
+            RenderHost = renderHost ?? throw new ArgumentNullException(nameof(renderHost));
+            TryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
+        }
+
+        internal ExcelInteropService ExcelInteropService { get; }
+
+        internal KernelCommandService KernelCommandService { get; }
+
+        internal AccountingSheetCommandService AccountingSheetCommandService { get; }
+
+        internal AccountingInternalCommandService AccountingInternalCommandService { get; }
+
+        internal UserErrorService UserErrorService { get; }
+
+        internal Logger Logger { get; }
+
+        internal Func<string, TaskPaneHost> ResolveHost { get; }
+
+        internal Action<TaskPaneHost, WorkbookContext, string> RenderHost { get; }
+
+        internal Func<TaskPaneHost, string, bool> TryShowHost { get; }
+    }
+
     internal static class TaskPaneManagerRuntimeBootstrap
     {
         // Production runtime entrypoint. AddInCompositionRoot should use this path so graph build/attach timing
@@ -478,10 +523,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             Func<string, TaskPaneHost> resolveHost =
                 windowKey => graphSurface.HostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null;
+            Func<TaskPaneHost, string, bool> tryShowHost =
+                (host, reason) => taskPaneDisplayCoordinator.TryShowHost(host, reason);
 
-            if (CanComposeNonCaseActionHandler(graphContext))
+            TaskPaneNonCaseActionHandlerComposeContext taskPaneNonCaseActionHandlerComposeContext = null;
+            if (graphContext.ExcelInteropService != null
+                && graphContext.KernelCommandService != null
+                && graphContext.AccountingSheetCommandService != null
+                && graphContext.AccountingInternalCommandService != null
+                && graphContext.UserErrorService != null)
             {
-                taskPaneNonCaseActionHandler = new TaskPaneNonCaseActionHandler(
+                taskPaneNonCaseActionHandlerComposeContext = new TaskPaneNonCaseActionHandlerComposeContext(
                     graphContext.ExcelInteropService,
                     graphContext.KernelCommandService,
                     graphContext.AccountingSheetCommandService,
@@ -490,7 +542,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     graphContext.Logger,
                     resolveHost,
                     graphSurface.RenderHost,
-                    (host, reason) => taskPaneDisplayCoordinator.TryShowHost(host, reason));
+                    tryShowHost);
+            }
+
+            if (taskPaneNonCaseActionHandlerComposeContext != null)
+            {
+                taskPaneNonCaseActionHandler = CreateTaskPaneNonCaseActionHandler(taskPaneNonCaseActionHandlerComposeContext);
             }
 
             if (CanComposeCaseActionDispatcher(graphContext))
@@ -529,7 +586,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     taskPaneCaseDocumentActionHandler,
                     host => taskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(host),
                     (control, workbook) => graphContext.CasePaneSnapshotRenderService.RenderAfterAction(control, workbook),
-                    (host, reason) => taskPaneDisplayCoordinator.TryShowHost(host, reason));
+                    tryShowHost);
             }
 
             var taskPaneHostFlowService = new TaskPaneHostFlowService(
@@ -586,6 +643,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 taskPaneHostFactory);
         }
 
+        private static TaskPaneNonCaseActionHandler CreateTaskPaneNonCaseActionHandler(
+            TaskPaneNonCaseActionHandlerComposeContext composeContext)
+        {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
+            return new TaskPaneNonCaseActionHandler(
+                composeContext.ExcelInteropService,
+                composeContext.KernelCommandService,
+                composeContext.AccountingSheetCommandService,
+                composeContext.AccountingInternalCommandService,
+                composeContext.UserErrorService,
+                composeContext.Logger,
+                composeContext.ResolveHost,
+                composeContext.RenderHost,
+                composeContext.TryShowHost);
+        }
+
         private static string ResolveWorkbookFullName(TaskPaneManagerRuntimeGraphComposeContext graphContext, Excel.Workbook workbook)
         {
             if (graphContext.ExcelInteropService != null)
@@ -594,15 +671,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return workbook == null ? string.Empty : (workbook.FullName ?? string.Empty);
-        }
-
-        private static bool CanComposeNonCaseActionHandler(TaskPaneManagerRuntimeGraphComposeContext graphContext)
-        {
-            return graphContext.ExcelInteropService != null
-                && graphContext.KernelCommandService != null
-                && graphContext.AccountingSheetCommandService != null
-                && graphContext.AccountingInternalCommandService != null
-                && graphContext.UserErrorService != null;
         }
 
         private static bool CanComposeCaseActionDispatcher(TaskPaneManagerRuntimeGraphComposeContext graphContext)

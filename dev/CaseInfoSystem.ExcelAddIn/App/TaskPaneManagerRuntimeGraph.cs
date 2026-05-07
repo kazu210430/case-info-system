@@ -362,6 +362,117 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal Func<TaskPaneHost, string, bool> TryShowHost { get; }
     }
 
+    // CASE target-resolver compose input. This keeps host lookup wiring explicit without routing the full
+    // runtime graph context through the target-resolution helper compose.
+    internal sealed class TaskPaneCaseActionTargetResolverComposeContext
+    {
+        internal TaskPaneCaseActionTargetResolverComposeContext(
+            ExcelInteropService excelInteropService,
+            Logger logger,
+            Func<string, TaskPaneHost> resolveHost)
+        {
+            ExcelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            ResolveHost = resolveHost ?? throw new ArgumentNullException(nameof(resolveHost));
+        }
+
+        internal ExcelInteropService ExcelInteropService { get; }
+
+        internal Logger Logger { get; }
+
+        internal Func<string, TaskPaneHost> ResolveHost { get; }
+    }
+
+    // CASE separated-action handler compose input. Both document/accounting handlers share the same collaborator
+    // set, so the compose helper keeps that payload explicit without reusing the full graph context.
+    internal sealed class TaskPaneCaseActionHandlerComposeContext
+    {
+        internal TaskPaneCaseActionHandlerComposeContext(
+            TaskPaneCaseActionTargetResolver caseActionTargetResolver,
+            TaskPaneCaseFallbackActionExecutor taskPaneCaseFallbackActionExecutor,
+            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
+            UserErrorService userErrorService,
+            Logger logger,
+            Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> handlePostActionRefresh)
+        {
+            CaseActionTargetResolver = caseActionTargetResolver ?? throw new ArgumentNullException(nameof(caseActionTargetResolver));
+            TaskPaneCaseFallbackActionExecutor = taskPaneCaseFallbackActionExecutor ?? throw new ArgumentNullException(nameof(taskPaneCaseFallbackActionExecutor));
+            CaseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
+            UserErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            HandlePostActionRefresh = handlePostActionRefresh ?? throw new ArgumentNullException(nameof(handlePostActionRefresh));
+        }
+
+        internal TaskPaneCaseActionTargetResolver CaseActionTargetResolver { get; }
+
+        internal TaskPaneCaseFallbackActionExecutor TaskPaneCaseFallbackActionExecutor { get; }
+
+        internal CaseTaskPaneViewStateBuilder CaseTaskPaneViewStateBuilder { get; }
+
+        internal UserErrorService UserErrorService { get; }
+
+        internal Logger Logger { get; }
+
+        internal Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> HandlePostActionRefresh { get; }
+    }
+
+    // CASE dispatcher compose input. This keeps the dispatcher-side wiring explicit after the separated handler
+    // subtree is resolved, without routing the full runtime graph context through dispatcher compose.
+    internal sealed class TaskPaneActionDispatcherComposeContext
+    {
+        internal TaskPaneActionDispatcherComposeContext(
+            ThisAddIn addIn,
+            ExcelInteropService excelInteropService,
+            CaseTaskPaneViewStateBuilder caseTaskPaneViewStateBuilder,
+            UserErrorService userErrorService,
+            Logger logger,
+            TaskPaneCaseFallbackActionExecutor taskPaneCaseFallbackActionExecutor,
+            TaskPaneCaseActionTargetResolver caseActionTargetResolver,
+            TaskPaneCaseAccountingActionHandler taskPaneCaseAccountingActionHandler,
+            TaskPaneCaseDocumentActionHandler taskPaneCaseDocumentActionHandler,
+            Action<TaskPaneHost> invalidateHostRenderStateForForcedRefresh,
+            Action<DocumentButtonsControl, Excel.Workbook> renderCaseHostAfterAction,
+            Func<TaskPaneHost, string, bool> tryShowHost)
+        {
+            AddIn = addIn;
+            ExcelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
+            CaseTaskPaneViewStateBuilder = caseTaskPaneViewStateBuilder ?? throw new ArgumentNullException(nameof(caseTaskPaneViewStateBuilder));
+            UserErrorService = userErrorService ?? throw new ArgumentNullException(nameof(userErrorService));
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            TaskPaneCaseFallbackActionExecutor = taskPaneCaseFallbackActionExecutor ?? throw new ArgumentNullException(nameof(taskPaneCaseFallbackActionExecutor));
+            CaseActionTargetResolver = caseActionTargetResolver ?? throw new ArgumentNullException(nameof(caseActionTargetResolver));
+            TaskPaneCaseAccountingActionHandler = taskPaneCaseAccountingActionHandler ?? throw new ArgumentNullException(nameof(taskPaneCaseAccountingActionHandler));
+            TaskPaneCaseDocumentActionHandler = taskPaneCaseDocumentActionHandler ?? throw new ArgumentNullException(nameof(taskPaneCaseDocumentActionHandler));
+            InvalidateHostRenderStateForForcedRefresh = invalidateHostRenderStateForForcedRefresh ?? throw new ArgumentNullException(nameof(invalidateHostRenderStateForForcedRefresh));
+            RenderCaseHostAfterAction = renderCaseHostAfterAction ?? throw new ArgumentNullException(nameof(renderCaseHostAfterAction));
+            TryShowHost = tryShowHost ?? throw new ArgumentNullException(nameof(tryShowHost));
+        }
+
+        internal ThisAddIn AddIn { get; }
+
+        internal ExcelInteropService ExcelInteropService { get; }
+
+        internal CaseTaskPaneViewStateBuilder CaseTaskPaneViewStateBuilder { get; }
+
+        internal UserErrorService UserErrorService { get; }
+
+        internal Logger Logger { get; }
+
+        internal TaskPaneCaseFallbackActionExecutor TaskPaneCaseFallbackActionExecutor { get; }
+
+        internal TaskPaneCaseActionTargetResolver CaseActionTargetResolver { get; }
+
+        internal TaskPaneCaseAccountingActionHandler TaskPaneCaseAccountingActionHandler { get; }
+
+        internal TaskPaneCaseDocumentActionHandler TaskPaneCaseDocumentActionHandler { get; }
+
+        internal Action<TaskPaneHost> InvalidateHostRenderStateForForcedRefresh { get; }
+
+        internal Action<DocumentButtonsControl, Excel.Workbook> RenderCaseHostAfterAction { get; }
+
+        internal Func<TaskPaneHost, string, bool> TryShowHost { get; }
+    }
+
     internal static class TaskPaneManagerRuntimeBootstrap
     {
         // Production runtime entrypoint. AddInCompositionRoot should use this path so graph build/attach timing
@@ -553,28 +664,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (CanComposeCaseActionDispatcher(graphContext))
             {
                 var taskPaneCaseFallbackActionExecutor = new TaskPaneCaseFallbackActionExecutor(graphContext.TaskPaneBusinessActionLauncher);
-                var taskPaneCaseActionTargetResolver = new TaskPaneCaseActionTargetResolver(
+                var taskPaneCaseActionTargetResolverComposeContext = new TaskPaneCaseActionTargetResolverComposeContext(
                     graphContext.ExcelInteropService,
                     graphContext.Logger,
                     resolveHost);
+                TaskPaneCaseActionTargetResolver taskPaneCaseActionTargetResolver =
+                    CreateTaskPaneCaseActionTargetResolver(taskPaneCaseActionTargetResolverComposeContext);
                 Action<TaskPaneHost, Excel.Workbook, DocumentButtonsControl, string> handlePostActionRefresh =
                     (host, workbook, control, actionKind) => taskPaneActionDispatcher.HandlePostActionRefresh(host, workbook, control, actionKind);
-                var taskPaneCaseAccountingActionHandler = new TaskPaneCaseAccountingActionHandler(
+                var taskPaneCaseActionHandlerComposeContext = new TaskPaneCaseActionHandlerComposeContext(
                     taskPaneCaseActionTargetResolver,
                     taskPaneCaseFallbackActionExecutor,
                     graphContext.CaseTaskPaneViewStateBuilder,
                     graphContext.UserErrorService,
                     graphContext.Logger,
                     handlePostActionRefresh);
-                var taskPaneCaseDocumentActionHandler = new TaskPaneCaseDocumentActionHandler(
-                    taskPaneCaseActionTargetResolver,
-                    taskPaneCaseFallbackActionExecutor,
-                    graphContext.CaseTaskPaneViewStateBuilder,
-                    graphContext.UserErrorService,
-                    graphContext.Logger,
-                    handlePostActionRefresh);
-
-                taskPaneActionDispatcher = new TaskPaneActionDispatcher(
+                TaskPaneCaseAccountingActionHandler taskPaneCaseAccountingActionHandler =
+                    CreateTaskPaneCaseAccountingActionHandler(taskPaneCaseActionHandlerComposeContext);
+                TaskPaneCaseDocumentActionHandler taskPaneCaseDocumentActionHandler =
+                    CreateTaskPaneCaseDocumentActionHandler(taskPaneCaseActionHandlerComposeContext);
+                var taskPaneActionDispatcherComposeContext = new TaskPaneActionDispatcherComposeContext(
                     graphContext.AddIn,
                     graphContext.ExcelInteropService,
                     graphContext.CaseTaskPaneViewStateBuilder,
@@ -587,6 +696,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     host => taskPaneDisplayCoordinator.InvalidateHostRenderStateForForcedRefresh(host),
                     (control, workbook) => graphContext.CasePaneSnapshotRenderService.RenderAfterAction(control, workbook),
                     tryShowHost);
+                taskPaneActionDispatcher = CreateTaskPaneActionDispatcher(taskPaneActionDispatcherComposeContext);
             }
 
             var taskPaneHostFlowService = new TaskPaneHostFlowService(
@@ -660,6 +770,77 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 composeContext.Logger,
                 composeContext.ResolveHost,
                 composeContext.RenderHost,
+                composeContext.TryShowHost);
+        }
+
+        private static TaskPaneCaseActionTargetResolver CreateTaskPaneCaseActionTargetResolver(
+            TaskPaneCaseActionTargetResolverComposeContext composeContext)
+        {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
+            return new TaskPaneCaseActionTargetResolver(
+                composeContext.ExcelInteropService,
+                composeContext.Logger,
+                composeContext.ResolveHost);
+        }
+
+        private static TaskPaneCaseAccountingActionHandler CreateTaskPaneCaseAccountingActionHandler(
+            TaskPaneCaseActionHandlerComposeContext composeContext)
+        {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
+            return new TaskPaneCaseAccountingActionHandler(
+                composeContext.CaseActionTargetResolver,
+                composeContext.TaskPaneCaseFallbackActionExecutor,
+                composeContext.CaseTaskPaneViewStateBuilder,
+                composeContext.UserErrorService,
+                composeContext.Logger,
+                composeContext.HandlePostActionRefresh);
+        }
+
+        private static TaskPaneCaseDocumentActionHandler CreateTaskPaneCaseDocumentActionHandler(
+            TaskPaneCaseActionHandlerComposeContext composeContext)
+        {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
+            return new TaskPaneCaseDocumentActionHandler(
+                composeContext.CaseActionTargetResolver,
+                composeContext.TaskPaneCaseFallbackActionExecutor,
+                composeContext.CaseTaskPaneViewStateBuilder,
+                composeContext.UserErrorService,
+                composeContext.Logger,
+                composeContext.HandlePostActionRefresh);
+        }
+
+        private static TaskPaneActionDispatcher CreateTaskPaneActionDispatcher(
+            TaskPaneActionDispatcherComposeContext composeContext)
+        {
+            if (composeContext == null)
+            {
+                throw new ArgumentNullException(nameof(composeContext));
+            }
+
+            return new TaskPaneActionDispatcher(
+                composeContext.AddIn,
+                composeContext.ExcelInteropService,
+                composeContext.CaseTaskPaneViewStateBuilder,
+                composeContext.UserErrorService,
+                composeContext.Logger,
+                composeContext.TaskPaneCaseFallbackActionExecutor,
+                composeContext.CaseActionTargetResolver,
+                composeContext.TaskPaneCaseAccountingActionHandler,
+                composeContext.TaskPaneCaseDocumentActionHandler,
+                composeContext.InvalidateHostRenderStateForForcedRefresh,
+                composeContext.RenderCaseHostAfterAction,
                 composeContext.TryShowHost);
         }
 

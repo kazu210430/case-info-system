@@ -255,7 +255,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Func<WorkbookContext, string> formatContextDescriptor,
             Func<TaskPaneHost, string> formatHostDescriptor,
             Func<Excel.Workbook, string> formatWorkbookDescriptor,
-            Action<TaskPaneHost, WorkbookContext, string> renderHost)
+            Func<TaskPaneHost, WorkbookContext, string, TaskPaneSnapshotBuilderService.TaskPaneBuildResult> renderHost)
         {
             HostsByWindowKey = hostsByWindowKey ?? throw new ArgumentNullException(nameof(hostsByWindowKey));
             FormatContextDescriptor = formatContextDescriptor ?? throw new ArgumentNullException(nameof(formatContextDescriptor));
@@ -272,7 +272,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Func<Excel.Workbook, string> FormatWorkbookDescriptor { get; }
 
-        internal Action<TaskPaneHost, WorkbookContext, string> RenderHost { get; }
+        internal Func<TaskPaneHost, WorkbookContext, string, TaskPaneSnapshotBuilderService.TaskPaneBuildResult> RenderHost { get; }
     }
 
     // Create-side adapter compose input. This narrows host-factory wiring so the helper does not receive the
@@ -636,6 +636,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 windowKey => graphSurface.HostsByWindowKey.TryGetValue(windowKey ?? string.Empty, out TaskPaneHost host) ? host : null;
             Func<TaskPaneHost, string, bool> tryShowHost =
                 (host, reason) => taskPaneDisplayCoordinator.TryShowHost(host, reason);
+            Action<TaskPaneHost, WorkbookContext, string> renderHostWithoutFacts =
+                (host, context, reason) =>
+                {
+                    graphSurface.RenderHost(host, context, reason);
+                };
 
             TaskPaneNonCaseActionHandlerComposeContext taskPaneNonCaseActionHandlerComposeContext = null;
             if (graphContext.ExcelInteropService != null
@@ -652,7 +657,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     graphContext.UserErrorService,
                     graphContext.Logger,
                     resolveHost,
-                    graphSurface.RenderHost,
+                    renderHostWithoutFacts,
                     tryShowHost);
             }
 

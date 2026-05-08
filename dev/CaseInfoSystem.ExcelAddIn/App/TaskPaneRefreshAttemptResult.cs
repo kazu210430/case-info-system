@@ -1,4 +1,5 @@
 using CaseInfoSystem.ExcelAddIn.Domain;
+using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.App
@@ -49,6 +50,224 @@ namespace CaseInfoSystem.ExcelAddIn.App
         ReusedShown = 2,
         RefreshedShown = 3,
         Unknown = 4,
+    }
+
+    internal enum RebuildFallbackOutcomeStatus
+    {
+        Unknown = 0,
+        Skipped = 1,
+        Completed = 2,
+        Degraded = 3,
+        Failed = 4,
+    }
+
+    internal sealed class RebuildFallbackOutcome
+    {
+        private RebuildFallbackOutcome(
+            RebuildFallbackOutcomeStatus status,
+            bool isRequired,
+            bool isTerminal,
+            bool canContinueRefresh,
+            TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource snapshotSource,
+            string fallbackReasons,
+            bool masterListRebuildAttempted,
+            bool masterListRebuildSucceeded,
+            bool snapshotTextAvailable,
+            bool updatedCaseSnapshotCache,
+            string failureReason,
+            string degradedReason,
+            string reason)
+        {
+            Status = status;
+            IsRequired = isRequired;
+            IsTerminal = isTerminal;
+            CanContinueRefresh = canContinueRefresh;
+            SnapshotSource = snapshotSource;
+            FallbackReasons = fallbackReasons ?? string.Empty;
+            MasterListRebuildAttempted = masterListRebuildAttempted;
+            MasterListRebuildSucceeded = masterListRebuildSucceeded;
+            SnapshotTextAvailable = snapshotTextAvailable;
+            UpdatedCaseSnapshotCache = updatedCaseSnapshotCache;
+            FailureReason = failureReason ?? string.Empty;
+            DegradedReason = degradedReason ?? string.Empty;
+            Reason = reason ?? string.Empty;
+        }
+
+        internal RebuildFallbackOutcomeStatus Status { get; }
+
+        internal bool IsRequired { get; }
+
+        internal bool IsTerminal { get; }
+
+        internal bool CanContinueRefresh { get; }
+
+        internal TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource SnapshotSource { get; }
+
+        internal string FallbackReasons { get; }
+
+        internal bool MasterListRebuildAttempted { get; }
+
+        internal bool MasterListRebuildSucceeded { get; }
+
+        internal bool SnapshotTextAvailable { get; }
+
+        internal bool UpdatedCaseSnapshotCache { get; }
+
+        internal string FailureReason { get; }
+
+        internal string DegradedReason { get; }
+
+        internal string Reason { get; }
+
+        internal static RebuildFallbackOutcome Unknown(string reason)
+        {
+            return new RebuildFallbackOutcome(
+                RebuildFallbackOutcomeStatus.Unknown,
+                isRequired: false,
+                isTerminal: false,
+                canContinueRefresh: false,
+                snapshotSource: TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None,
+                fallbackReasons: string.Empty,
+                masterListRebuildAttempted: false,
+                masterListRebuildSucceeded: false,
+                snapshotTextAvailable: false,
+                updatedCaseSnapshotCache: false,
+                failureReason: string.Empty,
+                degradedReason: string.Empty,
+                reason: reason);
+        }
+
+        internal static RebuildFallbackOutcome FromBuildResult(TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult)
+        {
+            if (buildResult == null)
+            {
+                return Skipped(
+                    "snapshotAcquisitionNotReached",
+                    TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None,
+                    string.Empty,
+                    updatedCaseSnapshotCache: false);
+            }
+
+            if (buildResult.SnapshotSource == TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.MasterListRebuild
+                || buildResult.MasterListRebuildAttempted)
+            {
+                if (buildResult.MasterListRebuildSucceeded && buildResult.SnapshotTextAvailable)
+                {
+                    return Completed(buildResult, "masterListRebuildCompleted");
+                }
+
+                if (buildResult.SnapshotTextAvailable)
+                {
+                    return Degraded(
+                        buildResult,
+                        string.IsNullOrWhiteSpace(buildResult.DegradedReason)
+                            ? "masterListRebuildReturnedFallbackSnapshot"
+                            : buildResult.DegradedReason);
+                }
+
+                return Failed(
+                    buildResult,
+                    string.IsNullOrWhiteSpace(buildResult.FailureReason)
+                        ? "NoSnapshotText"
+                        : buildResult.FailureReason);
+            }
+
+            if (buildResult.SnapshotTextAvailable)
+            {
+                return Skipped(
+                    "snapshotSource=" + buildResult.SnapshotSource.ToString(),
+                    buildResult.SnapshotSource,
+                    buildResult.FallbackReasons,
+                    buildResult.UpdatedCaseSnapshotCache);
+            }
+
+            if (!string.IsNullOrWhiteSpace(buildResult.FailureReason))
+            {
+                return Failed(buildResult, buildResult.FailureReason);
+            }
+
+            return Skipped(
+                "snapshotAcquisitionSkipped",
+                buildResult.SnapshotSource,
+                buildResult.FallbackReasons,
+                buildResult.UpdatedCaseSnapshotCache);
+        }
+
+        private static RebuildFallbackOutcome Skipped(
+            string reason,
+            TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource snapshotSource,
+            string fallbackReasons,
+            bool updatedCaseSnapshotCache)
+        {
+            return new RebuildFallbackOutcome(
+                RebuildFallbackOutcomeStatus.Skipped,
+                isRequired: false,
+                isTerminal: true,
+                canContinueRefresh: true,
+                snapshotSource: snapshotSource,
+                fallbackReasons: fallbackReasons,
+                masterListRebuildAttempted: false,
+                masterListRebuildSucceeded: false,
+                snapshotTextAvailable: snapshotSource != TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None,
+                updatedCaseSnapshotCache: updatedCaseSnapshotCache,
+                failureReason: string.Empty,
+                degradedReason: string.Empty,
+                reason: reason);
+        }
+
+        private static RebuildFallbackOutcome Completed(TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult, string reason)
+        {
+            return new RebuildFallbackOutcome(
+                RebuildFallbackOutcomeStatus.Completed,
+                isRequired: true,
+                isTerminal: true,
+                canContinueRefresh: true,
+                snapshotSource: buildResult.SnapshotSource,
+                fallbackReasons: buildResult.FallbackReasons,
+                masterListRebuildAttempted: buildResult.MasterListRebuildAttempted,
+                masterListRebuildSucceeded: buildResult.MasterListRebuildSucceeded,
+                snapshotTextAvailable: buildResult.SnapshotTextAvailable,
+                updatedCaseSnapshotCache: buildResult.UpdatedCaseSnapshotCache,
+                failureReason: buildResult.FailureReason,
+                degradedReason: buildResult.DegradedReason,
+                reason: reason);
+        }
+
+        private static RebuildFallbackOutcome Degraded(TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult, string degradedReason)
+        {
+            return new RebuildFallbackOutcome(
+                RebuildFallbackOutcomeStatus.Degraded,
+                isRequired: true,
+                isTerminal: true,
+                canContinueRefresh: true,
+                snapshotSource: buildResult.SnapshotSource,
+                fallbackReasons: buildResult.FallbackReasons,
+                masterListRebuildAttempted: buildResult.MasterListRebuildAttempted,
+                masterListRebuildSucceeded: buildResult.MasterListRebuildSucceeded,
+                snapshotTextAvailable: buildResult.SnapshotTextAvailable,
+                updatedCaseSnapshotCache: buildResult.UpdatedCaseSnapshotCache,
+                failureReason: buildResult.FailureReason,
+                degradedReason: degradedReason,
+                reason: "masterListRebuildDegraded");
+        }
+
+        private static RebuildFallbackOutcome Failed(TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult, string failureReason)
+        {
+            return new RebuildFallbackOutcome(
+                RebuildFallbackOutcomeStatus.Failed,
+                isRequired: buildResult != null && (buildResult.SnapshotSource == TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.MasterListRebuild || buildResult.MasterListRebuildAttempted),
+                isTerminal: true,
+                canContinueRefresh: false,
+                snapshotSource: buildResult == null ? TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None : buildResult.SnapshotSource,
+                fallbackReasons: buildResult == null ? string.Empty : buildResult.FallbackReasons,
+                masterListRebuildAttempted: buildResult != null && buildResult.MasterListRebuildAttempted,
+                masterListRebuildSucceeded: buildResult != null && buildResult.MasterListRebuildSucceeded,
+                snapshotTextAvailable: buildResult != null && buildResult.SnapshotTextAvailable,
+                updatedCaseSnapshotCache: buildResult != null && buildResult.UpdatedCaseSnapshotCache,
+                failureReason: failureReason,
+                degradedReason: string.Empty,
+                reason: "masterListRebuildFailed");
+        }
     }
 
     internal sealed class VisibilityRecoveryOutcome
@@ -375,6 +594,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Window foregroundWindow = null,
             bool isForegroundRecoveryServiceAvailable = false,
             VisibilityRecoveryOutcome visibilityRecoveryOutcome = null,
+            RebuildFallbackOutcome rebuildFallbackOutcome = null,
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult = null,
             PaneVisibleSource paneVisibleSource = PaneVisibleSource.None,
             bool preContextRecoveryAttempted = false,
             bool? preContextRecoverySucceeded = null)
@@ -391,6 +612,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ForegroundWindow = foregroundWindow;
             IsForegroundRecoveryServiceAvailable = isForegroundRecoveryServiceAvailable;
             VisibilityRecoveryOutcome = visibilityRecoveryOutcome ?? VisibilityRecoveryOutcome.Unknown("notEvaluated");
+            RebuildFallbackOutcome = rebuildFallbackOutcome ?? RebuildFallbackOutcome.Unknown("notEvaluated");
+            SnapshotBuildResult = snapshotBuildResult;
             PaneVisibleSource = paneVisibleSource;
             PreContextRecoveryAttempted = preContextRecoveryAttempted;
             PreContextRecoverySucceeded = preContextRecoverySucceeded;
@@ -425,6 +648,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool isForegroundRecoveryServiceAvailable,
             string completionBasis,
             PaneVisibleSource paneVisibleSource,
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult,
             bool preContextRecoveryAttempted,
             bool? preContextRecoverySucceeded)
         {
@@ -438,6 +662,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 foregroundWorkbook: foregroundWorkbook,
                 foregroundWindow: foregroundWindow,
                 isForegroundRecoveryServiceAvailable: isForegroundRecoveryServiceAvailable,
+                snapshotBuildResult: snapshotBuildResult,
                 paneVisibleSource: paneVisibleSource,
                 preContextRecoveryAttempted: preContextRecoveryAttempted,
                 preContextRecoverySucceeded: preContextRecoverySucceeded);
@@ -455,6 +680,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         internal static TaskPaneRefreshAttemptResult Failed(
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult = null,
             bool preContextRecoveryAttempted = false,
             bool? preContextRecoverySucceeded = null)
         {
@@ -462,6 +688,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 false,
                 completionBasis: "failed",
                 foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.Unknown("refreshFailed"),
+                snapshotBuildResult: snapshotBuildResult,
                 preContextRecoveryAttempted: preContextRecoveryAttempted,
                 preContextRecoverySucceeded: preContextRecoverySucceeded);
         }
@@ -503,6 +730,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 foregroundWindow: ForegroundWindow,
                 isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
                 visibilityRecoveryOutcome: VisibilityRecoveryOutcome,
+                rebuildFallbackOutcome: RebuildFallbackOutcome,
+                snapshotBuildResult: SnapshotBuildResult,
                 paneVisibleSource: PaneVisibleSource,
                 preContextRecoveryAttempted: PreContextRecoveryAttempted,
                 preContextRecoverySucceeded: PreContextRecoverySucceeded);
@@ -523,6 +752,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 foregroundWindow: ForegroundWindow,
                 isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
                 visibilityRecoveryOutcome: visibilityRecoveryOutcome,
+                rebuildFallbackOutcome: RebuildFallbackOutcome,
+                snapshotBuildResult: SnapshotBuildResult,
+                paneVisibleSource: PaneVisibleSource,
+                preContextRecoveryAttempted: PreContextRecoveryAttempted,
+                preContextRecoverySucceeded: PreContextRecoverySucceeded);
+        }
+
+        internal TaskPaneRefreshAttemptResult WithRebuildFallbackOutcome(RebuildFallbackOutcome rebuildFallbackOutcome)
+        {
+            return new TaskPaneRefreshAttemptResult(
+                IsRefreshSucceeded,
+                wasSkipped: WasSkipped,
+                wasContextRejected: WasContextRejected,
+                isPaneVisible: IsPaneVisible,
+                isRefreshCompleted: IsRefreshCompleted,
+                completionBasis: CompletionBasis,
+                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome,
+                foregroundContext: ForegroundContext,
+                foregroundWorkbook: ForegroundWorkbook,
+                foregroundWindow: ForegroundWindow,
+                isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
+                visibilityRecoveryOutcome: VisibilityRecoveryOutcome,
+                rebuildFallbackOutcome: rebuildFallbackOutcome,
+                snapshotBuildResult: SnapshotBuildResult,
                 paneVisibleSource: PaneVisibleSource,
                 preContextRecoveryAttempted: PreContextRecoveryAttempted,
                 preContextRecoverySucceeded: PreContextRecoverySucceeded);
@@ -567,6 +820,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal bool IsForegroundRecoveryServiceAvailable { get; }
 
         internal VisibilityRecoveryOutcome VisibilityRecoveryOutcome { get; }
+
+        internal RebuildFallbackOutcome RebuildFallbackOutcome { get; }
+
+        internal TaskPaneSnapshotBuilderService.TaskPaneBuildResult SnapshotBuildResult { get; }
 
         internal PaneVisibleSource PaneVisibleSource { get; }
 

@@ -147,26 +147,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         // Render 制御責務: role ごとの描画と signature 更新対象を分離し、再描画条件は上位から受け取る。
-        private void RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
+        private TaskPaneSnapshotBuilderService.TaskPaneBuildResult RenderHost(TaskPaneHost host, WorkbookContext context, string reason)
         {
             host.WorkbookFullName = context.WorkbookFullName;
 
             if (host.Control is KernelNavigationControl kernelControl)
             {
                 RenderKernelHost(kernelControl, context);
-                return;
+                return null;
             }
 
             if (host.Control is AccountingNavigationControl accountingControl)
             {
                 RenderAccountingHost(accountingControl, context);
-                return;
+                return null;
             }
 
             if (host.Control is DocumentButtonsControl caseControl)
             {
-                RenderCaseHost(caseControl, context, reason);
+                return RenderCaseHost(caseControl, context, reason);
             }
+
+            return null;
         }
 
         private void RenderKernelHost(KernelNavigationControl kernelControl, WorkbookContext context)
@@ -183,7 +185,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger.Info("RenderHost completed. role=Accounting, workbook=" + (context.WorkbookFullName ?? string.Empty));
         }
 
-        private void RenderCaseHost(DocumentButtonsControl caseControl, WorkbookContext context, string reason)
+        private TaskPaneSnapshotBuilderService.TaskPaneBuildResult RenderCaseHost(DocumentButtonsControl caseControl, WorkbookContext context, string reason)
         {
             _logger.Info("RenderHost start. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
             bool? originalWorkbookSavedState = _casePaneCacheRefreshNotificationService.TryGetWorkbookSavedState(context.Workbook);
@@ -195,6 +197,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger.Info("RenderHost snapshot parsed. role=Case, hasError=" + snapshot.HasError.ToString() + ", tabs=" + snapshot.Tabs.Count.ToString() + ", docs=" + snapshot.DocButtons.Count.ToString());
             _casePaneCacheRefreshNotificationService.NotifyCasePaneUpdatedIfNeeded(context.Workbook, reason, buildResult, originalWorkbookSavedState);
             _logger.Info("RenderHost completed. role=Case, workbook=" + (context.WorkbookFullName ?? string.Empty));
+            return buildResult;
         }
 
         internal void PrepareTargetWindowForForcedRefresh(Excel.Window targetWindow)

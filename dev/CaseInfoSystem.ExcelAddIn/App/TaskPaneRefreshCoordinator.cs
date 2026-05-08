@@ -173,9 +173,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     _excelWindowRecoveryService != null,
                     "refreshCompleted",
                     hostFlowResult.PaneVisibleSource,
+                    hostFlowResult.SnapshotBuildResult,
                     preContextRecoveryAttempted,
                     preContextRecoverySucceeded)
                 : TaskPaneRefreshAttemptResult.Failed(
+                    hostFlowResult.SnapshotBuildResult,
                     preContextRecoveryAttempted,
                     preContextRecoverySucceeded);
         }

@@ -90,6 +90,7 @@
     <Compile Include="TaskPaneDisplayRetryCoordinatorTests.cs" />
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
     <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
+    <Compile Include="RebuildFallbackOutcomeTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />

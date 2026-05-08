@@ -294,17 +294,70 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
     internal sealed class TaskPaneSnapshotBuilderService : CaseInfoSystem.ExcelAddIn.App.ICaseTaskPaneSnapshotReader
     {
+        internal enum TaskPaneSnapshotSource
+        {
+            None = 0,
+            CaseCache = 1,
+            BaseCache = 2,
+            BaseCacheFallback = 3,
+            MasterListRebuild = 4,
+        }
+
         internal sealed class TaskPaneBuildResult
         {
             internal TaskPaneBuildResult(string snapshotText, bool updatedCaseSnapshotCache)
+                : this(
+                    snapshotText,
+                    updatedCaseSnapshotCache,
+                    TaskPaneSnapshotSource.None,
+                    string.Empty,
+                    masterListRebuildAttempted: false,
+                    masterListRebuildSucceeded: false,
+                    failureReason: string.Empty,
+                    degradedReason: string.Empty)
+            {
+            }
+
+            internal TaskPaneBuildResult(
+                string snapshotText,
+                bool updatedCaseSnapshotCache,
+                TaskPaneSnapshotSource snapshotSource,
+                string fallbackReasons,
+                bool masterListRebuildAttempted,
+                bool masterListRebuildSucceeded,
+                string failureReason,
+                string degradedReason)
             {
                 SnapshotText = snapshotText ?? string.Empty;
                 UpdatedCaseSnapshotCache = updatedCaseSnapshotCache;
+                SnapshotSource = snapshotSource;
+                FallbackReasons = fallbackReasons ?? string.Empty;
+                MasterListRebuildAttempted = masterListRebuildAttempted;
+                MasterListRebuildSucceeded = masterListRebuildSucceeded;
+                FailureReason = failureReason ?? string.Empty;
+                DegradedReason = degradedReason ?? string.Empty;
             }
 
             internal string SnapshotText { get; }
 
             internal bool UpdatedCaseSnapshotCache { get; }
+
+            internal TaskPaneSnapshotSource SnapshotSource { get; }
+
+            internal string FallbackReasons { get; }
+
+            internal bool MasterListRebuildAttempted { get; }
+
+            internal bool MasterListRebuildSucceeded { get; }
+
+            internal bool SnapshotTextAvailable
+            {
+                get { return !string.IsNullOrWhiteSpace(SnapshotText); }
+            }
+
+            internal string FailureReason { get; }
+
+            internal string DegradedReason { get; }
         }
 
         internal Func<Excel.Workbook, TaskPaneBuildResult> OnBuildSnapshotText { get; set; }

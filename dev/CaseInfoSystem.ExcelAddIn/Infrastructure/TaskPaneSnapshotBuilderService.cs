@@ -12,6 +12,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
 	internal sealed class TaskPaneSnapshotBuilderService : CaseInfoSystem.ExcelAddIn.App.ICaseTaskPaneSnapshotReader
 	{
+		internal enum TaskPaneSnapshotSource
+		{
+			None = 0,
+			CaseCache = 1,
+			BaseCache = 2,
+			BaseCacheFallback = 3,
+			MasterListRebuild = 4,
+		}
+
 		internal sealed class TaskPaneBuildResult
 		{
 			internal string SnapshotText { get; private set; }
@@ -19,10 +28,57 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			internal bool UpdatedCaseSnapshotCache { get; private set; }
 
 			internal TaskPaneBuildResult (string snapshotText, bool updatedCaseSnapshotCache)
+				: this (
+					snapshotText,
+					updatedCaseSnapshotCache,
+					TaskPaneSnapshotSource.None,
+					string.Empty,
+					masterListRebuildAttempted: false,
+					masterListRebuildSucceeded: false,
+					failureReason: string.Empty,
+					degradedReason: string.Empty)
+			{
+			}
+
+			internal TaskPaneBuildResult (
+				string snapshotText,
+				bool updatedCaseSnapshotCache,
+				TaskPaneSnapshotSource snapshotSource,
+				string fallbackReasons,
+				bool masterListRebuildAttempted,
+				bool masterListRebuildSucceeded,
+				string failureReason,
+				string degradedReason)
 			{
 				SnapshotText = snapshotText ?? string.Empty;
 				UpdatedCaseSnapshotCache = updatedCaseSnapshotCache;
+				SnapshotSource = snapshotSource;
+				FallbackReasons = fallbackReasons ?? string.Empty;
+				MasterListRebuildAttempted = masterListRebuildAttempted;
+				MasterListRebuildSucceeded = masterListRebuildSucceeded;
+				FailureReason = failureReason ?? string.Empty;
+				DegradedReason = degradedReason ?? string.Empty;
 			}
+
+			internal TaskPaneSnapshotSource SnapshotSource { get; private set; }
+
+			internal string FallbackReasons { get; private set; }
+
+			internal bool MasterListRebuildAttempted { get; private set; }
+
+			internal bool MasterListRebuildSucceeded { get; private set; }
+
+			internal bool SnapshotTextAvailable
+			{
+				get
+				{
+					return !string.IsNullOrWhiteSpace (SnapshotText);
+				}
+			}
+
+			internal string FailureReason { get; private set; }
+
+			internal string DegradedReason { get; private set; }
 		}
 
 		private const string LineMeta = "META";
@@ -85,7 +141,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 		public TaskPaneBuildResult BuildSnapshotText (Workbook workbook)
 		{
 			if (workbook == null) {
-				return new TaskPaneBuildResult (string.Empty, updatedCaseSnapshotCache: false);
+				return new TaskPaneBuildResult (
+					string.Empty,
+					updatedCaseSnapshotCache: false,
+					TaskPaneSnapshotSource.None,
+					string.Empty,
+					masterListRebuildAttempted: false,
+					masterListRebuildSucceeded: false,
+					failureReason: "WorkbookMissing",
+					degradedReason: string.Empty);
 			}
 			long num = 0L;
 			MasterWorkbookReadAccessResult readAccess = null;
@@ -95,6 +159,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			long latestMasterVersion = 0L;
 			long caseMasterVersion = 0L;
 			long embeddedMasterVersion = 0L;
+			bool masterListRebuildAttempted = false;
 			try {
 				long masterVersion = 0L;
 				num = 5L;
@@ -113,7 +178,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						if (masterVersion <= 0 || masterVersion <= caseMasterVersion) {
 							string snapshotText2 = ApplyDynamicSpecialButtonOverrides (text, workbook);
 							_logger.Info ("Task pane snapshot source=CaseCache, caseListCaption=" + caseListCaption + ", cacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT") ?? string.Empty) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
-							return new TaskPaneBuildResult (snapshotText2, updatedCaseSnapshotCache: false);
+							return new TaskPaneBuildResult (
+								snapshotText2,
+								updatedCaseSnapshotCache: false,
+								TaskPaneSnapshotSource.CaseCache,
+								rebuildFallback,
+								masterListRebuildAttempted: false,
+								masterListRebuildSucceeded: false,
+								failureReason: string.Empty,
+								degradedReason: string.Empty);
 						}
 						AppendFallbackReason (ref rebuildFallback, "CaseCacheStale");
 						_logger.Info ("Task pane snapshot case cache is stale. caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
@@ -142,7 +215,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 								_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", text3);
 							}
 							_logger.Info ("Task pane snapshot source=BaseCacheFallback, caseListCaption=" + caseListCaption + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT") ?? string.Empty) + ", embeddedMasterVersion=" + embeddedMasterVersion + ", latestMasterVersion=" + latestMasterVersion + ", rebuildFallback=" + rebuildFallback + FormatObservationContext (workbook));
-							return new TaskPaneBuildResult (snapshotText3, updatedCaseSnapshotCache: true);
+							return new TaskPaneBuildResult (
+								snapshotText3,
+								updatedCaseSnapshotCache: true,
+								TaskPaneSnapshotSource.BaseCacheFallback,
+								rebuildFallback,
+								masterListRebuildAttempted: false,
+								masterListRebuildSucceeded: false,
+								failureReason: string.Empty,
+								degradedReason: string.Empty);
 						}
 						latestMasterVersion = masterVersion;
 						if (masterVersion <= 0 || masterVersion <= result) {
@@ -152,7 +233,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 								_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", text3);
 							}
 							_logger.Info ("Task pane snapshot source=BaseCache, caseListCaption=" + caseListCaption + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT") ?? string.Empty) + ", embeddedMasterVersion=" + embeddedMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
-							return new TaskPaneBuildResult (snapshotText4, updatedCaseSnapshotCache: true);
+							return new TaskPaneBuildResult (
+								snapshotText4,
+								updatedCaseSnapshotCache: true,
+								TaskPaneSnapshotSource.BaseCache,
+								rebuildFallback,
+								masterListRebuildAttempted: false,
+								masterListRebuildSucceeded: false,
+								failureReason: string.Empty,
+								degradedReason: string.Empty);
 						}
 						AppendFallbackReason (ref rebuildFallback, "BaseCacheStale");
 						_logger.Info ("Task pane snapshot base cache is stale. embeddedMasterVersion=" + embeddedMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
@@ -163,6 +252,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					if (string.IsNullOrWhiteSpace (rebuildFallback)) {
 						rebuildFallback = "CacheUnavailable";
 					}
+					masterListRebuildAttempted = true;
 					resolvedMasterPath = _masterWorkbookReadAccessService.ResolveMasterPath (workbook, MasterWorkbookPathResolutionMode.TaskPaneSnapshotBuilder);
 					_logger.Info ("Task pane snapshot rebuild fallback selected. rebuildFallback=" + rebuildFallback + ", caseListCaption=" + caseListCaption + ", latestMasterVersion=" + latestMasterVersion + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
 					_logger.Info ("Task pane snapshot MasterListRebuild started. rebuildFallback=" + rebuildFallback + ", caseListCaption=" + caseListCaption + ", latestMasterVersion=" + latestMasterVersion + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
@@ -191,10 +281,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				string snapshotText5 = string.Join ("\r\n", list);
 				SaveCaseSnapshotCache (workbook, snapshotText5);
 				_logger.Info ("Task pane snapshot source=MasterListRebuild, caseListCaption=" + caseListCaption + ", masterVersion=" + documentPropertyLong2 + ", latestMasterVersion=" + documentPropertyLong2 + ", rebuildFallback=" + rebuildFallback + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
-				return new TaskPaneBuildResult (snapshotText5, updatedCaseSnapshotCache: true);
+				return new TaskPaneBuildResult (
+					snapshotText5,
+					updatedCaseSnapshotCache: true,
+					TaskPaneSnapshotSource.MasterListRebuild,
+					rebuildFallback,
+					masterListRebuildAttempted: true,
+					masterListRebuildSucceeded: true,
+					failureReason: string.Empty,
+					degradedReason: string.Empty);
 			} catch (Exception ex) {
 				_logger.Error ("TaskPaneSnapshotBuilderService.BuildSnapshotText failed. step=" + num, ex);
-				return new TaskPaneBuildResult (JoinFields ("META", "2", "ERROR", "step=" + num + " / " + ex.Message), updatedCaseSnapshotCache: false);
+				return new TaskPaneBuildResult (
+					JoinFields ("META", "2", "ERROR", "step=" + num + " / " + ex.Message),
+					updatedCaseSnapshotCache: false,
+					masterListRebuildAttempted ? TaskPaneSnapshotSource.MasterListRebuild : TaskPaneSnapshotSource.None,
+					rebuildFallback,
+					masterListRebuildAttempted,
+					masterListRebuildSucceeded: false,
+					failureReason: "SnapshotBuildException",
+					degradedReason: masterListRebuildAttempted ? "SnapshotBuildException" : string.Empty);
 			} finally {
 				if (readAccess != null) {
 					try {

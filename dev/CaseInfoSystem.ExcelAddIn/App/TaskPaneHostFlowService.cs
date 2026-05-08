@@ -17,7 +17,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<WorkbookContext, string> _formatContextDescriptor;
         private readonly Func<TaskPaneHost, string> _formatHostDescriptor;
         private readonly Func<Excel.Window, string> _safeGetWindowKey;
-        private readonly Action<TaskPaneHost, WorkbookContext, string> _renderHost;
+        private readonly Func<TaskPaneHost, WorkbookContext, string, TaskPaneSnapshotBuilderService.TaskPaneBuildResult> _renderHost;
         private int _kernelFlickerTraceRefreshPaneSequence;
 
         internal TaskPaneHostFlowService(
@@ -28,7 +28,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Func<WorkbookContext, string> formatContextDescriptor,
             Func<TaskPaneHost, string> formatHostDescriptor,
             Func<Excel.Window, string> safeGetWindowKey,
-            Action<TaskPaneHost, WorkbookContext, string> renderHost)
+            Func<TaskPaneHost, WorkbookContext, string, TaskPaneSnapshotBuilderService.TaskPaneBuildResult> renderHost)
         {
             _excelInteropService = excelInteropService;
             _taskPaneDisplayCoordinator = taskPaneDisplayCoordinator ?? throw new ArgumentNullException(nameof(taskPaneDisplayCoordinator));
@@ -174,19 +174,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + renderState.IsRenderRequired.ToString());
             if (renderState.IsRenderRequired)
             {
-                _renderHost(host, context, reason);
+                TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = _renderHost(host, context, reason);
                 host.LastRenderSignature = renderState.RenderSignature;
-            }
-            else
-            {
-                _logger.Debug(nameof(TaskPaneManager), "RefreshPane render skipped because the host state did not change. windowKey=" + windowKey + ", role=" + role);
+                return ShowRenderedHostForRefresh(host, context, reason, windowKey, refreshPaneCallId, role, buildResult);
             }
 
+            _logger.Debug(nameof(TaskPaneManager), "RefreshPane render skipped because the host state did not change. windowKey=" + windowKey + ", role=" + role);
+            return ShowRenderedHostForRefresh(host, context, reason, windowKey, refreshPaneCallId, role, null);
+        }
+
+        private TaskPaneHostFlowResult ShowRenderedHostForRefresh(
+            TaskPaneHost host,
+            WorkbookContext context,
+            string reason,
+            string windowKey,
+            int refreshPaneCallId,
+            WorkbookRole role,
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult)
+        {
             _taskPaneDisplayCoordinator.PrepareHostsBeforeShow(host);
             if (!_taskPaneDisplayCoordinator.TryShowHost(host, "RefreshPane"))
             {
                 _logger.Warn("RefreshPane skipped because host could not be shown. reason=" + (reason ?? string.Empty) + ", windowKey=" + windowKey);
-                return TaskPaneHostFlowResult.Rejected();
+                return TaskPaneHostFlowResult.Rejected(buildResult);
             }
 
             _logger?.Info(
@@ -207,7 +217,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "TaskPaneHostFlowService.RenderAndShowHostForRefresh",
                 context == null ? null : context.WorkbookFullName,
                 "reason=" + (reason ?? string.Empty));
-            return TaskPaneHostFlowResult.RefreshedShown();
+            return TaskPaneHostFlowResult.RefreshedShown(buildResult);
         }
 
         private static bool ShouldReuseCaseHostWithoutRender(TaskPaneHost host, WorkbookContext context, string reason)
@@ -228,12 +238,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class TaskPaneHostFlowResult
     {
-        private TaskPaneHostFlowResult(bool isShown, bool wasReused, string paneVisibleBasis, PaneVisibleSource paneVisibleSource)
+        private TaskPaneHostFlowResult(
+            bool isShown,
+            bool wasReused,
+            string paneVisibleBasis,
+            PaneVisibleSource paneVisibleSource,
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult)
         {
             IsShown = isShown;
             WasReused = wasReused;
             PaneVisibleBasis = paneVisibleBasis ?? string.Empty;
             PaneVisibleSource = paneVisibleSource;
+            SnapshotBuildResult = snapshotBuildResult;
         }
 
         internal bool IsShown { get; }
@@ -244,19 +260,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal PaneVisibleSource PaneVisibleSource { get; }
 
+        internal TaskPaneSnapshotBuilderService.TaskPaneBuildResult SnapshotBuildResult { get; }
+
         internal static TaskPaneHostFlowResult Rejected()
         {
-            return new TaskPaneHostFlowResult(false, false, "rejected", PaneVisibleSource.None);
+            return Rejected(null);
+        }
+
+        internal static TaskPaneHostFlowResult Rejected(TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult)
+        {
+            return new TaskPaneHostFlowResult(false, false, "rejected", PaneVisibleSource.None, snapshotBuildResult);
         }
 
         internal static TaskPaneHostFlowResult ReusedShown()
         {
-            return new TaskPaneHostFlowResult(true, true, "taskpaneReusedShown", PaneVisibleSource.ReusedShown);
+            return new TaskPaneHostFlowResult(true, true, "taskpaneReusedShown", PaneVisibleSource.ReusedShown, null);
         }
 
-        internal static TaskPaneHostFlowResult RefreshedShown()
+        internal static TaskPaneHostFlowResult RefreshedShown(TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult)
         {
-            return new TaskPaneHostFlowResult(true, false, "taskpaneRefreshedShown", PaneVisibleSource.RefreshedShown);
+            return new TaskPaneHostFlowResult(true, false, "taskpaneRefreshedShown", PaneVisibleSource.RefreshedShown, snapshotBuildResult);
         }
     }
 }

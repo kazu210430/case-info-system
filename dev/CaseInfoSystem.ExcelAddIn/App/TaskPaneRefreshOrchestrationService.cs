@@ -107,7 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + FormatWindowDescriptor(window)
                     + ", activeState="
                     + FormatActiveState());
-                return CompleteVisibilityRecoveryOutcome(
+                TaskPaneRefreshAttemptResult skippedResult = CompleteVisibilityRecoveryOutcome(
                     reason,
                     workbook,
                     window,
@@ -115,6 +115,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     stopwatch,
                     preconditionEvaluationResult.SkipActionName,
                     null,
+                    null);
+                return CompleteRebuildFallbackOutcome(
+                    reason,
+                    workbook,
+                    window,
+                    skippedResult,
+                    stopwatch,
+                    preconditionEvaluationResult.SkipActionName,
                     null);
             }
 
@@ -133,6 +141,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 stopwatch,
                 "refresh",
                 null,
+                null);
+            attemptResult = CompleteRebuildFallbackOutcome(
+                reason,
+                workbook,
+                window,
+                attemptResult,
+                stopwatch,
+                "refresh",
                 null);
             attemptResult = CompleteForegroundGuaranteeOutcome(
                 reason,
@@ -764,6 +780,155 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return value.HasValue ? value.Value.ToString() : string.Empty;
         }
 
+        private TaskPaneRefreshAttemptResult CompleteRebuildFallbackOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber)
+        {
+            if (attemptResult == null)
+            {
+                return null;
+            }
+
+            RebuildFallbackOutcome outcome = RebuildFallbackOutcome.FromBuildResult(attemptResult.SnapshotBuildResult);
+            LogRebuildFallbackOutcome(
+                reason,
+                workbook,
+                inputWindow,
+                attemptResult,
+                outcome,
+                stopwatch,
+                completionSource,
+                attemptNumber);
+            return attemptResult.WithRebuildFallbackOutcome(outcome);
+        }
+
+        private void LogRebuildFallbackOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            RebuildFallbackOutcome outcome,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber)
+        {
+            if (!IsCreatedCaseDisplayReason(reason) || outcome == null)
+            {
+                return;
+            }
+
+            WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
+            Excel.Window observedWindow = context == null ? inputWindow : context.Window;
+            string detail = FormatRebuildFallbackDetails(
+                reason,
+                outcome,
+                attemptResult,
+                completionSource,
+                attemptNumber);
+            if (outcome.IsRequired)
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action=rebuild-fallback-required reason="
+                    + (reason ?? string.Empty)
+                    + ", context="
+                    + FormatContextDescriptor(context)
+                    + ", snapshotSource="
+                    + outcome.SnapshotSource.ToString()
+                    + ", fallbackReasons="
+                    + outcome.FallbackReasons
+                    + ", elapsedMs="
+                    + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)
+                    + FormatObservationCorrelationFields(context, workbook));
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    _excelInteropService,
+                    null,
+                    context == null ? workbook : context.Workbook,
+                    observedWindow,
+                    "rebuild-fallback-required",
+                    "TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome",
+                    ResolveObservedWorkbookPath(context, workbook),
+                    detail);
+            }
+
+            string statusAction = "rebuild-fallback-" + outcome.Status.ToString().ToLowerInvariant();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action="
+                + statusAction
+                + " reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", rebuildFallbackStatus="
+                + outcome.Status.ToString()
+                + ", rebuildFallbackRequired="
+                + outcome.IsRequired.ToString()
+                + ", rebuildFallbackCanContinue="
+                + outcome.CanContinueRefresh.ToString()
+                + ", snapshotSource="
+                + outcome.SnapshotSource.ToString()
+                + ", fallbackReasons="
+                + outcome.FallbackReasons
+                + ", failureReason="
+                + outcome.FailureReason
+                + ", degradedReason="
+                + outcome.DegradedReason
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                observedWindow,
+                statusAction,
+                "TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                detail);
+        }
+
+        private static string FormatRebuildFallbackDetails(
+            string reason,
+            RebuildFallbackOutcome outcome,
+            TaskPaneRefreshAttemptResult attemptResult,
+            string completionSource,
+            int? attemptNumber)
+        {
+            string details =
+                "reason=" + (reason ?? string.Empty)
+                + ",completionSource=" + (completionSource ?? string.Empty)
+                + ",rebuildFallbackStatus=" + outcome.Status.ToString()
+                + ",rebuildFallbackRequired=" + outcome.IsRequired.ToString()
+                + ",rebuildFallbackTerminal=" + outcome.IsTerminal.ToString()
+                + ",rebuildFallbackCanContinue=" + outcome.CanContinueRefresh.ToString()
+                + ",snapshotSource=" + outcome.SnapshotSource.ToString()
+                + ",fallbackReasons=" + outcome.FallbackReasons
+                + ",masterListRebuildAttempted=" + outcome.MasterListRebuildAttempted.ToString()
+                + ",masterListRebuildSucceeded=" + outcome.MasterListRebuildSucceeded.ToString()
+                + ",snapshotTextAvailable=" + outcome.SnapshotTextAvailable.ToString()
+                + ",updatedCaseSnapshotCache=" + outcome.UpdatedCaseSnapshotCache.ToString()
+                + ",failureReason=" + outcome.FailureReason
+                + ",degradedReason=" + outcome.DegradedReason
+                + ",outcomeReason=" + outcome.Reason
+                + ",refreshSucceeded=" + (attemptResult != null && attemptResult.IsRefreshSucceeded).ToString()
+                + ",refreshCompleted=" + (attemptResult != null && attemptResult.IsRefreshCompleted).ToString()
+                + ",paneVisible=" + (attemptResult != null && attemptResult.IsPaneVisible).ToString();
+            if (attemptNumber.HasValue)
+            {
+                details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return details;
+        }
+
         private TaskPaneRefreshAttemptResult CompleteForegroundGuaranteeOutcome(
             string reason,
             Excel.Workbook workbook,
@@ -1094,6 +1259,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "ready-show-attempt",
                 outcome.AttemptNumber,
                 outcome.WorkbookWindowEnsureFacts);
+            attemptResult = CompleteRebuildFallbackOutcome(
+                reason,
+                workbook,
+                outcome.WorkbookWindow,
+                attemptResult,
+                stopwatch,
+                "ready-show-attempt",
+                outcome.AttemptNumber);
             attemptResult = CompleteForegroundGuaranteeOutcome(
                 reason,
                 workbook,
@@ -1168,6 +1341,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ",visibilityPaneVisibleSource=" + attemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()
                 + ",visibilityRecoveryReason=" + attemptResult.VisibilityRecoveryOutcome.Reason
                 + ",visibilityRecoveryDegradedReason=" + attemptResult.VisibilityRecoveryOutcome.DegradedReason
+                + ",rebuildFallbackStatus=" + attemptResult.RebuildFallbackOutcome.Status.ToString()
+                + ",rebuildFallbackRequired=" + attemptResult.RebuildFallbackOutcome.IsRequired.ToString()
+                + ",rebuildFallbackCanContinue=" + attemptResult.RebuildFallbackOutcome.CanContinueRefresh.ToString()
+                + ",rebuildFallbackSnapshotSource=" + attemptResult.RebuildFallbackOutcome.SnapshotSource.ToString()
+                + ",rebuildFallbackReasons=" + attemptResult.RebuildFallbackOutcome.FallbackReasons
+                + ",rebuildFallbackFailureReason=" + attemptResult.RebuildFallbackOutcome.FailureReason
+                + ",rebuildFallbackDegradedReason=" + attemptResult.RebuildFallbackOutcome.DegradedReason
                 + ",refreshCompleted=" + attemptResult.IsRefreshCompleted.ToString()
                 + ",foregroundGuaranteeTerminal=" + attemptResult.IsForegroundGuaranteeTerminal.ToString()
                 + ",foregroundGuaranteeRequired=" + attemptResult.WasForegroundGuaranteeRequired.ToString()

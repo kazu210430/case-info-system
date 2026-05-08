@@ -86,15 +86,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow())
                 + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             WorkbookTaskPaneReadyShowAttemptOutcome shownOutcome = null;
+            WorkbookWindowVisibilityEnsureFacts lastWorkbookWindowEnsureFacts = null;
             _taskPaneDisplayRetryCoordinator.ShowWhenReady(
                 workbook,
                 reason,
                 (targetWorkbook, targetReason, attemptNumber) =>
                 {
                     WorkbookTaskPaneReadyShowAttemptOutcome attemptOutcome = TryShowWorkbookTaskPaneOnce(targetWorkbook, targetReason, attemptNumber);
+                    if (attemptOutcome.WorkbookWindowEnsureFacts != null)
+                    {
+                        lastWorkbookWindowEnsureFacts = attemptOutcome.WorkbookWindowEnsureFacts;
+                    }
+
                     if (attemptOutcome.IsShown)
                     {
-                        shownOutcome = attemptOutcome;
+                        shownOutcome = attemptOutcome.WorkbookWindowEnsureFacts == null && lastWorkbookWindowEnsureFacts != null
+                            ? attemptOutcome.WithWorkbookWindowEnsureFacts(lastWorkbookWindowEnsureFacts)
+                            : attemptOutcome;
                     }
 
                     return attemptOutcome.IsShown;
@@ -140,12 +148,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 SafeWorkbookFullName(workbook),
                 "reason=" + (reason ?? string.Empty) + ",attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
             bool visibleCasePaneAlreadyShown = false;
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts = null;
             WorkbookTaskPaneDisplayAttemptResult result = _workbookTaskPaneDisplayAttemptCoordinator.TryShowOnce(
                 workbook,
                 reason,
                 (targetWorkbook, targetReason) =>
                 {
-                    EnsureWorkbookWindowVisibleForTaskPaneDisplay(targetWorkbook, targetReason, attemptNumber);
+                    workbookWindowEnsureFacts = EnsureWorkbookWindowVisibleForTaskPaneDisplay(targetWorkbook, targetReason, attemptNumber);
                     Excel.Window resolvedWindow = _resolveWorkbookPaneWindow(targetWorkbook, targetReason, true);
                     visibleCasePaneAlreadyShown = resolvedWindow != null
                         && _hasVisibleCasePaneForWorkbookWindow(targetWorkbook, resolvedWindow);
@@ -316,14 +325,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 attemptNumber,
                 result.WorkbookWindow,
                 result.RefreshAttemptResult,
-                visibleCasePaneAlreadyShown);
+                visibleCasePaneAlreadyShown,
+                workbookWindowEnsureFacts);
         }
 
-        private void EnsureWorkbookWindowVisibleForTaskPaneDisplay(Excel.Workbook workbook, string reason, int attemptNumber)
+        private WorkbookWindowVisibilityEnsureFacts EnsureWorkbookWindowVisibleForTaskPaneDisplay(Excel.Workbook workbook, string reason, int attemptNumber)
         {
             if (attemptNumber != 1 || workbook == null)
             {
-                return;
+                return null;
             }
 
             WorkbookWindowVisibilityEnsureResult result = _workbookWindowVisibilityService.EnsureVisible(workbook, reason);
@@ -340,6 +350,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + result.WindowHwnd
                 + ", visibleAfterSet="
                 + (result.VisibleAfterSet.HasValue ? result.VisibleAfterSet.Value.ToString() : string.Empty));
+            return WorkbookWindowVisibilityEnsureFacts.FromResult(result);
         }
 
         private bool IsActiveWorkbookMatch(Excel.Workbook workbook)

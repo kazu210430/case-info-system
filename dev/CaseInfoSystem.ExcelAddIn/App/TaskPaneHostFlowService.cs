@@ -228,11 +228,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class TaskPaneHostFlowResult
     {
-        private TaskPaneHostFlowResult(bool isShown, bool wasReused, string paneVisibleBasis)
+        private TaskPaneHostFlowResult(bool isShown, bool wasReused, string paneVisibleBasis, PaneVisibleSource paneVisibleSource)
         {
             IsShown = isShown;
             WasReused = wasReused;
             PaneVisibleBasis = paneVisibleBasis ?? string.Empty;
+            PaneVisibleSource = paneVisibleSource;
         }
 
         internal bool IsShown { get; }
@@ -241,19 +242,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal string PaneVisibleBasis { get; }
 
+        internal PaneVisibleSource PaneVisibleSource { get; }
+
         internal static TaskPaneHostFlowResult Rejected()
         {
-            return new TaskPaneHostFlowResult(false, false, "rejected");
+            return new TaskPaneHostFlowResult(false, false, "rejected", PaneVisibleSource.None);
         }
 
         internal static TaskPaneHostFlowResult ReusedShown()
         {
-            return new TaskPaneHostFlowResult(true, true, "taskpaneReusedShown");
+            return new TaskPaneHostFlowResult(true, true, "taskpaneReusedShown", PaneVisibleSource.ReusedShown);
         }
 
         internal static TaskPaneHostFlowResult RefreshedShown()
         {
-            return new TaskPaneHostFlowResult(true, false, "taskpaneRefreshedShown");
+            return new TaskPaneHostFlowResult(true, false, "taskpaneRefreshedShown", PaneVisibleSource.RefreshedShown);
         }
     }
 }

@@ -86,16 +86,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // recovery は単なる UI 修復ではなく、後続の context 解決の前提調整。
             // ActiveWindow / 可視 window / UI 状態を「解決可能な状態」に整える段階であり、
             // ここでは対象 window も context もまだ決定しない。
+            bool preContextRecoveryAttempted = false;
+            bool? preContextRecoverySucceeded = null;
             if ((kernelHomeForm == null || kernelHomeForm.IsDisposed || !kernelHomeForm.Visible)
                 && _excelWindowRecoveryService != null)
             {
+                preContextRecoveryAttempted = true;
                 if (workbook != null)
                 {
-                    _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    preContextRecoverySucceeded = _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(workbook, "TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
                 }
                 else
                 {
-                    _excelWindowRecoveryService.TryRecoverActiveWorkbookWindowWithoutShowing("TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
+                    preContextRecoverySucceeded = _excelWindowRecoveryService.TryRecoverActiveWorkbookWindowWithoutShowing("TryRefreshTaskPane." + (reason ?? string.Empty), bringToFront: false);
                 }
             }
 
@@ -139,7 +142,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + FormatContextDescriptor(context)
                     + ", resolvedWindow="
                     + FormatWindowDescriptor(window));
-                return TaskPaneRefreshAttemptResult.ContextRejected();
+                return TaskPaneRefreshAttemptResult.ContextRejected(
+                    preContextRecoveryAttempted,
+                    preContextRecoverySucceeded);
             }
 
             // 受理された context を使って pane UI へ反映し、
@@ -166,8 +171,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     workbook,
                     window,
                     _excelWindowRecoveryService != null,
-                    "refreshCompleted")
-                : TaskPaneRefreshAttemptResult.Failed();
+                    "refreshCompleted",
+                    hostFlowResult.PaneVisibleSource,
+                    preContextRecoveryAttempted,
+                    preContextRecoverySucceeded)
+                : TaskPaneRefreshAttemptResult.Failed(
+                    preContextRecoveryAttempted,
+                    preContextRecoverySucceeded);
         }
 
         private bool CanExecuteTaskPaneRefresh(string reason, Stopwatch stopwatch, int taskPaneRefreshSuppressionCount)

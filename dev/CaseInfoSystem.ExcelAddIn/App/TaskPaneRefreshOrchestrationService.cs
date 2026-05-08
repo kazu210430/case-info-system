@@ -107,7 +107,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + FormatWindowDescriptor(window)
                     + ", activeState="
                     + FormatActiveState());
-                return TaskPaneRefreshAttemptResult.Skipped();
+                return CompleteVisibilityRecoveryOutcome(
+                    reason,
+                    workbook,
+                    window,
+                    TaskPaneRefreshAttemptResult.Skipped(),
+                    stopwatch,
+                    preconditionEvaluationResult.SkipActionName,
+                    null,
+                    null);
             }
 
             RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(
@@ -117,11 +125,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 window,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount);
-            TaskPaneRefreshAttemptResult attemptResult = CompleteForegroundGuaranteeOutcome(
+            TaskPaneRefreshAttemptResult attemptResult = CompleteVisibilityRecoveryOutcome(
                 reason,
                 workbook,
                 window,
                 dispatchExecutionResult.AttemptResult,
+                stopwatch,
+                "refresh",
+                null,
+                null);
+            attemptResult = CompleteForegroundGuaranteeOutcome(
+                reason,
+                workbook,
+                window,
+                attemptResult,
                 stopwatch);
             _logger?.Info(
                 KernelFlickerTracePrefix
@@ -437,6 +454,314 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _waitReadyRetryTimers.Clear();
+        }
+
+        private TaskPaneRefreshAttemptResult CompleteVisibilityRecoveryOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber,
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+        {
+            if (attemptResult == null)
+            {
+                return null;
+            }
+
+            VisibilityRecoveryOutcome outcome = BuildVisibilityRecoveryOutcome(
+                workbook,
+                inputWindow,
+                attemptResult,
+                workbookWindowEnsureFacts);
+            LogVisibilityRecoveryOutcome(
+                reason,
+                workbook,
+                inputWindow,
+                attemptResult,
+                outcome,
+                stopwatch,
+                completionSource,
+                attemptNumber,
+                workbookWindowEnsureFacts);
+            return attemptResult.WithVisibilityRecoveryOutcome(outcome);
+        }
+
+        private static VisibilityRecoveryOutcome BuildVisibilityRecoveryOutcome(
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+        {
+            WorkbookWindowVisibilityEnsureOutcome? ensureStatus = workbookWindowEnsureFacts == null
+                ? (WorkbookWindowVisibilityEnsureOutcome?)null
+                : workbookWindowEnsureFacts.Outcome;
+            VisibilityRecoveryTargetKind targetKind = ResolveVisibilityRecoveryTargetKind(
+                workbook,
+                inputWindow,
+                attemptResult);
+            PaneVisibleSource paneVisibleSource = attemptResult.PaneVisibleSource;
+
+            if (!attemptResult.IsRefreshSucceeded)
+            {
+                if (attemptResult.WasSkipped)
+                {
+                    return VisibilityRecoveryOutcome.Skipped(
+                        "refreshSkipped",
+                        isPaneVisible: false,
+                        isDisplayCompletable: false,
+                        targetKind: targetKind,
+                        paneVisibleSource: paneVisibleSource,
+                        workbookWindowEnsureStatus: ensureStatus,
+                        fullRecoveryAttempted: attemptResult.PreContextRecoveryAttempted,
+                        fullRecoverySucceeded: attemptResult.PreContextRecoverySucceeded);
+                }
+
+                return VisibilityRecoveryOutcome.Failed(
+                    attemptResult.WasContextRejected ? "contextRejected" : "refreshFailed",
+                    targetKind,
+                    paneVisibleSource,
+                    ensureStatus,
+                    attemptResult.PreContextRecoveryAttempted,
+                    attemptResult.PreContextRecoverySucceeded);
+            }
+
+            if (!attemptResult.IsPaneVisible)
+            {
+                return VisibilityRecoveryOutcome.Failed(
+                    "paneVisible=false",
+                    targetKind,
+                    paneVisibleSource,
+                    ensureStatus,
+                    attemptResult.PreContextRecoveryAttempted,
+                    attemptResult.PreContextRecoverySucceeded);
+            }
+
+            string degradedReason = ResolveVisibilityRecoveryDegradedReason(workbookWindowEnsureFacts, attemptResult);
+            if (!string.IsNullOrWhiteSpace(degradedReason))
+            {
+                return VisibilityRecoveryOutcome.Degraded(
+                    "paneVisibleWithDegradedRecoveryFacts",
+                    targetKind,
+                    paneVisibleSource,
+                    ensureStatus,
+                    attemptResult.PreContextRecoveryAttempted,
+                    attemptResult.PreContextRecoverySucceeded,
+                    degradedReason);
+            }
+
+            if (paneVisibleSource == PaneVisibleSource.AlreadyVisibleHost)
+            {
+                return VisibilityRecoveryOutcome.Skipped(
+                    "alreadyVisible",
+                    isPaneVisible: true,
+                    isDisplayCompletable: true,
+                    targetKind: VisibilityRecoveryTargetKind.AlreadyVisible,
+                    paneVisibleSource: paneVisibleSource,
+                    workbookWindowEnsureStatus: ensureStatus,
+                    fullRecoveryAttempted: attemptResult.PreContextRecoveryAttempted,
+                    fullRecoverySucceeded: attemptResult.PreContextRecoverySucceeded);
+            }
+
+            string completedReason = ensureStatus == WorkbookWindowVisibilityEnsureOutcome.MadeVisible
+                ? "madeVisibleThenShown"
+                : "paneVisible";
+            if (attemptResult.IsRefreshCompleted)
+            {
+                completedReason = paneVisibleSource == PaneVisibleSource.ReusedShown
+                    ? "reusedShown"
+                    : "refreshedShown";
+            }
+
+            return VisibilityRecoveryOutcome.Completed(
+                completedReason,
+                targetKind,
+                paneVisibleSource,
+                ensureStatus,
+                attemptResult.PreContextRecoveryAttempted,
+                attemptResult.PreContextRecoverySucceeded);
+        }
+
+        private static VisibilityRecoveryTargetKind ResolveVisibilityRecoveryTargetKind(
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult)
+        {
+            if (attemptResult != null && attemptResult.PaneVisibleSource == PaneVisibleSource.AlreadyVisibleHost)
+            {
+                return VisibilityRecoveryTargetKind.AlreadyVisible;
+            }
+
+            if (workbook == null
+                && inputWindow == null
+                && attemptResult != null
+                && attemptResult.ForegroundWorkbook == null
+                && attemptResult.ForegroundWindow == null)
+            {
+                return attemptResult.ForegroundContext != null
+                    || attemptResult.IsRefreshSucceeded
+                    || attemptResult.PreContextRecoveryAttempted
+                    ? VisibilityRecoveryTargetKind.ActiveWorkbookFallback
+                    : VisibilityRecoveryTargetKind.NoKnownTarget;
+            }
+
+            if (workbook != null
+                || inputWindow != null
+                || (attemptResult != null && (attemptResult.ForegroundWorkbook != null || attemptResult.ForegroundWindow != null)))
+            {
+                return VisibilityRecoveryTargetKind.ExplicitWorkbookWindow;
+            }
+
+            return VisibilityRecoveryTargetKind.NoKnownTarget;
+        }
+
+        private static string ResolveVisibilityRecoveryDegradedReason(
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts,
+            TaskPaneRefreshAttemptResult attemptResult)
+        {
+            if (workbookWindowEnsureFacts != null)
+            {
+                switch (workbookWindowEnsureFacts.Outcome)
+                {
+                    case WorkbookWindowVisibilityEnsureOutcome.WorkbookMissing:
+                    case WorkbookWindowVisibilityEnsureOutcome.WindowUnresolved:
+                    case WorkbookWindowVisibilityEnsureOutcome.VisibilityReadFailed:
+                    case WorkbookWindowVisibilityEnsureOutcome.Failed:
+                        return "workbookWindowEnsure=" + workbookWindowEnsureFacts.Outcome.ToString();
+                    case WorkbookWindowVisibilityEnsureOutcome.MadeVisible:
+                        if (workbookWindowEnsureFacts.VisibleAfterSet != true)
+                        {
+                            return "workbookWindowEnsureVisibleAfterSet="
+                                + (workbookWindowEnsureFacts.VisibleAfterSet.HasValue
+                                    ? workbookWindowEnsureFacts.VisibleAfterSet.Value.ToString()
+                                    : "null");
+                        }
+
+                        break;
+                }
+            }
+
+            if (attemptResult != null
+                && attemptResult.PreContextRecoveryAttempted
+                && attemptResult.PreContextRecoverySucceeded == false)
+            {
+                return "fullRecoveryReturnedFalse";
+            }
+
+            return string.Empty;
+        }
+
+        private void LogVisibilityRecoveryOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            VisibilityRecoveryOutcome outcome,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber,
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+        {
+            if (!IsCreatedCaseDisplayReason(reason) || outcome == null)
+            {
+                return;
+            }
+
+            WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
+            Excel.Window observedWindow = context == null ? inputWindow : context.Window;
+            string detail = FormatVisibilityRecoveryDetails(
+                reason,
+                outcome,
+                attemptResult,
+                completionSource,
+                attemptNumber,
+                workbookWindowEnsureFacts);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=visibility-recovery-decision reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", inputWindow="
+                + FormatWindowDescriptor(inputWindow)
+                + ", visibilityRecoveryStatus="
+                + outcome.Status.ToString()
+                + ", visibilityRecoveryReason="
+                + outcome.Reason
+                + ", visibilityRecoveryDisplayCompletable="
+                + outcome.IsDisplayCompletable.ToString()
+                + ", paneVisible="
+                + outcome.IsPaneVisible.ToString()
+                + ", paneVisibleSource="
+                + outcome.PaneVisibleSource.ToString()
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                observedWindow,
+                "visibility-recovery-decision",
+                "TaskPaneRefreshOrchestrationService.CompleteVisibilityRecoveryOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                detail);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                observedWindow,
+                "visibility-recovery-" + outcome.Status.ToString().ToLowerInvariant(),
+                "TaskPaneRefreshOrchestrationService.CompleteVisibilityRecoveryOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                detail);
+        }
+
+        private static string FormatVisibilityRecoveryDetails(
+            string reason,
+            VisibilityRecoveryOutcome outcome,
+            TaskPaneRefreshAttemptResult attemptResult,
+            string completionSource,
+            int? attemptNumber,
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+        {
+            string details =
+                "reason=" + (reason ?? string.Empty)
+                + ",completionSource=" + (completionSource ?? string.Empty)
+                + ",visibilityRecoveryStatus=" + outcome.Status.ToString()
+                + ",visibilityRecoveryReason=" + outcome.Reason
+                + ",visibilityRecoveryTerminal=" + outcome.IsTerminal.ToString()
+                + ",visibilityRecoveryDisplayCompletable=" + outcome.IsDisplayCompletable.ToString()
+                + ",visibilityRecoveryPaneVisible=" + outcome.IsPaneVisible.ToString()
+                + ",visibilityRecoveryTargetKind=" + outcome.TargetKind.ToString()
+                + ",visibilityPaneVisibleSource=" + outcome.PaneVisibleSource.ToString()
+                + ",visibilityRecoveryDegradedReason=" + outcome.DegradedReason
+                + ",refreshSucceeded=" + (attemptResult != null && attemptResult.IsRefreshSucceeded).ToString()
+                + ",refreshCompleted=" + (attemptResult != null && attemptResult.IsRefreshCompleted).ToString()
+                + ",preContextFullRecoveryAttempted=" + outcome.FullRecoveryAttempted.ToString()
+                + ",preContextFullRecoverySucceeded=" + FormatNullableBool(outcome.FullRecoverySucceeded);
+            if (workbookWindowEnsureFacts != null)
+            {
+                details += ",workbookWindowEnsureStatus=" + workbookWindowEnsureFacts.Outcome.ToString()
+                    + ",workbookWindowEnsureHwnd=" + workbookWindowEnsureFacts.WindowHwnd
+                    + ",workbookWindowVisibleAfterSet=" + FormatNullableBool(workbookWindowEnsureFacts.VisibleAfterSet);
+            }
+
+            if (attemptNumber.HasValue)
+            {
+                details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return details;
+        }
+
+        private static string FormatNullableBool(bool? value)
+        {
+            return value.HasValue ? value.Value.ToString() : string.Empty;
         }
 
         private TaskPaneRefreshAttemptResult CompleteForegroundGuaranteeOutcome(
@@ -759,12 +1084,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            TaskPaneRefreshAttemptResult attemptResult = CompleteForegroundGuaranteeOutcome(
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            TaskPaneRefreshAttemptResult attemptResult = CompleteVisibilityRecoveryOutcome(
                 reason,
                 workbook,
                 outcome.WorkbookWindow,
                 outcome.RefreshAttemptResult,
-                Stopwatch.StartNew());
+                stopwatch,
+                "ready-show-attempt",
+                outcome.AttemptNumber,
+                outcome.WorkbookWindowEnsureFacts);
+            attemptResult = CompleteForegroundGuaranteeOutcome(
+                reason,
+                workbook,
+                outcome.WorkbookWindow,
+                attemptResult,
+                stopwatch);
             TryCompleteCreatedCaseDisplaySession(
                 session,
                 reason,
@@ -788,6 +1123,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 || attemptResult == null
                 || !attemptResult.IsRefreshSucceeded
                 || !attemptResult.IsPaneVisible
+                || attemptResult.VisibilityRecoveryOutcome == null
+                || !attemptResult.VisibilityRecoveryOutcome.IsTerminal
+                || !attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable
                 || !attemptResult.IsForegroundGuaranteeTerminal
                 || attemptResult.ForegroundGuaranteeOutcome == null
                 || !attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)
@@ -823,6 +1161,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ",completionSource=" + (completionSource ?? string.Empty)
                 + ",completion=" + attemptResult.CompletionBasis
                 + ",paneVisible=" + attemptResult.IsPaneVisible.ToString()
+                + ",visibilityRecoveryStatus=" + attemptResult.VisibilityRecoveryOutcome.Status.ToString()
+                + ",visibilityRecoveryDisplayCompletable=" + attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable.ToString()
+                + ",visibilityRecoveryPaneVisible=" + attemptResult.VisibilityRecoveryOutcome.IsPaneVisible.ToString()
+                + ",visibilityRecoveryTargetKind=" + attemptResult.VisibilityRecoveryOutcome.TargetKind.ToString()
+                + ",visibilityPaneVisibleSource=" + attemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()
+                + ",visibilityRecoveryReason=" + attemptResult.VisibilityRecoveryOutcome.Reason
+                + ",visibilityRecoveryDegradedReason=" + attemptResult.VisibilityRecoveryOutcome.DegradedReason
                 + ",refreshCompleted=" + attemptResult.IsRefreshCompleted.ToString()
                 + ",foregroundGuaranteeTerminal=" + attemptResult.IsForegroundGuaranteeTerminal.ToString()
                 + ",foregroundGuaranteeRequired=" + attemptResult.WasForegroundGuaranteeRequired.ToString()

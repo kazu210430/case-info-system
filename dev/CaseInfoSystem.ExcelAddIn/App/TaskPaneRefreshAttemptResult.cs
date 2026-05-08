@@ -24,6 +24,191 @@ namespace CaseInfoSystem.ExcelAddIn.App
         NoKnownTarget = 5,
     }
 
+    internal enum VisibilityRecoveryOutcomeStatus
+    {
+        Unknown = 0,
+        Completed = 1,
+        Skipped = 2,
+        Degraded = 3,
+        Failed = 4,
+    }
+
+    internal enum VisibilityRecoveryTargetKind
+    {
+        Unknown = 0,
+        ExplicitWorkbookWindow = 1,
+        ActiveWorkbookFallback = 2,
+        AlreadyVisible = 3,
+        NoKnownTarget = 4,
+    }
+
+    internal enum PaneVisibleSource
+    {
+        None = 0,
+        AlreadyVisibleHost = 1,
+        ReusedShown = 2,
+        RefreshedShown = 3,
+        Unknown = 4,
+    }
+
+    internal sealed class VisibilityRecoveryOutcome
+    {
+        private VisibilityRecoveryOutcome(
+            VisibilityRecoveryOutcomeStatus status,
+            string reason,
+            bool isTerminal,
+            bool isPaneVisible,
+            bool isDisplayCompletable,
+            VisibilityRecoveryTargetKind targetKind,
+            PaneVisibleSource paneVisibleSource,
+            WorkbookWindowVisibilityEnsureOutcome? workbookWindowEnsureStatus,
+            bool fullRecoveryAttempted,
+            bool? fullRecoverySucceeded,
+            string degradedReason)
+        {
+            Status = status;
+            Reason = reason ?? string.Empty;
+            IsTerminal = isTerminal;
+            IsPaneVisible = isPaneVisible;
+            IsDisplayCompletable = isDisplayCompletable;
+            TargetKind = targetKind;
+            PaneVisibleSource = paneVisibleSource;
+            WorkbookWindowEnsureStatus = workbookWindowEnsureStatus;
+            FullRecoveryAttempted = fullRecoveryAttempted;
+            FullRecoverySucceeded = fullRecoverySucceeded;
+            DegradedReason = degradedReason ?? string.Empty;
+        }
+
+        internal VisibilityRecoveryOutcomeStatus Status { get; }
+
+        internal string Reason { get; }
+
+        internal bool IsTerminal { get; }
+
+        internal bool IsPaneVisible { get; }
+
+        internal bool IsDisplayCompletable { get; }
+
+        internal VisibilityRecoveryTargetKind TargetKind { get; }
+
+        internal PaneVisibleSource PaneVisibleSource { get; }
+
+        internal WorkbookWindowVisibilityEnsureOutcome? WorkbookWindowEnsureStatus { get; }
+
+        internal bool FullRecoveryAttempted { get; }
+
+        internal bool? FullRecoverySucceeded { get; }
+
+        internal string DegradedReason { get; }
+
+        internal static VisibilityRecoveryOutcome Unknown(string reason)
+        {
+            return new VisibilityRecoveryOutcome(
+                VisibilityRecoveryOutcomeStatus.Unknown,
+                reason,
+                isTerminal: false,
+                isPaneVisible: false,
+                isDisplayCompletable: false,
+                targetKind: VisibilityRecoveryTargetKind.Unknown,
+                paneVisibleSource: PaneVisibleSource.Unknown,
+                workbookWindowEnsureStatus: null,
+                fullRecoveryAttempted: false,
+                fullRecoverySucceeded: null,
+                degradedReason: string.Empty);
+        }
+
+        internal static VisibilityRecoveryOutcome Completed(
+            string reason,
+            VisibilityRecoveryTargetKind targetKind,
+            PaneVisibleSource paneVisibleSource,
+            WorkbookWindowVisibilityEnsureOutcome? workbookWindowEnsureStatus,
+            bool fullRecoveryAttempted,
+            bool? fullRecoverySucceeded)
+        {
+            return new VisibilityRecoveryOutcome(
+                VisibilityRecoveryOutcomeStatus.Completed,
+                reason,
+                isTerminal: true,
+                isPaneVisible: true,
+                isDisplayCompletable: true,
+                targetKind: targetKind,
+                paneVisibleSource: paneVisibleSource,
+                workbookWindowEnsureStatus: workbookWindowEnsureStatus,
+                fullRecoveryAttempted: fullRecoveryAttempted,
+                fullRecoverySucceeded: fullRecoverySucceeded,
+                degradedReason: string.Empty);
+        }
+
+        internal static VisibilityRecoveryOutcome Skipped(
+            string reason,
+            bool isPaneVisible,
+            bool isDisplayCompletable,
+            VisibilityRecoveryTargetKind targetKind,
+            PaneVisibleSource paneVisibleSource,
+            WorkbookWindowVisibilityEnsureOutcome? workbookWindowEnsureStatus,
+            bool fullRecoveryAttempted,
+            bool? fullRecoverySucceeded)
+        {
+            return new VisibilityRecoveryOutcome(
+                VisibilityRecoveryOutcomeStatus.Skipped,
+                reason,
+                isTerminal: true,
+                isPaneVisible: isPaneVisible,
+                isDisplayCompletable: isDisplayCompletable,
+                targetKind: targetKind,
+                paneVisibleSource: paneVisibleSource,
+                workbookWindowEnsureStatus: workbookWindowEnsureStatus,
+                fullRecoveryAttempted: fullRecoveryAttempted,
+                fullRecoverySucceeded: fullRecoverySucceeded,
+                degradedReason: string.Empty);
+        }
+
+        internal static VisibilityRecoveryOutcome Degraded(
+            string reason,
+            VisibilityRecoveryTargetKind targetKind,
+            PaneVisibleSource paneVisibleSource,
+            WorkbookWindowVisibilityEnsureOutcome? workbookWindowEnsureStatus,
+            bool fullRecoveryAttempted,
+            bool? fullRecoverySucceeded,
+            string degradedReason)
+        {
+            return new VisibilityRecoveryOutcome(
+                VisibilityRecoveryOutcomeStatus.Degraded,
+                reason,
+                isTerminal: true,
+                isPaneVisible: true,
+                isDisplayCompletable: true,
+                targetKind: targetKind,
+                paneVisibleSource: paneVisibleSource,
+                workbookWindowEnsureStatus: workbookWindowEnsureStatus,
+                fullRecoveryAttempted: fullRecoveryAttempted,
+                fullRecoverySucceeded: fullRecoverySucceeded,
+                degradedReason: degradedReason);
+        }
+
+        internal static VisibilityRecoveryOutcome Failed(
+            string reason,
+            VisibilityRecoveryTargetKind targetKind,
+            PaneVisibleSource paneVisibleSource,
+            WorkbookWindowVisibilityEnsureOutcome? workbookWindowEnsureStatus,
+            bool fullRecoveryAttempted,
+            bool? fullRecoverySucceeded)
+        {
+            return new VisibilityRecoveryOutcome(
+                VisibilityRecoveryOutcomeStatus.Failed,
+                reason,
+                isTerminal: true,
+                isPaneVisible: false,
+                isDisplayCompletable: false,
+                targetKind: targetKind,
+                paneVisibleSource: paneVisibleSource,
+                workbookWindowEnsureStatus: workbookWindowEnsureStatus,
+                fullRecoveryAttempted: fullRecoveryAttempted,
+                fullRecoverySucceeded: fullRecoverySucceeded,
+                degradedReason: string.Empty);
+        }
+    }
+
     internal sealed class ForegroundGuaranteeOutcome
     {
         private ForegroundGuaranteeOutcome(
@@ -188,7 +373,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             WorkbookContext foregroundContext = null,
             Excel.Workbook foregroundWorkbook = null,
             Excel.Window foregroundWindow = null,
-            bool isForegroundRecoveryServiceAvailable = false)
+            bool isForegroundRecoveryServiceAvailable = false,
+            VisibilityRecoveryOutcome visibilityRecoveryOutcome = null,
+            PaneVisibleSource paneVisibleSource = PaneVisibleSource.None,
+            bool preContextRecoveryAttempted = false,
+            bool? preContextRecoverySucceeded = null)
         {
             IsRefreshSucceeded = isRefreshSucceeded;
             WasSkipped = wasSkipped;
@@ -201,6 +390,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ForegroundWorkbook = foregroundWorkbook;
             ForegroundWindow = foregroundWindow;
             IsForegroundRecoveryServiceAvailable = isForegroundRecoveryServiceAvailable;
+            VisibilityRecoveryOutcome = visibilityRecoveryOutcome ?? VisibilityRecoveryOutcome.Unknown("notEvaluated");
+            PaneVisibleSource = paneVisibleSource;
+            PreContextRecoveryAttempted = preContextRecoveryAttempted;
+            PreContextRecoverySucceeded = preContextRecoverySucceeded;
         }
 
         internal static TaskPaneRefreshAttemptResult Succeeded()
@@ -221,7 +414,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     ? ForegroundGuaranteeOutcome.RequiredSucceeded(
                         ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
                         completionBasis)
-                    : ForegroundGuaranteeOutcome.NotRequired(completionBasis));
+                    : ForegroundGuaranteeOutcome.NotRequired(completionBasis),
+                paneVisibleSource: PaneVisibleSource.RefreshedShown);
         }
 
         internal static TaskPaneRefreshAttemptResult RefreshCompletedPendingForeground(
@@ -229,7 +423,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Workbook foregroundWorkbook,
             Excel.Window foregroundWindow,
             bool isForegroundRecoveryServiceAvailable,
-            string completionBasis)
+            string completionBasis,
+            PaneVisibleSource paneVisibleSource,
+            bool preContextRecoveryAttempted,
+            bool? preContextRecoverySucceeded)
         {
             return new TaskPaneRefreshAttemptResult(
                 true,
@@ -240,7 +437,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 foregroundContext: foregroundContext,
                 foregroundWorkbook: foregroundWorkbook,
                 foregroundWindow: foregroundWindow,
-                isForegroundRecoveryServiceAvailable: isForegroundRecoveryServiceAvailable);
+                isForegroundRecoveryServiceAvailable: isForegroundRecoveryServiceAvailable,
+                paneVisibleSource: paneVisibleSource,
+                preContextRecoveryAttempted: preContextRecoveryAttempted,
+                preContextRecoverySucceeded: preContextRecoverySucceeded);
         }
 
         internal static TaskPaneRefreshAttemptResult VisibleAlreadySatisfied()
@@ -250,15 +450,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 isPaneVisible: true,
                 isRefreshCompleted: false,
                 completionBasis: "visibleCasePaneAlreadyShown",
-                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.SkippedAlreadyVisible("visibleCasePaneAlreadyShown"));
+                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.SkippedAlreadyVisible("visibleCasePaneAlreadyShown"),
+                paneVisibleSource: PaneVisibleSource.AlreadyVisibleHost);
         }
 
-        internal static TaskPaneRefreshAttemptResult Failed()
+        internal static TaskPaneRefreshAttemptResult Failed(
+            bool preContextRecoveryAttempted = false,
+            bool? preContextRecoverySucceeded = null)
         {
             return new TaskPaneRefreshAttemptResult(
                 false,
                 completionBasis: "failed",
-                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.Unknown("refreshFailed"));
+                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.Unknown("refreshFailed"),
+                preContextRecoveryAttempted: preContextRecoveryAttempted,
+                preContextRecoverySucceeded: preContextRecoverySucceeded);
         }
 
         internal static TaskPaneRefreshAttemptResult Skipped()
@@ -270,13 +475,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.SkippedNoKnownTarget("refreshSkipped"));
         }
 
-        internal static TaskPaneRefreshAttemptResult ContextRejected()
+        internal static TaskPaneRefreshAttemptResult ContextRejected(
+            bool preContextRecoveryAttempted = false,
+            bool? preContextRecoverySucceeded = null)
         {
             return new TaskPaneRefreshAttemptResult(
                 false,
                 wasContextRejected: true,
                 completionBasis: "contextRejected",
-                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.SkippedNoKnownTarget("contextRejected"));
+                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.SkippedNoKnownTarget("contextRejected"),
+                preContextRecoveryAttempted: preContextRecoveryAttempted,
+                preContextRecoverySucceeded: preContextRecoverySucceeded);
         }
 
         internal TaskPaneRefreshAttemptResult WithForegroundGuaranteeOutcome(ForegroundGuaranteeOutcome foregroundGuaranteeOutcome)
@@ -292,7 +501,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 foregroundContext: ForegroundContext,
                 foregroundWorkbook: ForegroundWorkbook,
                 foregroundWindow: ForegroundWindow,
-                isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable);
+                isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
+                visibilityRecoveryOutcome: VisibilityRecoveryOutcome,
+                paneVisibleSource: PaneVisibleSource,
+                preContextRecoveryAttempted: PreContextRecoveryAttempted,
+                preContextRecoverySucceeded: PreContextRecoverySucceeded);
+        }
+
+        internal TaskPaneRefreshAttemptResult WithVisibilityRecoveryOutcome(VisibilityRecoveryOutcome visibilityRecoveryOutcome)
+        {
+            return new TaskPaneRefreshAttemptResult(
+                IsRefreshSucceeded,
+                wasSkipped: WasSkipped,
+                wasContextRejected: WasContextRejected,
+                isPaneVisible: IsPaneVisible,
+                isRefreshCompleted: IsRefreshCompleted,
+                completionBasis: CompletionBasis,
+                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome,
+                foregroundContext: ForegroundContext,
+                foregroundWorkbook: ForegroundWorkbook,
+                foregroundWindow: ForegroundWindow,
+                isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
+                visibilityRecoveryOutcome: visibilityRecoveryOutcome,
+                paneVisibleSource: PaneVisibleSource,
+                preContextRecoveryAttempted: PreContextRecoveryAttempted,
+                preContextRecoverySucceeded: PreContextRecoverySucceeded);
         }
 
         internal bool IsRefreshSucceeded { get; }
@@ -332,5 +565,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal Excel.Window ForegroundWindow { get; }
 
         internal bool IsForegroundRecoveryServiceAvailable { get; }
+
+        internal VisibilityRecoveryOutcome VisibilityRecoveryOutcome { get; }
+
+        internal PaneVisibleSource PaneVisibleSource { get; }
+
+        internal bool PreContextRecoveryAttempted { get; }
+
+        internal bool? PreContextRecoverySucceeded { get; }
     }
 }

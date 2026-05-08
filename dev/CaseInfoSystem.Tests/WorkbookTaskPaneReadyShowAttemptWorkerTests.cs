@@ -64,6 +64,10 @@ namespace CaseInfoSystem.Tests
             Assert.NotNull(shownOutcome);
             Assert.True(shownOutcome.VisibleCasePaneAlreadyShown);
             Assert.True(shownOutcome.IsShown);
+            Assert.NotNull(shownOutcome.WorkbookWindowEnsureFacts);
+            Assert.Equal(
+                WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
+                shownOutcome.WorkbookWindowEnsureFacts.Outcome);
             Assert.False(shownOutcome.RefreshAttemptResult.IsRefreshCompleted);
             Assert.True(shownOutcome.RefreshAttemptResult.IsForegroundGuaranteeTerminal);
             Assert.Equal(
@@ -128,6 +132,10 @@ namespace CaseInfoSystem.Tests
             Assert.NotNull(shownOutcome);
             Assert.False(shownOutcome.VisibleCasePaneAlreadyShown);
             Assert.True(shownOutcome.IsShown);
+            Assert.NotNull(shownOutcome.WorkbookWindowEnsureFacts);
+            Assert.Equal(
+                WorkbookWindowVisibilityEnsureOutcome.MadeVisible,
+                shownOutcome.WorkbookWindowEnsureFacts.Outcome);
             Assert.True(shownOutcome.RefreshAttemptResult.IsRefreshCompleted);
             Assert.Equal(
                 ForegroundGuaranteeOutcomeStatus.NotRequired,

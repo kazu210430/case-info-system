@@ -31,6 +31,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string UserDataPhoneKey = "当方_電話";
         private const string UserDataAccountingNameRow1Key = "銀行・支店";
         private const string UserDataAccountingNameRow2Key = "口座番号・名義";
+        private const string HiddenExcelCleanupCompleted = "HiddenExcelCleanupCompleted";
+        private const string HiddenExcelCleanupDegraded = "HiddenExcelCleanupDegraded";
+        private const string HiddenExcelCleanupNotRequired = "HiddenExcelCleanupNotRequired";
+        private const string IsolatedAppReleased = "IsolatedAppReleased";
+        private const string IsolatedAppReleaseDegraded = "IsolatedAppReleaseDegraded";
+        private const string IsolatedAppReleaseNotRequired = "IsolatedAppReleaseNotRequired";
 
         private readonly KernelWorkbookService _kernelWorkbookService;
         private readonly ExcelInteropService _excelInteropService;
@@ -341,6 +347,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             finally
             {
+                bool workbookPresent = isolatedWorkbook != null;
+                bool workbookCloseCompleted = !workbookPresent;
+                bool applicationPresent = isolatedApplication != null;
+                bool applicationQuitCompleted = !applicationPresent;
+
                 if (isolatedWorkbook != null)
                 {
                     _logger.Info(
@@ -350,15 +361,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + SafeApplicationHwnd(isolatedApplication)
                         + ", path="
                         + workbookPath);
-                    CloseWorkbookQuietly(isolatedWorkbook, workbookKind, workbookPath);
+                    workbookCloseCompleted = CloseWorkbookQuietly(isolatedWorkbook, workbookKind, workbookPath);
                 }
 
                 if (isolatedApplication != null)
                 {
                     string applicationHwnd = SafeApplicationHwnd(isolatedApplication);
-                    QuitApplicationQuietly(isolatedApplication, workbookKind, workbookPath);
+                    applicationQuitCompleted = QuitApplicationQuietly(isolatedApplication, workbookKind, workbookPath);
                     _logger.Info("Kernel user data reflection hidden session quit. target=" + workbookKind + ", appHwnd=" + applicationHwnd + ", path=" + workbookPath);
                 }
+
+                LogManagedHiddenReflectionCleanupOutcome(
+                    workbookKind,
+                    workbookPath,
+                    workbookPresent,
+                    workbookCloseCompleted,
+                    applicationPresent,
+                    applicationQuitCompleted);
             }
         }
 
@@ -393,16 +412,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + workbookPath);
         }
 
-        private void CloseWorkbookQuietly(Excel.Workbook workbook, string workbookKind, string workbookPath)
+        private bool CloseWorkbookQuietly(Excel.Workbook workbook, string workbookKind, string workbookPath)
         {
             if (workbook == null)
             {
-                return;
+                return false;
             }
 
+            bool completed = false;
             try
             {
                 WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
+                completed = true;
             }
             catch
             {
@@ -419,18 +440,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", path="
                     + (workbookPath ?? string.Empty));
             }
+
+            return completed;
         }
 
-        private void QuitApplicationQuietly(Excel.Application application, string workbookKind, string workbookPath)
+        private bool QuitApplicationQuietly(Excel.Application application, string workbookKind, string workbookPath)
         {
             if (application == null)
             {
-                return;
+                return false;
             }
 
+            bool completed = false;
             try
             {
                 application.Quit();
+                completed = true;
             }
             catch
             {
@@ -449,6 +474,63 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", path="
                     + (workbookPath ?? string.Empty));
             }
+
+            return completed;
+        }
+
+        private void LogManagedHiddenReflectionCleanupOutcome(
+            string workbookKind,
+            string workbookPath,
+            bool workbookPresent,
+            bool workbookCloseCompleted,
+            bool applicationPresent,
+            bool applicationQuitCompleted)
+        {
+            string hiddenOutcome = ResolveReflectionHiddenCleanupOutcome(
+                workbookPresent,
+                workbookCloseCompleted,
+                applicationPresent,
+                applicationQuitCompleted);
+            string isolatedOutcome = ResolveReflectionIsolatedAppOutcome(applicationPresent, applicationQuitCompleted);
+            _logger.Info(
+                "[KernelFlickerTrace] source=KernelUserDataReflectionService action=hidden-excel-cleanup-outcome"
+                + " target=" + (workbookKind ?? string.Empty)
+                + ", path=" + (workbookPath ?? string.Empty)
+                + ", hiddenCleanupOutcome=" + hiddenOutcome
+                + ", isolatedAppOutcome=" + isolatedOutcome
+                + ", workbookPresent=" + workbookPresent.ToString()
+                + ", workbookCloseCompleted=" + workbookCloseCompleted.ToString()
+                + ", appPresent=" + applicationPresent.ToString()
+                + ", appQuitCompleted=" + applicationQuitCompleted.ToString()
+                + ", owner=KernelUserDataReflectionService");
+        }
+
+        private static string ResolveReflectionHiddenCleanupOutcome(
+            bool workbookPresent,
+            bool workbookCloseCompleted,
+            bool applicationPresent,
+            bool applicationQuitCompleted)
+        {
+            if (!workbookPresent && !applicationPresent)
+            {
+                return HiddenExcelCleanupNotRequired;
+            }
+
+            return (!workbookPresent || workbookCloseCompleted) && (!applicationPresent || applicationQuitCompleted)
+                ? HiddenExcelCleanupCompleted
+                : HiddenExcelCleanupDegraded;
+        }
+
+        private static string ResolveReflectionIsolatedAppOutcome(bool applicationPresent, bool applicationQuitCompleted)
+        {
+            if (!applicationPresent)
+            {
+                return IsolatedAppReleaseNotRequired;
+            }
+
+            return applicationQuitCompleted
+                ? IsolatedAppReleased
+                : IsolatedAppReleaseDegraded;
         }
 
         private static string SafeApplicationHwnd(Excel.Application application)

@@ -35,6 +35,7 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(1, application.QuitCallCount);
             Assert.False(application.DisplayAlerts);
+            Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionCompleted", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         [Fact]
@@ -63,6 +64,7 @@ namespace CaseInfoSystem.Tests
             Assert.Equal("quit failed", exception.Message);
             Assert.Equal(1, application.QuitCallCount);
             Assert.True(application.DisplayAlerts);
+            Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionFailed", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         [Fact]
@@ -89,6 +91,7 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(0, application.QuitCallCount);
             Assert.True(application.DisplayAlerts);
+            Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionNotRequired", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private static object CreateScheduler(Excel.Application application, Logger logger)

@@ -13,6 +13,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const int ExcelBusyHResult = unchecked((int)0x800AC472);
         private const int PostCloseRetryCount = 20;
         private const int PostCloseRetryIntervalMs = 500;
+        private const string WhiteExcelPreventionQueued = "WhiteExcelPreventionQueued";
+        private const string WhiteExcelPreventionNotRequired = "WhiteExcelPreventionNotRequired";
+        private const string WhiteExcelPreventionCompleted = "WhiteExcelPreventionCompleted";
+        private const string WhiteExcelPreventionFailed = "WhiteExcelPreventionFailed";
 
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
@@ -39,6 +43,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _pendingPostCloseQueue.Enqueue(new PostCloseFollowUpRequest(workbookKey, folderPath, PostCloseRetryCount));
+            LogWhiteExcelPreventionOutcome(
+                WhiteExcelPreventionQueued,
+                workbookKey,
+                hasVisibleWorkbook: null,
+                quitAttempted: false,
+                quitCompleted: false,
+                reason: "postCloseFollowUpQueued");
             if (_postClosePosted)
             {
                 return;
@@ -134,6 +145,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger.Info("Case post-close visible workbook check. hasVisibleWorkbook=" + hasVisibleWorkbook.ToString());
             if (hasVisibleWorkbook)
             {
+                LogWhiteExcelPreventionOutcome(
+                    WhiteExcelPreventionNotRequired,
+                    workbookKey: string.Empty,
+                    hasVisibleWorkbook: true,
+                    quitAttempted: false,
+                    quitCompleted: false,
+                    reason: "visibleWorkbookExists");
                 return;
             }
 
@@ -146,9 +164,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 hasDisplayAlertsSnapshot = true;
                 _application.DisplayAlerts = false;
                 _application.Quit();
+                LogWhiteExcelPreventionOutcome(
+                    WhiteExcelPreventionCompleted,
+                    workbookKey: string.Empty,
+                    hasVisibleWorkbook: false,
+                    quitAttempted: true,
+                    quitCompleted: true,
+                    reason: "noVisibleWorkbookQuitCompleted");
             }
             catch
             {
+                LogWhiteExcelPreventionOutcome(
+                    WhiteExcelPreventionFailed,
+                    workbookKey: string.Empty,
+                    hasVisibleWorkbook: false,
+                    quitAttempted: true,
+                    quitCompleted: false,
+                    reason: "quitFailed");
                 if (hasDisplayAlertsSnapshot)
                 {
                     try
@@ -162,6 +194,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 throw;
             }
+        }
+
+        private void LogWhiteExcelPreventionOutcome(
+            string outcome,
+            string workbookKey,
+            bool? hasVisibleWorkbook,
+            bool quitAttempted,
+            bool quitCompleted,
+            string reason)
+        {
+            _logger.Info(
+                "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
+                + " action=white-excel-prevention-outcome"
+                + " whiteExcelPreventionOutcome=" + (outcome ?? string.Empty)
+                + ", workbook=" + (workbookKey ?? string.Empty)
+                + ", hasVisibleWorkbook=" + (hasVisibleWorkbook.HasValue ? hasVisibleWorkbook.Value.ToString() : "unknown")
+                + ", quitAttempted=" + quitAttempted.ToString()
+                + ", quitCompleted=" + quitCompleted.ToString()
+                + ", outcomeReason=" + (reason ?? string.Empty));
         }
 
         private Control EnsureDispatcher()

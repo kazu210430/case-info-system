@@ -56,6 +56,7 @@ namespace CaseInfoSystem.Tests
                         OnFindWorksheetByCodeName = (_, __) => userDataWorksheet,
                         OnReadKeyValueMapFromColumnsAandB = _ => CreateUserDataValues()
                     };
+                    var logs = new List<string>();
                     var service = CreateService(
                         excelInteropService,
                         templatePath,
@@ -63,7 +64,7 @@ namespace CaseInfoSystem.Tests
                         {
                             OnSetWorkbookWindowsVisible = (_, visible) => windowVisibilityChanges.Add(visible)
                         },
-                        new List<string>());
+                        logs);
 
                     service.ReflectToAccountingSetOnly(CreateContext(kernelWorkbook, tempDirectory));
 
@@ -90,6 +91,9 @@ namespace CaseInfoSystem.Tests
                     Assert.True(kernelApplication.EnableEvents);
                     Assert.True(kernelApplication.ScreenUpdating);
                     Assert.Equal("ready", kernelApplication.StatusBar);
+                    Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("HiddenExcelCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("IsolatedAppReleased", StringComparison.OrdinalIgnoreCase) >= 0);
                 }
                 finally
                 {

@@ -44,6 +44,9 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.Contains(workbook, releasedObjects);
                 Assert.Contains(hiddenApplication, releasedObjects);
+                Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("HiddenExcelCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("IsolatedAppReleased", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
@@ -124,6 +127,8 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, cachedApplication.QuitCallCount);
                 Assert.Contains(cachedApplication, releasedObjects);
                 Assert.Contains(logs, message => message.IndexOf("hidden-app-cache reused", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceReturnedToIdle", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
@@ -184,6 +189,7 @@ namespace CaseInfoSystem.Tests
 
                 Assert.Equal(1, secondApplication.QuitCallCount);
                 Assert.Contains(logs, message => message.IndexOf("poisoned", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("RetainedInstancePoisoned", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 

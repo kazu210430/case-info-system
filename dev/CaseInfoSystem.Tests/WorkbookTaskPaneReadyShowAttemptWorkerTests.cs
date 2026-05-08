@@ -66,6 +66,10 @@ namespace CaseInfoSystem.Tests
             Assert.True(shownOutcome.IsShown);
             Assert.False(shownOutcome.RefreshAttemptResult.IsRefreshCompleted);
             Assert.True(shownOutcome.RefreshAttemptResult.IsForegroundGuaranteeTerminal);
+            Assert.Equal(
+                ForegroundGuaranteeOutcomeStatus.SkippedAlreadyVisible,
+                shownOutcome.RefreshAttemptResult.ForegroundGuaranteeOutcome.Status);
+            Assert.True(shownOutcome.RefreshAttemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable);
         }
 
         [Fact]
@@ -125,6 +129,9 @@ namespace CaseInfoSystem.Tests
             Assert.False(shownOutcome.VisibleCasePaneAlreadyShown);
             Assert.True(shownOutcome.IsShown);
             Assert.True(shownOutcome.RefreshAttemptResult.IsRefreshCompleted);
+            Assert.Equal(
+                ForegroundGuaranteeOutcomeStatus.NotRequired,
+                shownOutcome.RefreshAttemptResult.ForegroundGuaranteeOutcome.Status);
         }
 
         private static WorkbookTaskPaneReadyShowAttemptWorker CreateWorker(

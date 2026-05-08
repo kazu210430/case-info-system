@@ -146,57 +146,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // CASE 成功時の warmup もこの最終段でまとめて扱う。
             TaskPaneHostFlowResult hostFlowResult = TryRefreshPaneAndScheduleWarmup(context, reason, stopwatch);
             bool refreshed = hostFlowResult.IsShown;
-            bool foregroundRecoveryStarted = refreshed && window != null && _excelWindowRecoveryService != null;
-            string foregroundSkipReason = string.Empty;
-            if (!refreshed)
-            {
-                foregroundSkipReason = "refreshed=false";
-            }
-            else if (window == null)
-            {
-                foregroundSkipReason = "window=null";
-            }
-            else if (_excelWindowRecoveryService == null)
-            {
-                foregroundSkipReason = "recoveryService=null";
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshCoordinator action=foreground-recovery-decision reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context)
-                + ", refreshSucceeded="
-                + refreshed.ToString()
-                + ", resolvedWindowPresent="
-                + (window != null).ToString()
-                + ", recoveryServicePresent="
-                + (_excelWindowRecoveryService != null).ToString()
-                + ", foregroundRecoveryStarted="
-                + foregroundRecoveryStarted.ToString()
-                + ", foregroundRecoverySkipped="
-                + (!foregroundRecoveryStarted).ToString()
-                + ", foregroundSkipReason="
-                + foregroundSkipReason
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
-                + FormatObservationCorrelationFields(context, workbook));
-            NewCaseVisibilityObservation.Log(
-                _logger,
-                null,
-                null,
-                context == null ? workbook : context.Workbook,
-                context == null ? window : context.Window,
-                "foreground-recovery-decision",
-                "TaskPaneRefreshCoordinator.TryRefreshTaskPane",
-                ResolveObservedWorkbookPath(context, workbook),
-                "reason=" + (reason ?? string.Empty) + ",foregroundRecoveryStarted=" + foregroundRecoveryStarted.ToString() + ",foregroundSkipReason=" + foregroundSkipReason);
-            if (foregroundRecoveryStarted)
-            {
-                GuaranteeFinalForegroundAfterRefresh(context, workbook, reason, stopwatch);
-            }
-
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshCoordinator action=end coordinatorAttemptId="
@@ -212,11 +161,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
             return refreshed
-                ? TaskPaneRefreshAttemptResult.Succeeded(
-                    foregroundRecoveryStarted,
-                    foregroundRecoveryStarted
-                        ? "refreshCompletedWithForegroundGuarantee"
-                        : "refreshCompletedForegroundNotRequired")
+                ? TaskPaneRefreshAttemptResult.RefreshCompletedPendingForeground(
+                    context,
+                    workbook,
+                    window,
+                    _excelWindowRecoveryService != null,
+                    "refreshCompleted")
                 : TaskPaneRefreshAttemptResult.Failed();
         }
 
@@ -373,62 +323,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return hostFlowResult;
         }
 
-        private void GuaranteeFinalForegroundAfterRefresh(WorkbookContext context, Excel.Workbook workbook, string reason, Stopwatch stopwatch)
+        internal ForegroundGuaranteeExecutionResult ExecuteFinalForegroundGuaranteeRecovery(WorkbookContext context, Excel.Workbook workbook, string reason)
         {
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshCoordinator action=final-foreground-guarantee-start reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context)
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
-                + FormatObservationCorrelationFields(context, workbook));
-            NewCaseVisibilityObservation.Log(
-                _logger,
-                null,
-                null,
-                context == null ? workbook : context.Workbook,
-                context == null ? null : context.Window,
-                "final-foreground-guarantee-started",
-                "TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh",
-                ResolveObservedWorkbookPath(context, workbook),
-                "reason=" + (reason ?? string.Empty));
+            if (_excelWindowRecoveryService == null)
+            {
+                return ForegroundGuaranteeExecutionResult.NotAttempted();
+            }
 
             Stopwatch stopwatch2 = Stopwatch.StartNew();
             bool recovered = workbook != null
                 ? _excelWindowRecoveryService.TryRecoverWorkbookWindow(workbook, "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true)
                 : _excelWindowRecoveryService.TryRecoverActiveWorkbookWindow("TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty), bringToFront: true);
-            NewCaseDefaultTimingLogHelper.LogDetail(
-                _logger,
-                context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
-                "waitUiCloseToFinalForegroundStable",
-                "tryRecoverWorkbookWindow",
-                stopwatch2.ElapsedMilliseconds,
-                "reason=" + (reason ?? string.Empty));
+            return new ForegroundGuaranteeExecutionResult(
+                executionAttempted: true,
+                recovered: recovered,
+                elapsedMilliseconds: stopwatch2.ElapsedMilliseconds);
+        }
 
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshCoordinator action=final-foreground-guarantee-end reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context)
-                + ", recovered="
-                + recovered.ToString()
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
-                + FormatObservationCorrelationFields(context, workbook));
-            NewCaseVisibilityObservation.Log(
-                _logger,
-                null,
-                null,
-                context == null ? workbook : context.Workbook,
-                context == null ? null : context.Window,
-                "final-foreground-guarantee-completed",
-                "TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh",
-                context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
-                "reason=" + (reason ?? string.Empty) + ",recovered=" + recovered.ToString());
-
+        internal void BeginPostForegroundProtection(WorkbookContext context, Excel.Workbook workbook, string reason, long elapsedMilliseconds)
+        {
             Excel.Workbook protectedWorkbook = context == null ? workbook : context.Workbook;
             Excel.Window protectedWindow = context == null ? null : context.Window;
             bool protectionStartRequested = context != null && context.Role == WorkbookRole.Case && protectedWorkbook != null && protectedWindow != null;
@@ -463,7 +376,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", protectionSkipReason="
                 + protectionSkipReason
                 + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
+                + elapsedMilliseconds.ToString()
                 + FormatObservationCorrelationFields(context, protectedWorkbook));
             if (protectionStartRequested)
             {
@@ -472,12 +385,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     protectedWindow,
                     "TryRefreshTaskPane.PostRefresh." + (reason ?? string.Empty));
             }
-
-            NewCaseDefaultTimingLogHelper.LogWaitUiCloseToFinalForegroundStable(
-                _logger,
-                context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
-                reason,
-                recovered);
         }
 
         private static string FormatContextDescriptor(WorkbookContext context)

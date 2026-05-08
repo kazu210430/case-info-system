@@ -76,6 +76,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
         {
+            Stopwatch stopwatch = Stopwatch.StartNew();
             int refreshAttemptId = ++_kernelFlickerTraceRefreshAttemptSequence;
             _logger?.Info(
                 KernelFlickerTracePrefix
@@ -116,6 +117,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 window,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount);
+            TaskPaneRefreshAttemptResult attemptResult = CompleteForegroundGuaranteeOutcome(
+                reason,
+                workbook,
+                window,
+                dispatchExecutionResult.AttemptResult,
+                stopwatch);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshOrchestrationService action=try-refresh-end refreshAttemptId="
@@ -127,15 +134,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", inputWindow="
                 + FormatWindowDescriptor(window)
                 + ", result="
-                + dispatchExecutionResult.ResultText);
+                + RefreshDispatchExecutionResult.FormatResultText(attemptResult));
             TryCompleteCreatedCaseDisplaySession(
                 null,
                 reason,
                 workbook,
                 window,
-                dispatchExecutionResult.AttemptResult,
+                attemptResult,
                 "refresh");
-            return dispatchExecutionResult.AttemptResult;
+            return attemptResult;
         }
 
         internal bool IsTaskPaneRefreshSucceeded(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -432,6 +439,260 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _waitReadyRetryTimers.Clear();
         }
 
+        private TaskPaneRefreshAttemptResult CompleteForegroundGuaranteeOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            Stopwatch stopwatch)
+        {
+            if (attemptResult == null)
+            {
+                return null;
+            }
+
+            ForegroundGuaranteeOutcome existingOutcome = attemptResult.ForegroundGuaranteeOutcome;
+            if (existingOutcome != null
+                && existingOutcome.Status == ForegroundGuaranteeOutcomeStatus.SkippedAlreadyVisible)
+            {
+                LogForegroundGuaranteeDecision(
+                    reason,
+                    workbook,
+                    inputWindow,
+                    attemptResult,
+                    existingOutcome,
+                    foregroundRecoveryStarted: false,
+                    foregroundSkipReason: existingOutcome.Reason,
+                    stopwatch: stopwatch);
+                return attemptResult;
+            }
+
+            if (!attemptResult.IsRefreshSucceeded || !attemptResult.IsPaneVisible)
+            {
+                ForegroundGuaranteeOutcome skippedOutcome = attemptResult.WasSkipped || attemptResult.WasContextRejected
+                    ? attemptResult.ForegroundGuaranteeOutcome
+                    : ForegroundGuaranteeOutcome.NotRequired("refreshSucceeded=false");
+                LogForegroundGuaranteeDecision(
+                    reason,
+                    workbook,
+                    inputWindow,
+                    attemptResult,
+                    skippedOutcome,
+                    foregroundRecoveryStarted: false,
+                    foregroundSkipReason: skippedOutcome == null ? string.Empty : skippedOutcome.Reason,
+                    stopwatch: stopwatch);
+                return attemptResult.WithForegroundGuaranteeOutcome(skippedOutcome);
+            }
+
+            bool foregroundRecoveryStarted = attemptResult.IsRefreshCompleted
+                && attemptResult.ForegroundWindow != null
+                && attemptResult.IsForegroundRecoveryServiceAvailable;
+            string foregroundSkipReason = string.Empty;
+            if (!attemptResult.IsRefreshCompleted)
+            {
+                foregroundSkipReason = "refreshCompleted=false";
+            }
+            else if (attemptResult.ForegroundWindow == null)
+            {
+                foregroundSkipReason = "window=null";
+            }
+            else if (!attemptResult.IsForegroundRecoveryServiceAvailable)
+            {
+                foregroundSkipReason = "recoveryService=null";
+            }
+
+            if (!foregroundRecoveryStarted)
+            {
+                ForegroundGuaranteeOutcome notRequiredOutcome = ForegroundGuaranteeOutcome.NotRequired(foregroundSkipReason);
+                LogForegroundGuaranteeDecision(
+                    reason,
+                    workbook,
+                    inputWindow,
+                    attemptResult,
+                    notRequiredOutcome,
+                    foregroundRecoveryStarted: false,
+                    foregroundSkipReason: foregroundSkipReason,
+                    stopwatch: stopwatch);
+                return attemptResult.WithForegroundGuaranteeOutcome(notRequiredOutcome);
+            }
+
+            ForegroundGuaranteeTargetKind targetKind = attemptResult.ForegroundWorkbook == null
+                ? ForegroundGuaranteeTargetKind.ActiveWorkbookFallback
+                : ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow;
+            ForegroundGuaranteeOutcome requiredOutcome = ExecuteForegroundGuaranteeAndBuildOutcome(
+                reason,
+                workbook,
+                attemptResult,
+                targetKind,
+                stopwatch);
+            return attemptResult.WithForegroundGuaranteeOutcome(requiredOutcome);
+        }
+
+        private ForegroundGuaranteeOutcome ExecuteForegroundGuaranteeAndBuildOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            TaskPaneRefreshAttemptResult attemptResult,
+            ForegroundGuaranteeTargetKind targetKind,
+            Stopwatch stopwatch)
+        {
+            ForegroundGuaranteeOutcome pendingOutcome = ForegroundGuaranteeOutcome.Unknown("executionPending");
+            LogForegroundGuaranteeDecision(
+                reason,
+                workbook,
+                attemptResult.ForegroundWindow,
+                attemptResult,
+                pendingOutcome,
+                foregroundRecoveryStarted: true,
+                foregroundSkipReason: string.Empty,
+                stopwatch: stopwatch);
+            LogFinalForegroundGuaranteeStarted(reason, workbook, attemptResult, stopwatch);
+            ForegroundGuaranteeExecutionResult executionResult = _taskPaneRefreshCoordinator.ExecuteFinalForegroundGuaranteeRecovery(
+                attemptResult.ForegroundContext,
+                attemptResult.ForegroundWorkbook,
+                reason);
+            NewCaseDefaultTimingLogHelper.LogDetail(
+                _logger,
+                ResolveObservedWorkbookPath(attemptResult.ForegroundContext, attemptResult.ForegroundWorkbook),
+                "waitUiCloseToFinalForegroundStable",
+                "tryRecoverWorkbookWindow",
+                executionResult.ElapsedMilliseconds,
+                "reason=" + (reason ?? string.Empty));
+            LogFinalForegroundGuaranteeCompleted(reason, workbook, attemptResult, executionResult, stopwatch);
+            _taskPaneRefreshCoordinator.BeginPostForegroundProtection(
+                attemptResult.ForegroundContext,
+                attemptResult.ForegroundWorkbook,
+                reason,
+                stopwatch.ElapsedMilliseconds);
+            NewCaseDefaultTimingLogHelper.LogWaitUiCloseToFinalForegroundStable(
+                _logger,
+                ResolveObservedWorkbookPath(attemptResult.ForegroundContext, attemptResult.ForegroundWorkbook),
+                reason,
+                executionResult.Recovered);
+
+            return executionResult.ExecutionAttempted && executionResult.Recovered
+                ? ForegroundGuaranteeOutcome.RequiredSucceeded(targetKind, "foregroundRecoverySucceeded")
+                : ForegroundGuaranteeOutcome.RequiredDegraded(targetKind, "foregroundRecoveryReturnedFalse");
+        }
+
+        private void LogForegroundGuaranteeDecision(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            ForegroundGuaranteeOutcome outcome,
+            bool foregroundRecoveryStarted,
+            string foregroundSkipReason,
+            Stopwatch stopwatch)
+        {
+            WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
+            Excel.Window resolvedWindow = attemptResult == null || attemptResult.ForegroundWindow == null
+                ? inputWindow
+                : attemptResult.ForegroundWindow;
+            bool recoveryServicePresent = attemptResult != null && attemptResult.IsForegroundRecoveryServiceAvailable;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=foreground-recovery-decision reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", refreshSucceeded="
+                + (attemptResult != null && attemptResult.IsRefreshSucceeded).ToString()
+                + ", resolvedWindowPresent="
+                + (resolvedWindow != null).ToString()
+                + ", recoveryServicePresent="
+                + recoveryServicePresent.ToString()
+                + ", foregroundRecoveryStarted="
+                + foregroundRecoveryStarted.ToString()
+                + ", foregroundRecoverySkipped="
+                + (!foregroundRecoveryStarted).ToString()
+                + ", foregroundSkipReason="
+                + (foregroundSkipReason ?? string.Empty)
+                + ", foregroundOutcomeStatus="
+                + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString())
+                + ", foregroundOutcomeDisplayCompletable="
+                + (outcome != null && outcome.IsDisplayCompletable).ToString()
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                context == null ? inputWindow : context.Window,
+                "foreground-recovery-decision",
+                "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                "reason=" + (reason ?? string.Empty)
+                + ",foregroundRecoveryStarted=" + foregroundRecoveryStarted.ToString()
+                + ",foregroundSkipReason=" + (foregroundSkipReason ?? string.Empty)
+                + ",foregroundOutcomeStatus=" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString()));
+        }
+
+        private void LogFinalForegroundGuaranteeStarted(
+            string reason,
+            Excel.Workbook workbook,
+            TaskPaneRefreshAttemptResult attemptResult,
+            Stopwatch stopwatch)
+        {
+            WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=final-foreground-guarantee-start reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                context == null ? null : context.Window,
+                "final-foreground-guarantee-started",
+                "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                "reason=" + (reason ?? string.Empty));
+        }
+
+        private void LogFinalForegroundGuaranteeCompleted(
+            string reason,
+            Excel.Workbook workbook,
+            TaskPaneRefreshAttemptResult attemptResult,
+            ForegroundGuaranteeExecutionResult executionResult,
+            Stopwatch stopwatch)
+        {
+            WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=final-foreground-guarantee-end reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", recovered="
+                + (executionResult != null && executionResult.Recovered).ToString()
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                context == null ? null : context.Window,
+                "final-foreground-guarantee-completed",
+                "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                "reason=" + (reason ?? string.Empty)
+                + ",recovered=" + (executionResult != null && executionResult.Recovered).ToString()
+                + ",foregroundOutcomeStatus="
+                + (executionResult != null && executionResult.Recovered
+                    ? ForegroundGuaranteeOutcomeStatus.RequiredSucceeded.ToString()
+                    : ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString()));
+        }
+
         private CreatedCaseDisplaySession BeginCreatedCaseDisplaySession(Excel.Workbook workbook, string reason)
         {
             if (!IsCreatedCaseDisplayReason(reason) || workbook == null)
@@ -498,12 +759,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            TaskPaneRefreshAttemptResult attemptResult = CompleteForegroundGuaranteeOutcome(
+                reason,
+                workbook,
+                outcome.WorkbookWindow,
+                outcome.RefreshAttemptResult,
+                Stopwatch.StartNew());
             TryCompleteCreatedCaseDisplaySession(
                 session,
                 reason,
                 workbook,
                 outcome.WorkbookWindow,
-                outcome.RefreshAttemptResult,
+                attemptResult,
                 "ready-show-attempt",
                 outcome.AttemptNumber);
         }
@@ -521,7 +788,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 || attemptResult == null
                 || !attemptResult.IsRefreshSucceeded
                 || !attemptResult.IsPaneVisible
-                || !attemptResult.IsForegroundGuaranteeTerminal)
+                || !attemptResult.IsForegroundGuaranteeTerminal
+                || attemptResult.ForegroundGuaranteeOutcome == null
+                || !attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)
             {
                 return;
             }
@@ -556,7 +825,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ",paneVisible=" + attemptResult.IsPaneVisible.ToString()
                 + ",refreshCompleted=" + attemptResult.IsRefreshCompleted.ToString()
                 + ",foregroundGuaranteeTerminal=" + attemptResult.IsForegroundGuaranteeTerminal.ToString()
-                + ",foregroundGuaranteeRequired=" + attemptResult.WasForegroundGuaranteeRequired.ToString();
+                + ",foregroundGuaranteeRequired=" + attemptResult.WasForegroundGuaranteeRequired.ToString()
+                + ",foregroundGuaranteeStatus=" + attemptResult.ForegroundGuaranteeOutcome.Status.ToString()
+                + ",foregroundGuaranteeDisplayCompletable=" + attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable.ToString()
+                + ",foregroundGuaranteeExecutionAttempted=" + attemptResult.ForegroundGuaranteeOutcome.WasExecutionAttempted.ToString()
+                + ",foregroundGuaranteeTargetKind=" + attemptResult.ForegroundGuaranteeOutcome.TargetKind.ToString()
+                + ",foregroundRecoverySucceeded="
+                + (attemptResult.ForegroundGuaranteeOutcome.RecoverySucceeded.HasValue
+                    ? attemptResult.ForegroundGuaranteeOutcome.RecoverySucceeded.Value.ToString()
+                    : string.Empty)
+                + ",foregroundOutcomeReason=" + attemptResult.ForegroundGuaranteeOutcome.Reason;
             if (attemptNumber.HasValue)
             {
                 details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
@@ -618,6 +896,43 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private static bool IsCreatedCaseDisplayReason(string reason)
         {
             return string.Equals(reason, NewCaseDefaultTimingLogHelper.PostReleaseReason, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string FormatContextDescriptor(WorkbookContext context)
+        {
+            if (context == null)
+            {
+                return "null";
+            }
+
+            return "role=\""
+                + context.Role.ToString()
+                + "\",workbook="
+                + FormatWorkbookDescriptor(context.Workbook)
+                + ",window="
+                + FormatWindowDescriptor(context.Window)
+                + ",activeSheet=\""
+                + (context.ActiveSheetCodeName ?? string.Empty)
+                + "\"";
+        }
+
+        private string ResolveObservedWorkbookPath(WorkbookContext context, Excel.Workbook workbook)
+        {
+            if (context != null && !string.IsNullOrWhiteSpace(context.WorkbookFullName))
+            {
+                return context.WorkbookFullName;
+            }
+
+            return SafeWorkbookFullName(context == null ? workbook : context.Workbook);
+        }
+
+        private string FormatObservationCorrelationFields(WorkbookContext context, Excel.Workbook workbook)
+        {
+            Excel.Workbook observedWorkbook = context == null ? workbook : context.Workbook;
+            return NewCaseVisibilityObservation.FormatCorrelationFields(
+                _excelInteropService,
+                observedWorkbook,
+                ResolveObservedWorkbookPath(context, workbook));
         }
 
         private string SafeWorkbookFullName(Excel.Workbook workbook)
@@ -697,7 +1012,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 return new RefreshDispatchExecutionResult(
                     attemptResult,
-                    attemptResult == null ? "null" : attemptResult.IsRefreshSucceeded.ToString());
+                    FormatResultText(attemptResult));
+            }
+
+            internal static string FormatResultText(TaskPaneRefreshAttemptResult attemptResult)
+            {
+                if (attemptResult == null)
+                {
+                    return "null";
+                }
+
+                ForegroundGuaranteeOutcome outcome = attemptResult.ForegroundGuaranteeOutcome;
+                return attemptResult.IsRefreshSucceeded.ToString()
+                    + ",foregroundOutcome="
+                    + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString());
             }
         }
 

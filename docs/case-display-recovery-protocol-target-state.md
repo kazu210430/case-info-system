@@ -55,7 +55,7 @@
 | `display handoff completed` | CASE 表示要求が ready-show orchestration に受理され、created-case display session の owner が presentation 層から display protocol 層へ移った状態。 | `TaskPaneRefreshOrchestrationService` | upstream 前提段階。session start 条件。 |
 | `pane visible` | 対象 workbook / window に対して visible な CASE pane が成立している状態。新規 show でも retained host の visible 維持でもよい。 | `TaskPaneHostFlowService` が visible state owner。`WorkbookTaskPaneReadyShowAttemptWorker` は already-visible を観測するだけ。 | 必要条件。 |
 | `refresh completed` | refresh path が実行され、pane refresh unit が terminal になった状態。already-visible path では発生しない。 | `TaskPaneRefreshCoordinator` | 補助条件。pane visible に到達する 1 経路だが、必要条件ではない。 |
-| `foreground guarantee completed` | 同一 display session に対して foreground obligation が残っていない状態。`Required` なら recovery 実行後、`NotRequired` なら skip 判定の terminal 化までを含む。 | completion owner は `TaskPaneRefreshCoordinator`。execution owner は `ExcelWindowRecoveryService`。 | 条件付き必要条件。`Required` の場合だけ必要。 |
+| `foreground guarantee completed` | 同一 display session に対して foreground obligation が残っていない状態。`Required` なら recovery 実行後、`NotRequired` なら skip 判定の terminal 化までを含む。 | decision / outcome / trace owner は `TaskPaneRefreshOrchestrationService`。execution primitive owner は `ExcelWindowRecoveryService`。 | 条件付き必要条件。`Required` の場合だけ必要。 |
 | `CASE display completed` | created-case display session が success として閉じ、target pane visible が成立し、foreground obligation も terminal になった状態。 | `TaskPaneRefreshOrchestrationService`。将来専用 service を切る場合も、この orchestration 境界に置く。 | 最終 terminal state。 |
 
 ## CASE Display Completed Definition
@@ -96,7 +96,7 @@ target-state では、`CASE display completed` を次のように定義する。
 
 - `foreground guarantee completed`
 
-ただしこれは「必ず foreground recovery を実行する」という意味ではない。`TaskPaneRefreshCoordinator` が `NotRequired` と判断した場合も、その判断自体を terminal 化してから completion へ進む。
+ただしこれは「必ず foreground recovery を実行する」という意味ではない。`TaskPaneRefreshOrchestrationService` が `NotRequired` と判断した場合も、その判断自体を terminal 化してから completion へ進む。
 
 ### 補助条件
 
@@ -113,7 +113,7 @@ target-state では、`CASE display completed` を次のように定義する。
 理由:
 
 - worker は 1 attempt の owner であり、fallback handoff や後続 foreground obligation を知らない。
-- coordinator は refresh / foreground unit の owner だが、already-visible path を知らない。
+- coordinator は refresh unit と foreground execution bridge の owner だが、already-visible path を知らない。
 - host-flow service は `pane visible` state owner だが、created-case display session 全体の terminal owner ではない。
 - orchestration service だけが request / enqueue / retry / attempt result / fallback / final completion を同一 session で束ねられる。
 
@@ -138,11 +138,12 @@ target-state では、`CASE display completed` を次のように定義する。
 
 ### 3. foreground guarantee の decision / execution
 
-- foreground guarantee protocol unit の decision owner は `TaskPaneRefreshCoordinator`
-- foreground guarantee protocol unit の completion owner も `TaskPaneRefreshCoordinator`
+- foreground guarantee protocol unit の decision owner は `TaskPaneRefreshOrchestrationService`
+- foreground guarantee protocol unit の outcome / completion trace owner も `TaskPaneRefreshOrchestrationService`
+- `TaskPaneRefreshCoordinator` は refresh raw result と foreground execution bridge を返す側に寄せる。
 - 実際の app/window/foreground recovery primitive の execution owner は `ExcelWindowRecoveryService`
 
-この関係は「decision と execution を分けるが、protocol unit completion owner は coordinator に固定する」と読む。
+この関係は「decision / outcome / emit と execution primitive を分け、protocol unit completion owner は orchestration に固定する」と読む。
 
 `ExcelWindowRecoveryService` は execution result を返すが、`CASE display completed` の可否や foreground obligation の skip / required 判定までは持たない。
 
@@ -245,7 +246,7 @@ target-state の役割分担:
 5. already-visible なら worker は `pane visible already satisfied` を返す。
 6. refresh が必要なら `TaskPaneRefreshCoordinator` が refresh path を実行する。
 7. `TaskPaneHostFlowService` が show / reuse により `pane visible` state を成立させる。
-8. `TaskPaneRefreshCoordinator` が foreground unit を `Completed` または `NotRequired` で閉じる。
+8. `TaskPaneRefreshOrchestrationService` が foreground unit を `Completed` / `NotRequired` / `RequiredDegraded` などの outcome として閉じる。
 9. `TaskPaneRefreshOrchestrationService` が同一 session の `pane visible` と foreground terminal を確認して、`CASE display completed` を 1 回だけ成立させる。
 
 ## First Safe Implementation Unit
@@ -291,7 +292,7 @@ completion owner を `TaskPaneRefreshOrchestrationService` に置いた理由:
 各 service に残した責務:
 
 - `WorkbookTaskPaneReadyShowAttemptWorker`: 1 attempt の window resolve、already-visible 検知、refresh delegate 呼び出し、attempt outcome 返却。
-- `TaskPaneRefreshCoordinator`: refresh unit、foreground guarantee decision / terminal outcome、refresh attempt outcome 返却。
+- `TaskPaneRefreshCoordinator`: refresh unit、foreground execution bridge、refresh attempt raw result 返却。
 - `TaskPaneHostFlowService`: host reuse / render / show と `pane visible` state の返却。
 - `ExcelWindowRecoveryService`: application / workbook window / foreground recovery primitive の execution。
 - `TaskPaneSnapshotBuilderService`: CASE cache / Base cache / MasterListRebuild を含む snapshot source と rebuild fallback。
@@ -369,14 +370,14 @@ already-visible path と refresh path を収束させた理由:
 - retry、visibility、foreground の危険領域へ直ちに踏み込まずに済む
 - current-state 正本が指摘している最重要 owner 不明箇所にそのまま対応できる
 
-## foreground guarantee ownership target-state (2026-05-08 docs-only)
+## foreground guarantee ownership target-state (2026-05-08)
 
 ### target-state summary
 
 この節は、`docs/case-display-recovery-protocol-current-state.md` の `foreground guarantee ownership current-state (2026-05-08 docs-only)` を受けて、次の実装安全単位へ進むための target-state を固定する。
 
-- 今回は docs-only の設計追記であり、コード変更は行わない。
-- build / test / `DeployDebugAddIn` は docs-only のため実行しない。
+- 第1実装安全単位では、foreground guarantee の decision / outcome / `final-foreground-guarantee-*` trace owner を `TaskPaneRefreshOrchestrationService` 側へ寄せる。
+- build / test は `build.ps1` を入口に確認する。`DeployDebugAddIn` は実機確認が必要な場合の別入口として扱う。
 - retry 条件、ready-show timing、visibility recovery 条件、foreground recovery 条件、rebuild fallback 条件、`WindowActivate` 挙動は変更しない。
 - service 分割、helper 切り出し、ガード追加による上書きは行わない。
 - `CASE display completed` の emit owner は引き続き `TaskPaneRefreshOrchestrationService` とする。
@@ -386,9 +387,10 @@ target-state では、foreground guarantee を次の 3 層に分けて扱う。
 
 | 層 | owner | target-state の責務 |
 | --- | --- | --- |
-| decision / completion | `TaskPaneRefreshCoordinator` | refresh attempt の事実から foreground obligation を判定し、必要なら execution primitive を呼び、normalized outcome を返す。 |
+| decision / outcome / trace | `TaskPaneRefreshOrchestrationService` | refresh attempt の事実から foreground obligation を判定し、必要なら execution primitive を呼び、normalized outcome と `final-foreground-guarantee-*` trace を確定する。 |
+| execution bridge | `TaskPaneRefreshCoordinator` | refresh path の raw result を返し、既存の `ExcelWindowRecoveryService` 呼び出しと post-guarantee protection を実行する。foreground outcome は確定しない。 |
 | execution primitive | `ExcelWindowRecoveryService` | workbook window / application の recovery、activation、foreground promotion を実行し、実行結果だけを返す。 |
-| display-session consumption | `TaskPaneRefreshOrchestrationService` | worker / coordinator から返った normalized outcome を同一 created-case display session の材料として消費し、`case-display-completed` を success-only で emit するか判断する。 |
+| display-session consumption | `TaskPaneRefreshOrchestrationService` | foreground outcome を同一 created-case display session の材料として消費し、`case-display-completed` を success-only で emit するか判断する。 |
 
 ### foreground guarantee completed definition
 
@@ -401,7 +403,7 @@ target-state では、foreground guarantee を次の 3 層に分けて扱う。
 | `NotRequired` | yes | yes | refresh path ではない、または foreground recovery を要求する条件が成立していない。 |
 | `SkippedAlreadyVisible` | yes | yes | already-visible path で pane visible が成立しており、final foreground execution を要求しない。 |
 | `SkippedNoKnownTarget` | yes | no | workbook / window / active fallback の target が protocol 上確定できず、推測で補完しない。 |
-| `RequiredSucceeded` | yes | yes | `TaskPaneRefreshCoordinator` が foreground recovery required と判定し、`ExcelWindowRecoveryService` の execution が成功した。 |
+| `RequiredSucceeded` | yes | yes | `TaskPaneRefreshOrchestrationService` が foreground recovery required と判定し、`ExcelWindowRecoveryService` の execution が成功した。 |
 | `RequiredDegraded` | yes | yes, but degraded | execution は走ったが、OS foreground promotion や recovery primitive が完全成功を返さない。ただし対象 workbook / window と pane visible は維持され、追加 retry / timing hack へ進まない。 |
 | `RequiredFailed` | yes | no | foreground recovery required だが、target mismatch、例外、execution 不成立などで foreground obligation を display-completable と扱えない。 |
 | `Unknown` | no | no | owner が outcome を正規化できていない。target-state では fail-closed とし、success completion に使わない。 |
@@ -421,20 +423,19 @@ target-state では、foreground guarantee を次の 3 層に分けて扱う。
 
 #### foreground guarantee emit / decision owner
 
-- `TaskPaneRefreshCoordinator`
+- `TaskPaneRefreshOrchestrationService`
   - foreground guarantee の decision owner。
-  - refresh attempt 内の foreground guarantee completion owner。
-  - `final-foreground-guarantee-started` / `final-foreground-guarantee-completed` 相当の trace owner。
+  - refresh attempt / created-case display session 内の foreground guarantee outcome owner。
+  - `foreground-recovery-decision` と `final-foreground-guarantee-started` / `final-foreground-guarantee-completed` 相当の trace owner。
   - `ExcelWindowRecoveryService` の execution result を normalized foreground outcome へ変換する owner。
+- `TaskPaneRefreshCoordinator`
+  - refresh unit の owner。
+  - foreground recovery execution bridge と post-guarantee protection owner。
+  - raw execution result を返し、foreground outcome / `case-display-completed` を確定しない。
 - `ExcelWindowRecoveryService`
   - execution primitive owner。
   - `Required` / `NotRequired` / `Skipped` の protocol 判定は持たない。
   - `CASE display completed` の emit 可否を判断しない。
-- `TaskPaneRefreshOrchestrationService`
-  - created-case display session の owner。
-  - foreground outcome の consumer。
-  - `case-display-completed` emit owner。
-  - foreground recovery を実行するかどうかの lower-level 条件を再判定しない。
 
 #### retry / recovery / fallback との境界
 
@@ -450,7 +451,7 @@ target-state では、foreground guarantee を次の 3 層に分けて扱う。
 - event capture は `ThisAddIn` / `WorkbookEventCoordinator` に残す。
 - `WindowActivate` 特有の suppression / protection / dispatch は `WindowActivatePaneHandlingService` に残す。
 - `WindowActivate` 発火だけを `RequiredSucceeded` とみなさない。
-- `WindowActivate` dispatch から refresh path に入り、`TaskPaneRefreshCoordinator` が foreground outcome を返した場合だけ foreground guarantee の protocol outcome として扱う。
+- `WindowActivate` dispatch から refresh path に入り、`TaskPaneRefreshOrchestrationService` が foreground outcome を返した場合だけ foreground guarantee の protocol outcome として扱う。
 
 #### ready-show / visibility recovery / rebuild fallback との境界
 
@@ -469,7 +470,7 @@ target-state では、foreground guarantee を次の 3 層に分けて扱う。
 
 #### allowed
 
-- `TaskPaneRefreshCoordinator` が foreground requirement を判定し、`ExcelWindowRecoveryService` を呼び、normalized `ForegroundGuaranteeOutcome` を返す。
+- `TaskPaneRefreshOrchestrationService` が foreground requirement を判定し、`TaskPaneRefreshCoordinator` の execution bridge 経由で `ExcelWindowRecoveryService` を呼び、normalized `ForegroundGuaranteeOutcome` を返す。
 - `ExcelWindowRecoveryService` が app / workbook window / Win32 foreground primitive を実行し、実行結果だけを返す。
 - `TaskPaneRefreshOrchestrationService` が `pane visible` と foreground outcome を同一 created-case display session で突き合わせる。
 - `WorkbookTaskPaneReadyShowAttemptWorker` が already-visible path を success material として返す。
@@ -519,10 +520,9 @@ target-state の normalized outcome は少なくとも次を持つ。
 - `TaskPaneRefreshCoordinator`
   - `IsPaneVisible`
   - `IsRefreshCompleted`
-  - `ForegroundGuaranteeOutcome`
   - `RefreshSource`
   - `WindowTarget`
-  - foreground decision / completion owner として `Unknown` を上位へ丸めない。
+  - foreground decision / completion owner ではなく、raw foreground execution facts を上位へ返す。
 - `TaskPaneHostFlowService`
   - `IsPaneVisible`
   - `PaneVisibleSource`
@@ -578,16 +578,14 @@ target-state の normalized outcome は少なくとも次を持つ。
 
 ### 次の実装安全単位候補
 
-1. `ForegroundGuaranteeOutcome` の taxonomy を既存 result 型に追加し、ログ / trace 上で `NotRequired`、`SkippedAlreadyVisible`、`RequiredSucceeded`、`RequiredDegraded`、`RequiredFailed`、`Unknown` を観測できるようにする。挙動条件は変えない。
-2. `TaskPaneRefreshCoordinator` の foreground decision / execution result 変換を 1 箇所に寄せ、`ExcelWindowRecoveryService` の `recovered=false` を `RequiredDegraded` として返す。retry / recovery 条件は変えない。
+1. `ForegroundGuaranteeOutcome` の taxonomy を result 型に追加し、ログ / trace 上で `NotRequired`、`SkippedAlreadyVisible`、`RequiredSucceeded`、`RequiredDegraded`、`RequiredFailed`、`Unknown` を観測できるようにする。挙動条件は変えない。
+2. `TaskPaneRefreshOrchestrationService` の foreground decision / execution result 変換を 1 箇所に寄せ、`ExcelWindowRecoveryService` の `recovered=false` を `RequiredDegraded` として返す。retry / recovery 条件は変えない。
 3. `WorkbookTaskPaneReadyShowAttemptWorker` の already-visible path を `SkippedAlreadyVisible` として orchestration へ渡す。`case-display-completed` emit owner は増やさない。
-4. `TaskPaneRefreshOrchestrationService` が `IsDisplayCompletable` を見るようにする前に、実機ログで degraded / failed の実発生有無を観測する。
+4. `TaskPaneRefreshOrchestrationService` が `IsDisplayCompletable` を見て success-only completion を判断する。
 5. `WindowActivate` は event capture / dispatch / refresh request の境界整理だけを行い、foreground completed の代替にしない。
-
-今回の docs-only 範囲では、上記候補を実装しない。build / test / `DeployDebugAddIn` も実行しない。
 
 ## 一言まとめ
 
 target-state では、`CASE display completed` を `pane visible` の別名にも `refresh completed` の別名にもせず、created-case display session を閉じる orchestration-level terminal state として定義する。
 
-その owner は `TaskPaneRefreshOrchestrationService` に置く。worker は attempt、coordinator は refresh / foreground unit、host-flow は visible state、snapshot builder は rebuild fallback をそれぞれ持ち、final completion を奪わない構造が target-state である。
+その owner は `TaskPaneRefreshOrchestrationService` に置く。worker は attempt、coordinator は refresh unit / foreground execution bridge、host-flow は visible state、snapshot builder は rebuild fallback をそれぞれ持ち、final completion を奪わない構造が target-state である。

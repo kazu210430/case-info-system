@@ -8,6 +8,7 @@
   - `2026-05-08` 時点で `main` と `origin/main` の一致を確認した `e41feb5d607f79077e112a1945e81ac0a76d95a4`
   - foreground guarantee ownership target-state 追記時点の `main` / `origin/main`: `3d6f2441f84dfefe46393508d4eae02ebe06b886`
   - visibility recovery ownership target-state 追記時点の `main` / `origin/main`: `79c4823537c881b81582d3456145f8fc5f09466f`
+  - rebuild fallback ownership target-state 追記時点の `main` / `origin/main`: `ca23a651a2c811eb19f81ade2348277af19fa0c3`
 - 参照正本:
   - `AGENTS.md`
   - `docs/architecture.md`
@@ -843,6 +844,267 @@ visibility recovery と rebuild fallback の接続は、次で固定する。
 4. `TaskPaneRefreshOrchestrationService` が `VisibilityRecoveryOutcome` と `ForegroundGuaranteeOutcome` を同一 created-case display session で突き合わせる。success-only completion の意味は変えない。
 5. `visibility-recovery-*` normalized trace を orchestration へ寄せる。primitive trace と pane shown trace は既存 owner に残す。
 6. rebuild fallback は `TaskPaneSnapshotBuilderService` の snapshot source decision として残し、visibility failure から直接起動しないことを test / trace 上でも確認する。
+
+## rebuild fallback ownership target-state (2026-05-08 docs-only)
+
+### target-state summary
+
+この節は、`docs/case-display-recovery-protocol-current-state.md` の rebuild fallback current-state を受けて、次の実装安全単位へ進むための target-state を固定する。
+
+- 参照した docs:
+  - `docs/architecture.md`
+  - `docs/flows.md`
+  - `docs/ui-policy.md`
+  - `docs/taskpane-refresh-policy.md`
+  - `docs/case-display-recovery-protocol-current-state.md`
+  - `docs/case-display-recovery-protocol-target-state.md`
+- 今回は docs-only であり、コード変更、service 分割、helper 切り出し、ready retry / pending retry / visibility recovery / foreground guarantee / rebuild fallback / `WindowActivate` 条件変更は行わない。
+- docs-only のため build / test / `DeployDebugAddIn` は実行しない。
+
+target-state では、rebuild fallback を TaskPane refresh render path 内の `snapshot acquisition subprotocol` として扱う。`MasterListRebuild` を選んだ事実が rebuild fallback required の中心であり、visibility recovery failure、foreground guarantee failure、ready retry exhausted、pending retry exhausted をそのまま rebuild fallback required とは呼ばない。
+
+`BaseCacheFallback` は cache source decision の fallback ではあるが、この節でいう rebuild fallback required ではない。`BaseCacheFallback` が snapshot を供給できる場合は、`MasterListRebuild` を要求しないため rebuild fallback は `Skipped` として扱う。
+
+### rebuild fallback required definition
+
+`rebuild fallback required` は、次をすべて満たす場合にだけ成立する。
+
+1. refresh path が fail-closed せず、対象 workbook / window / context が refresh render path へ到達している。
+2. host reuse / already-visible path ではなく、render が必要である。
+3. `TaskPaneSnapshotBuilderService` の snapshot source decision が `CaseCache` / `BaseCache` / `BaseCacheFallback` で表示用 snapshot を供給できない。
+4. `TaskPaneSnapshotBuilderService` が `MasterListRebuild` を選んだ、または選ぶべき facts に到達した。
+
+required の判定材料は、snapshot acquisition の raw facts に限定する。
+
+| fact / outcome | required 扱い | 理由 |
+| --- | --- | --- |
+| `CaseCache` usable | no | CASE cache で snapshot acquisition が完了する。 |
+| `BaseCache` usable | no | Base cache を CASE cache へ昇格して snapshot acquisition が完了する。 |
+| `BaseCacheFallback` selected | no | latest master version が読めない場合でも Base snapshot が使えるため、`MasterListRebuild` は要求しない。 |
+| `CaseCacheIncompatible` / `CaseCacheStale` | maybe | 単独では required ではない。Base cache / Base fallback でも満たせない場合だけ `MasterListRebuild` required の reason になる。 |
+| `BaseCacheIncompatible` / `BaseCacheStale` | maybe | CASE cache も使えず、Base cache も使えない場合に `MasterListRebuild` required の reason になる。 |
+| `CacheUnavailable` | yes, if render path reached | render path で使える cache source がないため `MasterListRebuild` required。 |
+| `MasterListRebuild` selected | yes | 実装上の rebuild fallback required 相当の canonical fact。 |
+
+visibility recovery failure との接続は直接ではない。
+
+- visibility recovery failure により window resolve / context resolve / refresh precondition が fail-closed で止まる場合、snapshot acquisition へ到達しないため rebuild fallback は required にならない。
+- visibility recovery が `Completed` / `Degraded` で render path へ到達し、その中で `MasterListRebuild` が選ばれた場合だけ rebuild fallback required になる。
+- rebuild fallback は workbook window visible 化、Excel foreground promotion、白 Excel 回復の代替ではない。
+
+ready retry / pending retry exhausted との接続も直接ではない。
+
+- ready-show attempt が尽きた場合の handoff 先は `ScheduleWorkbookTaskPaneRefresh(...)` / pending retry であり、即 `MasterListRebuild` ではない。
+- pending retry が対象 workbook または active CASE context fallback から refresh path に入り、render が必要になった場合だけ snapshot acquisition へ到達する。
+- ready retry exhausted / pending retry exhausted だけを reason にして rebuild fallback 条件を広げない。
+
+### rebuild fallback completed definition
+
+`rebuild fallback completed` は、required だった `MasterListRebuild` path が terminal になり、refresh render path が次の host show evaluation へ進める snapshot result を得た状態を指す。これは `pane visible`、`foreground guarantee completed`、`CASE display completed` と同義ではない。
+
+`RebuildFallbackOutcome` は少なくとも次の status を持つ。
+
+| status | terminal | refresh can continue | 定義 |
+| --- | --- | --- | --- |
+| `Skipped` | yes | conditional | rebuild fallback が required ではなかった。already-visible、host reuse、`CaseCache` / `BaseCache` / `BaseCacheFallback` 採用、または upstream fail-closed で snapshot acquisition に到達しない場合。 |
+| `Completed` | yes | yes | `MasterListRebuild` が正常に snapshot text を構築し、render path が通常 snapshot として扱える。 |
+| `Degraded` | yes | yes, but degraded | `MasterListRebuild` は required で、表示可能な fallback/error snapshot などを返せたが、CASE cache 更新失敗、Master 読み取りの一部不確実性、または diagnostic error を伴う。成功に丸めず trace に残す。 |
+| `Failed` | yes | no | `MasterListRebuild` が required だったが、render path が扱える snapshot result を得られない、または target / root / master path / owned read access が fail-closed になった。 |
+| `Unknown` | no | no | owner が raw facts を正規化できていない。success completion に使わず fail-closed とする。 |
+
+fallback 後に再評価するものは、通常 refresh path と同じである。
+
+1. `TaskPaneHostFlowService` が render result を使って host show / reuse 結果を評価する。
+2. `TaskPaneRefreshOrchestrationService` が pane visible facts を visibility recovery outcome に正規化する。
+3. `TaskPaneRefreshOrchestrationService` が foreground guarantee outcome を評価する。
+4. `TaskPaneRefreshOrchestrationService` が同一 created-case display session の `case-display-completed` 可否を判断する。
+
+`Completed` / `Degraded` は refresh render path が続行できることを示すだけで、CASE display completion を直接成立させない。`Failed` は snapshot acquisition subprotocol の failure であり、追加 guard、sleep、DoEvents、visibility recovery の再解釈で覆わない。
+
+### owner boundary
+
+#### fallback decision owner
+
+- `TaskPaneSnapshotBuilderService` が snapshot source decision と rebuild fallback required / skipped の raw decision owner である。
+- decision の入力は CASE cache facts、Base cache facts、latest master version availability、format compatibility、stale 判定、cache availability に限定する。
+- `TaskPaneRefreshOrchestrationService`、`WorkbookTaskPaneReadyShowAttemptWorker`、`TaskPaneRefreshCoordinator` は rebuild fallback required 条件を再実装しない。
+
+#### fallback execution owner
+
+- `TaskPaneSnapshotBuilderService` が `MasterListRebuild` execution owner である。
+- Master workbook の read-only open / close / owned cleanup 境界は `MasterWorkbookReadAccessService` に残す。
+- `readAccess.CloseIfOwned()` の `finally` 境界、COM release、hidden session / retained hidden app-cache の cleanup 境界を rebuild fallback target-state で広げない。
+
+#### fallback result normalization owner
+
+- `TaskPaneSnapshotBuilderService` は `SnapshotSource`、fallback reason list、`MasterListRebuildUsed`、`UpdatedCaseSnapshotCache`、snapshot text availability、raw failure facts を返す。
+- `TaskPaneRefreshCoordinator` / `TaskPaneHostFlowService` はその raw facts を refresh / render result に含めて上位へ渡す。
+- `TaskPaneRefreshOrchestrationService` が created-case display session 上の `RebuildFallbackOutcome` へ正規化する。
+- 正規化は観測と completion 消費のためであり、fallback 条件、retry 条件、host show 条件を変えるためのものではない。
+
+#### trace emit owner
+
+- primitive / diagnostic trace は `TaskPaneSnapshotBuilderService` と `MasterWorkbookReadAccessService` に残してよい。
+- normalized protocol trace は `TaskPaneRefreshOrchestrationService` が `rebuild-fallback-required` / `rebuild-fallback-skipped` / `rebuild-fallback-completed` / `rebuild-fallback-degraded` / `rebuild-fallback-failed` 相当として emit する。
+- trace owner を増やして `case-display-completed` の重複 emit を再導入しない。
+
+#### CASE display completed owner との境界
+
+- `TaskPaneSnapshotBuilderService` は `case-display-completed` を emit しない。
+- `TaskPaneHostFlowService` は pane visible facts を返すが、created-case display session の terminal owner ではない。
+- `TaskPaneRefreshOrchestrationService` だけが visibility outcome、foreground outcome、rebuild fallback outcome を同一 session の facts として消費し、success-only の `case-display-completed` を判断する。
+- rebuild fallback の使用有無は completion の直接条件ではない。
+
+### allowed / forbidden responsibilities
+
+#### allowed
+
+- `TaskPaneSnapshotBuilderService` が snapshot source decision と `MasterListRebuild` execution facts を返す。
+- `MasterWorkbookReadAccessService` が Master read-only access と owned cleanup を閉じる。
+- `TaskPaneHostFlowService` が render result 後の `ReusedShown` / `RefreshedShown` / show failure facts を返す。
+- `TaskPaneRefreshCoordinator` が refresh raw result に snapshot acquisition facts を含める。
+- `TaskPaneRefreshOrchestrationService` が lower-level facts を `RebuildFallbackOutcome` に正規化し、normalized trace を emit する。
+- `TaskPaneRefreshOrchestrationService` が fallback outcome を display completion の diagnostic fact として記録する。
+
+#### forbidden
+
+- visibility recovery failure を rebuild fallback required に直結する。
+- foreground guarantee failure を rebuild fallback required に直結する。
+- ready retry exhausted / pending retry exhausted だけを reason に `MasterListRebuild` を要求する。
+- host reuse / already-visible path を無理に render path へ流す。
+- `BaseCacheFallback` を `MasterListRebuild` required と混同する。
+- lower-level service が `case-display-completed` を emit する。
+- `TaskPaneSnapshotBuilderService` に visibility recovery、foreground guarantee、CASE display completion を判断させる。
+- fallback の成功率を上げる目的で `Application.DoEvents()`、sleep、単なる delay、timing hack を追加する。
+- fallback 条件、ready retry 条件、pending retry 条件、visibility recovery 条件、foreground guarantee 条件、`WindowActivate` 挙動を owner 整理の名目で変更する。
+- context-less fallback open、暗黙の workbook 推測、Master path 推測を追加する。
+- COM lifetime、`ScreenUpdating` / `DisplayAlerts` / `EnableEvents` restore scope、hidden session cleanup 境界を広げる。
+
+### normalized outcome design
+
+#### RebuildFallbackOutcome
+
+target-state の normalized outcome は少なくとも次を持つ。
+
+| field | 意味 |
+| --- | --- |
+| `Status` | `Skipped` / `Completed` / `Degraded` / `Failed` / `Unknown` |
+| `IsRequired` | `MasterListRebuild` が必要だったか。 |
+| `IsTerminal` | rebuild fallback subprotocol が terminal か。`Unknown` は false。 |
+| `CanContinueRefresh` | render / host show evaluation へ進める snapshot result があるか。 |
+| `SnapshotSource` | `CaseCache` / `BaseCache` / `BaseCacheFallback` / `MasterListRebuild` / `None` |
+| `FallbackReasons` | `CaseCacheIncompatible`、`CaseCacheStale`、`BaseCacheIncompatible`、`BaseCacheStale`、`LatestMasterVersionUnavailable`、`CacheUnavailable` などの diagnostic reason list。 |
+| `MasterListRebuildAttempted` | MasterList rebuild を実行したか。 |
+| `MasterListRebuildSucceeded` | MasterList rebuild が通常 snapshot を返せたか。 |
+| `SnapshotTextAvailable` | render path が扱える snapshot text があるか。 |
+| `UpdatedCaseSnapshotCache` | CASE cache を更新したか。display completion 条件ではない。 |
+| `FailureReason` | `NoSystemRoot`、`MasterPathUnavailable`、`MasterReadFailed`、`SnapshotBuildException`、`NoSnapshotText` など。 |
+| `DegradedReason` | cache update failure、error snapshot fallback、partial/unverifiable source など。 |
+
+#### Worker / Coordinator / HostFlowService / SnapshotBuilder
+
+- `WorkbookTaskPaneReadyShowAttemptWorker`
+  - `RefreshAttempted`
+  - `RefreshResult`
+  - `IsPaneVisible`
+  - `PaneVisibleSource`
+  - `FailureReason`
+  - rebuild fallback required / completed は判断しない。
+- `TaskPaneRefreshCoordinator`
+  - `IsRefreshCompleted`
+  - `WindowTarget`
+  - `RefreshPrecondition`
+  - `ContextAccepted`
+  - `HostFlowResult`
+  - `SnapshotAcquisitionFacts`
+  - normalized `RebuildFallbackOutcome` と completion trace は確定しない。
+- `TaskPaneHostFlowService`
+  - `HostReused`
+  - `Rendered`
+  - `IsPaneVisible`
+  - `PaneVisibleSource`
+  - `RenderResult`
+  - `SnapshotAcquisitionFacts`
+  - visibility recovery status、foreground outcome、CASE display completion は持たない。
+- `TaskPaneSnapshotBuilderService`
+  - `SnapshotSource`
+  - `FallbackReasons`
+  - `MasterListRebuildUsed`
+  - `UpdatedCaseSnapshotCache`
+  - `SnapshotTextAvailable`
+  - `BuildFailureReason`
+  - host show、foreground、CASE display completion は持たない。
+
+#### TaskPaneRefreshOrchestrationService
+
+`TaskPaneRefreshOrchestrationService` は次だけを判断する。
+
+1. lower-level facts が同一 created-case display session に属するか。
+2. `RebuildFallbackOutcome` が `Skipped` / `Completed` / `Degraded` / `Failed` / `Unknown` のどれか。
+3. rebuild fallback failure が refresh continuation を止める raw failure か。
+4. `pane visible` が成立しているか。
+5. visibility outcome が display-completable か。
+6. foreground outcome が terminal / display-completable か。
+7. success-only の `case-display-completed` を emit してよいか。
+
+`RebuildFallbackOutcome.Completed` / `Degraded` だけでは completion しない。`Failed` / `Unknown` は success completion に使わない。`Skipped` は fallback が不要だったという診断であり、pane visible / visibility / foreground が別途成立していれば completion を妨げない。
+
+### visibility recovery / foreground guarantee との接続
+
+#### visibility recovery
+
+- visibility recovery failure は rebuild fallback required ではない。
+- visibility recovery が fail-closed で refresh path に到達しない場合、rebuild fallback は `Skipped` または `Unknown` として扱い、`MasterListRebuild` を起動しない。
+- rebuild fallback が `Completed` / `Degraded` になった後も、`pane visible` は `TaskPaneHostFlowService` の facts で再評価する。
+- rebuild fallback は workbook window visible ensure の代替ではない。
+
+#### foreground guarantee
+
+- foreground guarantee は pane visible / refresh 後の foreground obligation を閉じる protocol unit であり、snapshot acquisition の fallback ではない。
+- rebuild fallback outcome を foreground guarantee success / failure の条件にしない。
+- `MasterListRebuild` が成功しても foreground guarantee required が消えるわけではない。
+- foreground guarantee が `RequiredFailed` / `RequiredDegraded` になっても、それだけで rebuild fallback を要求しない。
+
+### CASE display completed との関係
+
+`CASE display completed` は引き続き `TaskPaneRefreshOrchestrationService` の created-case display session terminal state とする。
+
+- rebuild fallback outcome は diagnostic / refresh continuation fact であり、completion の直接条件ではない。
+- `Completed` / `Degraded` は、通常 refresh path と同じく host show、visibility outcome、foreground outcome の評価へ戻る。
+- `Skipped` は fallback 不要を表すだけで、completion 成否は pane visible / visibility / foreground で判断する。
+- `Failed` / `Unknown` は fail-closed とし、snapshot acquisition failure を visibility recovery や foreground guarantee で覆って success completion にしない。
+- `case-display-completed` は lower-level service から emit しない。
+
+### constraints to preserve
+
+- 白Excel対策を落とさない。
+  - rebuild fallback を白 Excel 対策 guard として扱わない。
+  - `PostCloseFollowUpScheduler` の no visible workbook quit と snapshot acquisition fallback を混同しない。
+- TaskPane が出ない regression を防ぐ。
+  - ready-show、already-visible early-complete、pending retry、host reuse / render / show の現行条件を変更しない。
+  - fallback 条件を広げすぎない。
+- COM解放を落とさない。
+  - `MasterWorkbookReadAccessService` の owned read access cleanup、hidden create session、retained hidden app-cache、一時 workbook close の cleanup 境界を変えない。
+- Excel状態制御を落とさない。
+  - `ScreenUpdating` / `DisplayAlerts` / `EnableEvents` の既存 restore scope を変えない。
+  - Master read access を表示制御へ昇格しない。
+- fail closed を維持する。
+  - workbook / context / `SYSTEM_ROOT` / Master path が不明な場合に推測で補完しない。
+- timing hack に逃げない。
+  - `Application.DoEvents()`、sleep、単なる delay 追加は禁止する。
+  - ready retry `80ms`、pending retry `400ms`、attempt count は今回変更しない。
+- ガード追加で覆わない。
+  - visibility / foreground / rebuild fallback 条件を新しい guard で隠さない。
+  - `WorkbookOpen` を window 安定境界へ戻さない。
+
+### 次の実装安全単位候補
+
+1. `TaskPaneSnapshotBuilderService` の snapshot source decision を raw facts として返す。`SnapshotSource`、fallback reason list、`MasterListRebuildUsed`、`UpdatedCaseSnapshotCache`、failure / degraded reason を含める。挙動条件は変えない。
+2. `CasePaneSnapshotRenderService` / `TaskPaneHostFlowService` / `TaskPaneRefreshCoordinator` が snapshot acquisition facts を上位へ運ぶ。host reuse / render / show 条件は変えない。
+3. `TaskPaneRefreshOrchestrationService` に `RebuildFallbackOutcome` normalization と normalized trace emit を追加する。`case-display-completed` emit owner は増やさない。
+4. `RebuildFallbackOutcome` を visibility outcome / foreground outcome と同一 created-case display session で突き合わせる。ただし completion 条件に rebuild fallback 使用有無を直接足さない。
+5. tests / trace では、visibility recovery failure、foreground guarantee failure、ready retry exhausted、pending retry exhausted がそれ単独では rebuild fallback required にならないことを確認する。
+6. `BaseCacheFallback` と `MasterListRebuild` を protocol outcome 上で区別し、fallback 条件を広げないことを確認する。
 
 ## 一言まとめ
 

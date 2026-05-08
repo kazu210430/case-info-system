@@ -316,6 +316,212 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
   - event capture owner と refresh dispatch owner を分け続けるのか。
   - `WorkbookActivate` と `WindowActivate` の責務境界を protocol 上どこで分離するのか。
 
+## foreground guarantee ownership current-state (2026-05-08 docs-only)
+
+### current-state summary
+
+この節は、CASE display / recovery protocol の次フェーズ候補である `foreground guarantee ownership` だけを current-state として正本化するための追記です。
+
+- 調査開始時の `main` / `origin/main`: `3af0eb2484aa78c967b7fa5e48f252ce68907ea6`
+- 第1安全単位完了記録として本文上に残る `e41feb5d607f79077e112a1945e81ac0a76d95a4` は historical completion hash として扱う。
+- 参照した docs:
+  - `docs/architecture.md`
+  - `docs/flows.md`
+  - `docs/ui-policy.md`
+  - `docs/case-display-recovery-protocol-current-state.md`
+  - `docs/case-display-recovery-protocol-target-state.md`
+  - `docs/taskpane-refresh-policy.md`
+  - `docs/workbook-window-activation-notes.md`
+- 今回は docs-only であり、コード変更、service 分割、helper 切り出し、retry / visibility / foreground / rebuild fallback 条件変更、`WindowActivate` 挙動変更は行わない。
+- docs-only のため build / test / `DeployDebugAddIn` は実行しない。
+
+現行の foreground guarantee は、単一 owner の protocol ではありません。最終 foreground guarantee の decision と terminal trace は `TaskPaneRefreshCoordinator` にあり、実際の workbook window recovery / activation / foreground promotion primitive は `ExcelWindowRecoveryService` にあります。一方で、created CASE 表示の前後には `KernelCasePresentationService`、`WorkbookTaskPaneReadyShowAttemptWorker`、`TaskPaneRefreshOrchestrationService.WorkbookPaneWindowResolver`、`CaseWorkbookOpenStrategy` にも visibility / activation / one-shot promotion が存在します。
+
+したがって current-state では、次を分けて読む必要があります。
+
+- `foreground guarantee`
+  - refresh 後に CASE workbook / Excel window を最終 foreground へ戻す protocol unit。
+- `visibility recovery`
+  - workbook window を visible にする、または Excel application を visible に戻す recovery primitive。
+- `window activation`
+  - workbook / window / worksheet の `Activate()`、または `WorkbookActivate` / `WindowActivate` event を起点にした refresh dispatch。
+- `foreground preservation`
+  - hidden-for-display open 中に previous active window を戻す、または Kernel HOME を CASE より前へ戻さないための制御。
+- `CASE display completed`
+  - created-case display session を `TaskPaneRefreshOrchestrationService` が閉じる terminal state。
+
+これらは似ていますが、現行コードでは同義ではありません。
+
+### foreground guarantee 実行箇所一覧
+
+#### 通常 path: created-case display -> ready-show -> refresh
+
+| stage | 実行箇所 | 実行内容 | current-state の扱い |
+| --- | --- | --- | --- |
+| hidden-for-display open | `CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay(...)` | shared app で CASE を open し、`HideOpenedWorkbookWindow(...)` で CASE window を hidden にする。必要なら `RestorePreviousWindowForHiddenDisplay(...)` -> `RestorePreviousWindow(...)` で previous active window を `Visible = true` / `Activate()` する。 | CASE foreground guarantee ではない。表示 handoff 前の foreground preservation / flicker 抑止。 |
+| initial visibility | `KernelCasePresentationService.EnsureWorkbookWindowVisibleBeforeInitialRecovery(...)` -> `WorkbookWindowVisibilityService.EnsureVisible(...)` | CASE workbook window を解決し、非表示なら `window.Visible = true`。 | visibility recovery。foreground promotion ではない。 |
+| initial recovery | `KernelCasePresentationService.ShowCreatedCase(...)` -> `ExcelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(..., bringToFront: false)` | `ScreenUpdating` を true に戻し、window resolve / minimized restore / application visible ensure を行う。ただし `ensureWindowVisible = false`、`activateWindow = false`。 | initial recovery。foreground guarantee ではない。 |
+| ready-show pre-visibility | `KernelCasePresentationService.EnsureWorkbookWindowVisibleBeforeReadyShow(...)` -> `WorkbookWindowVisibilityService.EnsureVisible(...)` | ready-show 前に CASE workbook window の visible を再確認する。 | visibility recovery。foreground promotion ではない。 |
+| ready-show attempt | `WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce(...)` | attempt 1 で `WorkbookWindowVisibilityService.EnsureVisible(...)` を呼ぶ。続いて `ResolveWorkbookPaneWindow(..., activateWorkbook: true)` を通し、内部で `ExcelInteropService.ActivateWorkbook(...)` が `workbook.Activate()` と first visible window `Activate()` を行う。 | window resolve / activation。final foreground guarantee ではない。 |
+| refresh pre-context recovery | `TaskPaneRefreshCoordinator.TryRefreshTaskPane(...)` | Kernel HOME が visible でなければ、context 解決前に `ExcelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(..., bringToFront: false)` または active workbook 版を呼ぶ。 | context 解決の前提調整。foreground promotion ではない。 |
+| final foreground guarantee decision | `TaskPaneRefreshCoordinator.TryRefreshTaskPane(...)` | `refreshed && window != null && _excelWindowRecoveryService != null` のときだけ foreground recovery required と判断する。 | decision owner は `TaskPaneRefreshCoordinator`。 |
+| final foreground guarantee execution | `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` -> `ExcelWindowRecoveryService.TryRecoverWorkbookWindow(..., bringToFront: true)` または active workbook 版 | `window.Visible = true`、minimized なら `WindowState = xlNormal`、`EnsureApplicationVisible(...)`、`window.Activate()`、`PromoteWindow(...)` を実行する。`PromoteWindow(...)` は条件付き `ShowWindow(SW_RESTORE)`、topmost / no-topmost `SetWindowPos(...)`、`SetForegroundWindow(...)` を行う。 | execution owner は `ExcelWindowRecoveryService`。terminal trace は coordinator 側。 |
+| post-guarantee protection | `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` | CASE context / workbook / window が揃う場合だけ `BeginCaseWorkbookActivateProtection(...)` を要求する。 | foreground 後の reentrant refresh 抑止。foreground guarantee の実行自体ではない。 |
+
+#### already-visible path
+
+| stage | 実行箇所 | 実行内容 | current-state の扱い |
+| --- | --- | --- | --- |
+| visible pane early-complete | `WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce(...)` | `HasVisibleCasePaneForWorkbookWindow(...)` が true なら refresh を呼ばず `TaskPaneRefreshAttemptResult.VisibleAlreadySatisfied()` を返す。 | `foregroundGuaranteeRequired = false`、`foregroundGuaranteeTerminal = true` として扱われる。foreground recovery は実行されない。 |
+| CASE display completed | `TaskPaneRefreshOrchestrationService.TryCompleteCreatedCaseDisplaySession(...)` | `IsPaneVisible` と `IsForegroundGuaranteeTerminal` を見て `case-display-completed` を emit する。 | CASE display completion owner は orchestration 側。already-visible path でも final foreground execution は行わない。 |
+
+#### retry path
+
+| retry | 実行箇所 | 実行内容 | current-state の扱い |
+| --- | --- | --- | --- |
+| ready retry `80ms` | `TaskPaneRefreshOrchestrationService.ScheduleTaskPaneReadyRetry(...)` | retry timer firing 後に ready-show attempt を再実行する。attempt 2 でも window resolve は `activateWorkbook: true` で走るが、`WorkbookWindowVisibilityService.EnsureVisible(...)` は attempt 1 のみ。 | retry owner は orchestration。activation は window resolve の副作用。final foreground guarantee owner ではない。 |
+| pending retry `400ms` | `TaskPaneRefreshOrchestrationService.ScheduleWorkbookTaskPaneRefresh(...)` / `PendingPaneRefreshRetryService` | ready-show attempts exhausted 後、`TryRefreshTaskPane(...)` に fallback する。成功すれば通常 refresh path と同じ foreground decision / execution へ進む。 | fallback refresh owner は orchestration / pending retry service。foreground decision は coordinator。 |
+| active target fallback | `PendingPaneRefreshRetryService` -> `TaskPaneRefreshCoordinator.TryRefreshTaskPane(reason, null, null)` | 対象 workbook を見失った場合でも active CASE context があれば active refresh fallback を継続する。final guarantee は active workbook 版 `TryRecoverActiveWorkbookWindow(...)` になりうる。 | foreground target が explicit workbook ではなく active workbook へ寄る可能性がある current-state。 |
+
+#### recovery path
+
+| recovery | 実行箇所 | 実行内容 | current-state の扱い |
+| --- | --- | --- | --- |
+| lightweight visibility ensure | `WorkbookWindowVisibilityService.EnsureVisible(...)` | first visible window または `workbook.Windows[1]` を解決し、`window.Visible = true` を試みる。outcome は `AlreadyVisible` / `MadeVisible` / `WindowUnresolved` など。 | visibility owner。foreground completed とは別概念。 |
+| full window recovery without showing | `ExcelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing(...)` | `ScreenUpdating` restore、window resolve / recreate、minimized restore、application visible ensure を行う。`window.Activate()` と `PromoteWindow(...)` は行わない。 | recovery primitive。foreground guarantee ではない。 |
+| full window recovery with foreground | `ExcelWindowRecoveryService.TryRecoverWorkbookWindow(..., bringToFront: true)` | full recovery に加えて `window.Activate()` と `PromoteWindow(...)` を実行する。 | final foreground guarantee の execution primitive。 |
+| application foreground only | `ExcelWindowRecoveryService.TryBringApplicationToForeground(...)` | Excel application hwnd に `SetForegroundWindow(...)` を行う。 | Kernel HOME / Kernel workbook 表示系から使われる。created-case display completion の owner ではない。 |
+| application show | `ExcelWindowRecoveryService.ShowApplicationWindow(...)` / `EnsureApplicationVisible(...)` | `_application.Visible = true`、`ShowWindow(SW_RESTORE)`、`ShowWindow(SW_SHOW)` を行う。 | application visibility recovery。CASE foreground guarantee と混同しない。 |
+
+#### fallback / adjacent path
+
+| path | 実行箇所 | 実行内容 | current-state の扱い |
+| --- | --- | --- | --- |
+| rebuild fallback | `TaskPaneSnapshotBuilderService` downstream of `TaskPaneRefreshCoordinator -> TaskPaneManager -> TaskPaneHostFlowService -> CasePaneSnapshotRenderService` | snapshot source が `MasterListRebuild` に落ちる場合がある。 | refresh / snapshot subprotocol。foreground guarantee owner ではない。 |
+| non-`NewCaseDefault` after wait UI close | `KernelCasePresentationService.OpenCreatedCase(...)` -> `PromoteWorkbookWindowOnce(...)` | `CreateCaseSingle` など `NewCaseDefault` 以外で wait UI close 後に Excel app hwnd と workbook window hwnd を `ShowWindow(SW_RESTORE)` / topmost bounce / `SetForegroundWindow(...)` で 1 回 promote する。 | created-case display 周辺の one-shot foreground promotion。`TaskPaneRefreshCoordinator` の final foreground guarantee とは別 owner。 |
+| save-before-close normalization | `KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave(...)` / `NormalizeBatchWorkbookWindowStateBeforeSave(...)` | hidden create session 内で save 前に owned workbook window を `Visible = true`、minimized なら `xlNormal` へ戻す。必要なら `workbook.Activate()` / `NewWindow()` で save 用 window を確保する。 | 保存状態正規化。shared/current app の CASE foreground guarantee ではない。 |
+| Kernel HOME foreground | `ThisAddIn.ShowKernelHomePlaceholder(...)` / `KernelHomeForm.ForceBringToFront(...)` | `Show()`、`Activate()`、`BringToFront()`、`ShowWindow(...)`、`SetForegroundWindow(...)`、foreground retry timer を使う。 | Kernel HOME 表示 owner。CASE display foreground guarantee とは別 protocol。 |
+| Kernel workbook restore / release | `KernelWorkbookDisplayService.ShowKernelWorkbookWindows(...)` / `EnsureWorkbookVisible(...)` / `ReleaseHomeDisplay(...)` | Kernel workbook window visible / normal 化、`ExcelWindowRecoveryService.TryRecoverWorkbookWindow(..., bringToFront: true|false)`、application foreground を使う。 | Kernel HOME / Kernel workbook 表示制御。CASE display foreground guarantee と混同しない。 |
+
+### owner 分裂 / 混在ポイント
+
+現行の owner 分裂は次のとおりです。
+
+- foreground guarantee decision と execution が分裂している。
+  - decision / terminal trace: `TaskPaneRefreshCoordinator`
+  - execution primitive: `ExcelWindowRecoveryService`
+- foreground terminal と recovered outcome が分裂している。
+  - `GuaranteeFinalForegroundAfterRefresh(...)` は `recovered` をログに残す。
+  - ただし `TaskPaneRefreshAttemptResult.Succeeded(...)` は `foregroundRecoveryStarted` をもとに terminal 化され、`recovered=false` を degraded / failed として上位へ伝えない。
+- already-visible path は foreground execution を持たないが terminal として扱う。
+  - `VisibleAlreadySatisfied()` は `foregroundGuaranteeRequired=false` かつ `foregroundGuaranteeTerminal=true`。
+- ready-show owner と foreground owner が分裂している。
+  - request: `KernelCasePresentationService`
+  - enqueue / retry / fallback: `TaskPaneRefreshOrchestrationService`
+  - attempt / visible already satisfied: `WorkbookTaskPaneReadyShowAttemptWorker`
+  - final foreground decision: `TaskPaneRefreshCoordinator`
+  - final foreground execution: `ExcelWindowRecoveryService`
+- visibility recovery owner と foreground owner が混在しやすい。
+  - `WorkbookWindowVisibilityService` は workbook window visible ensure だけを持つ。
+  - `ExcelWindowRecoveryService` は application visibility、window restore、activation、foreground promotion を持つ。
+  - caller は `KernelCasePresentationService`、`WorkbookTaskPaneReadyShowAttemptWorker`、`TaskPaneRefreshCoordinator` に分散している。
+- WindowActivate owner が event capture と refresh dispatch に分裂している。
+  - event capture: `ThisAddIn.Application_WindowActivate(...)`
+  - observation / bridge: `WorkbookEventCoordinator` -> `ThisAddIn.HandleWindowActivateEvent(...)`
+  - protection / suppression / refresh request: `WindowActivatePaneHandlingService`
+  - actual refresh / foreground decision: `TaskPaneRefreshOrchestrationService` -> `TaskPaneRefreshCoordinator`
+- one-shot foreground promotion が final foreground guarantee と別に存在する。
+  - `KernelCasePresentationService.PromoteWorkbookWindowOnce(...)` は `NewCaseDefault` 以外の created CASE 表示後に実行される。
+  - これは `TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh(...)` とは別 owner / 別条件で、protocol 上の `foreground guarantee completed` には統合されていない。
+- Kernel HOME / Kernel workbook foreground owner が CASE display protocol と並存している。
+  - `KernelHomeForm` は foreground retry timer と WinForms `Activate` / `BringToFront` / `SetForegroundWindow` を持つ。
+  - `KernelWorkbookDisplayService` は Kernel workbook / Excel application の restore / foreground を持つ。
+  - CASE 作成フローでは「Kernel を CASE より前に戻さない」制約もあるため、foreground preservation と foreground guarantee が混ざりやすい。
+- `CASE display completed` owner とは分離済み。
+  - `case-display-completed` emit owner は `TaskPaneRefreshOrchestrationService` に集約済み。
+  - ただし completion 判定材料の `IsForegroundGuaranteeTerminal` は worker / coordinator が返す outcome に依存する。
+
+### protocol 上の未定義ポイント
+
+current-state で未定義または暗黙になっている点は次のとおりです。
+
+- `foreground guarantee completed` の正式定義がない。
+  - 実行された場合は `final-foreground-guarantee-completed` trace が観測点になる。
+  - 実行されない場合は `foregroundGuaranteeTerminal=true` として上位へ返るが、`NotRequired` / `Skipped` / `NotApplicable` の明示 enum はない。
+- outcome taxonomy が不足している。
+  - `required` は `WasForegroundGuaranteeRequired` で表現される。
+  - `completed` は `IsForegroundGuaranteeTerminal` で表現される。
+  - しかし `success` / `failed` / `degraded` / `skipped` の protocol outcome は定義されていない。
+  - `ExcelWindowRecoveryService` の `recovered=false` はログに残るが、CASE display completion を fail / degraded にしない。
+- already-visible path の foreground obligation が暗黙。
+  - visible CASE pane が既にある場合、foreground guarantee は not required と扱われる。
+  - ただし「既に foreground が十分だから不要」なのか、「pane visible をもって foreground obligation を閉じる」のかは docs 上まだ明確でない。
+- refresh path の foreground decision 条件が実装条件として残っている。
+  - `refreshed && window != null && recoveryService != null` が current-state の required 条件。
+  - この条件が UX 上の正式条件か、実装上の可能条件かは未定義。
+- active workbook fallback の foreground target が未正本化。
+  - workbook が null の fallback では active workbook recovery へ寄る。
+  - これを created CASE display session の foreground target とみなしてよい条件は未定義。
+- `WindowActivate` と foreground guarantee の関係が未定義。
+  - `WindowActivate` は実 window が activate された観測点であり refresh dispatch の入口でもある。
+  - ただし `WindowActivate` 発火自体を foreground guarantee completed とみなすかどうかは未定義。
+- one-shot promotion と final foreground guarantee の関係が未定義。
+  - `PromoteWorkbookWindowOnce(...)` と `GuaranteeFinalForegroundAfterRefresh(...)` は別々に存在する。
+  - どちらが CASE display protocol の foreground owner なのか、または別 unit なのかは未正本化。
+- rebuild fallback と foreground guarantee の関係は明示が必要。
+  - current-state では rebuild fallback は snapshot / refresh 内部の話で、foreground guarantee owner ではない。
+  - ただし refresh が成功した後に foreground decision が走るため、観測上は同一 refresh attempt 内に見える。
+
+### 守るべき既存制約
+
+foreground guarantee target-state 化では、次の現行制約を壊さないことを前提にする。
+
+- 白Excel対策
+  - `PostCloseFollowUpScheduler` の no visible workbook quit 設計目標と、Excel application visibility recovery を混同しない。
+  - foreground owner 整理のために白 Excel を覆うだけの追加ガードを足さない。
+- COM解放
+  - hidden create session / retained hidden app-cache / temporary workbook close の既存 cleanup 境界を変えない。
+  - foreground guarantee の owner 整理を理由に COM 参照の lifetime を広げない。
+- Excel状態制御
+  - `ScreenUpdating` / `DisplayAlerts` / `EnableEvents` は既存 scope で restore する。
+  - `ExcelWindowRecoveryService.EnsureScreenUpdatingEnabled(...)` は recovery primitive として扱い、shared state の恒常変更にしない。
+- fail closed
+  - context / workbook / window が解決できない場合に推測で補完しない。
+  - foreground target が不明なまま active workbook promotion へ広げる変更をしない。
+- timing hack 禁止
+  - `Application.DoEvents()`、sleep、単なる delay 追加で foreground guarantee を定義しない。
+  - retry 値や timer 条件は今回変更しない。
+- ガード追加で覆わない
+  - foreground / visibility / rebuild fallback 条件を新しい guard で覆って挙動を隠さない。
+  - `WorkbookOpen` 直後を window 安定境界へ戻さない。
+
+### 次に target-state 化すべき論点
+
+次フェーズで target-state 化する場合、少なくとも次を先に決める必要があります。
+
+1. `foreground guarantee completed` を outcome enum として定義するか。
+   - 例: `RequiredSucceeded`、`RequiredFailedDegraded`、`NotRequired`、`SkippedByAlreadyVisible`、`SkippedNoWindow` など。
+   - ただしこれは target-state 論点であり、current-state では未定義。
+2. `TaskPaneRefreshCoordinator` を foreground guarantee completion owner と呼ぶか、`TaskPaneRefreshOrchestrationService` の created-case display session に foreground sub-outcome を持たせるか。
+3. `ExcelWindowRecoveryService` の `recovered=false` を display completion に影響させるか、観測ログに留めるか。
+4. already-visible path の foreground obligation をどう閉じるか。
+5. `PromoteWorkbookWindowOnce(...)` を CASE display protocol の foreground unit に含めるか、non-`NewCaseDefault` の historical one-shot promotion として別扱いするか。
+6. WindowActivate event と foreground guarantee の関係をどう定義するか。
+7. active workbook fallback の foreground target を、created CASE session と紐づけてよい条件を明文化するか。
+8. rebuild fallback は refresh / snapshot subprotocol に留め、foreground / CASE display completion 条件へ昇格させないことを target-state でも固定するか。
+
+### 今回行わないこと
+
+- コード変更なし。
+- service 分割なし。
+- helper 切り出しなし。
+- retry 条件変更なし。
+- visibility recovery 条件変更なし。
+- foreground recovery 条件変更なし。
+- rebuild fallback 条件変更なし。
+- `WindowActivate` 挙動変更なし。
+- build / test / `DeployDebugAddIn` 実行なし。
+
 ## 今回の current-state に含めないこと
 
 - 表示不安定の原因断定

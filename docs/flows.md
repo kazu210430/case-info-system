@@ -49,7 +49,7 @@
 - `experimental-isolated-inner-save` は route 名どおり、current/shared app ではなく dedicated hidden `Application` を生成し、close 時の inner save を含む経路です。
 - 互換のため旧環境変数 `CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL` でも同 route に到達しますが、契約上の正本は `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` です。
 - `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外です。
-- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
+- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
 
 ### 不明点
 

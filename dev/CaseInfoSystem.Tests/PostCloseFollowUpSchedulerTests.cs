@@ -94,6 +94,61 @@ namespace CaseInfoSystem.Tests
             Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionNotRequired", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
+        [Fact]
+        public void Schedule_LogsQueuedDiagnosticWithCapturedFacts()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application();
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
+
+            InvokeSchedule(scheduler, @"C:\cases\case.xlsx", @"C:\cases");
+
+            Assert.Contains(
+                loggerMessages,
+                message => message.IndexOf("WhiteExcelPreventionQueued", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf(@"workbook=C:\cases\case.xlsx", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("pendingQueueCount=1", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("attemptsRemaining=20", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("folderPathPresent=True", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Fact]
+        public void ExecutePendingPostCloseQueue_WhenTargetWorkbookStillOpen_LogsDecisionAndDoesNotQuit()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application();
+            var workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\case.xlsx",
+                Name = "case.xlsx",
+                Path = @"C:\cases"
+            };
+
+            application.Workbooks.Add(workbook);
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
+
+            InvokeSchedule(scheduler, @"C:\cases\case.xlsx", @"C:\cases");
+            InvokeExecutePendingPostCloseQueue(scheduler);
+
+            Assert.Equal(0, application.QuitCallCount);
+            Assert.Contains(
+                loggerMessages,
+                message => message.IndexOf("action=post-close-follow-up-request-dequeued", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf(@"workbook=C:\cases\case.xlsx", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("pendingQueueCount=0", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("attemptsRemaining=20", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(
+                loggerMessages,
+                message => message.IndexOf("action=post-close-follow-up-decision", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("targetWorkbookStillOpen=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("decision=skip-still-open", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(
+                loggerMessages,
+                message => message.IndexOf("WhiteExcelPreventionNotRequired", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("outcomeReason=targetWorkbookStillOpen", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("targetWorkbookStillOpen=True", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private static object CreateScheduler(Excel.Application application, Logger logger)
         {
             Assembly addInAssembly = typeof(PostCloseFollowUpScheduler).Assembly;
@@ -115,6 +170,31 @@ namespace CaseInfoSystem.Tests
         {
             MethodInfo method = typeof(PostCloseFollowUpScheduler).GetMethod(
                 "QuitExcelIfNoVisibleWorkbook",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            try
+            {
+                method.Invoke(scheduler, Array.Empty<object>());
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException;
+            }
+        }
+
+        private static void InvokeSchedule(object scheduler, string workbookKey, string folderPath)
+        {
+            MethodInfo method = typeof(PostCloseFollowUpScheduler).GetMethod(
+                "Schedule",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            method.Invoke(scheduler, new object[] { workbookKey, folderPath });
+        }
+
+        private static void InvokeExecutePendingPostCloseQueue(object scheduler)
+        {
+            MethodInfo method = typeof(PostCloseFollowUpScheduler).GetMethod(
+                "ExecutePendingPostCloseQueue",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             try

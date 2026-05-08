@@ -42,14 +42,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            _pendingPostCloseQueue.Enqueue(new PostCloseFollowUpRequest(workbookKey, folderPath, PostCloseRetryCount));
+            PostCloseFollowUpRequest queuedRequest = new PostCloseFollowUpRequest(workbookKey, folderPath, PostCloseRetryCount);
+            _pendingPostCloseQueue.Enqueue(queuedRequest);
             LogWhiteExcelPreventionOutcome(
                 WhiteExcelPreventionQueued,
                 workbookKey,
                 hasVisibleWorkbook: null,
                 quitAttempted: false,
                 quitCompleted: false,
-                reason: "postCloseFollowUpQueued");
+                reason: "postCloseFollowUpQueued",
+                pendingQueueCount: _pendingPostCloseQueue.Count,
+                attemptsRemaining: queuedRequest.AttemptsRemaining,
+                folderPathPresent: !string.IsNullOrWhiteSpace(queuedRequest.FolderPath),
+                targetWorkbookStillOpen: null);
             if (_postClosePosted)
             {
                 return;
@@ -73,8 +78,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
                 try
                 {
-                    if (IsWorkbookStillOpen(request.WorkbookKey))
+                    _logger.Info(
+                        "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
+                        + " action=post-close-follow-up-request-dequeued"
+                        + " workbook=" + request.WorkbookKey
+                        + ", pendingQueueCount=" + _pendingPostCloseQueue.Count.ToString()
+                        + ", attemptsRemaining=" + request.AttemptsRemaining.ToString()
+                        + ", folderPathPresent=" + (!string.IsNullOrWhiteSpace(request.FolderPath)).ToString());
+                    bool targetWorkbookStillOpen = IsWorkbookStillOpen(request.WorkbookKey);
+                    _logger.Info(
+                        "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
+                        + " action=post-close-follow-up-decision"
+                        + " workbook=" + request.WorkbookKey
+                        + ", targetWorkbookStillOpen=" + targetWorkbookStillOpen.ToString()
+                        + ", pendingQueueCount=" + _pendingPostCloseQueue.Count.ToString()
+                        + ", attemptsRemaining=" + request.AttemptsRemaining.ToString()
+                        + ", decision=" + (targetWorkbookStillOpen ? "skip-still-open" : "scan-visible-workbooks"));
+                    if (targetWorkbookStillOpen)
                     {
+                        LogWhiteExcelPreventionOutcome(
+                            WhiteExcelPreventionNotRequired,
+                            request.WorkbookKey,
+                            hasVisibleWorkbook: null,
+                            quitAttempted: false,
+                            quitCompleted: false,
+                            reason: "targetWorkbookStillOpen",
+                            pendingQueueCount: _pendingPostCloseQueue.Count,
+                            attemptsRemaining: request.AttemptsRemaining,
+                            folderPathPresent: !string.IsNullOrWhiteSpace(request.FolderPath),
+                            targetWorkbookStillOpen: true);
                         _logger.Info("Case workbook post-close follow-up skipped because workbook is still open. workbook=" + request.WorkbookKey);
                         continue;
                     }
@@ -202,7 +234,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool? hasVisibleWorkbook,
             bool quitAttempted,
             bool quitCompleted,
-            string reason)
+            string reason,
+            int? pendingQueueCount = null,
+            int? attemptsRemaining = null,
+            bool? folderPathPresent = null,
+            bool? targetWorkbookStillOpen = null)
         {
             _logger.Info(
                 "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
@@ -212,7 +248,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", hasVisibleWorkbook=" + (hasVisibleWorkbook.HasValue ? hasVisibleWorkbook.Value.ToString() : "unknown")
                 + ", quitAttempted=" + quitAttempted.ToString()
                 + ", quitCompleted=" + quitCompleted.ToString()
-                + ", outcomeReason=" + (reason ?? string.Empty));
+                + ", outcomeReason=" + (reason ?? string.Empty)
+                + ", pendingQueueCount=" + (pendingQueueCount.HasValue ? pendingQueueCount.Value.ToString() : "unknown")
+                + ", attemptsRemaining=" + (attemptsRemaining.HasValue ? attemptsRemaining.Value.ToString() : "unknown")
+                + ", folderPathPresent=" + (folderPathPresent.HasValue ? folderPathPresent.Value.ToString() : "unknown")
+                + ", targetWorkbookStillOpen=" + (targetWorkbookStillOpen.HasValue ? targetWorkbookStillOpen.Value.ToString() : "unknown"));
         }
 
         private Control EnsureDispatcher()

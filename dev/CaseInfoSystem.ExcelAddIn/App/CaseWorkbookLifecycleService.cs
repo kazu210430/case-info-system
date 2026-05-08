@@ -142,10 +142,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
         // 副作用: メッセージ表示、管理クローズ予約、後追い終了予約を行う。
         internal bool HandleWorkbookBeforeClose(Excel.Workbook workbook, ref bool cancel)
         {
+            bool isBaseOrCaseWorkbook = IsBaseOrCaseWorkbookCore(workbook);
+            bool isManagedClose = IsManagedCloseCore(workbook);
+            string workbookKey = GetWorkbookKey(workbook);
+            bool isSessionDirty = _sessionDirtyWorkbookKeys.Contains(workbookKey);
             CaseWorkbookBeforeCloseAction action = CaseWorkbookBeforeClosePolicy.Decide(
-                isBaseOrCaseWorkbook: IsBaseOrCaseWorkbookCore(workbook),
-                isManagedClose: IsManagedCloseCore(workbook),
-                isSessionDirty: _sessionDirtyWorkbookKeys.Contains(GetWorkbookKey(workbook)));
+                isBaseOrCaseWorkbook: isBaseOrCaseWorkbook,
+                isManagedClose: isManagedClose,
+                isSessionDirty: isSessionDirty);
+
+            _logger.Info(
+                "[KernelFlickerTrace] source=CaseWorkbookLifecycleService"
+                + " action=workbook-close-immutable-facts-captured"
+                + " workbook=" + (workbookKey ?? string.Empty)
+                + ", isBaseOrCaseWorkbook=" + isBaseOrCaseWorkbook.ToString()
+                + ", isManagedClose=" + isManagedClose.ToString()
+                + ", isSessionDirty=" + isSessionDirty.ToString()
+                + ", beforeCloseAction=" + action.ToString());
 
             if (action == CaseWorkbookBeforeCloseAction.Ignore)
             {
@@ -154,14 +167,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (action == CaseWorkbookBeforeCloseAction.SuppressPromptForManagedClose)
             {
-                _logger.Info("Case workbook before-close prompt suppressed for managed close. workbook=" + GetWorkbookKey(workbook));
+                _logger.Info("Case workbook before-close prompt suppressed for managed close. workbook=" + workbookKey);
                 return false;
             }
 
             try
             {
-                string workbookKey = GetWorkbookKey(workbook);
                 string folderPath = ResolveContainingFolder(workbook);
+                _logger.Info(
+                    "[KernelFlickerTrace] source=CaseWorkbookLifecycleService"
+                    + " action=workbook-close-follow-up-facts-captured"
+                    + " workbook=" + (workbookKey ?? string.Empty)
+                    + ", folderPathCaptured=" + (!string.IsNullOrWhiteSpace(folderPath)).ToString()
+                    + ", beforeCloseAction=" + action.ToString());
 
                 if (action == CaseWorkbookBeforeCloseAction.PromptForDirtySession)
                 {

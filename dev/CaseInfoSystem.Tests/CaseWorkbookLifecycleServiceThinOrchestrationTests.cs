@@ -143,6 +143,51 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void HandleWorkbookBeforeClose_WhenSessionIsClean_LogsClosePreFactsBeforeSchedulingPostClose()
+        {
+            var loggerMessages = new List<string>();
+            string scheduledKey = null;
+            string scheduledFolder = null;
+            bool cancel = false;
+            Excel.Workbook workbook = new Excel.Workbook();
+            var service = new CaseWorkbookLifecycleService(
+                OrchestrationTestSupport.CreateLogger(loggerMessages),
+                new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks
+                {
+                    GetWorkbookKey = _ => "case-immutable",
+                    IsBaseOrCaseWorkbook = _ => true,
+                    IsManagedClose = _ => false,
+                    ResolveContainingFolder = _ => @"C:\cases",
+                    SchedulePostCloseFollowUp = (key, folder) =>
+                    {
+                        scheduledKey = key;
+                        scheduledFolder = folder;
+                    }
+                });
+
+            bool handled = service.HandleWorkbookBeforeClose(workbook, ref cancel);
+
+            Assert.False(handled);
+            Assert.False(cancel);
+            Assert.Equal("case-immutable", scheduledKey);
+            Assert.Equal(@"C:\cases", scheduledFolder);
+            Assert.Contains(
+                loggerMessages,
+                message => message.IndexOf("action=workbook-close-immutable-facts-captured", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("workbook=case-immutable", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isBaseOrCaseWorkbook=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isManagedClose=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isSessionDirty=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("beforeCloseAction=SchedulePostCloseFollowUp", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(
+                loggerMessages,
+                message => message.IndexOf("action=workbook-close-follow-up-facts-captured", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("workbook=case-immutable", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("folderPathCaptured=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("beforeCloseAction=SchedulePostCloseFollowUp", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Fact]
         public void HandleSheetChanged_WhenSuppressed_DoesNotDirtyWorkbook()
         {
             int managedCloseCalls = 0;

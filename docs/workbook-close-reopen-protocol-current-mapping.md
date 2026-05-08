@@ -206,6 +206,26 @@ current-state 上、`WindowActivate` は次の owner ではありません。
 - `TaskPaneHostLifecycleServiceTests`: close 前 workbook key による host removal
 - `WindowActivatePaneHandlingServiceTests`: WindowActivate dispatch outcome と non-owner 境界
 
+## E-1 diagnostic trace vocabulary
+
+E-1 では runtime 条件を変えず、close 前 facts と post-close follow-up decision の観測点を追加する。
+
+- `workbook-close-immutable-facts-captured`
+  - trace owner: `CaseWorkbookLifecycleService`
+  - close 前に既存取得済みの `workbookKey`、`isBaseOrCaseWorkbook`、`isManagedClose`、`isSessionDirty`、`beforeCloseAction` を記録する。
+  - `SYSTEM_ROOT`、DocProperty、window、sheet などの追加 COM 参照は行わない。
+- `workbook-close-follow-up-facts-captured`
+  - trace owner: `CaseWorkbookLifecycleService`
+  - close 前に既存フローで解決していた `folderPath` の有無と `beforeCloseAction` を、post-close / managed close へ渡る immutable facts として記録する。
+- `post-close-follow-up-request-dequeued`
+  - trace owner: `PostCloseFollowUpScheduler`
+  - close 前に queue へ積まれた `workbookKey`、`folderPath` 有無、attempts、queue count を request payload として記録する。
+- `post-close-follow-up-decision`
+  - trace owner: `PostCloseFollowUpScheduler`
+  - close 後は closed workbook object ではなく、captured `workbookKey` と current `Application.Workbooks` 列挙による still-open decision を記録する。
+
+これらは diagnostic trace であり、WorkbookClose 条件、reopen 条件、post-close quit 条件、visible workbook 判定条件、foreground / visibility 条件、WindowActivate dispatch 条件を変更しない。
+
 ## E-1 で触るべき安全単位
 
 E-1 で触る場合も、条件変更ではなく観測可能性と境界固定を最小単位にします。

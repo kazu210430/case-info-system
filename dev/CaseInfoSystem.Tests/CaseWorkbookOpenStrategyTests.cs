@@ -46,7 +46,37 @@ namespace CaseInfoSystem.Tests
                 Assert.Contains(hiddenApplication, releasedObjects);
                 Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("HiddenExcelCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("IsolatedAppReleased", StringComparison.OrdinalIgnoreCase) >= 0);
+                    && message.IndexOf("IsolatedAppReleased", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=isolated", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationLifetimeOwner=CaseWorkbookOpenStrategy", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isSharedCurrentApp=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isIsolatedApp=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isRetainedHiddenAppCache=False", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+        }
+
+        [Fact]
+        public void OpenHiddenWorkbook_WhenDedicatedApplicationQuitFails_LogsIsolatedAppReleaseFailed()
+        {
+            using (new HiddenRouteEnvironmentScope())
+            {
+                var logs = new List<string>();
+                var releasedObjects = new List<object>();
+                Excel.Application hiddenApplication = CreateHiddenApplication();
+                hiddenApplication.QuitBehavior = () => throw new InvalidOperationException("quit failed");
+                var strategy = CreateStrategy(logs, releasedObjects, hiddenApplication);
+
+                CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession session = strategy.OpenHiddenWorkbook(@"C:\Cases\quit-failure.xlsx");
+
+                session.Close();
+
+                Assert.Equal(1, hiddenApplication.QuitCallCount);
+                Assert.Contains(hiddenApplication, releasedObjects);
+                Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("HiddenExcelCleanupDegraded", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("IsolatedAppReleaseFailed", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitAttempted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=False", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
@@ -127,8 +157,13 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, cachedApplication.QuitCallCount);
                 Assert.Contains(cachedApplication, releasedObjects);
                 Assert.Contains(logs, message => message.IndexOf("hidden-app-cache reused", StringComparison.OrdinalIgnoreCase) >= 0);
-                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceReturnedToIdle", StringComparison.OrdinalIgnoreCase) >= 0);
-                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceReturnedToIdle", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationLifetimeOwner=CaseWorkbookOpenStrategy", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
@@ -234,6 +269,11 @@ namespace CaseInfoSystem.Tests
                 Assert.True(application.ScreenUpdating);
                 Assert.True(application.EnableEvents);
                 Assert.True(application.DisplayAlerts);
+                Assert.Contains(logs, message => message.IndexOf("Case workbook hidden-for-display Excel state applied", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=shared-current", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationLifetimeOwner=user-or-excel-host", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isSharedCurrentApp=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isIsolatedApp=False", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 

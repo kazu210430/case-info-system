@@ -93,7 +93,79 @@ namespace CaseInfoSystem.Tests
                     Assert.Equal("ready", kernelApplication.StatusBar);
                     Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
                         && message.IndexOf("HiddenExcelCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
-                        && message.IndexOf("IsolatedAppReleased", StringComparison.OrdinalIgnoreCase) >= 0);
+                        && message.IndexOf("IsolatedAppReleased", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("applicationKind=isolated", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("applicationLifetimeOwner=KernelUserDataReflectionService", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("isSharedCurrentApp=False", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("isIsolatedApp=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                    Assert.Contains(logs, message => message.IndexOf("shared-current-app-boundary", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("applicationKind=shared-current", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("applicationLifetimeOwner=user-or-excel-host", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("isSharedCurrentApp=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                }
+                finally
+                {
+                    Excel.Application.ResetCreatedApplications();
+                    TryDeleteDirectory(tempDirectory);
+                }
+            }
+        }
+
+        [Fact]
+        public void ReflectToAccountingSetOnly_WhenIsolatedApplicationQuitFails_LogsIsolatedAppReleaseFailed()
+        {
+            lock (IsolatedApplicationLock)
+            {
+                string tempDirectory = CreateTempDirectory();
+                try
+                {
+                    Excel.Application.ResetCreatedApplications();
+
+                    string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
+                    File.WriteAllText(templatePath, "template");
+
+                    Excel.Application kernelApplication = new Excel.Application
+                    {
+                        DisplayAlerts = true,
+                        EnableEvents = true,
+                        ScreenUpdating = true,
+                        StatusBar = "ready"
+                    };
+                    Excel.Workbook kernelWorkbook = CreateKernelWorkbook(tempDirectory, kernelApplication);
+                    Excel.Worksheet userDataWorksheet = CreateUserDataWorksheet();
+                    kernelWorkbook.Worksheets.Add(userDataWorksheet);
+
+                    Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
+                    Excel.Application.ConfigureNewApplication = application =>
+                    {
+                        application.QuitBehavior = () => throw new InvalidOperationException("quit failed");
+                        application.Workbooks.OpenBehavior = (_, __, ___) => accountingWorkbook;
+                    };
+
+                    var excelInteropService = new ExcelInteropService
+                    {
+                        OnFindOpenWorkbook = _ => null,
+                        OnFindWorksheetByCodeName = (_, __) => userDataWorksheet,
+                        OnReadKeyValueMapFromColumnsAandB = _ => CreateUserDataValues()
+                    };
+                    var logs = new List<string>();
+                    var service = CreateService(
+                        excelInteropService,
+                        templatePath,
+                        new AccountingWorkbookService(),
+                        logs);
+
+                    service.ReflectToAccountingSetOnly(CreateContext(kernelWorkbook, tempDirectory));
+
+                    Excel.Application isolatedApplication = Excel.Application.CreatedApplications[1];
+                    Assert.Equal(1, accountingWorkbook.CloseCallCount);
+                    Assert.Equal(1, isolatedApplication.QuitCallCount);
+                    Assert.Equal(0, kernelApplication.QuitCallCount);
+                    Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("HiddenExcelCleanupDegraded", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("IsolatedAppReleaseFailed", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("appQuitAttempted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                        && message.IndexOf("appQuitCompleted=False", StringComparison.OrdinalIgnoreCase) >= 0);
                 }
                 finally
                 {

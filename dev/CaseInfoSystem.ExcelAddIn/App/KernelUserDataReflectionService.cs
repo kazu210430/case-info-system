@@ -37,6 +37,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string IsolatedAppReleased = "IsolatedAppReleased";
         private const string IsolatedAppReleaseDegraded = "IsolatedAppReleaseDegraded";
         private const string IsolatedAppReleaseNotRequired = "IsolatedAppReleaseNotRequired";
+        private const string IsolatedAppReleaseFailed = "IsolatedAppReleaseFailed";
+        private const string ApplicationKindIsolated = "isolated";
+        private const string ApplicationKindSharedCurrent = "shared-current";
+        private const string ApplicationKindRetainedHiddenAppCache = "retained-hidden-app-cache";
+        private const string ApplicationLifetimeOwnerKernelUserDataReflectionService = "KernelUserDataReflectionService";
+        private const string ApplicationLifetimeOwnerUserOrExcelHost = "user-or-excel-host";
 
         private readonly KernelWorkbookService _kernelWorkbookService;
         private readonly ExcelInteropService _excelInteropService;
@@ -172,6 +178,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             Excel.Application application = kernelWorkbook.Application;
             ExcelApplicationUiState uiState = ExcelApplicationUiState.Capture(application);
+            LogApplicationLifetimeOwnerFacts(
+                "shared-current-app-boundary",
+                ApplicationKindSharedCurrent,
+                ApplicationLifetimeOwnerUserOrExcelHost,
+                application,
+                context == null ? string.Empty : context.SystemRoot);
 
             try
             {
@@ -330,7 +342,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", appHwnd="
                     + SafeApplicationHwnd(isolatedApplication)
                     + ", path="
-                    + workbookPath);
+                    + workbookPath
+                    + ", "
+                    + BuildApplicationOwnerFacts(ApplicationKindIsolated, ApplicationLifetimeOwnerKernelUserDataReflectionService));
+                LogApplicationLifetimeOwnerFacts(
+                    "isolated-app-boundary",
+                    ApplicationKindIsolated,
+                    ApplicationLifetimeOwnerKernelUserDataReflectionService,
+                    isolatedApplication,
+                    workbookPath);
 
                 isolatedWorkbook = OpenWorkbookInManagedHiddenSession(isolatedApplication, workbookPath);
                 if (isolatedWorkbook == null)
@@ -350,6 +370,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 bool workbookPresent = isolatedWorkbook != null;
                 bool workbookCloseCompleted = !workbookPresent;
                 bool applicationPresent = isolatedApplication != null;
+                bool applicationQuitAttempted = false;
                 bool applicationQuitCompleted = !applicationPresent;
 
                 if (isolatedWorkbook != null)
@@ -367,6 +388,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 if (isolatedApplication != null)
                 {
                     string applicationHwnd = SafeApplicationHwnd(isolatedApplication);
+                    applicationQuitAttempted = true;
                     applicationQuitCompleted = QuitApplicationQuietly(isolatedApplication, workbookKind, workbookPath);
                     _logger.Info("Kernel user data reflection hidden session quit. target=" + workbookKind + ", appHwnd=" + applicationHwnd + ", path=" + workbookPath);
                 }
@@ -377,6 +399,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     workbookPresent,
                     workbookCloseCompleted,
                     applicationPresent,
+                    applicationQuitAttempted,
                     applicationQuitCompleted);
             }
         }
@@ -484,6 +507,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool workbookPresent,
             bool workbookCloseCompleted,
             bool applicationPresent,
+            bool applicationQuitAttempted,
             bool applicationQuitCompleted)
         {
             string hiddenOutcome = ResolveReflectionHiddenCleanupOutcome(
@@ -491,18 +515,50 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbookCloseCompleted,
                 applicationPresent,
                 applicationQuitCompleted);
-            string isolatedOutcome = ResolveReflectionIsolatedAppOutcome(applicationPresent, applicationQuitCompleted);
+            string isolatedOutcome = ResolveReflectionIsolatedAppOutcome(
+                applicationPresent,
+                applicationQuitAttempted,
+                applicationQuitCompleted);
             _logger.Info(
                 "[KernelFlickerTrace] source=KernelUserDataReflectionService action=hidden-excel-cleanup-outcome"
                 + " target=" + (workbookKind ?? string.Empty)
                 + ", path=" + (workbookPath ?? string.Empty)
+                + ", " + BuildApplicationOwnerFacts(ApplicationKindIsolated, ApplicationLifetimeOwnerKernelUserDataReflectionService)
                 + ", hiddenCleanupOutcome=" + hiddenOutcome
                 + ", isolatedAppOutcome=" + isolatedOutcome
                 + ", workbookPresent=" + workbookPresent.ToString()
                 + ", workbookCloseCompleted=" + workbookCloseCompleted.ToString()
                 + ", appPresent=" + applicationPresent.ToString()
+                + ", appQuitAttempted=" + applicationQuitAttempted.ToString()
                 + ", appQuitCompleted=" + applicationQuitCompleted.ToString()
                 + ", owner=KernelUserDataReflectionService");
+        }
+
+        private void LogApplicationLifetimeOwnerFacts(
+            string action,
+            string applicationKind,
+            string applicationLifetimeOwner,
+            Excel.Application application,
+            string pathOrSystemRoot)
+        {
+            _logger.Info(
+                "[KernelFlickerTrace] source=KernelUserDataReflectionService"
+                + " action=" + (action ?? string.Empty)
+                + " " + BuildApplicationOwnerFacts(applicationKind, applicationLifetimeOwner)
+                + ", appHwnd=" + SafeApplicationHwnd(application)
+                + ", pathOrSystemRoot=" + (pathOrSystemRoot ?? string.Empty));
+        }
+
+        private static string BuildApplicationOwnerFacts(string applicationKind, string applicationLifetimeOwner)
+        {
+            bool isSharedCurrentApp = string.Equals(applicationKind, ApplicationKindSharedCurrent, StringComparison.Ordinal);
+            bool isIsolatedApp = string.Equals(applicationKind, ApplicationKindIsolated, StringComparison.Ordinal);
+            bool isRetainedHiddenAppCache = string.Equals(applicationKind, ApplicationKindRetainedHiddenAppCache, StringComparison.Ordinal);
+            return "applicationKind=" + (applicationKind ?? string.Empty)
+                + ",applicationLifetimeOwner=" + (applicationLifetimeOwner ?? string.Empty)
+                + ",isSharedCurrentApp=" + isSharedCurrentApp.ToString()
+                + ",isIsolatedApp=" + isIsolatedApp.ToString()
+                + ",isRetainedHiddenAppCache=" + isRetainedHiddenAppCache.ToString();
         }
 
         private static string ResolveReflectionHiddenCleanupOutcome(
@@ -521,15 +577,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 : HiddenExcelCleanupDegraded;
         }
 
-        private static string ResolveReflectionIsolatedAppOutcome(bool applicationPresent, bool applicationQuitCompleted)
+        private static string ResolveReflectionIsolatedAppOutcome(bool applicationPresent, bool applicationQuitAttempted, bool applicationQuitCompleted)
         {
             if (!applicationPresent)
             {
                 return IsolatedAppReleaseNotRequired;
             }
 
-            return applicationQuitCompleted
-                ? IsolatedAppReleased
+            if (applicationQuitCompleted)
+            {
+                return IsolatedAppReleased;
+            }
+
+            return applicationQuitAttempted
+                ? IsolatedAppReleaseFailed
                 : IsolatedAppReleaseDegraded;
         }
 

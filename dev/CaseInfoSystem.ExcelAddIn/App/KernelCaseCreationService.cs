@@ -355,9 +355,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (window == null) {
 					throw new InvalidOperationException ("Interactive CASE workbook window could not be resolved before save.");
 				}
-				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-before-visible", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-visible-normal");
-				window.Visible = true;
-				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-after-visible", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeRequest=window.Visible=True,visibilityChangeReason=prepare-save-visible-normal");
+				bool skipVisibleForExperiment = num > 0 && window.WindowState == XlWindowState.xlNormal;
+				if (skipVisibleForExperiment) {
+					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-visible-skipped-experiment", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,resolveAction=ExistingWindow,visibilityChangeReason=prepare-save-visible-normal,hiddenCreateSession=True,deferredVisiblePresentation=True,abExperiment=skip-window-visible-true,skipReason=existing-window-xlNormal");
+				} else {
+					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-before-visible", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-visible-normal");
+					window.Visible = true;
+					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-after-visible", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeRequest=window.Visible=True,visibilityChangeReason=prepare-save-visible-normal");
+				}
 				if (window.WindowState == XlWindowState.xlMinimized) {
 					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-before-windowstate-normal", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-windowstate-normal,windowStateNormalizeRequested=xlNormalWhenMinimized");
 					window.WindowState = XlWindowState.xlNormal;

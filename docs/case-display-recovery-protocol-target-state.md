@@ -6,6 +6,7 @@
 
 - 基準コード:
   - `2026-05-08` 時点で `main` と `origin/main` の一致を確認した `e41feb5d607f79077e112a1945e81ac0a76d95a4`
+  - foreground guarantee ownership target-state 追記時点の `main` / `origin/main`: `3d6f2441f84dfefe46393508d4eae02ebe06b886`
 - 参照正本:
   - `AGENTS.md`
   - `docs/architecture.md`
@@ -367,6 +368,223 @@ already-visible path と refresh path を収束させた理由:
 - worker / coordinator / host-flow の責務そのものは変えず、final completion owner だけを寄せられる
 - retry、visibility、foreground の危険領域へ直ちに踏み込まずに済む
 - current-state 正本が指摘している最重要 owner 不明箇所にそのまま対応できる
+
+## foreground guarantee ownership target-state (2026-05-08 docs-only)
+
+### target-state summary
+
+この節は、`docs/case-display-recovery-protocol-current-state.md` の `foreground guarantee ownership current-state (2026-05-08 docs-only)` を受けて、次の実装安全単位へ進むための target-state を固定する。
+
+- 今回は docs-only の設計追記であり、コード変更は行わない。
+- build / test / `DeployDebugAddIn` は docs-only のため実行しない。
+- retry 条件、ready-show timing、visibility recovery 条件、foreground recovery 条件、rebuild fallback 条件、`WindowActivate` 挙動は変更しない。
+- service 分割、helper 切り出し、ガード追加による上書きは行わない。
+- `CASE display completed` の emit owner は引き続き `TaskPaneRefreshOrchestrationService` とする。
+- `foreground guarantee` は CASE display completion の材料であり、CASE display completion そのものではない。
+
+target-state では、foreground guarantee を次の 3 層に分けて扱う。
+
+| 層 | owner | target-state の責務 |
+| --- | --- | --- |
+| decision / completion | `TaskPaneRefreshCoordinator` | refresh attempt の事実から foreground obligation を判定し、必要なら execution primitive を呼び、normalized outcome を返す。 |
+| execution primitive | `ExcelWindowRecoveryService` | workbook window / application の recovery、activation、foreground promotion を実行し、実行結果だけを返す。 |
+| display-session consumption | `TaskPaneRefreshOrchestrationService` | worker / coordinator から返った normalized outcome を同一 created-case display session の材料として消費し、`case-display-completed` を success-only で emit するか判断する。 |
+
+### foreground guarantee completed definition
+
+`foreground guarantee completed` は、「foreground recovery が成功した」という単一意味ではなく、同一 refresh attempt または created-case display session に対する foreground obligation が terminal になった状態を指す。
+
+`foreground guarantee completed` は次のいずれかで成立する。
+
+| outcome | completed | display-completable | 定義 |
+| --- | --- | --- | --- |
+| `NotRequired` | yes | yes | refresh path ではない、または foreground recovery を要求する条件が成立していない。 |
+| `SkippedAlreadyVisible` | yes | yes | already-visible path で pane visible が成立しており、final foreground execution を要求しない。 |
+| `SkippedNoKnownTarget` | yes | no | workbook / window / active fallback の target が protocol 上確定できず、推測で補完しない。 |
+| `RequiredSucceeded` | yes | yes | `TaskPaneRefreshCoordinator` が foreground recovery required と判定し、`ExcelWindowRecoveryService` の execution が成功した。 |
+| `RequiredDegraded` | yes | yes, but degraded | execution は走ったが、OS foreground promotion や recovery primitive が完全成功を返さない。ただし対象 workbook / window と pane visible は維持され、追加 retry / timing hack へ進まない。 |
+| `RequiredFailed` | yes | no | foreground recovery required だが、target mismatch、例外、execution 不成立などで foreground obligation を display-completable と扱えない。 |
+| `Unknown` | no | no | owner が outcome を正規化できていない。target-state では fail-closed とし、success completion に使わない。 |
+
+この定義では、`completed` と `success` を分ける。
+
+- `completed`
+  - protocol 上、その foreground obligation に対してこれ以上同じ owner が処理を続けない terminal 状態。
+- `display-completable`
+  - `TaskPaneRefreshOrchestrationService` が `CASE display completed` の success-only 判定材料として消費できる状態。
+- `degraded`
+  - foreground execution が best-effort に留まったことを観測できる状態。`RequiredDegraded` は `case-display-completed` を即座に禁止する failure ではないが、成功と同じ意味に丸めない。
+- `failed`
+  - success-only の `case-display-completed` に使ってはいけない状態。新しい retry や fallback を足して覆わず、既存 flow の範囲で fail closed に扱う。
+
+### owner boundary
+
+#### foreground guarantee emit / decision owner
+
+- `TaskPaneRefreshCoordinator`
+  - foreground guarantee の decision owner。
+  - refresh attempt 内の foreground guarantee completion owner。
+  - `final-foreground-guarantee-started` / `final-foreground-guarantee-completed` 相当の trace owner。
+  - `ExcelWindowRecoveryService` の execution result を normalized foreground outcome へ変換する owner。
+- `ExcelWindowRecoveryService`
+  - execution primitive owner。
+  - `Required` / `NotRequired` / `Skipped` の protocol 判定は持たない。
+  - `CASE display completed` の emit 可否を判断しない。
+- `TaskPaneRefreshOrchestrationService`
+  - created-case display session の owner。
+  - foreground outcome の consumer。
+  - `case-display-completed` emit owner。
+  - foreground recovery を実行するかどうかの lower-level 条件を再判定しない。
+
+#### retry / recovery / fallback との境界
+
+- ready retry `80ms` と pending retry `400ms` は `TaskPaneRefreshOrchestrationService` / `PendingPaneRefreshRetryService` の既存責務に残す。
+- foreground guarantee outcome を理由に retry 回数や delay を変更しない。
+- lightweight visibility ensure は `WorkbookWindowVisibilityService` の責務に残す。
+- full window recovery / foreground promotion は `ExcelWindowRecoveryService` の責務に残す。
+- rebuild fallback は `TaskPaneSnapshotBuilderService` の snapshot acquisition subprotocol に残し、foreground guarantee の owner や completion 条件へ昇格しない。
+
+#### WindowActivate との境界
+
+- `WindowActivate` は window が activate された観測点であり、foreground guarantee completed の代替ではない。
+- event capture は `ThisAddIn` / `WorkbookEventCoordinator` に残す。
+- `WindowActivate` 特有の suppression / protection / dispatch は `WindowActivatePaneHandlingService` に残す。
+- `WindowActivate` 発火だけを `RequiredSucceeded` とみなさない。
+- `WindowActivate` dispatch から refresh path に入り、`TaskPaneRefreshCoordinator` が foreground outcome を返した場合だけ foreground guarantee の protocol outcome として扱う。
+
+#### ready-show / visibility recovery / rebuild fallback との境界
+
+- `WorkbookTaskPaneReadyShowAttemptWorker`
+  - ready-show attempt、window resolve、already-visible detection、refresh delegate 呼び出しを担当する。
+  - already-visible path では `SkippedAlreadyVisible` 相当の foreground obligation を outcome として返せる。
+  - `final-foreground-guarantee-*` trace や `case-display-completed` は emit しない。
+- `WorkbookWindowVisibilityService`
+  - workbook window visible ensure だけを返す。
+  - foreground guarantee completed を返さない。
+- `TaskPaneSnapshotBuilderService`
+  - `CaseCache -> BaseCache -> BaseCacheFallback -> MasterListRebuild` の snapshot source decision owner。
+  - rebuild fallback の発生有無を foreground outcome に混ぜない。
+
+### allowed / forbidden responsibilities
+
+#### allowed
+
+- `TaskPaneRefreshCoordinator` が foreground requirement を判定し、`ExcelWindowRecoveryService` を呼び、normalized `ForegroundGuaranteeOutcome` を返す。
+- `ExcelWindowRecoveryService` が app / workbook window / Win32 foreground primitive を実行し、実行結果だけを返す。
+- `TaskPaneRefreshOrchestrationService` が `pane visible` と foreground outcome を同一 created-case display session で突き合わせる。
+- `WorkbookTaskPaneReadyShowAttemptWorker` が already-visible path を success material として返す。
+- `TaskPaneHostFlowService` が host reuse / render / show と `pane visible` source を返す。
+- `TaskPaneSnapshotBuilderService` が snapshot source と rebuild fallback を観測可能にする。
+
+#### forbidden
+
+- lower-level service が `case-display-completed` を emit する。
+- `ExcelWindowRecoveryService` が `CASE display completed` の可否を判断する。
+- `WindowActivate` 発火だけで foreground guarantee completed とみなす。
+- rebuild fallback の発生有無を foreground guarantee success / failure の条件にする。
+- foreground outcome の不足を新しい guard で覆う。
+- active workbook fallback を target 不明時の推測 promotion として広げる。
+- retry 回数、delay、foreground recovery 条件、visibility recovery 条件、rebuild fallback 条件をこの owner 整理で変更する。
+- `Application.DoEvents()`、sleep、単なる timing delay で completed を作る。
+- hidden session / retained hidden app-cache / COM lifetime を foreground owner 整理のために広げる。
+
+### normalized outcome design
+
+次の実装安全単位では、まず outcome を明示するだけに留め、挙動条件は変えない。
+
+#### ForegroundGuaranteeOutcome
+
+target-state の normalized outcome は少なくとも次を持つ。
+
+| field | 意味 |
+| --- | --- |
+| `Status` | `NotRequired` / `SkippedAlreadyVisible` / `SkippedNoKnownTarget` / `RequiredSucceeded` / `RequiredDegraded` / `RequiredFailed` / `Unknown` |
+| `WasRequired` | foreground recovery execution が protocol 上必要だったか。 |
+| `WasExecutionAttempted` | `ExcelWindowRecoveryService` の foreground primitive を呼んだか。 |
+| `IsTerminal` | foreground obligation が terminal か。`Unknown` は false。 |
+| `IsDisplayCompletable` | `CASE display completed` の材料として使えるか。 |
+| `TargetKind` | `ExplicitWorkbookWindow` / `ActiveWorkbookFallback` / `AlreadyVisible` / `NoKnownTarget` など。 |
+| `RecoverySucceeded` | execution result。not-required / skipped では null を許容する。 |
+| `Reason` | skip / degraded / failed の事実ベース理由。 |
+
+#### Worker / Coordinator / HostFlowService
+
+- `WorkbookTaskPaneReadyShowAttemptWorker`
+  - `IsPaneVisible`
+  - `PaneVisibleSource`
+  - `RefreshAttempted`
+  - `RefreshResult`
+  - `ForegroundGuaranteeOutcome`
+  - already-visible path では `SkippedAlreadyVisible` を返す。
+- `TaskPaneRefreshCoordinator`
+  - `IsPaneVisible`
+  - `IsRefreshCompleted`
+  - `ForegroundGuaranteeOutcome`
+  - `RefreshSource`
+  - `WindowTarget`
+  - foreground decision / completion owner として `Unknown` を上位へ丸めない。
+- `TaskPaneHostFlowService`
+  - `IsPaneVisible`
+  - `PaneVisibleSource`
+  - `HostReused`
+  - `Rendered`
+  - foreground outcome と CASE display completion は持たない。
+
+#### TaskPaneRefreshOrchestrationService
+
+`TaskPaneRefreshOrchestrationService` は次だけを判断する。
+
+1. outcome が同一 created-case display session に属するか。
+2. `pane visible` が成立しているか。
+3. `ForegroundGuaranteeOutcome.IsTerminal` が true か。
+4. `ForegroundGuaranteeOutcome.IsDisplayCompletable` が true か。
+5. 既存 retry / fallback が outstanding ではないか。
+
+この条件を満たした場合だけ `case-display-completed` を emit する。`RequiredFailed`、`SkippedNoKnownTarget`、`Unknown` は success-only completion に使わない。
+
+### CASE display completed との関係
+
+`CASE display completed` は引き続き `TaskPaneRefreshOrchestrationService` の created-case display session terminal state とする。
+
+- `foreground guarantee completed` は `CASE display completed` の条件付き材料である。
+- `foreground guarantee completed` は `pane visible` の代替ではない。
+- `foreground guarantee completed` は `refresh completed` の別名ではない。
+- `RequiredDegraded` は display-completable だが degraded として観測可能に残す。
+- `RequiredFailed` は display-completable ではないため、success-only の `case-display-completed` に使わない。
+- already-visible path は final foreground execution を要求しないが、`SkippedAlreadyVisible` として terminal 化し、pane visible と合わせて completion 材料にできる。
+- rebuild fallback は refresh / snapshot 内部の source decision であり、CASE display completion の直接条件にしない。
+
+この関係により、`CASE display completed` の owner を増やさず、foreground guarantee の結果だけを normalized input として扱う。
+
+### constraints to preserve
+
+- 白Excel対策を落とさない。
+  - `PostCloseFollowUpScheduler` の no visible workbook quit と foreground recovery を混同しない。
+  - foreground outcome 整理を白Excel対策ガードの追加で覆わない。
+- COM解放を落とさない。
+  - hidden create session / retained hidden app-cache / temporary workbook close の cleanup 境界を変えない。
+  - foreground outcome のために workbook / window / application COM reference lifetime を広げない。
+- Excel状態制御を落とさない。
+  - `ScreenUpdating` / `DisplayAlerts` / `EnableEvents` は既存 scope で restore する。
+  - `ExcelWindowRecoveryService` の state restore は recovery primitive として扱い、恒常状態変更にしない。
+- fail closed を維持する。
+  - context / workbook / window が不明な場合に推測で補完しない。
+  - `Unknown` を success に丸めない。
+- timing hack に逃げない。
+  - `Application.DoEvents()`、sleep、単なる delay 追加は禁止する。
+- ガード追加で覆わない。
+  - foreground / visibility / rebuild fallback 条件を新しい guard で隠さない。
+  - `WorkbookOpen` を window 安定境界へ戻さない。
+
+### 次の実装安全単位候補
+
+1. `ForegroundGuaranteeOutcome` の taxonomy を既存 result 型に追加し、ログ / trace 上で `NotRequired`、`SkippedAlreadyVisible`、`RequiredSucceeded`、`RequiredDegraded`、`RequiredFailed`、`Unknown` を観測できるようにする。挙動条件は変えない。
+2. `TaskPaneRefreshCoordinator` の foreground decision / execution result 変換を 1 箇所に寄せ、`ExcelWindowRecoveryService` の `recovered=false` を `RequiredDegraded` として返す。retry / recovery 条件は変えない。
+3. `WorkbookTaskPaneReadyShowAttemptWorker` の already-visible path を `SkippedAlreadyVisible` として orchestration へ渡す。`case-display-completed` emit owner は増やさない。
+4. `TaskPaneRefreshOrchestrationService` が `IsDisplayCompletable` を見るようにする前に、実機ログで degraded / failed の実発生有無を観測する。
+5. `WindowActivate` は event capture / dispatch / refresh request の境界整理だけを行い、foreground completed の代替にしない。
+
+今回の docs-only 範囲では、上記候補を実装しない。build / test / `DeployDebugAddIn` も実行しない。
 
 ## 一言まとめ
 

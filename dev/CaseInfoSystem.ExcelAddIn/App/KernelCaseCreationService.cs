@@ -271,6 +271,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, application, workbook, null, "case-workbook-initialize-completed", "KernelCaseCreationService.CreateSavedCaseWithoutShowing", plan.CaseWorkbookPath, "scope=isolated,route=" + hiddenCaseWorkbookSession.RouteName + ",startupPresentation=" + (deferredVisiblePresentationRequired ? "deferred-visible" : "hidden"));
 					if (deferredVisiblePresentationRequired) {
 						NormalizeInteractiveWorkbookWindowStateBeforeSave (workbook, plan, stopwatch, hiddenCaseWorkbookSession.RouteName);
+						NewCaseVisibilityObservation.Log (_logger, _excelInteropService, application, workbook, null, "save-window-before-save", "KernelCaseCreationService.CreateSavedCaseWithoutShowing", plan.CaseWorkbookPath, "scope=isolated,route=" + hiddenCaseWorkbookSession.RouteName + ",mode=interactive");
 					} else if (plan.Mode == KernelCaseCreationMode.CreateCaseBatch) {
 						NormalizeBatchWorkbookWindowStateBeforeSave (workbook, plan, stopwatch, hiddenCaseWorkbookSession.RouteName);
 					}
@@ -354,10 +355,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (window == null) {
 					throw new InvalidOperationException ("Interactive CASE workbook window could not be resolved before save.");
 				}
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-before-visible", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-visible-normal");
 				window.Visible = true;
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-after-visible", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeRequest=window.Visible=True,visibilityChangeReason=prepare-save-visible-normal");
 				if (window.WindowState == XlWindowState.xlMinimized) {
+					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-before-windowstate-normal", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-windowstate-normal,windowStateNormalizeRequested=xlNormalWhenMinimized");
 					window.WindowState = XlWindowState.xlNormal;
+					NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-after-windowstate-normal", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-windowstate-normal,windowStateNormalizeRequested=xlNormalWhenMinimized");
 				}
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-after-normalize", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeReason=prepare-save-visible-normal,windowStateNormalizeRequested=xlNormalWhenMinimized");
 				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, window, "save-window-normalized", "KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave", plan.CaseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",mode=interactive,visibilityChangeRequest=window.Visible=True,visibilityChangeReason=prepare-save-visible-normal,callerStep=KernelCaseCreationService.NormalizeInteractiveWorkbookWindowStateBeforeSave,windowStateNormalizeRequested=xlNormalWhenMinimized");
 				_logger.Info ("Kernel interactive CASE workbook window normalized before save. path=" + plan.CaseWorkbookPath + ", initialWindowCount=" + num + ", finalWindowCount=" + SafeWorkbookWindowCount (workbook) + ", windowVisible=" + SafeWindowVisible (window) + ", windowState=" + SafeWindowState (window) + ", activeSheet=" + SafeWorksheetName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			} catch (Exception exception) {
@@ -374,7 +380,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return null;
 			}
 			if (SafeWorkbookWindowCount (workbook) > 0) {
-				return workbook.Windows [1];
+				Window existingWindow = workbook.Windows [1];
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, existingWindow, "save-window-resolve-existing-window", callerStep, caseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",resolveAction=ExistingWindow");
+				return existingWindow;
 			}
 			NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "save-window-resolve-before-activate", callerStep, caseWorkbookPath, "scope=isolated,route=" + (routeName ?? string.Empty) + ",resolveAction=Activate");
 			workbook.Activate ();

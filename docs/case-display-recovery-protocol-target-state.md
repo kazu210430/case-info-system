@@ -7,6 +7,7 @@
 - 基準コード:
   - `2026-05-08` 時点で `main` と `origin/main` の一致を確認した `e41feb5d607f79077e112a1945e81ac0a76d95a4`
   - foreground guarantee ownership target-state 追記時点の `main` / `origin/main`: `3d6f2441f84dfefe46393508d4eae02ebe06b886`
+  - visibility recovery ownership target-state 追記時点の `main` / `origin/main`: `79c4823537c881b81582d3456145f8fc5f09466f`
 - 参照正本:
   - `AGENTS.md`
   - `docs/architecture.md`
@@ -583,6 +584,265 @@ target-state の normalized outcome は少なくとも次を持つ。
 3. `WorkbookTaskPaneReadyShowAttemptWorker` の already-visible path を `SkippedAlreadyVisible` として orchestration へ渡す。`case-display-completed` emit owner は増やさない。
 4. `TaskPaneRefreshOrchestrationService` が `IsDisplayCompletable` を見て success-only completion を判断する。
 5. `WindowActivate` は event capture / dispatch / refresh request の境界整理だけを行い、foreground completed の代替にしない。
+
+## visibility recovery ownership target-state (2026-05-08 docs-only)
+
+### target-state summary
+
+この節は、`docs/case-display-recovery-protocol-current-state.md` の `visibility recovery ownership current-state (2026-05-08 docs-only)` を受けて、次の実装安全単位へ進むための target-state を固定する。
+
+- 調査開始時の `main` / `origin/main`: `79c4823537c881b81582d3456145f8fc5f09466f`
+- 参照した docs:
+  - `docs/architecture.md`
+  - `docs/flows.md`
+  - `docs/ui-policy.md`
+  - `docs/case-display-recovery-protocol-current-state.md`
+  - `docs/case-display-recovery-protocol-target-state.md`
+- 今回は docs-only であり、コード変更、service 分割、helper 切り出し、ready retry / pending retry / visibility recovery / foreground guarantee / rebuild fallback / `WindowActivate` 条件変更は行わない。
+- docs-only のため build / test / `DeployDebugAddIn` は実行しない。
+
+target-state では、visibility recovery を「workbook window を visible にしたか」だけではなく、created-case display session に対して `pane visible` へ到達できたかを正規化する protocol unit として扱う。ただし primitive owner は統合しない。
+
+| 層 | owner | target-state の責務 |
+| --- | --- | --- |
+| protocol decision / normalized outcome / completion trace | `TaskPaneRefreshOrchestrationService` | ready-show / refresh / pending handoff の結果から `VisibilityRecoveryOutcome` を確定し、`CASE display completed` の材料として消費する。 |
+| ready-show attempt facts | `WorkbookTaskPaneReadyShowAttemptWorker` | 1 attempt の window resolve、already-visible 判定、lightweight ensure の local result、refresh delegate result を返す。protocol outcome は確定しない。 |
+| refresh raw facts | `TaskPaneRefreshCoordinator` | refresh path の window target、pre-context recovery local result、refresh completion、host-flow result を返す。visibility completion は確定しない。 |
+| pane visible state | `TaskPaneHostFlowService` | host reuse / render / show による actual pane visible transition を返す。created-case display session の terminal owner ではない。 |
+| lightweight primitive | `WorkbookWindowVisibilityService` | workbook window visible ensure の local outcome を返す。CASE pane visible や display completion は返さない。 |
+| full recovery primitive | `ExcelWindowRecoveryService` | application / workbook window recovery、minimized restore、必要時の activation / foreground primitive を実行し、execution facts を返す。protocol outcome は確定しない。 |
+
+### visibility recovery completed definition
+
+`visibility recovery completed` は、同一 created-case display session の visibility obligation が terminal になり、canonical な `pane visible` が成立した状態を指す。workbook window の `Visible=true`、`WindowActivate` 発火、または `ExcelWindowRecoveryService` の bool 成功だけでは completed としない。
+
+target-state の `pane visible` は、次のいずれかで成立する。
+
+- already-visible path:
+  - 対象 window key が解決できる。
+  - host registry に対象 window key の host がある。
+  - host の `WorkbookFullName` が対象 workbook と一致する。
+  - host role が `WorkbookRole.Case` である。
+  - host の `CustomTaskPane.Visible` が true である。
+- refresh path:
+  - `TaskPaneHostFlowService` が `ReusedShown` または `RefreshedShown` 相当の visible result を返す。
+  - その result が対象 workbook / window / CASE role と矛盾しない。
+
+この定義では、`workbook window visible` は `pane visible` の前提になりうるが十分条件ではない。`WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible` / `MadeVisible` は workbook window の local outcome であり、CASE pane visible とは同義にしない。
+
+### completed / skipped / degraded / failed
+
+`VisibilityRecoveryOutcome` は、少なくとも次の status を持つ。
+
+| status | terminal | display-completable | 定義 |
+| --- | --- | --- | --- |
+| `Completed` | yes | yes | visibility recovery が必要または実行され、canonical `pane visible` が成立した。 |
+| `Skipped` | yes | conditional | recovery primitive を実行しなかった。`AlreadyVisible` で canonical `pane visible` が true の場合だけ display-completable。`WorkbookOpenWindowUnstable`、`Suppressed`、`NoCreatedCaseSession`、`NoKnownTarget` などは success completion に使わない。 |
+| `Degraded` | yes | yes, but degraded | recovery primitive が partial failure / unverifiable state を返したが、canonical `pane visible` は成立している。成功に丸めず trace に残す。 |
+| `Failed` | yes | no | target workbook / window / context が不明、target mismatch、例外、または allowed recovery / show attempt 後も canonical `pane visible` が成立しない。 |
+| `Unknown` | no | no | owner が outcome を正規化できていない。fail-closed とし、success completion に使わない。 |
+
+`Degraded` と `Failed` の境界は `pane visible` で切る。`VisibleAfterSet=false/null` や full recovery の `recovered=false` があっても、その後の host reuse / render / show で canonical `pane visible` が成立していれば `Degraded` として扱える。`pane visible` が成立しない場合は `Failed` であり、追加 guard、sleep、DoEvents、rebuild fallback で覆わない。
+
+### owner boundary
+
+#### visibility 判定 owner
+
+- canonical `pane visible` の事実 owner は `TaskPaneDisplayCoordinator` / `TaskPaneHostFlowService` に置く。
+- `WorkbookTaskPaneReadyShowAttemptWorker` は already-visible path で判定を呼び、結果を observation として返す。
+- `TaskPaneRefreshOrchestrationService` はその observation を同一 created-case display session の `VisibilityRecoveryOutcome` へ正規化する。
+- `WorkbookWindowVisibilityService` と `ExcelWindowRecoveryService` は workbook / application / window の local recovery owner であり、CASE pane visible 判定 owner ではない。
+
+#### recovery trigger owner
+
+- pre-handoff presentation preparation は `KernelCasePresentationService` に残す。
+  - hidden reopen 後の initial visibility ensure、initial full recovery without showing、ready-show request 前 visibility ensure を扱う。
+  - ここでは created-case display session の normalized `VisibilityRecoveryOutcome` を確定しない。
+- post-handoff display / recovery orchestration は `TaskPaneRefreshOrchestrationService` に寄せる。
+  - ready-show attempt、refresh handoff、pending retry handoff の結果を同一 session で束ねる。
+  - normalized outcome と `visibility-recovery-*` protocol trace の owner になる。
+
+#### retry / pending retry との境界
+
+- ready retry `80ms` は `TaskPaneRefreshOrchestrationService.ScheduleTaskPaneReadyRetry(...)` の既存責務に残す。
+- pending retry `400ms` は `PendingPaneRefreshRetryService` の既存責務に残す。
+- `VisibilityRecoveryOutcome.Failed` を理由に retry 回数、delay、ready 条件、pending 条件を変更しない。
+- pending retry が active CASE context fallback に入る場合、outcome には `TargetKind=ActiveWorkbookFallback` などを残す。explicit workbook target と同一視できない場合は fail-closed とする。
+
+#### foreground guarantee との境界
+
+- visibility recovery は `pane visible` へ到達できたかを扱う。
+- foreground guarantee は pane visible / refresh 後に foreground obligation が terminal かを扱う。
+- `ExcelWindowRecoveryService` は両方で使われうる primitive だが、visibility outcome と `ForegroundGuaranteeOutcome` は別 result とする。
+- `Window.Visible = true`、`workbook.Activate()`、`WindowActivate` 発火は foreground guarantee completed の代替ではない。
+- `CASE display completed` は visibility outcome と foreground outcome の両方を `TaskPaneRefreshOrchestrationService` が消費して判断する。
+
+#### rebuild fallback との境界
+
+- rebuild fallback の owner は引き続き `TaskPaneSnapshotBuilderService`。
+- visibility recovery 失敗は即 rebuild fallback ではない。
+- rebuild fallback は refresh path が context 解決、refresh precondition、render path へ進んだ後の snapshot acquisition subprotocol でだけ発生する。
+- visibility failure により window resolve / context 解決 / refresh precondition が fail-closed で止まる場合、rebuild fallback までは到達しない。
+
+#### WindowActivate との境界
+
+- `WindowActivate` は visible window が activate された観測点、または refresh request source の入口であり、visibility recovery completed の代替ではない。
+- event capture は `ThisAddIn` / `WorkbookEventCoordinator` に残す。
+- protection / suppression / dispatch は `WindowActivatePaneHandlingService` に残す。
+- refresh / visibility / foreground outcome は `TaskPaneRefreshOrchestrationService` が判断する。
+- protection / suppression により dispatch が return する場合、event 発火だけで visibility recovery terminal とは扱わない。
+
+### allowed / forbidden responsibilities
+
+#### allowed
+
+- `TaskPaneRefreshOrchestrationService` が lower-level result を同一 created-case display session に束ね、`VisibilityRecoveryOutcome` を確定する。
+- `WorkbookTaskPaneReadyShowAttemptWorker` が already-visible 判定、attempt 1 の lightweight ensure、refresh delegate 呼び出しを行い、facts を返す。
+- `TaskPaneRefreshCoordinator` が refresh pre-context recovery と refresh raw result を返す。
+- `TaskPaneHostFlowService` が `ReusedShown` / `RefreshedShown` として pane visible source を返す。
+- `WorkbookWindowVisibilityService` が workbook window visible ensure の local outcome を返す。
+- `ExcelWindowRecoveryService` が app / window recovery primitive を実行し、execution facts を返す。
+- `TaskPaneSnapshotBuilderService` が snapshot source と rebuild fallback を観測可能にする。
+
+#### forbidden
+
+- lower-level service が `case-display-completed` を emit する。
+- `WorkbookWindowVisibilityService.EnsureVisible(...)` の local outcome をそのまま `visibility recovery completed` とみなす。
+- `ExcelWindowRecoveryService` が `CASE display completed` や protocol-level visibility outcome を判断する。
+- `WindowActivate` 発火だけで `Completed` / `RequiredSucceeded` / `CASE display completed` とみなす。
+- visibility recovery failure を rebuild fallback へ直接接続する。
+- `Degraded` を retry / fallback / timing hack で覆う。
+- ready retry、pending retry、visibility recovery、foreground guarantee、rebuild fallback、`WindowActivate` 条件を owner 整理の名目で変更する。
+- `Application.DoEvents()`、sleep、単なる delay 追加で completed を作る。
+- hidden session / retained hidden app-cache / COM lifetime を visibility outcome のために広げる。
+- `WorkbookOpen` を window 安定境界へ戻す。
+
+### normalized outcome design
+
+#### VisibilityRecoveryOutcome
+
+target-state の normalized outcome は少なくとも次を持つ。
+
+| field | 意味 |
+| --- | --- |
+| `Status` | `Completed` / `Skipped` / `Degraded` / `Failed` / `Unknown` |
+| `Reason` | `AlreadyVisible`、`MadeVisibleThenShown`、`RefreshShown`、`WorkbookOpenWindowUnstable`、`NoKnownTarget`、`TargetMismatch`、`Exception` などの事実ベース理由。 |
+| `IsTerminal` | visibility obligation が terminal か。`Unknown` は false。 |
+| `IsPaneVisible` | canonical `pane visible` が成立しているか。 |
+| `IsDisplayCompletable` | `CASE display completed` の success-only 材料として使えるか。 |
+| `TargetKind` | `ExplicitWorkbookWindow` / `ActiveWorkbookFallback` / `AlreadyVisible` / `NoKnownTarget` など。 |
+| `PaneVisibleSource` | `AlreadyVisibleHost` / `ReusedShown` / `RefreshedShown` / `None` など。 |
+| `WorkbookWindowEnsureStatus` | `WorkbookWindowVisibilityService` の local status。null 可。 |
+| `FullRecoveryAttempted` | `ExcelWindowRecoveryService` の full recovery primitive を呼んだか。 |
+| `FullRecoverySucceeded` | full recovery execution result。not attempted では null を許容する。 |
+| `DegradedReason` | partial failure / unverifiable state を success と区別して残す理由。 |
+
+#### Worker / Coordinator / HostFlowService
+
+- `WorkbookTaskPaneReadyShowAttemptWorker`
+  - `IsPaneVisible`
+  - `PaneVisibleSource`
+  - `WindowTarget`
+  - `WorkbookWindowEnsureStatus`
+  - `RefreshAttempted`
+  - `RefreshResult`
+  - `FailureReason`
+  - protocol-level `VisibilityRecoveryOutcome` と `case-display-completed` は持たない。
+- `TaskPaneRefreshCoordinator`
+  - `IsRefreshCompleted`
+  - `WindowTarget`
+  - `RefreshPrecondition`
+  - `PreContextRecoveryFacts`
+  - `HostFlowResult`
+  - `RawFailureReason`
+  - normalized visibility outcome / completion trace は確定しない。
+- `TaskPaneHostFlowService`
+  - `IsPaneVisible`
+  - `PaneVisibleSource`
+  - `HostReused`
+  - `Rendered`
+  - `WorkbookFullName`
+  - `WindowKey`
+  - visibility recovery status、foreground outcome、CASE display completion は持たない。
+
+#### TaskPaneRefreshOrchestrationService
+
+`TaskPaneRefreshOrchestrationService` は次だけを判断する。
+
+1. lower-level result が同一 created-case display session に属するか。
+2. canonical `pane visible` が成立しているか。
+3. recovery primitive の local failure を `Degraded` として残すか、`Failed` として fail-closed にするか。
+4. `VisibilityRecoveryOutcome.IsTerminal` が true か。
+5. `VisibilityRecoveryOutcome.IsDisplayCompletable` が true か。
+6. foreground obligation が terminal か。
+7. 既存 retry / fallback が outstanding ではないか。
+
+この条件を満たした場合だけ、foreground outcome と合わせて `case-display-completed` を success-only で emit する。`Failed`、`Unknown`、および `Skipped` でも `IsPaneVisible=false` のものは completion に使わない。
+
+### trace emit / completion emit の責務分離
+
+- primitive trace
+  - `WorkbookWindowVisibilityService` / `ExcelWindowRecoveryService` は local mutation / execution trace を維持してよい。
+- pane visible trace
+  - `TaskPaneHostFlowService` は `taskpane-reused-shown` / `taskpane-refreshed-shown` 相当の actual show trace を維持する。
+- protocol trace
+  - `TaskPaneRefreshOrchestrationService` が `visibility-recovery-decision` と `visibility-recovery-completed` / `visibility-recovery-skipped` / `visibility-recovery-degraded` / `visibility-recovery-failed` 相当の normalized trace owner になる。
+- completion emit
+  - `case-display-completed` は引き続き `TaskPaneRefreshOrchestrationService` だけが emit する。
+
+### rebuild fallback への接続条件
+
+visibility recovery と rebuild fallback の接続は、次で固定する。
+
+- visibility recovery 失敗は即 rebuild fallback ではない。
+- rebuild fallback は `TaskPaneSnapshotBuilderService` が refresh / render / snapshot acquisition 内で `CaseCache -> BaseCache -> BaseCacheFallback -> MasterListRebuild` を選ぶ場合だけ成立する。
+- `Completed` / `Reason=AlreadyVisible` の `Skipped` / `Degraded` は rebuild fallback を要求しない。
+- `Failed` は rebuild fallback を要求しない。既存 ready retry / pending retry / fail-closed の範囲で扱う。
+- refresh path に到達し、snapshot acquisition が `MasterListRebuild` を選んだ結果 pane visible が成立した場合、visibility outcome は `Completed` または `Degraded` になりうる。ただし fallback 使用有無は visibility status ではなく snapshot source として残す。
+- fallback 判断 owner は `TaskPaneSnapshotBuilderService` であり、`TaskPaneRefreshOrchestrationService` は fallback 使用有無を `CASE display completed` の直接条件にしない。
+
+### CASE display completed との関係
+
+`CASE display completed` は引き続き `TaskPaneRefreshOrchestrationService` の created-case display session terminal state とする。
+
+- visibility recovery outcome は `CASE display completed` の材料であり、completion そのものではない。
+- `Completed`、`Reason=AlreadyVisible` かつ `IsPaneVisible=true` の `Skipped`、`Degraded` は display-completable になりうる。
+- `Failed`、`Unknown`、`IsPaneVisible=false` の `Skipped` は success-only completion に使わない。
+- `CASE display completed` は `VisibilityRecoveryOutcome.IsPaneVisible` と `ForegroundGuaranteeOutcome.IsTerminal / IsDisplayCompletable` を両方確認する。
+- workbook window visibility ensure の local outcome を直接 completion 条件にしない。
+- rebuild fallback の発生有無を直接の completion 条件にしない。
+
+### constraints to preserve
+
+- 白Excel対策を落とさない。
+  - `PostCloseFollowUpScheduler` の no visible workbook quit と visibility recovery を混同しない。
+  - 白 Excel を覆うだけの guard を追加しない。
+- TaskPane が出ない regression を防ぐ。
+  - ready-show、already-visible early-complete、pending retry、host reuse / render / show の現行条件を変更しない。
+- COM解放を落とさない。
+  - hidden create session、retained hidden app-cache、一時 workbook close の cleanup 境界を変えない。
+  - visibility outcome のために workbook / window / application COM reference lifetime を広げない。
+- Excel状態制御を落とさない。
+  - `ScreenUpdating` / `DisplayAlerts` / `EnableEvents` の既存 restore scope を変えない。
+  - `ExcelWindowRecoveryService.EnsureScreenUpdatingEnabled(...)` を恒常状態変更として扱わない。
+- fail closed を維持する。
+  - workbook / window / context が不明な場合に推測で補完しない。
+  - active workbook fallback を target 不明時の広域 promotion として拡大しない。
+- timing hack に逃げない。
+  - `Application.DoEvents()`、sleep、単なる delay 追加は禁止する。
+  - ready retry `80ms`、pending retry `400ms`、attempt count は今回変更しない。
+- ガード追加で覆わない。
+  - visibility / foreground / rebuild fallback 条件を新しい guard で隠さない。
+  - `WorkbookOpen` を window 安定境界へ戻さない。
+
+### 次の実装安全単位候補
+
+1. `VisibilityRecoveryOutcome` の taxonomy を orchestration 層に追加し、lower-level result から `Completed` / `Skipped` / `Degraded` / `Failed` / `Unknown` を観測できるようにする。挙動条件は変えない。
+2. `WorkbookTaskPaneReadyShowAttemptWorker` の already-visible / lightweight ensure / refresh delegate result を structured facts として返し、`case-display-completed` emit owner は増やさない。
+3. `TaskPaneRefreshCoordinator` と `TaskPaneHostFlowService` の pane visible facts を orchestration が消費できる形に整理する。host reuse / render / show 条件は変えない。
+4. `TaskPaneRefreshOrchestrationService` が `VisibilityRecoveryOutcome` と `ForegroundGuaranteeOutcome` を同一 created-case display session で突き合わせる。success-only completion の意味は変えない。
+5. `visibility-recovery-*` normalized trace を orchestration へ寄せる。primitive trace と pane shown trace は既存 owner に残す。
+6. rebuild fallback は `TaskPaneSnapshotBuilderService` の snapshot source decision として残し、visibility failure から直接起動しないことを test / trace 上でも確認する。
 
 ## 一言まとめ
 

@@ -8,6 +8,7 @@
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
 - hidden Excel / isolated app / white Excel lifecycle の前提: `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`
+- WorkbookClose / reopen protocol の current mapping: `docs/workbook-close-reopen-protocol-current-mapping.md`
 - TaskPane 側の現在地: `docs/taskpane-refactor-current-state.md`
 - 残課題: `docs/technical-debt.md`
 

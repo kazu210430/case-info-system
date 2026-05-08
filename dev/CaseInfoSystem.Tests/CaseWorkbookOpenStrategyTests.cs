@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.Tests.Fakes;
 using Xunit;
@@ -157,12 +158,96 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, cachedApplication.QuitCallCount);
                 Assert.Contains(cachedApplication, releasedObjects);
                 Assert.Contains(logs, message => message.IndexOf("hidden-app-cache reused", StringComparison.OrdinalIgnoreCase) >= 0);
-                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceReturnedToIdle", StringComparison.OrdinalIgnoreCase) >= 0
+                Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("route=app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("hiddenCleanupOutcome=HiddenExcelCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isolatedAppOutcome=,retainedInstanceOutcome=RetainedInstanceReturnedToIdle", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitAttempted=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cacheReturnedToIdle=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cachePoisoned=False", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("applicationLifetimeOwner=CaseWorkbookOpenStrategy", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
-                Assert.Contains(logs, message => message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                Assert.Contains(logs, message => message.IndexOf("retained-instance-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=shutdown-cleanup", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitAttempted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=True", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+        }
+
+        [Fact]
+        public void OpenHiddenWorkbook_WithCacheEnabled_LogsIdleTimeoutCleanupOutcome_WhenIdleTimerTicks()
+        {
+            using (new HiddenRouteEnvironmentScope())
+            {
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName, "1");
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName, "60");
+                var logs = new List<string>();
+                var releasedObjects = new List<object>();
+                Excel.Application cachedApplication = CreateHiddenApplication();
+                var strategy = CreateStrategy(logs, releasedObjects, cachedApplication);
+
+                CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession session = strategy.OpenHiddenWorkbook(@"C:\Cases\timeout.xlsx");
+                session.Close();
+
+                FieldInfo cachedSlotField = typeof(CaseWorkbookOpenStrategy).GetField("_cachedHiddenApplication", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(cachedSlotField);
+                object cachedSlot = cachedSlotField.GetValue(strategy);
+                Assert.NotNull(cachedSlot);
+                PropertyInfo idleSinceProperty = cachedSlot.GetType().GetProperty("IdleSinceUtc", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(idleSinceProperty);
+                idleSinceProperty.SetValue(cachedSlot, DateTime.UtcNow.AddSeconds(-120), null);
+
+                MethodInfo timerTick = typeof(CaseWorkbookOpenStrategy).GetMethod("HiddenApplicationIdleTimer_Tick", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(timerTick);
+                timerTick.Invoke(strategy, new object[] { null, EventArgs.Empty });
+
+                Assert.Equal(1, cachedApplication.QuitCallCount);
+                Assert.Contains(cachedApplication, releasedObjects);
+                Assert.Contains(logs, message => message.IndexOf("retained-instance-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=idle-timeout", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitAttempted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationLifetimeOwner=CaseWorkbookOpenStrategy", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+        }
+
+        [Fact]
+        public void OpenHiddenWorkbook_WithCacheEnabled_LogsFeatureFlagDisabledCleanupOutcome_WhenIdleTimerTicks()
+        {
+            using (new HiddenRouteEnvironmentScope())
+            {
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName, "1");
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName, "60");
+                var logs = new List<string>();
+                var releasedObjects = new List<object>();
+                Excel.Application cachedApplication = CreateHiddenApplication();
+                var strategy = CreateStrategy(logs, releasedObjects, cachedApplication);
+
+                CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession session = strategy.OpenHiddenWorkbook(@"C:\Cases\feature-flag-disabled.xlsx");
+                session.Close();
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName, null);
+
+                MethodInfo timerTick = typeof(CaseWorkbookOpenStrategy).GetMethod("HiddenApplicationIdleTimer_Tick", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(timerTick);
+                timerTick.Invoke(strategy, new object[] { null, EventArgs.Empty });
+
+                Assert.Equal(1, cachedApplication.QuitCallCount);
+                Assert.Contains(cachedApplication, releasedObjects);
+                Assert.Contains(logs, message => message.IndexOf("retained-instance-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=feature-flag-disabled", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitAttempted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationLifetimeOwner=CaseWorkbookOpenStrategy", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
@@ -223,8 +308,17 @@ namespace CaseInfoSystem.Tests
                 strategy.ShutdownHiddenApplicationCache();
 
                 Assert.Equal(1, secondApplication.QuitCallCount);
-                Assert.Contains(logs, message => message.IndexOf("poisoned", StringComparison.OrdinalIgnoreCase) >= 0);
-                Assert.Contains(logs, message => message.IndexOf("RetainedInstancePoisoned", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("route=app-cache", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("retainedInstanceOutcome=RetainedInstancePoisoned", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cacheReturnedToIdle=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cachePoisoned=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("outcomeReason=markPoisoned", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("retained-instance-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("RetainedInstanceCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=poisoned", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitAttempted=True", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=True", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 

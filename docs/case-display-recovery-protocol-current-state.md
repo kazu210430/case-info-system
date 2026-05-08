@@ -8,12 +8,13 @@
 - `TaskPaneHostFlowService` returns `TaskPaneHostFlowResult` so pane-visible source stays below the refresh coordinator without becoming display-completion ownership.
 - `display-handoff-completed` is now emitted when the created-case display request is accepted by `TaskPaneRefreshOrchestrationService`; the old `display-handoff-open-completed` emit was removed from presentation/open-strategy code.
 - Retry counts, ready-show timing, visibility recovery conditions, foreground recovery conditions, rebuild fallback, hidden session behavior, fail-closed conditions, and CASE creation behavior are unchanged.
+- Completion status: merged to `main` at `e41feb5d607f79077e112a1945e81ac0a76d95a4` and verified on the actual Excel runtime.
 
 ## 位置づけ
 
 この文書は、CASE display / recovery protocol の current-state 正本です。目的は、現行 `main` で実際に動いている owner と順序を、観測ログと現コードを根拠に固定することです。
 
-- 基準コード: 現行 `main` / `origin/main` 一致時点の `16e3a415a929b60eee45e13c606152d04d83676b`
+- 基準コード: 現行 `main` / `origin/main` 一致時点の `e41feb5d607f79077e112a1945e81ac0a76d95a4`
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
@@ -224,65 +225,43 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
   - `TaskPaneRefreshCoordinator` の `taskpane-refresh-started` / `completed` では `refreshSource` が実質 `reason` の再掲になっている。
   - source を誰が決め、reason とどう区別するかは current-state で 1 owner に閉じていない。
 
-## 最重要 owner 不明・未正本化箇所
+## 第1実装安全単位完了後の ownership 状態
 
-current-state の中でも、次が protocol redesign 前に最も重要な「owner 不明」または「未正本化」箇所です。
+第1実装安全単位では、`CASE display completed` definition owner と `case-display-completed` emit owner を `TaskPaneRefreshOrchestrationService` へ一本化しました。これにより、already-visible path と refresh path は、同一 created-case display session の terminal 判定へ収束します。
 
-### 1. CASE display completed definition owner
+整理済み:
 
-- first safe unit 後は `TaskPaneRefreshOrchestrationService` の 1 箇所で完了扱いになります。
-- pane visible trace と foreground guarantee trace は別 service にあるため、「何をもって CASE 表示完了とするか」の正本 owner がありません。
+- `CASE display completed` は `pane visible` の別名でも、`refresh completed` の別名でもありません。
+- `TaskPaneRefreshOrchestrationService` が created-case display session を開始し、success-only の final completion を 1 回だけ成立させます。
+- `WorkbookTaskPaneReadyShowAttemptWorker` は already-visible を検知して outcome を返しますが、final completion は emit しません。
+- `TaskPaneRefreshCoordinator` は refresh / foreground terminal を normalized outcome として返しますが、final completion は emit しません。
+- `TaskPaneHostFlowService` は pane visible state を返しますが、created-case display session 全体の terminal owner ではありません。
+- `display-handoff-completed` は ready-show acceptance 側の `TaskPaneRefreshOrchestrationService` に寄せられました。
 
-### 2. refresh source owner
+意図的に残した ownership:
 
-- `reason` は caller 起点で流れてきますが、`refreshSource` は protocol 上の正規化された source owner を持っていません。
-- snapshot source、refresh trigger source、display completion source が別概念のまま同列に見えやすく、current-state docs でも未正本化として扱うべき領域です。
+- foreground guarantee owner
+- visibility recovery owner
+- rebuild fallback owner
+- refresh source owner
+- WindowActivate ownership
 
-### 3. display handoff completion owner
+## 残っている ownership 論点
 
-- hidden reopen handoff を完了させる owner と、その completion trace owner が一致していません。
-- 同名 trace の重複により、観測上は「どちらが protocol owner か」が曖昧です。
+この節は target-state を確定するものではありません。第1実装安全単位後も current-state で分裂している ownership だけを列挙します。
 
-## 次に protocol redesign へ入るなら最初の安全単位候補
-
-最初の安全単位候補は、`CASE display completed` の定義 owner を current-state 上で 1 箇所に寄せる準備です。
-
-理由は次です。
-
-- 表示完了、pane visible、foreground guarantee が別概念のまま分離している。
-- completion trace は `TaskPaneRefreshOrchestrationService` に集約済みです。worker / coordinator / host-flow は outcome と visible trace を返す側に残します。
-- recovery 条件、retry 条件、visibility 制御、ready-show timing を変えずに、まず completion definition の ownership だけを切り出して観測・文書化しやすい。
-
-この候補は redesign 実施を意味しません。current-state としては、「最初に触るなら completion definition boundary を安全単位化するのが最も説明可能」という提案に留めます。
-
-## 次に target-state 設計で決めるべき論点
-
-この節は target-state を確定するものではありません。current-state で見えている分裂状態を前提に、次に設計判断が必要な論点だけを列挙します。
-
-### 1. CASE display completed definition
-
-- current-state の分裂状態
-  - `WorkbookTaskPaneReadyShowAttemptWorker` が already-visible path で completion を成立させる。
-  - `TaskPaneRefreshCoordinator` が refresh path で completion を成立させる。
-  - `TaskPaneHostFlowService` は pane visible を記録するが、completion owner ではない。
-  - `TaskPaneRefreshCoordinator` と `ExcelWindowRecoveryService` の foreground guarantee 完了とも一致していない。
-- 次に設計判断が必要な点
-  - completion を 1 owner に寄せるのか。
-  - completion 判定を `pane visible`、`refresh completed`、`foreground guarantee completed` のどこに結び付けるのか。
-  - already-visible path と refresh path の completion semantics を同一にするのか。
-
-### 2. ready-show orchestration owner
+### 1. ready-show orchestration owner
 
 - current-state の分裂状態
   - request は `KernelCasePresentationService`
   - enqueue / fallback / retry 調停は `TaskPaneRefreshOrchestrationService`
-  - attempt / early-complete は `WorkbookTaskPaneReadyShowAttemptWorker`
+  - attempt は `WorkbookTaskPaneReadyShowAttemptWorker`
 - 次に設計判断が必要な点
   - ready-show protocol の owner を request から completion まで 1 本の orchestration として扱うのか。
   - fallback / retry / attempt を同一 owner に閉じるのか、それとも queue owner と attempt owner を分けたまま明示するのか。
   - ready-show が CASE display protocol のどこからどこまでを責務に含むのか。
 
-### 3. foreground guarantee owner
+### 2. foreground guarantee owner
 
 - current-state の分裂状態
   - decision は `TaskPaneRefreshCoordinator`
@@ -293,7 +272,7 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
   - decision と execution を分けたままにするなら、どちらを正本 owner と呼ぶのか。
   - CASE display completed との前後関係を protocol 上でどう固定するのか。
 
-### 4. visibility recovery owner
+### 3. visibility recovery owner
 
 - current-state の分裂状態
   - `WorkbookWindowVisibilityService` が workbook window visible ensure を持つ。
@@ -304,7 +283,7 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
   - visible ensure と foreground promotion の境界をどこで切るのか。
   - caller 側が recovery primitive を直接組み合わせる current-state を維持するのか。
 
-### 5. rebuild fallback owner
+### 4. rebuild fallback owner
 
 - current-state の分裂状態
   - rebuild fallback decision 自体は `TaskPaneSnapshotBuilderService`
@@ -315,7 +294,7 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
   - snapshot build owner と display protocol owner の境界をどこに置くのか。
   - rebuild fallback 開始時点を protocol trace 上どこで定義するのか。
 
-### 6. refresh source owner
+### 5. refresh source owner
 
 - current-state の分裂状態
   - refresh trigger の `reason` は caller 起点で流れる。
@@ -326,7 +305,7 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
   - refresh source の正本 owner を coordinator に置くのか、もっと上流に置くのか。
   - 観測上の `reason` と protocol 上の `source` をどう切り分けるのか。
 
-### 7. WindowActivate 系 owner
+### 6. WindowActivate 系 owner
 
 - current-state の分裂状態
   - Excel event capture と trace は `ThisAddIn.HandleWindowActivateEvent(...)`
@@ -349,6 +328,6 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
 
 ## 一言まとめ
 
-現行の CASE display / recovery protocol は、単一 owner の直線的な flow ではありません。display handoff、ready-show、refresh、foreground guarantee、visibility recovery、rebuild fallback、display completion が複数 service に分散し、いくつかは重複観測と未正本化のまま連結しています。
+現行の CASE display / recovery protocol は、単一 owner の直線的な flow ではありません。第1実装安全単位で display completion は `TaskPaneRefreshOrchestrationService` に集約されましたが、ready-show、refresh、foreground guarantee、visibility recovery、rebuild fallback、WindowActivate は複数 service に分散したままです。
 
-この文書では、その分散を問題視する前に、まず current-state として固定しました。次に進むなら、completion definition から安全単位で ownership を整理するのが最初の候補です。
+この文書では、completion definition を整理済みの到達点として固定し、残りの ownership を次の安全単位候補として分けて扱います。

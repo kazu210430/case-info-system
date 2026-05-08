@@ -12,6 +12,22 @@ It is observation-only work for the unstable display sequence after template upd
 This note does not declare a root cause.
 It does not change UI behavior, recovery conditions, retry counts, visibility control, or ready-show timing.
 
+## First safe unit runtime verification
+
+After `main` was fast-forwarded to `e41feb5d607f79077e112a1945e81ac0a76d95a4`, the first CASE display / recovery protocol safe unit was verified on the actual Excel runtime.
+
+Verified result:
+
+- New CASE creation is normal.
+- Existing CASE reopen is normal.
+- `created-case-display-session-started -> display-handoff-completed -> case-display-completed` appears once for the created-case display session.
+- already-visible path and refresh path converge to the same completion definition.
+- No white Excel window was observed.
+- No endless spinner was observed.
+- New CASE creation after template update felt improved.
+
+This verification confirms the observation goal for the first safe unit only. It does not resolve the remaining ownership topics for foreground guarantee, visibility recovery, rebuild fallback, refresh source, or WindowActivate.
+
 Related source-of-truth docs:
 
 - `docs/flows.md`

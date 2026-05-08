@@ -5,7 +5,7 @@
 この文書は、`docs/case-display-recovery-protocol-current-state.md` を前提に、CASE display / recovery protocol の target-state を定義するための docs-only 設計記録です。
 
 - 基準コード:
-  - `2026-05-08` 時点で `main` と `origin/main` の一致を確認した `f04006719df438016381c67a5e3f6866755c3d32`
+  - `2026-05-08` 時点で `main` と `origin/main` の一致を確認した `e41feb5d607f79077e112a1945e81ac0a76d95a4`
 - 参照正本:
   - `AGENTS.md`
   - `docs/architecture.md`
@@ -259,7 +259,92 @@ target-state の役割分担:
 - Implemented: `display-handoff-completed` is emitted at ready-show acceptance in `TaskPaneRefreshOrchestrationService`.
 - Preserved: retry counts, ready-show timing, foreground and visibility recovery conditions, rebuild fallback, hidden session behavior, CASE creation behavior, and fail-closed conditions.
 
-### この安全単位に含めること
+### Completion record (2026-05-08, merged main `e41feb5d607f79077e112a1945e81ac0a76d95a4`)
+
+第1実装安全単位の目的は、CASE display / recovery protocol 全体を作り替えることではなく、`CASE display completed` definition と `case-display-completed` emit owner を 1 箇所に固定することでした。
+
+current-state で見えていた ownership 分裂:
+
+- already-visible path では `WorkbookTaskPaneReadyShowAttemptWorker` が completion 相当の判断を持っていた。
+- refresh path では `TaskPaneRefreshCoordinator` が refresh / foreground 後の completion 相当の判断を持っていた。
+- `TaskPaneHostFlowService` は `pane visible` を成立させるが、display session 全体の terminal owner ではなかった。
+- foreground guarantee は `TaskPaneRefreshCoordinator` の decision / completion と `ExcelWindowRecoveryService` の execution に分かれていた。
+- display handoff completion trace は presentation / open-strategy 側にもあり、ready-show acceptance との境界が観測上重なっていた。
+
+target-state で固定した completion definition:
+
+- `CASE display completed` は success-only の terminal state とする。
+- 同一 created-case display session に対して成立する。
+- `pane visible` が成立している。
+- foreground obligation が terminal である。
+- `refresh completed` は補助条件であり、already-visible path では必須ではない。
+- `pane visible`、`refresh completed`、`foreground guarantee completed` のいずれか単独を `CASE display completed` の別名にしない。
+
+completion owner を `TaskPaneRefreshOrchestrationService` に置いた理由:
+
+- ready-show request acceptance、queue、retry / fallback handoff、attempt outcome、refresh outcome を同一 session で束ねられる。
+- already-visible path と refresh path の両方を見られる境界である。
+- Worker / Coordinator / HostFlowService の lower-level 成功を final completion と誤認しない境界である。
+- hidden protocol や CASE 作成本体へ ownership を戻さず、display protocol の orchestration 層で閉じられる。
+
+各 service に残した責務:
+
+- `WorkbookTaskPaneReadyShowAttemptWorker`: 1 attempt の window resolve、already-visible 検知、refresh delegate 呼び出し、attempt outcome 返却。
+- `TaskPaneRefreshCoordinator`: refresh unit、foreground guarantee decision / terminal outcome、refresh attempt outcome 返却。
+- `TaskPaneHostFlowService`: host reuse / render / show と `pane visible` state の返却。
+- `ExcelWindowRecoveryService`: application / workbook window / foreground recovery primitive の execution。
+- `TaskPaneSnapshotBuilderService`: CASE cache / Base cache / MasterListRebuild を含む snapshot source と rebuild fallback。
+
+created-case display session を導入した理由:
+
+- CASE display completion を単発ログではなく、created-case post-release の表示要求に紐づく protocol session として扱うため。
+- `pane visible`、`refresh completed`、`foreground guarantee terminal` を同じ session の材料として束ねるため。
+- completion emit の重複を防ぎ、`case-display-completed` を 1 session につき 1 回だけ成立させるため。
+
+already-visible path と refresh path を収束させた理由:
+
+- already-visible は `refresh completed` を持たないが、CASE display completion としては `pane visible` と foreground terminal が満たされれば success にできる。
+- refresh path は refresh / render / foreground を経由するが、最終的には同じ created-case display session の terminal 判定へ戻す必要がある。
+- path ごとに completion owner を分けると、同じ CASE 表示完了が別 semantic になり、重複 emit や観測ずれを再発させる。
+
+維持したもの:
+
+- retry 回数
+- ready-show timing
+- foreground guarantee 条件
+- visibility recovery 条件
+- rebuild fallback 条件
+- hidden session behavior
+- CASE 作成本体
+- fail closed
+
+実機確認結果:
+
+- 新規CASE作成は正常。
+- `created-case-display-session-started -> display-handoff-completed -> case-display-completed` は 1 回だけ出る。
+- already-visible path / refresh path は同じ completion definition へ収束する。
+- 既存CASE reopen は正常。
+- 白Excelなし。
+- ぐるぐるなし。
+- 雛形更新後の新規CASE作成も体感改善済み。
+
+今回まだ触っていない ownership:
+
+- foreground guarantee owner
+- visibility recovery owner
+- rebuild fallback owner
+- refresh source owner
+- WindowActivate ownership
+
+次の安全単位候補:
+
+- foreground guarantee を 1 protocol unit として、decision / execution / terminal trace の境界を固定する。
+- visibility recovery を lightweight workbook visible ensure と full application/window/foreground recovery に分けて、caller orchestration owner を固定する。
+- refresh source を `reason` の再掲ではなく structured source として request boundary で固定する。
+- rebuild fallback を refresh / snapshot subprotocol の観測 unit として整理し、display completion 条件へ昇格させないことを明文化する。
+- `WindowActivate` event capture と refresh dispatch の ownership を、`ThisAddIn` / `WorkbookEventCoordinator` / `WindowActivatePaneHandlingService` / orchestration service の境界で整理する。
+
+### この安全単位に含めたこと
 
 - `TaskPaneRefreshOrchestrationService` に created-case display session を導入する
 - `WorkbookTaskPaneReadyShowAttemptWorker` から `case-display-completed` emit を外し、attempt outcome を返す
@@ -267,7 +352,7 @@ target-state の役割分担:
 - `CaseWorkbookOpenStrategy` 側の completion trace 名を `workbook open completed` 系へ寄せる
 - `display handoff completed` を enqueue acceptance 側へ一本化する
 
-### この安全単位に含めないこと
+### この安全単位に含めなかったこと
 
 - retry 回数 / delay の変更
 - visibility primitive の呼出し順変更
@@ -276,7 +361,7 @@ target-state の役割分担:
 - rebuild fallback 条件変更
 - hidden session / CASE 作成本体修正
 
-### この安全単位を最初に選ぶ理由
+### この安全単位を最初に選んだ理由
 
 - current-state で最も分散している completion definition だけを切り出せる
 - worker / coordinator / host-flow の責務そのものは変えず、final completion owner だけを寄せられる

@@ -30,6 +30,25 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
+		public void Execute_WhenPreflightFailsOnProtectedMasterSheet_RestoresProtectionStateAndSkipsSideEffects ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				ConfigureMasterSheetAsProtected (harness.MasterSheet);
+
+				KernelTemplateSyncResult result = harness.Service.Execute (harness.Context);
+
+				Assert.False (result.Success);
+				Assert.Empty (harness.Events);
+				Assert.Equal (1, harness.MasterSheet.UnprotectCallCount);
+				Assert.Equal (1, harness.MasterSheet.ProtectCallCount);
+				Assert.True (harness.MasterSheet.ProtectContents);
+				Assert.True (harness.MasterSheet.ProtectDrawingObjects);
+				Assert.True (harness.MasterSheet.ProtectScenarios);
+				Assert.Equal (Excel.XlEnableSelection.xlUnlockedCells, harness.MasterSheet.EnableSelection);
+			}
+		}
+
+		[Fact]
 		public void Execute_WhenPublicationSucceeds_RunsSideEffectsInCurrentOrder ()
 		{
 			using (TestHarness harness = TestHarness.Create (includeDefinedTags: true, createValidTemplate: true, createBaseFile: true)) {
@@ -273,6 +292,27 @@ namespace CaseInfoSystem.Tests
 			}
 		}
 
+		[Fact]
+		public void Execute_WhenPreparationThrows_RestoresProtectionStateBeforeRethrow ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: true, createValidTemplate: false, createBaseFile: false)) {
+				ConfigureMasterSheetAsProtected (harness.MasterSheet);
+				Directory.Delete (Path.Combine (Path.GetDirectoryName (harness.KernelWorkbook.FullName) ?? string.Empty, "雛形"), recursive: true);
+
+				InvalidOperationException exception = Assert.Throws<InvalidOperationException> (() => harness.Service.Execute (harness.Context));
+
+				Assert.Contains ("雛形", exception.Message);
+				Assert.Empty (harness.Events);
+				Assert.Equal (0, harness.KernelWorkbook.SaveCallCount);
+				Assert.Equal (1, harness.MasterSheet.UnprotectCallCount);
+				Assert.Equal (1, harness.MasterSheet.ProtectCallCount);
+				Assert.True (harness.MasterSheet.ProtectContents);
+				Assert.True (harness.MasterSheet.ProtectDrawingObjects);
+				Assert.True (harness.MasterSheet.ProtectScenarios);
+				Assert.Equal (Excel.XlEnableSelection.xlUnlockedCells, harness.MasterSheet.EnableSelection);
+			}
+		}
+
 		private static void ConfigureMasterSheetAsProtected (Excel.Worksheet worksheet)
 		{
 			worksheet.ProtectContents = true;
@@ -462,6 +502,11 @@ namespace CaseInfoSystem.Tests
 				KernelTemplateSyncPreflightService preflightService = new KernelTemplateSyncPreflightService (
 					pathCompatibilityService,
 					new WordTemplateRegistrationValidationService (new WordTemplateContentControlInspectionService (), _logger));
+				KernelTemplateSyncPreparationService preparationService = new KernelTemplateSyncPreparationService (
+					ExcelInteropService,
+					pathCompatibilityService,
+					caseListFieldDefinitionRepository,
+					preflightService);
 				CaseWorkbookLifecycleService caseWorkbookLifecycleService = new CaseWorkbookLifecycleService (
 					_logger,
 					new CaseWorkbookLifecycleService.CaseWorkbookLifecycleServiceTestHooks {
@@ -473,8 +518,7 @@ namespace CaseInfoSystem.Tests
 					ExcelInteropService,
 					AccountingWorkbookService,
 					pathCompatibilityService,
-					caseListFieldDefinitionRepository,
-					preflightService,
+					preparationService,
 					MasterTemplateCatalogService,
 					caseWorkbookLifecycleService,
 					_logger);

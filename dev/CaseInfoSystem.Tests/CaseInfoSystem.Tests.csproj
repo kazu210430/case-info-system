@@ -150,6 +150,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\NavigationService.cs" Link="Source\App\NavigationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\PostCloseFollowUpScheduler.cs" Link="Source\App\PostCloseFollowUpScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateSyncPreparationService.cs" Link="Source\App\KernelTemplateSyncPreparationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateSyncPreflightService.cs" Link="Source\App\KernelTemplateSyncPreflightService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateFolderPathResolver.cs" Link="Source\App\KernelTemplateFolderPathResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateFolderOpenService.cs" Link="Source\App\KernelTemplateFolderOpenService.cs" />

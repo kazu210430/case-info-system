@@ -185,6 +185,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var wordTemplateContentControlInspectionService = new WordTemplateContentControlInspectionService();
             var wordTemplateRegistrationValidationService = new WordTemplateRegistrationValidationService(wordTemplateContentControlInspectionService, _logger);
             var kernelTemplateSyncPreflightService = new KernelTemplateSyncPreflightService(pathCompatibilityService, wordTemplateRegistrationValidationService);
+            var kernelTemplateSyncPreparationService = new KernelTemplateSyncPreparationService(ExcelInteropService, pathCompatibilityService, caseListFieldDefinitionRepository, kernelTemplateSyncPreflightService);
             var documentOutputService = new DocumentOutputService(ExcelInteropService, pathCompatibilityService, _logger);
             var excelValidationService = new ExcelValidationService(_logger);
             var accountingTemplateResolver = new AccountingTemplateResolver(ExcelInteropService, pathCompatibilityService, _logger);
@@ -286,11 +287,10 @@ namespace CaseInfoSystem.ExcelAddIn
                 ExcelInteropService,
                 accountingWorkbookService,
                 pathCompatibilityService,
-                caseListFieldDefinitionRepository,
-                kernelTemplateSyncPreflightService,
+                kernelTemplateSyncPreparationService,
                 masterTemplateCatalogService,
-                    caseWorkbookLifecycleService,
-                    _logger);
+                caseWorkbookLifecycleService,
+                _logger);
             var kernelCommandService = new KernelCommandService(
                 KernelWorkbookService,
                 KernelUserDataReflectionService,

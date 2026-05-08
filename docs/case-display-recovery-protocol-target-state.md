@@ -10,6 +10,7 @@
   - visibility recovery ownership target-state 追記時点の `main` / `origin/main`: `79c4823537c881b81582d3456145f8fc5f09466f`
   - rebuild fallback ownership target-state 追記時点の `main` / `origin/main`: `ca23a651a2c811eb19f81ade2348277af19fa0c3`
   - refresh source ownership target-state 追記時点の `main` / `origin/main`: `b9f0ab8b1534b083160a4c709e1cf33c753975a3`
+  - WindowActivate ownership target-state 追記時点の `main` / `origin/main`: `0feaadac7cc8ca433b61774f8f44a018b053e10c`
 - 参照正本:
   - `AGENTS.md`
   - `docs/architecture.md`
@@ -1294,8 +1295,209 @@ refresh source と rebuild fallback の接続は、`SelectedSource=MasterListReb
 5. tests / trace では、`BaseCacheFallback` が rebuild fallback required ではないこと、`CaseCache` / `BaseCache` 採用時に fallback required を立てないこと、source selection failure が fail closed になることを確認する。
 6. already-visible / host reuse / precondition skip / context reject では `SnapshotSource=None` または `NotReached` になり、`MasterListRebuild` required にならないことを確認する。
 
+## WindowActivate ownership target-state (2026-05-08 docs-only)
+
+### target-state summary
+
+この節は、`docs/case-display-recovery-protocol-current-state.md` の `WindowActivate ownership current-state (2026-05-08 docs-only)` を受けて、次の実装安全単位へ進むための target-state を固定する。
+
+参照した正本:
+
+- `docs/architecture.md`
+- `docs/flows.md`
+- `docs/ui-policy.md`
+- `docs/case-display-recovery-protocol-current-state.md`
+- `docs/case-display-recovery-protocol-target-state.md`
+
+今回は docs-only であり、コード変更、service 分割、helper 切り出し、`WindowActivate` 挙動変更、activation 条件変更、foreground guarantee 条件変更、visibility recovery 条件変更、hidden Excel / white Excel 対策変更は行わない。docs-only のため build / test / `DeployDebugAddIn` は実行しない。
+
+target-state では、`WindowActivate` を「window-safe な TaskPane display / refresh trigger」として定義する。`WindowActivate` は recovery、foreground guarantee、hidden Excel / white Excel 対策、`CASE display completed` のどれでもない。これらへ接続することはあっても、owner や terminal 判定を奪わない。
+
+### WindowActivate role definition
+
+`WindowActivate` の role は次で固定する。
+
+| 観点 | target-state の定義 |
+| --- | --- |
+| trigger | yes。対象 window が実際に activate された後続イベントとして、window-dependent な TaskPane display / refresh request を起動できる。 |
+| recovery | no。visibility recovery や Excel window recovery の primitive / owner ではない。 |
+| foreground guarantee | no。`WindowActivate` 発火を foreground obligation terminal とみなさない。 |
+| hidden Excel / white Excel 対策 | no。hidden session cleanup、retained hidden app-cache cleanup、post-close quit の owner ではない。 |
+| CASE display completed | no。completion の契機にはなり得るが、completion 条件そのものではない。 |
+
+`WindowActivate` は `WorkbookOpen` 直後に window が未確定な refresh を後続イベントへ委ねるための安全境界である。一方で、event が発火したことだけをもって pane visible、visibility recovery completed、foreground guarantee completed、CASE display completed のいずれも成立させない。
+
+### owner boundary
+
+target-state の owner 境界は current-state と同じ service 配置を維持し、semantic だけを明確にする。
+
+| boundary | owner | allowed responsibility | forbidden responsibility |
+| --- | --- | --- | --- |
+| event subscription | `ApplicationEventSubscriptionService` | `WorkbookActivate` / `WindowActivate` の hook / unhook。 | protocol decision、display outcome 判定。 |
+| event capture | `ThisAddIn.Application_WindowActivate(...)` / `ThisAddIn.HandleWindowActivateEvent(...)` | Excel event の受信、raw trace、観測事実の記録。 | refresh decision、foreground decision、hidden cleanup。 |
+| event bridge | `WorkbookEventCoordinator.OnWindowActivate(...)` | 既存 add-in 境界への中継。 | owner 変更、条件追加。 |
+| dispatch gate | `WindowActivatePaneHandlingService.Handle(...)` | `TaskPaneDisplayRequest.ForWindowActivate()` 作成、protection / suppression / external workbook gate、display entry への dispatch。 | recovery / foreground / display completion の terminal 判定。 |
+| display entry | `ThisAddIn.RequestTaskPaneDisplayForTargetWindow(...)` | `PaneDisplayPolicy.Decide(...)` による show / hide / reject / render entry の選択。 | snapshot source selection、foreground outcome 正規化。 |
+| refresh protocol | `TaskPaneRefreshOrchestrationService` | `WindowActivate` reason / source を受けた refresh outcome、visibility / foreground / source / rebuild outcome の正規化、created-case display session terminal 判定。 | `WindowActivate` event capture owner になること。 |
+| refresh execution | `TaskPaneRefreshCoordinator` | context resolve、pre-context recovery bridge、TaskPane refresh raw result。 | foreground guarantee decision / outcome owner になること。 |
+| host reuse / pane visible | `TaskPaneHostFlowService` / `TaskPaneHostReusePolicy` / `TaskPaneDisplayCoordinator` | `WorkbookActivate` / `WindowActivate` の CASE host reuse、show / render、visible CASE pane 判定。 | version 比較、CASE display completed emit。 |
+| workbook activation primitive | `ExcelInteropService.ActivateWorkbook(...)` など | 呼び出し元が許可した条件内で workbook / visible window を activate する。 | `WindowActivate` event owner として振る舞うこと。 |
+| foreground / recovery primitive | `ExcelWindowRecoveryService` | app/window visibility、window state restore、activation、foreground promotion の実行 primitive。 | trigger source の所有、display completion emit。 |
+| hidden create / hidden-for-display | `KernelCaseCreationService` / `CaseWorkbookOpenStrategy` | managed hidden create session、retained hidden app-cache、hidden-for-display open / cleanup。 | `WindowActivate` dispatch へ ownership を移すこと。 |
+| white Excel prevention | `PostCloseFollowUpScheduler` | no visible workbook 時の post-close quit 判定。 | `WindowActivate` / foreground recovery で代替すること。 |
+
+### allowed / forbidden responsibilities
+
+#### allowed
+
+- `WindowActivate` を window-dependent TaskPane display / refresh の trigger として扱う。
+- `WindowActivate` request を structured source または trigger reason として downstream に保持する。
+- `WindowActivate` dispatch の result を normalized diagnostic outcome として trace する。
+- `WindowActivate` reason で入った refresh が、通常の visibility recovery、refresh source、rebuild fallback、foreground guarantee の protocol outcome を受け取る。
+- `WorkbookActivate` と `WindowActivate` を host reuse 対象として扱う。
+- protection / suppression により `WindowActivate` dispatch を ignored / deferred として終了する。
+- workbook / window / context が不足する場合は fail closed とする。
+
+#### forbidden
+
+- `WindowActivate` 発火だけで display success とみなす。
+- `WindowActivate` 発火だけで visibility recovery completed、foreground guarantee completed、CASE display completed とみなす。
+- `WindowActivate` dispatch のために activation 条件を広げる。
+- `WorkbookOpen` 直後の window-dependent refresh skip 条件を弱める。
+- foreground guarantee、visibility recovery、rebuild fallback、refresh source の条件を `WindowActivate` owner 整理の名目で変更する。
+- hidden create session、hidden-for-display、retained hidden app-cache、post-close quit を `WindowActivate` handler の責務へ移す。
+- hidden Excel / white Excel 対策として `Application.DoEvents()`、sleep、timing hack、追加 foreground guard を導入する。
+- service 分割、helper 切り出し、context-less workbook 推測、暗黙の open を追加する。
+
+### normalized outcome design
+
+`WindowActivate` event 自体に display success / failure の outcome は持たせない。event capture は observation であり、success terminal ではない。
+
+target-state では、必要な場合だけ `WindowActivateDispatchOutcome` 相当の normalized diagnostic outcome を dispatch owner が返し、protocol outcome は downstream の owner が持つ。
+
+| outcome layer | owner | target-state の意味 |
+| --- | --- | --- |
+| event observed | `ThisAddIn` | Excel event を受信した事実。success / failure ではない。 |
+| dispatch outcome | `WindowActivatePaneHandlingService` | request 化できたか、ignored / deferred / failed したかを示す diagnostic outcome。 |
+| display entry outcome | `ThisAddIn.RequestTaskPaneDisplayForTargetWindow(...)` | `PaneDisplayPolicy.Decide(...)` の show / hide / reject / render entry。 |
+| refresh attempt outcome | `TaskPaneRefreshOrchestrationService` / `TaskPaneRefreshCoordinator` | refresh protocol の terminal / fail-closed / retry / recovery facts。 |
+| foreground outcome | `TaskPaneRefreshOrchestrationService` | foreground guarantee の normalized outcome。 |
+| visibility outcome | `TaskPaneRefreshOrchestrationService` | pane visible / recovery obligation の normalized outcome。 |
+| CASE display completed | `TaskPaneRefreshOrchestrationService` | created-case display session の success-only terminal。 |
+
+`WindowActivateDispatchOutcome` は少なくとも次の status を持つ。
+
+| status | terminal | 定義 |
+| --- | --- | --- |
+| `Observed` | no | event capture だけが成立し、dispatch owner へ渡る前の観測状態。 |
+| `Ignored` | yes | external workbook、role mismatch、display policy reject、protection / suppression などにより refresh へ進めない。失敗ではない。 |
+| `Deferred` | yes | ready retry / pending retry / suppression など既存の後続経路へ委ね、今回の event では refresh を確定しない。 |
+| `Dispatched` | yes | display entry または refresh orchestration へ request を渡した。display success を意味しない。 |
+| `Failed` | yes | request 作成、window / workbook facts、dispatch boundary で fail-closed になった。visibility / foreground / hidden cleanup で覆わない。 |
+| `Unknown` | no | outcome を正規化できていない。success completion には使わない。 |
+
+activation attempt は `WindowActivate` dispatch outcome から分離する。
+
+- `ActivationAttempt=NotAttempted`
+  - 通常の `WindowActivate` trigger では event window が既に activate されているため、dispatch owner は新たな activation primitive を所有しない。
+- `ActivationAttempt=Delegated`
+  - downstream の `ExcelInteropService`、`WorkbookPaneWindowResolver`、`ExcelWindowRecoveryService` など既存 primitive が、既存条件内で activation を実行した。
+- `ActivationAttempt=Succeeded` / `Failed`
+  - primitive owner の execution result としてだけ扱う。`WindowActivate` event success とは呼ばない。
+
+trace emit owner は次で固定する。
+
+- raw event trace:
+  - `ThisAddIn`
+- dispatch normalized trace:
+  - `WindowActivatePaneHandlingService`
+- display / refresh / visibility / foreground / source / rebuild normalized trace:
+  - `TaskPaneRefreshOrchestrationService`
+- primitive execution trace:
+  - `ExcelWindowRecoveryService`、`ExcelInteropService` など実行 owner
+- `case-display-completed`:
+  - `TaskPaneRefreshOrchestrationService` だけ
+
+### foreground guarantee / visibility recovery との境界
+
+`WindowActivate` と foreground guarantee / visibility recovery の境界は次で固定する。
+
+- `WindowActivate` は refresh trigger であり、foreground guarantee の decision owner ではない。
+- `WindowActivate` 発火だけを `ForegroundGuaranteeOutcome.RequiredSucceeded` / `SkippedAlreadyVisible` / `NotRequired` の根拠にしない。
+- foreground guarantee decision / outcome / trace は `TaskPaneRefreshOrchestrationService` が持つ。
+- foreground guarantee execution primitive は `ExcelWindowRecoveryService` が持つ。
+- `WindowActivate` は visibility recovery owner ではない。
+- workbook window visible ensure は `WorkbookWindowVisibilityService`、full app/window recovery は `ExcelWindowRecoveryService` に残す。
+- `WindowActivate` dispatch が ignored / deferred / failed の場合、visibility / foreground outcome は `NotReached` または fail-closed として扱い、success に丸めない。
+- `WindowActivate` reason で refresh path に到達した場合だけ、通常の refresh attempt と同じ rules で visibility / foreground outcome を正規化する。
+
+`WindowActivate` は「対象 window が実際に activate された観測点」ではあるが、「その後の display protocol が成功した証明」ではない。`Window.Visible = true`、`window.Activate()`、`WorkbookActivate`、`WindowActivate` はそれぞれ observation / primitive / trigger であり、pane visible や foreground terminal の代替にはしない。
+
+### hidden Excel / white Excel との接続条件
+
+`WindowActivate` と hidden Excel / white Excel 対策の接続は、owner を移さず接続条件だけを明確にする。
+
+#### shared/current app
+
+- `WindowActivate` が TaskPane display / refresh trigger になれるのは shared/current app 上の visible window に対してである。
+- hidden-for-display 後に shared/current app へ CASE 表示責務が handoff された場合でも、`WindowActivate` は handoff 後の trigger にすぎない。
+- shared/current app の `Application.Visible`、workbook window `Visible`、`WindowState` の復旧は `WorkbookWindowVisibilityService` / `ExcelWindowRecoveryService` の責務で扱う。
+
+#### isolated app
+
+- managed hidden create session や managed hidden reflection session の isolated app は display trigger source として扱わない。
+- isolated app 内の save 前 window normalization で `workbook.Activate()` が必要になっても、それは owner-side cleanup であり `WindowActivate` target-state へ昇格させない。
+- isolated app cleanup は session owner が close / quit / COM release まで閉じる。
+
+#### retained hidden app-cache
+
+- retained hidden app-cache は `CaseWorkbookOpenStrategy` の例外境界に残す。
+- cached `Application` の idle return / poison / timeout / shutdown cleanup は cache owner が持つ。
+- `WindowActivate` handler は retained instance を破棄しない。
+
+#### white Excel
+
+- white Excel 防止は close / quit 側の design goal であり、`PostCloseFollowUpScheduler` の no visible workbook quit 判定に残す。
+- `WindowActivate`、visibility recovery、foreground guarantee を post-close quit の代替にしない。
+- visible workbook がない状態を `WindowActivate` reason だけで補正しない。対象 window / workbook が不明なら fail closed とする。
+
+### CASE display completed との関係
+
+`WindowActivate` は `CASE display completed` の trigger になり得るが、completion 条件ではない。
+
+- `case-display-completed` emit owner は `TaskPaneRefreshOrchestrationService` のまま固定する。
+- `WindowActivateDispatchOutcome.Dispatched` は completion の直接材料ではない。
+- `WindowActivate` reason の refresh が pane visible と foreground terminal に到達した場合だけ、通常の created-case display session completion 判定へ進む。
+- `Ignored` / `Deferred` / `Failed` / `Unknown` は success-only completion に使わない。
+- already-visible / host reuse の場合でも、visible CASE pane 判定と foreground terminal を orchestration 側が確認してから completion する。
+- `WindowActivate` target-state は completion owner を増やさない。
+
+### constraints to preserve
+
+- `WindowActivate` 挙動を変えない。
+- activation 条件を広げない。
+- `WorkbookActivate` / `WindowActivate` の host reuse 条件を変えない。
+- `WorkbookOpen` 直後の window-dependent refresh skip を変えない。
+- foreground guarantee 条件を変えない。
+- visibility recovery 条件を変えない。
+- rebuild fallback 条件を変えない。
+- refresh source / snapshot source の採用条件を変えない。
+- hidden Excel / white Excel 対策を変えない。
+- `ScreenUpdating` / `DisplayAlerts` / `EnableEvents` restore scope、COM cleanup、hidden session cleanup を広げない。
+- `Application.DoEvents()`、sleep、timing hack を追加しない。
+- fail closed を維持し、不明な workbook / window / context を推測で補完しない。
+
+### 次の実装安全単位候補
+
+1. `WindowActivatePaneHandlingService` が既存条件を変えずに `WindowActivateDispatchOutcome` 相当の diagnostic facts を返す。`Ignored` / `Deferred` / `Dispatched` / `Failed` を区別し、refresh 到達条件は変えない。
+2. `TaskPaneDisplayRequest.Source=WindowActivate` と downstream `reason="WindowActivate"` の関係を trace 上で分ける。structured source を保持しても、snapshot source / refresh source selection の条件には使わない。
+3. `TaskPaneRefreshOrchestrationService` が `WindowActivate` trigger reason を session diagnostic として保持し、visibility / foreground / source / rebuild outcome と紐づけて trace する。`case-display-completed` emit owner は増やさない。
+4. tests / trace では、event observed、ignored、deferred、dispatched、failed を分け、`WindowActivate` 発火だけで foreground / visibility / display completed にならないことを確認する。
+5. hidden-for-display、managed hidden create session、retained hidden app-cache、post-close quit は既存 owner に残り、`WindowActivate` target-state 実装で cleanup / quit / activation 条件が広がらないことを確認する。
+6. docs-only 設計から実装へ進む場合も、最初の安全単位は outcome / trace の正規化に限定し、service 分割や helper 切り出しは行わない。
+
 ## 一言まとめ
 
 target-state では、`CASE display completed` を `pane visible` の別名にも `refresh completed` の別名にもせず、created-case display session を閉じる orchestration-level terminal state として定義する。
 
-その owner は `TaskPaneRefreshOrchestrationService` に置く。worker は attempt、coordinator は refresh unit / foreground execution bridge、host-flow は visible state、snapshot builder は rebuild fallback をそれぞれ持ち、final completion を奪わない構造が target-state である。
+その owner は `TaskPaneRefreshOrchestrationService` に置く。worker は attempt、coordinator は refresh unit / foreground execution bridge、host-flow は visible state、snapshot builder は rebuild fallback をそれぞれ持ち、`WindowActivate` は trigger / dispatch 境界に留める。いずれの lower-level owner も final completion を奪わない構造が target-state である。

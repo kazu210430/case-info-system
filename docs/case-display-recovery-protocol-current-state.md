@@ -26,6 +26,7 @@
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
+- hidden Excel / isolated app / white Excel lifecycle の前提: `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`
 - review-first safe unit の前提: `docs/codex-review-first-safe-unit-plan.md`
 - ready-show / recovery 観測整理: `docs/readyshow-recovery-observation-points-2026-05-08.md`
 

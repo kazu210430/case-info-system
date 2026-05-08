@@ -17,6 +17,7 @@
   - `docs/flows.md`
   - `docs/ui-policy.md`
   - `docs/case-display-recovery-protocol-current-state.md`
+  - `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`
   - `docs/readyshow-recovery-observation-points-2026-05-08.md`
   - `docs/codex-review-first-safe-unit-plan.md`
 

@@ -7,6 +7,7 @@
 - 構成全体の前提: `docs/architecture.md`
 - 主要フローの前提: `docs/flows.md`
 - UI 制御の前提: `docs/ui-policy.md`
+- hidden Excel / isolated app / white Excel lifecycle の前提: `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`
 - TaskPane 側の現在地: `docs/taskpane-refactor-current-state.md`
 - 残課題: `docs/technical-debt.md`
 

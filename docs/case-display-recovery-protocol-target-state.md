@@ -9,6 +9,7 @@
   - foreground guarantee ownership target-state 追記時点の `main` / `origin/main`: `3d6f2441f84dfefe46393508d4eae02ebe06b886`
   - visibility recovery ownership target-state 追記時点の `main` / `origin/main`: `79c4823537c881b81582d3456145f8fc5f09466f`
   - rebuild fallback ownership target-state 追記時点の `main` / `origin/main`: `ca23a651a2c811eb19f81ade2348277af19fa0c3`
+  - refresh source ownership target-state 追記時点の `main` / `origin/main`: `b9f0ab8b1534b083160a4c709e1cf33c753975a3`
 - 参照正本:
   - `AGENTS.md`
   - `docs/architecture.md`
@@ -1105,6 +1106,193 @@ target-state の normalized outcome は少なくとも次を持つ。
 4. `RebuildFallbackOutcome` を visibility outcome / foreground outcome と同一 created-case display session で突き合わせる。ただし completion 条件に rebuild fallback 使用有無を直接足さない。
 5. tests / trace では、visibility recovery failure、foreground guarantee failure、ready retry exhausted、pending retry exhausted がそれ単独では rebuild fallback required にならないことを確認する。
 6. `BaseCacheFallback` と `MasterListRebuild` を protocol outcome 上で区別し、fallback 条件を広げないことを確認する。
+
+## refresh source ownership target-state (2026-05-08 docs-only)
+
+### target-state summary
+
+この節は、`docs/case-display-recovery-protocol-current-state.md` の refresh source ownership current-state を受けて、次の実装安全単位へ進むための target-state を固定する。
+
+参照した正本:
+
+- `docs/architecture.md`
+- `docs/flows.md`
+- `docs/ui-policy.md`
+- `docs/case-display-recovery-protocol-current-state.md`
+- `docs/case-display-recovery-protocol-target-state.md`
+
+今回は docs-only であり、コード変更、service 分割、helper 切り出し、source 採用順序変更、cache 条件変更、rebuild fallback 条件変更、visibility / foreground / `WindowActivate` 条件変更は行わない。docs-only のため build / test / `DeployDebugAddIn` は実行しない。
+
+target-state では、`refresh source` を raw string `reason` の別名にしない。TaskPane refresh には少なくとも次の 4 種の source-like field があるため、同じ `source` という名前で混ぜない。
+
+| 種別 | 定義 | owner | snapshot source selection との関係 |
+| --- | --- | --- | --- |
+| trigger reason | refresh が要求された契機や診断文字列。`WorkbookActivate`、`WindowActivate`、`CreatedCaseReadyShow`、`RibbonCasePaneRefresh` など。 | refresh request を作る entry service / caller。 | 採用 source ではない。render path に到達するまで snapshot source は決まらない。 |
+| display request source | `TaskPaneDisplayRequest.Source` が表す structured な表示要求元。`WindowActivate`、`PostActionRefresh.<actionKind>` など。 | request creator と `TaskPaneRefreshOrchestrationService`。 | display entry / show / hide / reject の前段情報であり、cache 採用順序を決めない。 |
+| snapshot source | CASE pane render が必要になったとき、表示用 snapshot text をどこから採用したか。 | `TaskPaneSnapshotBuilderService`。 | `CaseCache -> BaseCache -> BaseCacheFallback -> MasterListRebuild` の順でだけ決まる。 |
+| log component source | trace / log を emit した component 名や logger 文脈。 | emit した service。 | protocol decision ではない。`refreshSource=(reason)` のような既存 log 名は normalized source として読まない。 |
+
+この節で正本化する `refresh source ownership` の中心は、上表のうち `snapshot source` と、それを上位 protocol outcome へ正規化する境界である。trigger reason や display request source は保持してよいが、`CaseCache` / `BaseCache` / `BaseCacheFallback` / `MasterListRebuild` の採用判断とは分ける。
+
+### source 種別定義
+
+| source | target-state の定義 | selection reason | degraded / fallback / rebuild required との関係 |
+| --- | --- | --- | --- |
+| `CaseCache` | CASE workbook の `TASKPANE_SNAPSHOT_CACHE_*` が存在し、format compatible で、version 条件を満たすため、CASE cache を表示用 snapshot として採用した状態。 | `CaseCacheUsable`。CASE cache が表示中 Pane と整合する最優先 source として使える。 | degraded ではない。cache fallback ではない。rebuild fallback required ではない。 |
+| `BaseCache` | CASE cache が使えず、Base 埋込 `TASKPANE_BASE_SNAPSHOT_*` が存在し、format compatible で、version 条件を満たすため、Base cache を CASE cache へ昇格して採用した状態。 | `BaseCachePromoted`。Base 埋込 snapshot が表示用 source として使える。 | degraded ではない。cache fallback ではない。rebuild fallback required ではない。 |
+| `BaseCacheFallback` | Base snapshot が存在し format compatible だが latest master version を読めないため、`LatestMasterVersionUnavailable` を diagnostic reason として持ったまま Base snapshot を採用した状態。 | `LatestMasterVersionUnavailable`。latest version 不明でも Base snapshot 自体は表示用 source として使える。 | cache fallback である。`SelectionQuality=Fallback` または `DegradedSelected` として観測してよいが、`MasterListRebuild` required ではない。 |
+| `MasterListRebuild` | CASE cache / Base cache / Base fallback のいずれも表示用 snapshot を供給できず、Master path を解決して read-only open し、`雛形一覧` から snapshot text を再構築する状態。 | `CacheUnavailable`、`CaseCacheIncompatible`、`CaseCacheStale`、`BaseCacheIncompatible`、`BaseCacheStale` など、cache source で完了できない reasons。 | rebuild fallback required の canonical source。rebuild outcome は `Completed` / `Degraded` / `Failed` に正規化する。 |
+| workbook snapshot | CASE / Base workbook の DocProperty chunk、master version、format compatibility、latest master version availability などの raw facts。 | `CaseWorkbookSnapshotFacts` / `BaseWorkbookSnapshotFacts`。採用前の材料であり、採用 source そのものではない。 | degraded / fallback / rebuild required を直接意味しない。`TaskPaneSnapshotBuilderService` がこの raw facts を評価して上記 source に変換する。 |
+| `None` | already-visible、host reuse、display entry reject、precondition skip、context reject、non-CASE render、または source selection failure で snapshot source を持てない状態。 | `SnapshotAcquisitionNotReached`、`ContextRejected`、`WorkbookMissing`、`SelectionFailed` など。 | `None` だけで rebuild required とは扱わない。selection failure で renderable snapshot がない場合は terminal failure として fail closed する。 |
+
+`workbook snapshot` は source 採用前の raw material であり、normalized `SelectedSource` にはしない。`CaseCache` / `BaseCache` / `BaseCacheFallback` は workbook snapshot facts から採用された source であり、`MasterListRebuild` は workbook snapshot facts では満たせなかった場合の rebuild source である。
+
+### owner boundary
+
+#### source 採用判断 owner
+
+- `TaskPaneSnapshotBuilderService` が `CaseCache -> BaseCache -> BaseCacheFallback -> MasterListRebuild` の採用順序と採用可否を判断する。
+- `TaskPaneRefreshOrchestrationService`、`WorkbookTaskPaneReadyShowAttemptWorker`、`TaskPaneRefreshCoordinator`、`TaskPaneHostFlowService` はこの順序を再実装しない。
+- host reuse / already-visible / precondition skip / context reject は snapshot source selection の前段であり、source 採用失敗として扱わない。
+
+#### raw facts owner
+
+- CASE / Base workbook snapshot facts は `TaskPaneSnapshotBuilderService` が読み取り、`TaskPaneSnapshotCacheService` など既存 cache helper の責務境界を変えない。
+- Master path 解決、read-only open、owned workbook close、COM cleanup は `MasterWorkbookReadAccessService` に残す。
+- `TaskPaneBuildResult`、`TaskPaneHostFlowResult`、`TaskPaneRefreshAttemptResult` は raw facts を上位へ運んでよいが、採用順序を再判定しない。
+
+#### source normalization owner
+
+- `TaskPaneRefreshOrchestrationService` が lower-level raw facts を `RefreshSourceSelectionOutcome` として正規化する。
+- normalization は selected source、selection reason、degraded / fallback / rebuild required flags、terminal status を観測可能にするためのものであり、cache 条件や rebuild 条件を変えるためのものではない。
+- `TaskPaneRefreshCoordinator` の既存 `refreshSource=(reason)` は target-state では `TriggerReason` または diagnostic reason として扱い、normalized source とは呼ばない。
+
+#### trace emit owner
+
+- raw diagnostic trace は `TaskPaneSnapshotBuilderService`、`MasterWorkbookReadAccessService`、`TaskPaneRefreshCoordinator` に残してよい。
+- normalized protocol trace は `TaskPaneRefreshOrchestrationService` が emit する。
+- normalized trace は `refresh-source-selected` / `refresh-source-skipped` / `refresh-source-degraded` / `refresh-source-failed` 相当として扱い、`case-display-completed` の emit owner を増やさない。
+- log component source は emit 元の説明であり、snapshot source や trigger reason の代替名にしない。
+
+#### rebuild fallback owner との境界
+
+- `MasterListRebuild` を選ぶ raw decision は `TaskPaneSnapshotBuilderService` の snapshot source decision に含まれる。
+- rebuild fallback required / completed / degraded / failed の normalized outcome は、既存の rebuild fallback target-state どおり `TaskPaneRefreshOrchestrationService` が `RebuildFallbackOutcome` として正規化する。
+- `RefreshSourceSelectionOutcome` は `RebuildFallbackOutcome` を参照または内包してよいが、rebuild fallback 条件を再判定しない。
+
+### allowed / forbidden responsibilities
+
+#### allowed
+
+- entry service / caller が trigger reason と display request source を設定する。
+- `TaskPaneRefreshOrchestrationService` が trigger reason / display request source を session に保持し、downstream へ渡す。
+- `TaskPaneSnapshotBuilderService` が workbook snapshot facts を評価し、snapshot source と selection reason を返す。
+- `TaskPaneSnapshotBuilderService` が `BaseCacheFallback` と `MasterListRebuild` を別 source として返す。
+- `TaskPaneHostFlowService` / `TaskPaneRefreshCoordinator` が snapshot source facts を result に含めて上位へ伝播する。
+- `TaskPaneRefreshOrchestrationService` が `RefreshSourceSelectionOutcome` と normalized trace を作る。
+- `case-display-completed` details に selected source / rebuild fallback outcome を diagnostic fact として含める。
+
+#### forbidden
+
+- trigger reason を `CaseCache` / `BaseCache` / `MasterListRebuild` の採用 source と混同する。
+- display request source を cache 採用順序や rebuild fallback required 判定に使う。
+- log component source を protocol source として扱う。
+- `TaskPaneRefreshCoordinator` が `refreshSource=(reason)` を根拠に snapshot source を決める。
+- `BaseCacheFallback` を `MasterListRebuild` required と混同する。
+- `CaseCache` / `BaseCache` / `BaseCacheFallback` 採用時に rebuild fallback required を立てる。
+- source normalization のために host reuse / already-visible / ready retry / pending retry / render / show 条件を変える。
+- source selection failure を visibility recovery、foreground guarantee、追加 guard、sleep、`Application.DoEvents()` で覆って success に丸める。
+- source selection のために context-less fallback open、暗黙の workbook 推測、Master path 推測を追加する。
+- COM lifetime、`ScreenUpdating` / `DisplayAlerts` / `EnableEvents` restore scope、hidden session cleanup 境界を広げる。
+
+### normalized outcome design
+
+#### RefreshSourceSelectionOutcome
+
+target-state の normalized outcome は少なくとも次を持つ。
+
+| field | 意味 |
+| --- | --- |
+| `Status` | `NotReached` / `Selected` / `DegradedSelected` / `Failed` / `Unknown` |
+| `SelectedSource` | `None` / `CaseCache` / `BaseCache` / `BaseCacheFallback` / `MasterListRebuild` |
+| `SelectionReason` | `CaseCacheUsable`、`BaseCachePromoted`、`LatestMasterVersionUnavailable`、`CacheUnavailable`、`SnapshotAcquisitionNotReached`、`SelectionFailed` など。 |
+| `TriggerReason` | upstream が渡した raw reason。source 採用判断には使わない diagnostic field。 |
+| `DisplayRequestSource` | structured request source。存在する場合のみ保持する。 |
+| `WorkbookSnapshotFactsAvailable` | CASE / Base workbook snapshot facts を評価できたか。 |
+| `FallbackReasons` | cache が使えなかった diagnostic reason list。 |
+| `IsCacheFallback` | `BaseCacheFallback` のように cache source 内の fallback を使ったか。 |
+| `IsRebuildRequired` | `MasterListRebuild` が required だったか。 |
+| `RebuildFallbackOutcome` | `MasterListRebuild` required 時の normalized rebuild fallback outcome。required でない場合は `Skipped` 相当。 |
+| `IsTerminal` | source selection protocol が terminal か。`Unknown` は false。 |
+| `CanContinueRefresh` | render / host show evaluation へ進める snapshot result があるか。 |
+| `FailureReason` | `WorkbookMissing`、`ContextRejected`、`MasterPathUnavailable`、`SnapshotBuildException`、`NoSnapshotText` など。 |
+| `DegradedReason` | latest version unavailable、cache update failure、error snapshot fallback、partial / unverifiable source など。 |
+
+`Status` の意味は次で固定する。
+
+| status | terminal | refresh can continue | 定義 |
+| --- | --- | --- | --- |
+| `NotReached` | yes | conditional | already-visible、host reuse、precondition skip、context reject などで snapshot acquisition に到達しなかった。失敗とは限らない。 |
+| `Selected` | yes | yes | `CaseCache`、`BaseCache`、または正常な `MasterListRebuild` で renderable snapshot を得た。 |
+| `DegradedSelected` | yes | yes, but degraded | `BaseCacheFallback`、または `MasterListRebuild` degraded など、表示継続は可能だが diagnostic reason を持つ。 |
+| `Failed` | yes | no | snapshot source が必要だったが renderable snapshot を得られなかった。fail closed で扱う。 |
+| `Unknown` | no | no | owner が facts を正規化できていない。success completion に使わない。 |
+
+source selection failure の terminal outcome は `Status=Failed` とし、`SelectedSource=None`、`IsTerminal=true`、`CanContinueRefresh=false` とする。`MasterListRebuild` attempted かつ error snapshot text が renderable な場合は `Failed` ではなく `DegradedSelected` とし、degraded fact を trace に残す。
+
+### rebuild fallback との接続条件
+
+refresh source と rebuild fallback の接続は、`SelectedSource=MasterListRebuild` または raw facts 上 `MasterListRebuild` を選ぶべき状態に到達した場合だけ成立する。
+
+- `CaseCache`
+  - CASE cache が renderable snapshot を供給できるため、rebuild fallback required ではない。
+- `BaseCache`
+  - Base snapshot を CASE cache へ昇格して renderable snapshot を供給できるため、rebuild fallback required ではない。
+- `BaseCacheFallback`
+  - latest master version が読めない degraded / cache fallback であっても、Base snapshot を供給できるため、rebuild fallback required ではない。
+- `MasterListRebuild`
+  - cache source が snapshot を供給できず、Master list から再構築するため、rebuild fallback required である。
+- `None`
+  - snapshot acquisition に到達していない、または source selection failure の状態である。到達していない場合は required ではない。selection failure の場合は facts に応じて failed outcome とするが、trigger reason だけを根拠に `MasterListRebuild` を要求しない。
+
+`MasterListRebuild` required になるためには、refresh path が fail-closed せず、CASE render が必要になり、`TaskPaneSnapshotBuilderService` が CASE / Base / Base fallback のいずれでも renderable snapshot を得られないことが必要である。visibility recovery failure、foreground guarantee failure、ready retry exhausted、pending retry exhausted、`WindowActivate` 発火有無は、それ単独では rebuild fallback required ではない。
+
+### CASE display completed との関係
+
+`CASE display completed` は引き続き `TaskPaneRefreshOrchestrationService` の created-case display session terminal state とする。
+
+- selected source は completion の直接条件ではない。
+- `CaseCache` / `BaseCache` / `BaseCacheFallback` / `MasterListRebuild` のどれを使っても、completion は pane visible、visibility outcome、foreground outcome で判断する。
+- `BaseCacheFallback` や `MasterListRebuild` degraded は diagnostic fact であり、pane visible と foreground terminal が display-completable なら completion の材料を妨げない。
+- `RefreshSourceSelectionOutcome.Failed` / `Unknown` は fail-closed とし、success-only の `case-display-completed` には使わない。
+- already-visible / host reuse では source selection が `NotReached` でも、pane visible と foreground terminal が成立していれば display completion できる。
+- `case-display-completed` は lower-level service から emit しない。
+
+### constraints to preserve
+
+- 既存の source 採用順序を変えない。
+  - `CaseCache -> BaseCache -> BaseCacheFallback -> MasterListRebuild` を維持する。
+- cache / snapshot / rebuild 条件を変えない。
+  - format compatibility、master version 比較、latest master version unreadable 時の `BaseCacheFallback`、Master read-only rebuild 条件を維持する。
+- 白Excel対策を落とさない。
+  - source selection を Excel window visibility recovery や post-close quit の代替にしない。
+- TaskPane 不表示 regression を防ぐ。
+  - already-visible、host reuse、display entry、ready retry、pending retry、render / show 条件を source 正規化の名目で変えない。
+- COM解放を落とさない。
+  - `MasterWorkbookReadAccessService` の owned read access cleanup と `readAccess.CloseIfOwned()` の finally 境界を維持する。
+- fail closed を維持する。
+  - workbook / context / `SYSTEM_ROOT` / Master path が不明な場合に推測で補完しない。
+- ガード追加で覆わない。
+  - source failure を新しい guard、sleep、DoEvents、visibility / foreground 条件の拡大で隠さない。
+
+### 次の実装安全単位候補
+
+1. `TaskPaneSnapshotBuilderService` が `SnapshotSourceSelectionFacts` を返す。`SelectedSource`、selection reason、fallback reason list、workbook snapshot facts availability、failure / degraded reason を含め、採用順序と条件は変えない。
+2. `CasePaneSnapshotRenderService` / `TaskPaneHostFlowService` / `TaskPaneRefreshCoordinator` が source selection facts を上位へ伝播する。host reuse / render / show 条件は変えない。
+3. `TaskPaneRefreshOrchestrationService` が `RefreshSourceSelectionOutcome` を正規化し、created-case display session 上で normalized trace を emit する。`case-display-completed` emit owner は増やさない。
+4. `TaskPaneRefreshCoordinator` の `refreshSource=(reason)` 相当 log を、互換を保ちながら `triggerReason` / `displayRequestSource` / `snapshotSource` の区別へ移す。
+5. tests / trace では、`BaseCacheFallback` が rebuild fallback required ではないこと、`CaseCache` / `BaseCache` 採用時に fallback required を立てないこと、source selection failure が fail closed になることを確認する。
+6. already-visible / host reuse / precondition skip / context reject では `SnapshotSource=None` または `NotReached` になり、`MasterListRebuild` required にならないことを確認する。
 
 ## 一言まとめ
 

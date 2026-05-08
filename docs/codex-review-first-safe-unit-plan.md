@@ -211,33 +211,26 @@
 
 ## 10. 実機 NG 調査記録（2026-05-08）
 
-- 本節は、第1安全単位の実装後に実機で観測した NG と、その原因調査記録である
-- 観測した症状:
-  - 雛形更新後に新規 CASE を作成したところ、表示準備中にぐるぐるループした
-  - いったん終了後、対象 CASE を開いたところ白 Excel になった
-  - 白 Excel はウインドウ再表示で復元した
-  - 他の既存 CASE は、ボタンパネル更新で表示できた
-- 調査で分かったこと:
-  - `KernelTemplateSyncService` から `KernelTemplateSyncPreparationService` へ移した処理について、`ExcelApplicationStateScope`、sheet protection restore、preflight、publication の前後関係は変わっていない
-  - publication 本線の順序 `WriteToMasterList -> TASKPANE_MASTER_VERSION +1 -> Kernel save -> Base snapshot sync -> InvalidateCache` は変わっていない
-  - Base 本体 `案件情報System_Base.xlsx` は、調査時点で `TASKPANE_BASE_MASTER_VERSION=68`、`TASKPANE_MASTER_VERSION=68`、`TASKPANE_BASE_SNAPSHOT_COUNT=14` を持っていた
-  - 2026-05-08 15:50 以後に新規作成した `20260508_テスト\\案件情報_テスト.xlsx` は、`TASKPANE_BASE_MASTER_VERSION=68`、`TASKPANE_MASTER_VERSION=68`、`TASKPANE_SNAPSHOT_CACHE_COUNT=14` で正常だった
-  - 一方で、問題として開かれた `20260508_白フラッシュ出ちゃった。\\案件情報_白フラッシュ出ちゃった。.xlsx` は、`TASKPANE_BASE_MASTER_VERSION=65` を保持していた
-  - 同 CASE の reopen ログでは、`caseMasterVersion=65, latestMasterVersion=68`、`embeddedMasterVersion=65, latestMasterVersion=68` から `MasterListRebuild` と foreground recovery に入っていた
-  - 問題 CASE のフォルダ作成時刻は 2026-05-08 00:26:46 で、15:50 の雛形更新より前だった
-- `KernelTemplateSyncPreparationService` 分離が直接原因ではなさそうな理由:
-  - refactor 前後で publication 本線の順序変更がない
-  - `ExcelApplicationStateScope` / protection restore / preflight / publication の関係が同一である
-  - Base 本体は update 後に version 68 / snapshot count 14 へ到達している
-  - update 後に作成した新規 CASE は version 68 / cache 正常で、今回の refactor だけで新規 CASE を壊した形跡がない
-  - 実機 NG の対象は、雛形更新後に作った CASE ではなく、更新前状態を引きずった stale CASE reopen と読む方が事実に合う
-- 本命の残課題:
-  - stale CASE reopen 時の `TaskPaneSnapshotBuilderService` による `MasterListRebuild`
-  - rebuild 後の foreground recovery
-  - ready-show / window recovery と白 Excel 観測の関係
-- 次の安全単位候補として扱う対象:
-  - `TaskPaneSnapshotBuilderService`
-  - ready-show / window recovery 側の orchestration
-- revert 判断:
-  - `KernelTemplateSyncPreparationService` 分離 commit の revert は第一推奨ではない
-  - 理由は、今回の NG が「refactor 後に作った新規 CASE の破損」ではなく、「stale CASE reopen で既存の rebuild / recovery 経路が表面化した事象」である可能性が高いため
+- 本節は、第1安全単位の実装後に 1 度だけ観測した表示不安定の記録であり、正本補足は `docs/flows.md` の `雛形更新直後の新規 CASE 作成〜初回表示〜再オープンの観測メモ（2026-05-08）` を参照する。
+- 以前の「古いCASEを開いたらぐるぐる」という表現は不正確だった。
+- 今回の観測事実:
+  - 雛形更新後、そのまま Kernel から新規 CASE を作成した。
+  - その新規 CASE が表示準備中にぐるぐる状態になった。
+  - 一旦 Excel を終了した。
+  - 当該 CASE を開いたところ白 Excel になった。
+  - 白 Excel はウインドウ再表示で復元した。
+  - 同じ操作で再現を試したが、再発しなかった。
+- この記録からまだ断定しないこと:
+  - 第1安全単位 `KernelTemplateSyncPreparationService` 分離が直接原因か。
+  - stale CASE reopen が原因か。
+  - 恒常不具合か、一過性の表示タイミング問題か。
+- ログ上の関連候補として切り分け対象に残すもの:
+  - version mismatch
+  - `TaskPaneSnapshotBuilderService` の `MasterListRebuild`
+  - `TaskPaneRefreshCoordinator` の foreground recovery
+  - `KernelCasePresentationService` / `WorkbookTaskPaneReadyShowAttemptWorker` 周辺の ready-show
+  - `ExcelWindowRecoveryService` / `WorkbookWindowVisibilityService` の window recovery / visibility
+- 判断:
+  - 直ちに白 Excel 対策ガードを追加する段階ではなく、追加観測を優先する。
+  - 次の安全単位候補は `TaskPaneSnapshotBuilderService` と ready-show / foreground recovery / window recovery 周辺の観測強化または責務整理である。
+  - `KernelTemplateSyncPreparationService` 分離 commit の revert は第一推奨ではないが、これは「直接原因ではないと確定した」という意味ではなく、原因未確定の段階で revert を先行させないという判断に留める。

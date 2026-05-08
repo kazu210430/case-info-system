@@ -545,6 +545,54 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 - Base snapshot 埋め込みを削らないこと。
 - `TASKPANE_SNAPSHOT_CACHE_COUNT` を削除対象に含めないこと。
 
+## 雛形更新直後の新規 CASE 作成〜初回表示〜再オープンの観測メモ（2026-05-08）
+
+この節は、第1安全単位 merge 後に 1 度だけ観測した表示不安定について、観測事実と未確定事項を分けて残す補足です。原因断定や恒常不具合の認定はまだ行いません。
+
+### 観測事実
+
+- 雛形更新後、そのまま Kernel から新規 CASE を作成した。
+- その新規 CASE は初回表示の準備中にぐるぐる状態になった。
+- いったん Excel を終了した。
+- その当該 CASE を開いたところ白 Excel になった。
+- 白 Excel はウインドウ再表示で復元した。
+- その後、同じ操作で再現を試したが、最初から問題なく表示された。
+- したがって、現時点では恒常再現する不具合か、一過性の表示タイミング問題か、根本原因が潜んでいるかは未確定である。
+- 以前の「古いCASEを開いたらぐるぐる」という要約は不正確であり、今回の一次観測は「雛形更新直後に新規 CASE を作成した直後の初回表示」から始まっている。
+
+### この観測に関係しうる既存フロー
+
+- 新規 CASE 作成直後は `CaseWorkbookInitializer` と `CaseTemplateSnapshotService` が Base 埋込 snapshot / master version を CASE へ引き継ぐ。
+- 初回表示では `KernelCasePresentationService` が hidden create session 後の表示 handoff を行い、`WorkbookWindowVisibilityService` が workbook window の visible 化、`ExcelWindowRecoveryService` が initial recovery、`ShowWorkbookTaskPaneWhenReady(...)` が ready-show 予約を担当する。
+- 再オープン後の TaskPane snapshot 解決では `TaskPaneSnapshotBuilderService` が `CASE cache -> Base cache -> MasterListRebuild` の順で解決し、refresh 完了後の foreground recovery は `TaskPaneRefreshCoordinator` が判断する。
+
+### まだ断定できないこと
+
+- 今回のぐるぐるが、新規 CASE 作成直後の初回表示タイミングだけで起きた一過性の現象か。
+- `ShowWorkbookTaskPaneWhenReady(...)` 周辺の ready-show handoff が関与したか。
+- `ExcelWindowRecoveryService` / `TaskPaneRefreshCoordinator` の foreground recovery / window recovery が白 Excel の復元前後で関与したか。
+- `TaskPaneSnapshotBuilderService` の `MasterListRebuild` が今回の再オープン時に実際に走っていたか。
+- version mismatch が起点だったか。
+- Excel window visibility の変化が主因だったか。
+- 第1安全単位 `KernelTemplateSyncPreparationService` 分離が直接原因かどうか。
+
+### 追加で見たいログと確認項目
+
+- 新規 CASE 作成直後から初回表示完了までの `NewCaseVisibilityObservation` と `KernelFlickerTrace`。
+- `KernelCasePresentationService` の `initial-recovery-completed`、`post-release-suppression-prepared`、`ready-show-requested`、`ShowCreatedCase workbook window made visible before ready-show`。
+- 再オープン時の `TaskPaneSnapshotBuilderService` による `caseMasterVersion`、`embeddedMasterVersion`、`latestMasterVersion`、`Task pane snapshot source=CaseCache|BaseCache|MasterListRebuild`。
+- `TaskPaneRefreshCoordinator` の `foreground-recovery-decision`、`final-foreground-guarantee-start`、`final-foreground-guarantee-end`。
+- `ExcelWindowRecoveryService` の `Excel window recovery evaluated` と `Excel window recovery mutation trace`。
+- `WorkbookOpen -> WorkbookActivate -> WindowActivate` の順序と、その時点での対象 workbook / window 解決可否。
+- `Application.Visible`、`ScreenUpdating`、workbook window `Visible`、`WindowState` の復元有無。
+
+### 次の安全単位候補と判断
+
+- 現時点では、白 Excel 対策ガードや stale CASE reopen 前提の分岐を先に足すより、追加観測を挟む判断を優先する。
+- 次の安全単位候補は、`TaskPaneSnapshotBuilderService` 周辺の version mismatch / `MasterListRebuild` 観測整理と、`KernelCasePresentationService` / ready-show / `TaskPaneRefreshCoordinator` / `ExcelWindowRecoveryService` 周辺の表示回復経路の観測整理である。
+- 第1安全単位の直接原因とは断定しない。
+- stale CASE reopen が原因だとも断定しない。
+
 ## 不明点
 
 - この文書の不明点は、該当する各節の `### 不明点` に記載します。

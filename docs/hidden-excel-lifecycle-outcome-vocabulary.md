@@ -127,6 +127,20 @@ owner:
 | `RetainedInstancePoisoned` | cached app を再利用不可として扱う。 | cleanup failure、unhealthy detection。 | reuse しない。cleanup completed ではない。 | cache owner の cleanup trigger へ接続。 | poison と cleanup completed を混同しない。 |
 | `RetainedInstanceOwnershipUnknown` | cache entry / owner facts が不足して retained instance と断定できない。 | diagnostic gap。 | cleanup 不可。 | 別安全単位で owner facts を確認。 | broad process cleanup 禁止。 |
 
+#### Retained Cleanup Protocol Mapping
+
+retained cleanup vocabulary は `CaseWorkbookOpenStrategy` の retained hidden app-cache にだけ使います。session close の hidden cleanup facts と、cached `Application` disposal facts を分けて読むため、次の mapping を正本とします。
+
+| protocol event | raw facts | normalized retained outcome | outcome owner | 使用禁止の読み替え |
+| --- | --- | --- | --- | --- |
+| app-cache session close succeeds and cache remains healthy | route、workbook close attempted / completed、cache returned to idle、cache poisoned false。 | `RetainedInstanceReturnedToIdle` または keep decision。 | `CaseWorkbookOpenStrategy`。 | `IsolatedAppReleased`、`RetainedInstanceCleanupCompleted`、foreground / visibility success。 |
+| app-cache session close cannot safely return to idle | route、workbook close failure、return-to-idle failure、health check failure、cache poisoned true。 | `RetainedInstancePoisoned`、必要に応じて hidden cleanup degraded / failed。 | `CaseWorkbookOpenStrategy`。 | poison を cleanup completed と呼ぶこと。 |
+| cached app is disposed by timeout / poison / feature flag disabled / shutdown | cleanup reason、owner facts、app quit attempted、app quit completed、release facts。 | `RetainedInstanceCleanupCompleted` / `RetainedInstanceCleanupDegraded` / `RetainedInstanceCleanupFailed`。 | `CaseWorkbookOpenStrategy`。 | hidden workbook close completed を cached app cleanup completed と呼ぶこと。 |
+| cache entry absent or trigger absent | cache entry missing、cleanup trigger absent。 | `RetainedInstanceCleanupNotRequired`。 | `CaseWorkbookOpenStrategy`。 | trace gap を not required に丸めること。 |
+| cache-owned facts are false or insufficient | owner mismatch、cache entry / process facts insufficient。 | `RetainedInstanceCleanupSkipped` / `RetainedInstanceOwnershipUnknown`。 | `CaseWorkbookOpenStrategy`。 | PID / process name だけで cleanup すること。 |
+
+retained cleanup の raw facts は diagnostic であり、それ自体は success / failure ではありません。normalized outcome は cache owner が決めます。`WindowActivate`、white Excel prevention、foreground guarantee、visibility restore は retained cleanup outcome owner ではありません。
+
 ### Workbook Close Outcome
 
 owner:

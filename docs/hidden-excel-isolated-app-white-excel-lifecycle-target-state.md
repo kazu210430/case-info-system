@@ -122,6 +122,27 @@ cleanup してはいけない条件:
 - cache owner 以外が retained instance を推測で見つけた場合。
 - workbook / process の owner tag や cache entry が不明な orphaned `EXCEL.EXE` を、target-state だけで強制終了する場合。
 
+#### retained instance cleanup protocol
+
+retained hidden app-cache は `CaseWorkbookOpenStrategy` が所有する cache entry lifetime です。hidden create session の workbook close と、cached `Application` 自体の cleanup を別 protocol として扱います。
+
+| protocol unit | trigger | owner が出す normalized outcome | runtime mutation | 混ぜてはいけないもの |
+| --- | --- | --- | --- | --- |
+| keep / return-to-idle | app-cache route の session close で、owned workbook close / release が終わり、cached app が healthy で、timeout / poison / shutdown に該当しない場合。 | `RetainedInstanceReturnedToIdle`。必要に応じて cache 維持を表す `RetainedInstanceKept` と同じ owner vocabulary で扱う。 | cached app を hidden / quiet state に戻し、idle timer を予約する。`Application.Quit` は実行しない。 | isolated app release、retained cleanup completed、foreground guarantee completed。 |
+| poison | abort、workbook close failure、return-to-idle failure、health check failure、session cleanup failure で cache owner が reuse unsafe と判断した場合。 | `RetainedInstancePoisoned`。 | cache entry から外し、以後 reuse しない。必要なら slot disposal へ接続する。 | poison を `RetainedInstanceCleanupCompleted` と呼ばない。 |
+| timeout cleanup | cached app が idle で、既存 idle timeout に到達した場合。 | `RetainedInstanceCleanupCompleted` / `RetainedInstanceCleanupDegraded` / `RetainedInstanceCleanupFailed`。 | cache-owned app だけ `Application.Quit` / COM release する。 | idle timeout 値変更、in-use app cleanup、shared/current app quit。 |
+| feature flag disabled cleanup | cache owner が既存 cache flag disabled を検知した場合。 | `RetainedInstanceCleanupCompleted` / `RetainedInstanceCleanupDegraded` / `RetainedInstancePoisoned`。 | 既存条件内で slot を cache から外す。 | feature flag 意味変更、route 選択条件変更。 |
+| shutdown cleanup | Add-in shutdown で `ShutdownHiddenApplicationCache()` が呼ばれた場合。 | `RetainedInstanceCleanupCompleted` / `RetainedInstanceCleanupDegraded` / `RetainedInstanceCleanupSkipped`。 | cached slot と idle timer を cache owner 内で閉じる。 | user-owned shared app cleanup、post-close white Excel quit。 |
+| not required / skipped / unknown | cache entry が無い、owner facts が不足、または cache-owned でない slot が見えた場合。 | `RetainedInstanceCleanupNotRequired` / `RetainedInstanceCleanupSkipped` / `RetainedInstanceOwnershipUnknown`。 | cleanup mutation なし、または fail closed。 | process 名だけの broad kill、WindowActivate を根拠にした cleanup。 |
+
+trace policy:
+
+- return-to-idle は session close outcome として記録し、cached app disposal outcome と混同しません。
+- timeout / poison / shutdown cleanup は `cleanupReason`、`appQuitAttempted`、`appQuitCompleted` などの raw facts を伴う retained cleanup outcome として記録します。
+- hidden cleanup outcome、isolated app outcome、retained instance outcome を同じ success terminal に丸めません。
+- retained cleanup は `CaseWorkbookOpenStrategy` cache owner だけが正規化します。`KernelCaseCreationService`、`WindowActivatePaneHandlingService`、`PostCloseFollowUpScheduler` は retained cleanup outcome owner ではありません。
+- orphaned `EXCEL.EXE` の監視、通知、強制終了はこの protocol では未定義です。owner facts が揃わない process cleanup は D-3 として扱います。
+
 ### hidden Excel visibility restore
 
 visible に戻す条件:

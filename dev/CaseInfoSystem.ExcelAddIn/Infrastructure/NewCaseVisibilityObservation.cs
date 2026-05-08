@@ -48,7 +48,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 if (TryGetLiveSessionLocked(normalizedPath, out Session existingSession))
                 {
-                    RemoveSessionLocked(existingSession);
+                    return;
                 }
 
                 string sessionId = "NCO-" + (++_sessionSequence).ToString("D4", CultureInfo.InvariantCulture);

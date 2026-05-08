@@ -116,6 +116,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     preconditionEvaluationResult.SkipActionName,
                     null,
                     null);
+                skippedResult = CompleteRefreshSourceSelectionOutcome(
+                    reason,
+                    workbook,
+                    window,
+                    skippedResult,
+                    stopwatch,
+                    preconditionEvaluationResult.SkipActionName,
+                    null);
                 return CompleteRebuildFallbackOutcome(
                     reason,
                     workbook,
@@ -141,6 +149,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 stopwatch,
                 "refresh",
                 null,
+                null);
+            attemptResult = CompleteRefreshSourceSelectionOutcome(
+                reason,
+                workbook,
+                window,
+                attemptResult,
+                stopwatch,
+                "refresh",
                 null);
             attemptResult = CompleteRebuildFallbackOutcome(
                 reason,
@@ -780,6 +796,182 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return value.HasValue ? value.Value.ToString() : string.Empty;
         }
 
+        private TaskPaneRefreshAttemptResult CompleteRefreshSourceSelectionOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber)
+        {
+            if (attemptResult == null)
+            {
+                return null;
+            }
+
+            RefreshSourceSelectionOutcome outcome = RefreshSourceSelectionOutcome.FromAttemptResult(attemptResult);
+            LogRefreshSourceSelectionOutcome(
+                reason,
+                workbook,
+                inputWindow,
+                attemptResult,
+                outcome,
+                stopwatch,
+                completionSource,
+                attemptNumber);
+            return attemptResult.WithRefreshSourceSelectionOutcome(outcome);
+        }
+
+        private void LogRefreshSourceSelectionOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            RefreshSourceSelectionOutcome outcome,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber)
+        {
+            if (!IsCreatedCaseDisplayReason(reason) || outcome == null)
+            {
+                return;
+            }
+
+            WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
+            Excel.Window observedWindow = context == null ? inputWindow : context.Window;
+            string detail = FormatRefreshSourceSelectionDetails(
+                reason,
+                outcome,
+                attemptResult,
+                completionSource,
+                attemptNumber);
+            string statusAction = FormatRefreshSourceSelectionAction(outcome);
+            LogRefreshSourceSelectionTrace(
+                reason,
+                workbook,
+                context,
+                observedWindow,
+                outcome,
+                stopwatch,
+                statusAction,
+                detail);
+
+            if (outcome.IsRebuildRequired && !string.Equals(statusAction, "refresh-source-rebuild-required", StringComparison.OrdinalIgnoreCase))
+            {
+                LogRefreshSourceSelectionTrace(
+                    reason,
+                    workbook,
+                    context,
+                    observedWindow,
+                    outcome,
+                    stopwatch,
+                    "refresh-source-rebuild-required",
+                    detail);
+            }
+        }
+
+        private void LogRefreshSourceSelectionTrace(
+            string reason,
+            Excel.Workbook workbook,
+            WorkbookContext context,
+            Excel.Window observedWindow,
+            RefreshSourceSelectionOutcome outcome,
+            Stopwatch stopwatch,
+            string statusAction,
+            string detail)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action="
+                + statusAction
+                + " reason="
+                + (reason ?? string.Empty)
+                + ", context="
+                + FormatContextDescriptor(context)
+                + ", refreshSourceStatus="
+                + outcome.Status.ToString()
+                + ", selectedSource="
+                + outcome.SelectedSource.ToString()
+                + ", selectionReason="
+                + outcome.SelectionReason
+                + ", cacheFallback="
+                + outcome.IsCacheFallback.ToString()
+                + ", rebuildRequired="
+                + outcome.IsRebuildRequired.ToString()
+                + ", canContinue="
+                + outcome.CanContinueRefresh.ToString()
+                + ", elapsedMs="
+                + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                context == null ? workbook : context.Workbook,
+                observedWindow,
+                statusAction,
+                "TaskPaneRefreshOrchestrationService.CompleteRefreshSourceSelectionOutcome",
+                ResolveObservedWorkbookPath(context, workbook),
+                detail);
+        }
+
+        private static string FormatRefreshSourceSelectionAction(RefreshSourceSelectionOutcome outcome)
+        {
+            switch (outcome.Status)
+            {
+                case RefreshSourceSelectionOutcomeStatus.Selected:
+                    return "refresh-source-selected";
+                case RefreshSourceSelectionOutcomeStatus.DegradedSelected:
+                    return "refresh-source-degraded";
+                case RefreshSourceSelectionOutcomeStatus.FallbackSelected:
+                    return "refresh-source-fallback";
+                case RefreshSourceSelectionOutcomeStatus.RebuildRequired:
+                    return "refresh-source-rebuild-required";
+                case RefreshSourceSelectionOutcomeStatus.Failed:
+                    return "refresh-source-failed";
+                case RefreshSourceSelectionOutcomeStatus.NotReached:
+                    return "refresh-source-not-reached";
+                default:
+                    return "refresh-source-unknown";
+            }
+        }
+
+        private static string FormatRefreshSourceSelectionDetails(
+            string reason,
+            RefreshSourceSelectionOutcome outcome,
+            TaskPaneRefreshAttemptResult attemptResult,
+            string completionSource,
+            int? attemptNumber)
+        {
+            string details =
+                "reason=" + (reason ?? string.Empty)
+                + ",completionSource=" + (completionSource ?? string.Empty)
+                + ",refreshSourceStatus=" + outcome.Status.ToString()
+                + ",selectedSource=" + outcome.SelectedSource.ToString()
+                + ",selectionReason=" + outcome.SelectionReason
+                + ",fallbackReasons=" + outcome.FallbackReasons
+                + ",refreshSourceTerminal=" + outcome.IsTerminal.ToString()
+                + ",refreshSourceCanContinue=" + outcome.CanContinueRefresh.ToString()
+                + ",cacheFallback=" + outcome.IsCacheFallback.ToString()
+                + ",rebuildRequired=" + outcome.IsRebuildRequired.ToString()
+                + ",masterListRebuildAttempted=" + outcome.MasterListRebuildAttempted.ToString()
+                + ",masterListRebuildSucceeded=" + outcome.MasterListRebuildSucceeded.ToString()
+                + ",snapshotTextAvailable=" + outcome.SnapshotTextAvailable.ToString()
+                + ",updatedCaseSnapshotCache=" + outcome.UpdatedCaseSnapshotCache.ToString()
+                + ",failureReason=" + outcome.FailureReason
+                + ",degradedReason=" + outcome.DegradedReason
+                + ",refreshSucceeded=" + (attemptResult != null && attemptResult.IsRefreshSucceeded).ToString()
+                + ",refreshCompleted=" + (attemptResult != null && attemptResult.IsRefreshCompleted).ToString()
+                + ",paneVisible=" + (attemptResult != null && attemptResult.IsPaneVisible).ToString();
+            if (attemptNumber.HasValue)
+            {
+                details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return details;
+        }
+
         private TaskPaneRefreshAttemptResult CompleteRebuildFallbackOutcome(
             string reason,
             Excel.Workbook workbook,
@@ -1259,6 +1451,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "ready-show-attempt",
                 outcome.AttemptNumber,
                 outcome.WorkbookWindowEnsureFacts);
+            attemptResult = CompleteRefreshSourceSelectionOutcome(
+                reason,
+                workbook,
+                outcome.WorkbookWindow,
+                attemptResult,
+                stopwatch,
+                "ready-show-attempt",
+                outcome.AttemptNumber);
             attemptResult = CompleteRebuildFallbackOutcome(
                 reason,
                 workbook,
@@ -1341,6 +1541,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ",visibilityPaneVisibleSource=" + attemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()
                 + ",visibilityRecoveryReason=" + attemptResult.VisibilityRecoveryOutcome.Reason
                 + ",visibilityRecoveryDegradedReason=" + attemptResult.VisibilityRecoveryOutcome.DegradedReason
+                + ",refreshSourceStatus=" + attemptResult.RefreshSourceSelectionOutcome.Status.ToString()
+                + ",refreshSourceSelectedSource=" + attemptResult.RefreshSourceSelectionOutcome.SelectedSource.ToString()
+                + ",refreshSourceSelectionReason=" + attemptResult.RefreshSourceSelectionOutcome.SelectionReason
+                + ",refreshSourceFallbackReasons=" + attemptResult.RefreshSourceSelectionOutcome.FallbackReasons
+                + ",refreshSourceCacheFallback=" + attemptResult.RefreshSourceSelectionOutcome.IsCacheFallback.ToString()
+                + ",refreshSourceRebuildRequired=" + attemptResult.RefreshSourceSelectionOutcome.IsRebuildRequired.ToString()
+                + ",refreshSourceCanContinue=" + attemptResult.RefreshSourceSelectionOutcome.CanContinueRefresh.ToString()
+                + ",refreshSourceFailureReason=" + attemptResult.RefreshSourceSelectionOutcome.FailureReason
+                + ",refreshSourceDegradedReason=" + attemptResult.RefreshSourceSelectionOutcome.DegradedReason
                 + ",rebuildFallbackStatus=" + attemptResult.RebuildFallbackOutcome.Status.ToString()
                 + ",rebuildFallbackRequired=" + attemptResult.RebuildFallbackOutcome.IsRequired.ToString()
                 + ",rebuildFallbackCanContinue=" + attemptResult.RebuildFallbackOutcome.CanContinueRefresh.ToString()

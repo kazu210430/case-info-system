@@ -303,6 +303,59 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             MasterListRebuild = 4,
         }
 
+        internal sealed class SnapshotSourceSelectionFacts
+        {
+            internal SnapshotSourceSelectionFacts(
+                TaskPaneSnapshotSource selectedSource,
+                string selectionReason,
+                string fallbackReasons,
+                bool masterListRebuildAttempted,
+                bool masterListRebuildSucceeded,
+                bool snapshotTextAvailable,
+                bool updatedCaseSnapshotCache,
+                string failureReason,
+                string degradedReason)
+            {
+                SelectedSource = selectedSource;
+                SelectionReason = selectionReason ?? string.Empty;
+                FallbackReasons = fallbackReasons ?? string.Empty;
+                MasterListRebuildAttempted = masterListRebuildAttempted;
+                MasterListRebuildSucceeded = masterListRebuildSucceeded;
+                SnapshotTextAvailable = snapshotTextAvailable;
+                UpdatedCaseSnapshotCache = updatedCaseSnapshotCache;
+                FailureReason = failureReason ?? string.Empty;
+                DegradedReason = degradedReason ?? string.Empty;
+            }
+
+            internal TaskPaneSnapshotSource SelectedSource { get; }
+
+            internal string SelectionReason { get; }
+
+            internal string FallbackReasons { get; }
+
+            internal bool MasterListRebuildAttempted { get; }
+
+            internal bool MasterListRebuildSucceeded { get; }
+
+            internal bool SnapshotTextAvailable { get; }
+
+            internal bool UpdatedCaseSnapshotCache { get; }
+
+            internal string FailureReason { get; }
+
+            internal string DegradedReason { get; }
+
+            internal bool IsCacheFallback
+            {
+                get { return SelectedSource == TaskPaneSnapshotSource.BaseCacheFallback; }
+            }
+
+            internal bool IsRebuildRequired
+            {
+                get { return SelectedSource == TaskPaneSnapshotSource.MasterListRebuild || MasterListRebuildAttempted; }
+            }
+        }
+
         internal sealed class TaskPaneBuildResult
         {
             internal TaskPaneBuildResult(string snapshotText, bool updatedCaseSnapshotCache)
@@ -336,6 +389,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 MasterListRebuildSucceeded = masterListRebuildSucceeded;
                 FailureReason = failureReason ?? string.Empty;
                 DegradedReason = degradedReason ?? string.Empty;
+                SourceSelectionFacts = new SnapshotSourceSelectionFacts(
+                    snapshotSource,
+                    ResolveSelectionReason(
+                        snapshotSource,
+                        FallbackReasons,
+                        masterListRebuildAttempted,
+                        masterListRebuildSucceeded,
+                        SnapshotTextAvailable,
+                        FailureReason,
+                        DegradedReason),
+                    FallbackReasons,
+                    masterListRebuildAttempted,
+                    masterListRebuildSucceeded,
+                    SnapshotTextAvailable,
+                    updatedCaseSnapshotCache,
+                    FailureReason,
+                    DegradedReason);
             }
 
             internal string SnapshotText { get; }
@@ -358,6 +428,44 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             internal string FailureReason { get; }
 
             internal string DegradedReason { get; }
+
+            internal SnapshotSourceSelectionFacts SourceSelectionFacts { get; }
+
+            private static string ResolveSelectionReason(
+                TaskPaneSnapshotSource snapshotSource,
+                string fallbackReasons,
+                bool masterListRebuildAttempted,
+                bool masterListRebuildSucceeded,
+                bool snapshotTextAvailable,
+                string failureReason,
+                string degradedReason)
+            {
+                if (!string.IsNullOrWhiteSpace(failureReason) && !snapshotTextAvailable)
+                {
+                    return failureReason;
+                }
+
+                if (!string.IsNullOrWhiteSpace(degradedReason))
+                {
+                    return degradedReason;
+                }
+
+                switch (snapshotSource)
+                {
+                    case TaskPaneSnapshotSource.CaseCache:
+                        return "CaseCacheUsable";
+                    case TaskPaneSnapshotSource.BaseCache:
+                        return "BaseCachePromoted";
+                    case TaskPaneSnapshotSource.BaseCacheFallback:
+                        return string.IsNullOrWhiteSpace(fallbackReasons) ? "BaseCacheFallback" : fallbackReasons;
+                    case TaskPaneSnapshotSource.MasterListRebuild:
+                        return masterListRebuildSucceeded
+                            ? "MasterListRebuildCompleted"
+                            : (masterListRebuildAttempted ? "MasterListRebuildAttempted" : "MasterListRebuildSelected");
+                    default:
+                        return snapshotTextAvailable ? "SnapshotSourceUnspecified" : "SnapshotAcquisitionNotReached";
+                }
+            }
         }
 
         internal Func<Excel.Workbook, TaskPaneBuildResult> OnBuildSnapshotText { get; set; }

@@ -61,6 +61,190 @@ namespace CaseInfoSystem.ExcelAddIn.App
         Failed = 4,
     }
 
+    internal enum RefreshSourceSelectionOutcomeStatus
+    {
+        Unknown = 0,
+        NotReached = 1,
+        Selected = 2,
+        DegradedSelected = 3,
+        FallbackSelected = 4,
+        RebuildRequired = 5,
+        Failed = 6,
+    }
+
+    internal sealed class RefreshSourceSelectionOutcome
+    {
+        private RefreshSourceSelectionOutcome(
+            RefreshSourceSelectionOutcomeStatus status,
+            TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource selectedSource,
+            string selectionReason,
+            string fallbackReasons,
+            bool isTerminal,
+            bool canContinueRefresh,
+            bool isCacheFallback,
+            bool isRebuildRequired,
+            bool masterListRebuildAttempted,
+            bool masterListRebuildSucceeded,
+            bool snapshotTextAvailable,
+            bool updatedCaseSnapshotCache,
+            string failureReason,
+            string degradedReason)
+        {
+            Status = status;
+            SelectedSource = selectedSource;
+            SelectionReason = selectionReason ?? string.Empty;
+            FallbackReasons = fallbackReasons ?? string.Empty;
+            IsTerminal = isTerminal;
+            CanContinueRefresh = canContinueRefresh;
+            IsCacheFallback = isCacheFallback;
+            IsRebuildRequired = isRebuildRequired;
+            MasterListRebuildAttempted = masterListRebuildAttempted;
+            MasterListRebuildSucceeded = masterListRebuildSucceeded;
+            SnapshotTextAvailable = snapshotTextAvailable;
+            UpdatedCaseSnapshotCache = updatedCaseSnapshotCache;
+            FailureReason = failureReason ?? string.Empty;
+            DegradedReason = degradedReason ?? string.Empty;
+        }
+
+        internal RefreshSourceSelectionOutcomeStatus Status { get; }
+
+        internal TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource SelectedSource { get; }
+
+        internal string SelectionReason { get; }
+
+        internal string FallbackReasons { get; }
+
+        internal bool IsTerminal { get; }
+
+        internal bool CanContinueRefresh { get; }
+
+        internal bool IsCacheFallback { get; }
+
+        internal bool IsRebuildRequired { get; }
+
+        internal bool MasterListRebuildAttempted { get; }
+
+        internal bool MasterListRebuildSucceeded { get; }
+
+        internal bool SnapshotTextAvailable { get; }
+
+        internal bool UpdatedCaseSnapshotCache { get; }
+
+        internal string FailureReason { get; }
+
+        internal string DegradedReason { get; }
+
+        internal static RefreshSourceSelectionOutcome Unknown(string reason)
+        {
+            return new RefreshSourceSelectionOutcome(
+                RefreshSourceSelectionOutcomeStatus.Unknown,
+                TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None,
+                reason,
+                string.Empty,
+                isTerminal: false,
+                canContinueRefresh: false,
+                isCacheFallback: false,
+                isRebuildRequired: false,
+                masterListRebuildAttempted: false,
+                masterListRebuildSucceeded: false,
+                snapshotTextAvailable: false,
+                updatedCaseSnapshotCache: false,
+                failureReason: string.Empty,
+                degradedReason: string.Empty);
+        }
+
+        internal static RefreshSourceSelectionOutcome FromAttemptResult(TaskPaneRefreshAttemptResult attemptResult)
+        {
+            if (attemptResult == null)
+            {
+                return Unknown("attemptResultMissing");
+            }
+
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult = attemptResult.SnapshotBuildResult;
+            if (buildResult == null)
+            {
+                return new RefreshSourceSelectionOutcome(
+                    RefreshSourceSelectionOutcomeStatus.NotReached,
+                    TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None,
+                    "snapshotAcquisitionNotReached",
+                    string.Empty,
+                    isTerminal: true,
+                    canContinueRefresh: attemptResult.IsRefreshSucceeded,
+                    isCacheFallback: false,
+                    isRebuildRequired: false,
+                    masterListRebuildAttempted: false,
+                    masterListRebuildSucceeded: false,
+                    snapshotTextAvailable: false,
+                    updatedCaseSnapshotCache: false,
+                    failureReason: string.Empty,
+                    degradedReason: string.Empty);
+            }
+
+            TaskPaneSnapshotBuilderService.SnapshotSourceSelectionFacts facts = buildResult.SourceSelectionFacts;
+            if (facts == null)
+            {
+                return Unknown("sourceSelectionFactsMissing");
+            }
+
+            if (!facts.SnapshotTextAvailable)
+            {
+                return new RefreshSourceSelectionOutcome(
+                    RefreshSourceSelectionOutcomeStatus.Failed,
+                    facts.SelectedSource,
+                    string.IsNullOrWhiteSpace(facts.SelectionReason) ? "NoSnapshotText" : facts.SelectionReason,
+                    facts.FallbackReasons,
+                    isTerminal: true,
+                    canContinueRefresh: false,
+                    isCacheFallback: facts.IsCacheFallback,
+                    isRebuildRequired: facts.IsRebuildRequired,
+                    masterListRebuildAttempted: facts.MasterListRebuildAttempted,
+                    masterListRebuildSucceeded: facts.MasterListRebuildSucceeded,
+                    snapshotTextAvailable: false,
+                    updatedCaseSnapshotCache: facts.UpdatedCaseSnapshotCache,
+                    failureReason: string.IsNullOrWhiteSpace(facts.FailureReason) ? "NoSnapshotText" : facts.FailureReason,
+                    degradedReason: facts.DegradedReason);
+            }
+
+            RefreshSourceSelectionOutcomeStatus status = ResolveStatus(facts);
+            return new RefreshSourceSelectionOutcome(
+                status,
+                facts.SelectedSource,
+                facts.SelectionReason,
+                facts.FallbackReasons,
+                isTerminal: true,
+                canContinueRefresh: true,
+                isCacheFallback: facts.IsCacheFallback,
+                isRebuildRequired: facts.IsRebuildRequired,
+                masterListRebuildAttempted: facts.MasterListRebuildAttempted,
+                masterListRebuildSucceeded: facts.MasterListRebuildSucceeded,
+                snapshotTextAvailable: true,
+                updatedCaseSnapshotCache: facts.UpdatedCaseSnapshotCache,
+                failureReason: facts.FailureReason,
+                degradedReason: facts.DegradedReason);
+        }
+
+        private static RefreshSourceSelectionOutcomeStatus ResolveStatus(TaskPaneSnapshotBuilderService.SnapshotSourceSelectionFacts facts)
+        {
+            if (!string.IsNullOrWhiteSpace(facts.DegradedReason)
+                || (!string.IsNullOrWhiteSpace(facts.FailureReason) && facts.SnapshotTextAvailable))
+            {
+                return RefreshSourceSelectionOutcomeStatus.DegradedSelected;
+            }
+
+            if (facts.IsCacheFallback)
+            {
+                return RefreshSourceSelectionOutcomeStatus.FallbackSelected;
+            }
+
+            if (facts.IsRebuildRequired)
+            {
+                return RefreshSourceSelectionOutcomeStatus.RebuildRequired;
+            }
+
+            return RefreshSourceSelectionOutcomeStatus.Selected;
+        }
+    }
+
     internal sealed class RebuildFallbackOutcome
     {
         private RebuildFallbackOutcome(
@@ -595,6 +779,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool isForegroundRecoveryServiceAvailable = false,
             VisibilityRecoveryOutcome visibilityRecoveryOutcome = null,
             RebuildFallbackOutcome rebuildFallbackOutcome = null,
+            RefreshSourceSelectionOutcome refreshSourceSelectionOutcome = null,
             TaskPaneSnapshotBuilderService.TaskPaneBuildResult snapshotBuildResult = null,
             PaneVisibleSource paneVisibleSource = PaneVisibleSource.None,
             bool preContextRecoveryAttempted = false,
@@ -613,6 +798,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             IsForegroundRecoveryServiceAvailable = isForegroundRecoveryServiceAvailable;
             VisibilityRecoveryOutcome = visibilityRecoveryOutcome ?? VisibilityRecoveryOutcome.Unknown("notEvaluated");
             RebuildFallbackOutcome = rebuildFallbackOutcome ?? RebuildFallbackOutcome.Unknown("notEvaluated");
+            RefreshSourceSelectionOutcome = refreshSourceSelectionOutcome ?? RefreshSourceSelectionOutcome.Unknown("notEvaluated");
             SnapshotBuildResult = snapshotBuildResult;
             PaneVisibleSource = paneVisibleSource;
             PreContextRecoveryAttempted = preContextRecoveryAttempted;
@@ -731,6 +917,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
                 visibilityRecoveryOutcome: VisibilityRecoveryOutcome,
                 rebuildFallbackOutcome: RebuildFallbackOutcome,
+                refreshSourceSelectionOutcome: RefreshSourceSelectionOutcome,
                 snapshotBuildResult: SnapshotBuildResult,
                 paneVisibleSource: PaneVisibleSource,
                 preContextRecoveryAttempted: PreContextRecoveryAttempted,
@@ -753,6 +940,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
                 visibilityRecoveryOutcome: visibilityRecoveryOutcome,
                 rebuildFallbackOutcome: RebuildFallbackOutcome,
+                refreshSourceSelectionOutcome: RefreshSourceSelectionOutcome,
                 snapshotBuildResult: SnapshotBuildResult,
                 paneVisibleSource: PaneVisibleSource,
                 preContextRecoveryAttempted: PreContextRecoveryAttempted,
@@ -775,6 +963,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
                 visibilityRecoveryOutcome: VisibilityRecoveryOutcome,
                 rebuildFallbackOutcome: rebuildFallbackOutcome,
+                refreshSourceSelectionOutcome: RefreshSourceSelectionOutcome,
+                snapshotBuildResult: SnapshotBuildResult,
+                paneVisibleSource: PaneVisibleSource,
+                preContextRecoveryAttempted: PreContextRecoveryAttempted,
+                preContextRecoverySucceeded: PreContextRecoverySucceeded);
+        }
+
+        internal TaskPaneRefreshAttemptResult WithRefreshSourceSelectionOutcome(RefreshSourceSelectionOutcome refreshSourceSelectionOutcome)
+        {
+            return new TaskPaneRefreshAttemptResult(
+                IsRefreshSucceeded,
+                wasSkipped: WasSkipped,
+                wasContextRejected: WasContextRejected,
+                isPaneVisible: IsPaneVisible,
+                isRefreshCompleted: IsRefreshCompleted,
+                completionBasis: CompletionBasis,
+                foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome,
+                foregroundContext: ForegroundContext,
+                foregroundWorkbook: ForegroundWorkbook,
+                foregroundWindow: ForegroundWindow,
+                isForegroundRecoveryServiceAvailable: IsForegroundRecoveryServiceAvailable,
+                visibilityRecoveryOutcome: VisibilityRecoveryOutcome,
+                rebuildFallbackOutcome: RebuildFallbackOutcome,
+                refreshSourceSelectionOutcome: refreshSourceSelectionOutcome,
                 snapshotBuildResult: SnapshotBuildResult,
                 paneVisibleSource: PaneVisibleSource,
                 preContextRecoveryAttempted: PreContextRecoveryAttempted,
@@ -822,6 +1034,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal VisibilityRecoveryOutcome VisibilityRecoveryOutcome { get; }
 
         internal RebuildFallbackOutcome RebuildFallbackOutcome { get; }
+
+        internal RefreshSourceSelectionOutcome RefreshSourceSelectionOutcome { get; }
 
         internal TaskPaneSnapshotBuilderService.TaskPaneBuildResult SnapshotBuildResult { get; }
 

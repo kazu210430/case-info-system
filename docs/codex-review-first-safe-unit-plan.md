@@ -189,3 +189,22 @@
 - 第1安全単位は `KernelTemplateSyncService` 周辺の preflight owner 整理とする
 - これは「管理シート保護/定義検証」を `flows.md` 上の preflight 境界へ寄せる作業であり、publication side effects や close protocol を同時に触らない
 - CASE 作成 hidden session、本格的な close protocol 一本化、TaskPane VSTO boundary 整理は、いずれも今回より危険度が高く、第1単位には採らない
+
+## 9. 実装結果記録（2026-05-08）
+
+- 本節は実装後の結果記録であり、`1` から `8` までは実装前の計画記録として保持する
+- 実装コミット:
+  - `38e4f3fedc6c6da05aca1ed00cb47256379182f3`
+- 実装結果:
+  - `KernelTemplateSyncPreparationService` を追加し、管理シート解決、sheet protection の一時解除/復元、`SYSTEM_ROOT` 解決、`CaseList_FieldInventory` 定義タグ読取、`KernelTemplateSyncPreflightService` 呼出しを新 owner へ移した
+  - `KernelTemplateSyncService` は `WorkbookContext` 起点の kernel resolve、`ExcelApplicationStateScope`、preflight 成否分岐、`PublicationExecutor` 呼出し、結果整形に寄せた
+  - `PublicationExecutor` の side-effect order と Base sync/close path には変更を入れていない
+- 既存挙動として維持したこと:
+  - preflight failure no-side-effect
+  - `ScreenUpdating` / `EnableEvents` の restore
+  - sheet protection restore と restore failure の握りつぶし
+  - `SYSTEM_ROOT` の property/path fallback
+  - `WriteToMasterList -> TASKPANE_MASTER_VERSION +1 -> Kernel save -> Base snapshot sync -> InvalidateCache` の順序
+  - Base sync failure 時の success + warning semantics
+- 実装結果として追加した確認:
+  - `KernelTemplateSyncServiceTests` に、preflight failure 時の保護復元と、preparation 例外時の保護復元を固定するテストを追加した

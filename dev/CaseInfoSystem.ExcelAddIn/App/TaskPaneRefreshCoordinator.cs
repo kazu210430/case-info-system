@@ -144,7 +144,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             // 受理された context を使って pane UI へ反映し、
             // CASE 成功時の warmup もこの最終段でまとめて扱う。
-            bool refreshed = TryRefreshPaneAndScheduleWarmup(context, reason, stopwatch);
+            TaskPaneHostFlowResult hostFlowResult = TryRefreshPaneAndScheduleWarmup(context, reason, stopwatch);
+            bool refreshed = hostFlowResult.IsShown;
             bool foregroundRecoveryStarted = refreshed && window != null && _excelWindowRecoveryService != null;
             string foregroundSkipReason = string.Empty;
             if (!refreshed)
@@ -210,23 +211,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
-            if (string.Equals(reason, NewCaseDefaultTimingLogHelper.PostReleaseReason, StringComparison.OrdinalIgnoreCase))
-            {
-                string observedWorkbookPath = context == null ? SafeWorkbookFullName(workbook, null) : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName);
-                NewCaseVisibilityObservation.Log(
-                    _logger,
-                    null,
-                    null,
-                    context == null ? workbook : context.Workbook,
-                    context == null ? window : context.Window,
-                    "case-display-completed",
-                    "TaskPaneRefreshCoordinator.TryRefreshTaskPane",
-                    observedWorkbookPath,
-                    "reason=" + (reason ?? string.Empty) + ",result=" + (refreshed ? "Succeeded" : "Failed"));
-                NewCaseVisibilityObservation.Complete(observedWorkbookPath);
-            }
             return refreshed
-                ? TaskPaneRefreshAttemptResult.Succeeded()
+                ? TaskPaneRefreshAttemptResult.Succeeded(
+                    foregroundRecoveryStarted,
+                    foregroundRecoveryStarted
+                        ? "refreshCompletedWithForegroundGuarantee"
+                        : "refreshCompletedForegroundNotRequired")
                 : TaskPaneRefreshAttemptResult.Failed();
         }
 
@@ -327,7 +317,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return true;
         }
 
-        private bool TryRefreshPaneAndScheduleWarmup(WorkbookContext context, string reason, Stopwatch stopwatch)
+        private TaskPaneHostFlowResult TryRefreshPaneAndScheduleWarmup(WorkbookContext context, string reason, Stopwatch stopwatch)
         {
             string observedWorkbookPath = ResolveObservedWorkbookPath(context, null);
             NewCaseVisibilityObservation.Log(
@@ -340,13 +330,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "TaskPaneRefreshCoordinator.TryRefreshPaneAndScheduleWarmup",
                 observedWorkbookPath,
                 "reason=" + (reason ?? string.Empty) + ",refreshSource=" + (reason ?? string.Empty));
-            bool refreshed = _taskPaneManager.RefreshPane(context, reason);
+            TaskPaneHostFlowResult hostFlowResult = _taskPaneManager.RefreshPaneWithOutcome(context, reason);
+            bool refreshed = hostFlowResult.IsShown;
             NewCaseDefaultTimingLogHelper.LogTaskPaneReadyWaitToRefreshCompleted(
                 _logger,
                 context == null ? string.Empty : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
                 reason,
                 refreshed,
-                "refreshAttemptCompleted");
+                hostFlowResult.PaneVisibleBasis);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshCoordinator action=refresh-pane-complete reason="
@@ -357,6 +348,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + refreshed.ToString()
                 + ", refreshSource="
                 + (reason ?? string.Empty)
+                + ", paneVisibleBasis="
+                + hostFlowResult.PaneVisibleBasis
                 + ", scheduleWarmup="
                 + (refreshed && context != null && context.Role == WorkbookRole.Case).ToString()
                 + ", elapsedMs="
@@ -371,13 +364,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "taskpane-refresh-completed",
                 "TaskPaneRefreshCoordinator.TryRefreshPaneAndScheduleWarmup",
                 observedWorkbookPath,
-                "reason=" + (reason ?? string.Empty) + ",refreshSource=" + (reason ?? string.Empty) + ",refreshed=" + refreshed.ToString());
+                "reason=" + (reason ?? string.Empty) + ",refreshSource=" + (reason ?? string.Empty) + ",refreshed=" + refreshed.ToString() + ",paneVisibleBasis=" + hostFlowResult.PaneVisibleBasis);
             if (refreshed && context != null && context.Role == WorkbookRole.Case)
             {
                 _scheduleWordWarmup();
             }
 
-            return refreshed;
+            return hostFlowResult;
         }
 
         private void GuaranteeFinalForegroundAfterRefresh(WorkbookContext context, Excel.Workbook workbook, string reason, Stopwatch stopwatch)

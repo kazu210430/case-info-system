@@ -127,7 +127,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
 					NewCaseDefaultTimingLogHelper.AttachWorkbookAlias (result.CaseWorkbookPath, workbookFullName);
 				}
-				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "display-handoff-open-completed", "KernelCasePresentationService.OpenCreatedCase", result.CaseWorkbookPath);
 				result.CreatedWorkbook = workbook;
 				ShowCreatedCase (workbook, waitSession);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {

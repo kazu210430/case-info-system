@@ -64,8 +64,11 @@ Added correlation fields:
 ### ready-show flow
 
 - `TaskPaneRefreshOrchestrationService`
+  - `created-case-display-session-started`
+  - `display-handoff-completed`
   - `ready-show-fallback-handoff`
   - `ready-show-enqueued`
+  - `case-display-completed`
 - `WorkbookTaskPaneReadyShowAttemptWorker`
   - `ready-show-attempt`
   - `ready-show-attempt-result`
@@ -121,12 +124,15 @@ For a single new CASE flow, the main order to inspect is:
 4. `WorkbookActivate-event`
 5. `WindowActivate-event`
 6. `ready-show-enqueued`
-7. `ready-show-attempt`
-8. `taskpane-refresh-started`
-9. `taskpane-refresh-completed`
-10. `foreground-recovery-decision`
-11. `final-foreground-guarantee-started`
-12. `final-foreground-guarantee-completed`
+7. `created-case-display-session-started`
+8. `display-handoff-completed`
+9. `ready-show-attempt`
+10. `taskpane-refresh-started`
+11. `taskpane-refresh-completed`
+12. `foreground-recovery-decision`
+13. `final-foreground-guarantee-started`
+14. `final-foreground-guarantee-completed`
+15. `case-display-completed`
 
 In parallel, inspect whether the same `traceKey` shows:
 

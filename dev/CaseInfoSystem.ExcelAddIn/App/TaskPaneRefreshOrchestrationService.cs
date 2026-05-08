@@ -27,9 +27,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
         private readonly ICasePaneHostBridge _casePaneHostBridge;
         private readonly PendingPaneRefreshRetryService _pendingPaneRefreshRetryService;
+        private readonly object _createdCaseDisplaySessionSyncRoot = new object();
+        private readonly Dictionary<string, CreatedCaseDisplaySession> _createdCaseDisplaySessions = new Dictionary<string, CreatedCaseDisplaySession>(StringComparer.OrdinalIgnoreCase);
 
         private readonly List<System.Windows.Forms.Timer> _waitReadyRetryTimers = new List<System.Windows.Forms.Timer>();
         private int _kernelFlickerTraceRefreshAttemptSequence;
+        private int _createdCaseDisplaySessionSequence;
 
         internal TaskPaneRefreshOrchestrationService(
             ExcelInteropService excelInteropService,
@@ -125,6 +128,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", result="
                 + dispatchExecutionResult.ResultText);
+            TryCompleteCreatedCaseDisplaySession(
+                null,
+                reason,
+                workbook,
+                window,
+                dispatchExecutionResult.AttemptResult,
+                "refresh");
             return dispatchExecutionResult.AttemptResult;
         }
 
@@ -300,11 +310,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady",
                 SafeWorkbookFullName(workbook),
                 "reason=" + (reason ?? string.Empty));
+            CreatedCaseDisplaySession createdCaseDisplaySession = BeginCreatedCaseDisplaySession(workbook, reason);
             _workbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(
                 workbook,
                 reason,
                 ScheduleTaskPaneReadyRetry,
-                StopPendingPaneRefreshTimer,
+                outcome => HandleWorkbookTaskPaneShown(createdCaseDisplaySession, workbook, reason, outcome),
                 ScheduleWorkbookTaskPaneRefresh);
         }
 
@@ -421,9 +432,215 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _waitReadyRetryTimers.Clear();
         }
 
+        private CreatedCaseDisplaySession BeginCreatedCaseDisplaySession(Excel.Workbook workbook, string reason)
+        {
+            if (!IsCreatedCaseDisplayReason(reason) || workbook == null)
+            {
+                return null;
+            }
+
+            string workbookFullName = SafeWorkbookFullName(workbook);
+            if (string.IsNullOrWhiteSpace(workbookFullName))
+            {
+                return null;
+            }
+
+            CreatedCaseDisplaySession session = new CreatedCaseDisplaySession(
+                "CDS-" + (++_createdCaseDisplaySessionSequence).ToString("0000", CultureInfo.InvariantCulture),
+                workbookFullName,
+                reason);
+            lock (_createdCaseDisplaySessionSyncRoot)
+            {
+                _createdCaseDisplaySessions[workbookFullName] = session;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=created-case-display-session-started sessionId="
+                + session.SessionId
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                null,
+                "created-case-display-session-started",
+                "TaskPaneRefreshOrchestrationService.BeginCreatedCaseDisplaySession",
+                workbookFullName,
+                "reason=" + (reason ?? string.Empty) + ",sessionId=" + session.SessionId);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                null,
+                "display-handoff-completed",
+                "TaskPaneRefreshOrchestrationService.BeginCreatedCaseDisplaySession",
+                workbookFullName,
+                "reason=" + (reason ?? string.Empty) + ",sessionId=" + session.SessionId);
+            return session;
+        }
+
+        private void HandleWorkbookTaskPaneShown(
+            CreatedCaseDisplaySession session,
+            Excel.Workbook workbook,
+            string reason,
+            WorkbookTaskPaneReadyShowAttemptOutcome outcome)
+        {
+            StopPendingPaneRefreshTimer();
+            if (outcome == null)
+            {
+                return;
+            }
+
+            TryCompleteCreatedCaseDisplaySession(
+                session,
+                reason,
+                workbook,
+                outcome.WorkbookWindow,
+                outcome.RefreshAttemptResult,
+                "ready-show-attempt",
+                outcome.AttemptNumber);
+        }
+
+        private void TryCompleteCreatedCaseDisplaySession(
+            CreatedCaseDisplaySession session,
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window window,
+            TaskPaneRefreshAttemptResult attemptResult,
+            string completionSource,
+            int? attemptNumber = null)
+        {
+            if (!IsCreatedCaseDisplayReason(reason)
+                || attemptResult == null
+                || !attemptResult.IsRefreshSucceeded
+                || !attemptResult.IsPaneVisible
+                || !attemptResult.IsForegroundGuaranteeTerminal)
+            {
+                return;
+            }
+
+            CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);
+            if (resolvedSession == null)
+            {
+                return;
+            }
+
+            bool shouldEmit = false;
+            lock (_createdCaseDisplaySessionSyncRoot)
+            {
+                if (!resolvedSession.IsCompleted)
+                {
+                    resolvedSession.IsCompleted = true;
+                    _createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);
+                    shouldEmit = true;
+                }
+            }
+
+            if (!shouldEmit)
+            {
+                return;
+            }
+
+            string details =
+                "reason=" + (reason ?? string.Empty)
+                + ",sessionId=" + resolvedSession.SessionId
+                + ",completionSource=" + (completionSource ?? string.Empty)
+                + ",completion=" + attemptResult.CompletionBasis
+                + ",paneVisible=" + attemptResult.IsPaneVisible.ToString()
+                + ",refreshCompleted=" + attemptResult.IsRefreshCompleted.ToString()
+                + ",foregroundGuaranteeTerminal=" + attemptResult.IsForegroundGuaranteeTerminal.ToString()
+                + ",foregroundGuaranteeRequired=" + attemptResult.WasForegroundGuaranteeRequired.ToString();
+            if (attemptNumber.HasValue)
+            {
+                details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=case-display-completed sessionId="
+                + resolvedSession.SessionId
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", window="
+                + FormatWindowDescriptor(window)
+                + ", completion="
+                + attemptResult.CompletionBasis);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                window,
+                "case-display-completed",
+                "TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession",
+                resolvedSession.WorkbookFullName,
+                details);
+            NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
+        }
+
+        private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)
+        {
+            if (!IsCreatedCaseDisplayReason(reason))
+            {
+                return null;
+            }
+
+            string workbookFullName = SafeWorkbookFullName(workbook);
+            lock (_createdCaseDisplaySessionSyncRoot)
+            {
+                if (!string.IsNullOrWhiteSpace(workbookFullName)
+                    && _createdCaseDisplaySessions.TryGetValue(workbookFullName, out CreatedCaseDisplaySession session))
+                {
+                    return session;
+                }
+
+                if (_createdCaseDisplaySessions.Count == 1)
+                {
+                    foreach (CreatedCaseDisplaySession activeSession in _createdCaseDisplaySessions.Values)
+                    {
+                        return activeSession;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsCreatedCaseDisplayReason(string reason)
+        {
+            return string.Equals(reason, NewCaseDefaultTimingLogHelper.PostReleaseReason, StringComparison.OrdinalIgnoreCase);
+        }
+
         private string SafeWorkbookFullName(Excel.Workbook workbook)
         {
             return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+        }
+
+        private sealed class CreatedCaseDisplaySession
+        {
+            internal CreatedCaseDisplaySession(string sessionId, string workbookFullName, string reason)
+            {
+                SessionId = sessionId ?? string.Empty;
+                WorkbookFullName = workbookFullName ?? string.Empty;
+                Reason = reason ?? string.Empty;
+            }
+
+            internal string SessionId { get; }
+
+            internal string WorkbookFullName { get; }
+
+            internal string Reason { get; }
+
+            internal bool IsCompleted { get; set; }
         }
 
         private static class RefreshPreconditionEvaluator

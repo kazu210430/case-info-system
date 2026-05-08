@@ -1,5 +1,14 @@
 # CASE Display Recovery Protocol Current State
 
+## Implementation delta (2026-05-08 first safe unit)
+
+- `TaskPaneRefreshOrchestrationService` now owns the created-case display session and is the only emitter of `case-display-completed`.
+- `WorkbookTaskPaneReadyShowAttemptWorker` returns a normalized `WorkbookTaskPaneReadyShowAttemptOutcome`; it no longer completes the CASE display on the already-visible path.
+- `TaskPaneRefreshCoordinator` returns a normalized `TaskPaneRefreshAttemptResult` with pane-visible / refresh-completed / foreground-terminal fields; it no longer emits `case-display-completed`.
+- `TaskPaneHostFlowService` returns `TaskPaneHostFlowResult` so pane-visible source stays below the refresh coordinator without becoming display-completion ownership.
+- `display-handoff-completed` is now emitted when the created-case display request is accepted by `TaskPaneRefreshOrchestrationService`; the old `display-handoff-open-completed` emit was removed from presentation/open-strategy code.
+- Retry counts, ready-show timing, visibility recovery conditions, foreground recovery conditions, rebuild fallback, hidden session behavior, fail-closed conditions, and CASE creation behavior are unchanged.
+
 ## 位置づけ
 
 この文書は、CASE display / recovery protocol の current-state 正本です。目的は、現行 `main` で実際に動いている owner と順序を、観測ログと現コードを根拠に固定することです。
@@ -36,7 +45,7 @@
 
 - `display handoff`
   - CASE workbook を hidden reopen し、表示系 protocol へ渡す境界です。
-  - 現状では `KernelCasePresentationService` と `CaseWorkbookOpenStrategy` の両方に `display-handoff-open-completed` 観測があり、観測 owner が重複しています。
+  - first safe unit 後は `TaskPaneRefreshOrchestrationService` が ready-show acceptance 時に `display-handoff-completed` を記録します。
 - `ready-show enqueue`
   - 「ready になったら CASE pane を見せる」要求を retry 可能な ready-show queue に入れる段階です。
 - `ready-show attempt`
@@ -48,8 +57,8 @@
   - refresh 後に Excel / workbook window を最終的に前面へ戻す protocol です。
   - current-state では decision owner と execution owner が分かれています。
 - `CASE display completed`
-  - current-state では 1 owner では定義されていません。
-  - `WorkbookTaskPaneReadyShowAttemptWorker` の early-complete path と `TaskPaneRefreshCoordinator` の refresh-complete path の 2 箇所で `case-display-completed` が成立します。
+  - first safe unit 後は `TaskPaneRefreshOrchestrationService` が created-case display session を閉じる唯一の owner です。
+  - `WorkbookTaskPaneReadyShowAttemptWorker` と `TaskPaneRefreshCoordinator` は normalized outcome を返し、`case-display-completed` を emit しません。
 
 重要なのは、`CASE display completed`、`pane visible`、`foreground guarantee` は同じ意味ではないことです。現行 code では別 service、別タイミング、別条件で扱われています。
 
@@ -65,13 +74,11 @@
 
 ### 2. display handoff
 
-- hidden reopen の handoff 完了は、現状では 2 箇所で観測されます。
-- `CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay(...)`
-  - hidden reopen handoff 自体を完了させた直後に `display-handoff-open-completed` を記録します。
-- `KernelCasePresentationService.OpenCreatedCase(...)`
-  - strategy 戻り後にも `display-handoff-open-completed` を記録します。
+- hidden reopen 後、`KernelCasePresentationService` が ready-show request を発行します。
+- `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` は request を受理し、created-case display session を開始します。
+- この acceptance 境界で `created-case-display-session-started` と `display-handoff-completed` を記録します。
 
-つまり current-state では、display handoff の protocol owner と観測 owner が一致していません。実処理 owner は `CaseWorkbookOpenStrategy` 寄りですが、presentation 層にも同名イベントが残っています。
+つまり first safe unit 後は、display handoff completion の観測 owner は `TaskPaneRefreshOrchestrationService` に寄っています。
 
 ### 3. initial recovery and ready-show request
 
@@ -98,9 +105,9 @@
 
 - `WorkbookTaskPaneReadyShowAttemptWorker` は、既存 CASE pane が同じ workbook window に対して visible かどうかを判定します。
 - visible であれば `taskpane-already-visible` を記録し、refresh せずに success として抜けます。
-- さらに reason が created-case post-release の場合は、ここで `case-display-completed` が成立します。
+- first safe unit 後は `WorkbookTaskPaneReadyShowAttemptWorker` が `WorkbookTaskPaneReadyShowAttemptOutcome` を返し、`case-display-completed` は orchestration 側で成立します。
 
-この path では、pane reuse と CASE display completed 判定が worker 側で閉じています。`TaskPaneHostFlowService` の actual show trace とは別経路です。
+この path では、pane already-visible の検知は worker 側に残しつつ、CASE display completed 判定は `TaskPaneRefreshOrchestrationService` 側へ移しています。
 
 ### 7. taskpane refresh path
 
@@ -132,7 +139,7 @@
 - host reuse path では `taskpane-reused-shown` を記録します。
 - refresh render path では `taskpane-refreshed-shown` を記録します。
 
-これは `case-display-completed` と同義ではありません。current-state では、pane visible trace は host-flow 層、display completion trace は worker または coordinator に分かれています。
+これは `case-display-completed` と同義ではありません。first safe unit 後も pane visible trace は host-flow 層に残し、display completion trace は orchestration 層に集約しています。
 
 ### 10. foreground guarantee
 
@@ -157,13 +164,13 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
 
 ### 12. CASE display completed
 
-- current-state では、`case-display-completed` の定義 owner は 1 箇所に正本化されていません。
+- first safe unit 後は、`case-display-completed` の定義 owner は `TaskPaneRefreshOrchestrationService` です。
 - `WorkbookTaskPaneReadyShowAttemptWorker`
-  - ready-show attempt 中の already-visible success を created-case post-release reason で完了扱いにします。
+  - already-visible success を `WorkbookTaskPaneReadyShowAttemptOutcome` として返します。
 - `TaskPaneRefreshCoordinator`
-  - refresh 完了後、post-release reason なら完了扱いにします。
+  - refresh / foreground terminal を `TaskPaneRefreshAttemptResult` として返します。
 
-このため、CASE display completed は「pane visible になった瞬間」でも「foreground guarantee が終わった瞬間」でもなく、2 つの protocol path に分散して成立しています。
+このため、CASE display completed は「pane visible になった瞬間」や「refresh completed の別名」ではなく、同一 created-case display session の pane visible と foreground terminal を orchestration 側が確認して成立させます。
 
 ## Protocol Unit と Current-State Owner
 
@@ -174,7 +181,7 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
 | WorkbookActivate | `WorkbookLifecycleCoordinator` | suppression / protection を見た上で refresh dispatch |
 | WindowActivate event capture | `ThisAddIn.HandleWindowActivateEvent(...)` | Excel event capture と trace |
 | WindowActivate refresh dispatch | `WindowActivatePaneHandlingService` | request 化して refresh へ渡す |
-| display handoff | 実処理は `CaseWorkbookOpenStrategy`、観測は `CaseWorkbookOpenStrategy` と `KernelCasePresentationService` に重複 | 同名 trace が 2 箇所 |
+| display handoff | `TaskPaneRefreshOrchestrationService` | `display-handoff-completed` は ready-show acceptance 側 |
 | ready-show request | `KernelCasePresentationService` | `ready-show-requested` |
 | ready-show enqueue | `TaskPaneRefreshOrchestrationService` | `ready-show-enqueued` |
 | ready-show attempt | `WorkbookTaskPaneReadyShowAttemptWorker` | retry 可能な 1 attempt owner |
@@ -186,14 +193,14 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
 | visibility recovery | `WorkbookWindowVisibilityService` と `ExcelWindowRecoveryService` | workbook visibility と full recovery に分裂 |
 | rebuild fallback | `TaskPaneSnapshotBuilderService` | refresh path 内の render/snapshot protocol |
 | snapshot source decision | `TaskPaneSnapshotBuilderService` | `CaseCache -> BaseCache -> BaseCacheFallback -> MasterListRebuild` |
-| CASE display completed | `WorkbookTaskPaneReadyShowAttemptWorker` と `TaskPaneRefreshCoordinator` | 1 owner に閉じていない |
+| CASE display completed | `TaskPaneRefreshOrchestrationService` | created-case display session の terminal owner |
 
 ## ownership 混在・重複・暗黙 protocol
 
 現行 code と観測から、次を current-state の混在として固定します。
 
-- `display-handoff-open-completed` が 2 箇所で記録される。
-  - hidden reopen 実処理 owner は `CaseWorkbookOpenStrategy` 寄りだが、presentation 層にも同名 trace が残っている。
+- `display-handoff-open-completed` の重複 emit は first safe unit で削除済み。
+  - `display-handoff-completed` は `TaskPaneRefreshOrchestrationService` が ready-show acceptance 側で emit する。
 - `WindowActivate` owner が event capture と refresh dispatch に分裂している。
   - capture は `ThisAddIn.HandleWindowActivateEvent(...)`
   - dispatch は `WindowActivatePaneHandlingService`
@@ -201,9 +208,9 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
   - request は `KernelCasePresentationService`
   - enqueue / fallback / retry 調停は `TaskPaneRefreshOrchestrationService`
   - attempt / early-complete は `WorkbookTaskPaneReadyShowAttemptWorker`
-- `CASE display completed` owner が分裂している。
-  - already-visible completion は worker
-  - refresh completion は coordinator
+- `CASE display completed` owner は `TaskPaneRefreshOrchestrationService` に集約済み。
+  - already-visible completion 材料は worker outcome
+  - refresh / foreground 材料は coordinator outcome
   - actual pane visible trace は host-flow service
 - foreground guarantee が decision と execution に分裂している。
   - decision は `TaskPaneRefreshCoordinator`
@@ -223,7 +230,7 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
 
 ### 1. CASE display completed definition owner
 
-- 現在は worker と coordinator の 2 箇所で完了扱いになります。
+- first safe unit 後は `TaskPaneRefreshOrchestrationService` の 1 箇所で完了扱いになります。
 - pane visible trace と foreground guarantee trace は別 service にあるため、「何をもって CASE 表示完了とするか」の正本 owner がありません。
 
 ### 2. refresh source owner
@@ -243,7 +250,7 @@ current-state の中でも、次が protocol redesign 前に最も重要な「ow
 理由は次です。
 
 - 表示完了、pane visible、foreground guarantee が別概念のまま分離している。
-- completion trace が worker と coordinator に分散していて、現在の protocol 終端が最も読み取りにくい。
+- completion trace は `TaskPaneRefreshOrchestrationService` に集約済みです。worker / coordinator / host-flow は outcome と visible trace を返す側に残します。
 - recovery 条件、retry 条件、visibility 制御、ready-show timing を変えずに、まず completion definition の ownership だけを切り出して観測・文書化しやすい。
 
 この候補は redesign 実施を意味しません。current-state としては、「最初に触るなら completion definition boundary を安全単位化するのが最も説明可能」という提案に留めます。

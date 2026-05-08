@@ -8,7 +8,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class WorkbookTaskPaneReadyShowAttemptWorker
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
-        private const string CreatedCasePostReleaseReason = "KernelCasePresentationService.ShowCreatedCase.PostRelease";
         private const int ReadyShowMaxAttempts = 2;
         private const int ReadyShowRetryDelayMs = 80;
 
@@ -45,7 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Workbook workbook,
             string reason,
             Action<Excel.Workbook, string, int, Action> scheduleRetry,
-            Action onShown,
+            Action<WorkbookTaskPaneReadyShowAttemptOutcome> onShown,
             Action<Excel.Workbook, string> scheduleFallback)
         {
             if (workbook == null)
@@ -86,16 +85,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", activeWindowHwnd="
                 + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow())
                 + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+            WorkbookTaskPaneReadyShowAttemptOutcome shownOutcome = null;
             _taskPaneDisplayRetryCoordinator.ShowWhenReady(
                 workbook,
                 reason,
-                TryShowWorkbookTaskPaneOnce,
+                (targetWorkbook, targetReason, attemptNumber) =>
+                {
+                    WorkbookTaskPaneReadyShowAttemptOutcome attemptOutcome = TryShowWorkbookTaskPaneOnce(targetWorkbook, targetReason, attemptNumber);
+                    if (attemptOutcome.IsShown)
+                    {
+                        shownOutcome = attemptOutcome;
+                    }
+
+                    return attemptOutcome.IsShown;
+                },
                 scheduleRetry,
-                onShown,
+                () => onShown?.Invoke(shownOutcome),
                 scheduleFallback);
         }
 
-        private bool TryShowWorkbookTaskPaneOnce(Excel.Workbook workbook, string reason, int attemptNumber)
+        private WorkbookTaskPaneReadyShowAttemptOutcome TryShowWorkbookTaskPaneOnce(Excel.Workbook workbook, string reason, int attemptNumber)
         {
             _logger?.Info(
                 KernelFlickerTracePrefix
@@ -221,7 +230,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             "WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce",
                             SafeWorkbookFullName(targetWorkbook),
                             "reason=" + (targetReason ?? string.Empty) + ",attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
-                        return TaskPaneRefreshAttemptResult.Succeeded();
+                        return TaskPaneRefreshAttemptResult.VisibleAlreadySatisfied();
                     }
 
                     TaskPaneRefreshAttemptResult refreshAttemptResult = _tryRefreshTaskPane(targetReason, targetWorkbook, targetWindow);
@@ -264,23 +273,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + refreshed.ToString()
                 + ",visibleCasePaneEarlyComplete="
                 + visibleCasePaneAlreadyShown.ToString());
-            if (refreshed
-                && visibleCasePaneAlreadyShown
-                && string.Equals(reason, CreatedCasePostReleaseReason, StringComparison.OrdinalIgnoreCase))
-            {
-                string observedWorkbookPath = SafeWorkbookFullName(workbook);
-                NewCaseVisibilityObservation.Log(
-                    _logger,
-                    _excelInteropService,
-                    null,
-                    workbook,
-                    result.WorkbookWindow,
-                    "case-display-completed",
-                    "WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce",
-                    observedWorkbookPath,
-                    "completion=visibleCasePaneAlreadyShown,attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
-                NewCaseVisibilityObservation.Complete(observedWorkbookPath);
-            }
             if (!refreshed
                 && attemptNumber >= ReadyShowMaxAttempts)
             {
@@ -320,7 +312,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + windowResolved.ToString());
             }
 
-            return refreshed;
+            return new WorkbookTaskPaneReadyShowAttemptOutcome(
+                attemptNumber,
+                result.WorkbookWindow,
+                result.RefreshAttemptResult,
+                visibleCasePaneAlreadyShown);
         }
 
         private void EnsureWorkbookWindowVisibleForTaskPaneDisplay(Excel.Workbook workbook, string reason, int attemptNumber)

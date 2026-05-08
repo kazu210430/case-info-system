@@ -344,16 +344,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + SafeApplicationHwnd(_application)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
-                NewCaseVisibilityObservation.Log(
-                    _logger,
-                    null,
-                    _application,
-                    workbook,
-                    null,
-                    "display-handoff-open-completed",
-                    "CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay",
-                    caseWorkbookPath,
-                    "route=" + CreatedCaseDisplayHiddenRouteName);
                 return workbook;
             }
             catch

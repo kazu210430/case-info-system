@@ -58,6 +58,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool RefreshPane(WorkbookContext context, string reason)
         {
+            return RefreshPaneWithOutcome(context, reason).IsShown;
+        }
+
+        internal TaskPaneHostFlowResult RefreshPaneWithOutcome(WorkbookContext context, string reason)
+        {
             return _taskPaneHostFlowService.RefreshPane(context, reason);
         }
 

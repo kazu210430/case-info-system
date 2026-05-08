@@ -38,6 +38,7 @@ namespace CaseInfoSystem.Tests
                 out _);
 
             bool shown = false;
+            WorkbookTaskPaneReadyShowAttemptOutcome shownOutcome = null;
             bool fallbackScheduled = false;
             var scheduledAttempts = new List<int>();
 
@@ -49,13 +50,22 @@ namespace CaseInfoSystem.Tests
                     scheduledAttempts.Add(attemptNumber);
                     continueAction();
                 },
-                () => shown = true,
+                outcome =>
+                {
+                    shown = true;
+                    shownOutcome = outcome;
+                },
                 (_, __) => fallbackScheduled = true);
 
             Assert.True(shown);
             Assert.False(fallbackScheduled);
             Assert.Empty(scheduledAttempts);
             Assert.Equal(0, refreshCallCount);
+            Assert.NotNull(shownOutcome);
+            Assert.True(shownOutcome.VisibleCasePaneAlreadyShown);
+            Assert.True(shownOutcome.IsShown);
+            Assert.False(shownOutcome.RefreshAttemptResult.IsRefreshCompleted);
+            Assert.True(shownOutcome.RefreshAttemptResult.IsForegroundGuaranteeTerminal);
         }
 
         [Fact]
@@ -86,6 +96,7 @@ namespace CaseInfoSystem.Tests
             window.Visible = false;
 
             bool shown = false;
+            WorkbookTaskPaneReadyShowAttemptOutcome shownOutcome = null;
             bool fallbackScheduled = false;
             var scheduledAttempts = new List<int>();
 
@@ -97,7 +108,11 @@ namespace CaseInfoSystem.Tests
                     scheduledAttempts.Add(attemptNumber);
                     continueAction();
                 },
-                () => shown = true,
+                outcome =>
+                {
+                    shown = true;
+                    shownOutcome = outcome;
+                },
                 (_, __) => fallbackScheduled = true);
 
             Assert.True(shown);
@@ -106,6 +121,10 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(2, refreshCallCount);
             Assert.True(firstAttemptWindowVisible.GetValueOrDefault());
             Assert.False(secondAttemptWindowVisible.GetValueOrDefault());
+            Assert.NotNull(shownOutcome);
+            Assert.False(shownOutcome.VisibleCasePaneAlreadyShown);
+            Assert.True(shownOutcome.IsShown);
+            Assert.True(shownOutcome.RefreshAttemptResult.IsRefreshCompleted);
         }
 
         private static WorkbookTaskPaneReadyShowAttemptWorker CreateWorker(

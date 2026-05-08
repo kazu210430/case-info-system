@@ -251,6 +251,14 @@ target-state の役割分担:
 
 最初の安全単位は、「`CASE display completed` の ownership を orchestration 境界へ寄せる」ことに限定する。
 
+### Implementation status (2026-05-08 first safe unit)
+
+- Implemented: created-case display session in `TaskPaneRefreshOrchestrationService`.
+- Implemented: `case-display-completed` is emitted only by `TaskPaneRefreshOrchestrationService`.
+- Implemented: worker / coordinator / host-flow now return normalized outcomes instead of owning final display completion.
+- Implemented: `display-handoff-completed` is emitted at ready-show acceptance in `TaskPaneRefreshOrchestrationService`.
+- Preserved: retry counts, ready-show timing, foreground and visibility recovery conditions, rebuild fallback, hidden session behavior, CASE creation behavior, and fail-closed conditions.
+
 ### この安全単位に含めること
 
 - `TaskPaneRefreshOrchestrationService` に created-case display session を導入する

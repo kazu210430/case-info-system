@@ -208,3 +208,36 @@
   - Base sync failure 時の success + warning semantics
 - 実装結果として追加した確認:
   - `KernelTemplateSyncServiceTests` に、preflight failure 時の保護復元と、preparation 例外時の保護復元を固定するテストを追加した
+
+## 10. 実機 NG 調査記録（2026-05-08）
+
+- 本節は、第1安全単位の実装後に実機で観測した NG と、その原因調査記録である
+- 観測した症状:
+  - 雛形更新後に新規 CASE を作成したところ、表示準備中にぐるぐるループした
+  - いったん終了後、対象 CASE を開いたところ白 Excel になった
+  - 白 Excel はウインドウ再表示で復元した
+  - 他の既存 CASE は、ボタンパネル更新で表示できた
+- 調査で分かったこと:
+  - `KernelTemplateSyncService` から `KernelTemplateSyncPreparationService` へ移した処理について、`ExcelApplicationStateScope`、sheet protection restore、preflight、publication の前後関係は変わっていない
+  - publication 本線の順序 `WriteToMasterList -> TASKPANE_MASTER_VERSION +1 -> Kernel save -> Base snapshot sync -> InvalidateCache` は変わっていない
+  - Base 本体 `案件情報System_Base.xlsx` は、調査時点で `TASKPANE_BASE_MASTER_VERSION=68`、`TASKPANE_MASTER_VERSION=68`、`TASKPANE_BASE_SNAPSHOT_COUNT=14` を持っていた
+  - 2026-05-08 15:50 以後に新規作成した `20260508_テスト\\案件情報_テスト.xlsx` は、`TASKPANE_BASE_MASTER_VERSION=68`、`TASKPANE_MASTER_VERSION=68`、`TASKPANE_SNAPSHOT_CACHE_COUNT=14` で正常だった
+  - 一方で、問題として開かれた `20260508_白フラッシュ出ちゃった。\\案件情報_白フラッシュ出ちゃった。.xlsx` は、`TASKPANE_BASE_MASTER_VERSION=65` を保持していた
+  - 同 CASE の reopen ログでは、`caseMasterVersion=65, latestMasterVersion=68`、`embeddedMasterVersion=65, latestMasterVersion=68` から `MasterListRebuild` と foreground recovery に入っていた
+  - 問題 CASE のフォルダ作成時刻は 2026-05-08 00:26:46 で、15:50 の雛形更新より前だった
+- `KernelTemplateSyncPreparationService` 分離が直接原因ではなさそうな理由:
+  - refactor 前後で publication 本線の順序変更がない
+  - `ExcelApplicationStateScope` / protection restore / preflight / publication の関係が同一である
+  - Base 本体は update 後に version 68 / snapshot count 14 へ到達している
+  - update 後に作成した新規 CASE は version 68 / cache 正常で、今回の refactor だけで新規 CASE を壊した形跡がない
+  - 実機 NG の対象は、雛形更新後に作った CASE ではなく、更新前状態を引きずった stale CASE reopen と読む方が事実に合う
+- 本命の残課題:
+  - stale CASE reopen 時の `TaskPaneSnapshotBuilderService` による `MasterListRebuild`
+  - rebuild 後の foreground recovery
+  - ready-show / window recovery と白 Excel 観測の関係
+- 次の安全単位候補として扱う対象:
+  - `TaskPaneSnapshotBuilderService`
+  - ready-show / window recovery 側の orchestration
+- revert 判断:
+  - `KernelTemplateSyncPreparationService` 分離 commit の revert は第一推奨ではない
+  - 理由は、今回の NG が「refactor 後に作った新規 CASE の破損」ではなく、「stale CASE reopen で既存の rebuild / recovery 経路が表面化した事象」である可能性が高いため

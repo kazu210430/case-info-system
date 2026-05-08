@@ -586,6 +586,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal Action<CaseInfoSystem.ExcelAddIn.App.TaskPaneDisplayRequest, Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window> RequestTaskPaneDisplayForTargetWindowHandler { get; set; }
 
+        internal Func<Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window, bool> ShouldIgnoreWindowActivateDuringCaseProtectionHandler { get; set; }
+
         internal Func<CaseInfoSystem.ExcelAddIn.Domain.WorkbookContext, string, string, bool> ShowKernelSheetAndRefreshPaneFromHomeHandler { get; set; }
 
         internal Action<Microsoft.Office.Interop.Excel.Workbook, string> ShowWorkbookTaskPaneWhenReadyHandler { get; set; }
@@ -631,6 +633,14 @@ namespace CaseInfoSystem.ExcelAddIn
             Microsoft.Office.Interop.Excel.Window targetWindow)
         {
             RequestTaskPaneDisplayForTargetWindowHandler?.Invoke(request, workbook, targetWindow);
+        }
+
+        internal bool ShouldIgnoreWindowActivateDuringCaseProtection(
+            Microsoft.Office.Interop.Excel.Workbook workbook,
+            Microsoft.Office.Interop.Excel.Window window)
+        {
+            return ShouldIgnoreWindowActivateDuringCaseProtectionHandler != null
+                && ShouldIgnoreWindowActivateDuringCaseProtectionHandler(workbook, window);
         }
 
         internal bool ShowKernelSheetAndRefreshPaneFromHome(

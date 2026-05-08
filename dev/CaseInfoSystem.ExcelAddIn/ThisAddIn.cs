@@ -285,37 +285,62 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             EventBoundaryGuard.Execute(_logger, nameof(Application_WindowActivate), () =>
             {
+                WindowActivateTaskPaneTriggerFacts triggerFacts = CaptureWindowActivateTaskPaneTriggerFacts(
+                    workbook,
+                    window,
+                    "ThisAddIn.Application_WindowActivate");
                 _logger?.Info(
                     KernelFlickerTracePrefix
                     + " source=ExcelEventBoundary action=fire event=WindowActivate workbook="
-                    + FormatWorkbookDescriptor(workbook)
+                    + triggerFacts.WorkbookDescriptor
                     + ", eventWindow="
-                    + FormatWindowDescriptor(window)
+                    + triggerFacts.WindowDescriptor
                     + ", activeState="
-                    + FormatActiveExcelState());
+                    + triggerFacts.ActiveState
+                    + ", triggerRole=TaskPaneDisplayRefreshTrigger");
                 _logger?.Info(
                     "Excel WindowActivate fired. workbook="
-                    + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
+                    + triggerFacts.WorkbookFullName
                     + ", windowHwnd="
-                    + SafeWindowHwnd(window)
+                    + triggerFacts.WindowHwnd
                     + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
-                _workbookEventCoordinator.OnWindowActivate(workbook, window);
+                _workbookEventCoordinator.OnWindowActivate(triggerFacts);
             });
+        }
+
+        internal void HandleWindowActivateEvent(WindowActivateTaskPaneTriggerFacts triggerFacts)
+        {
+            if (triggerFacts == null)
+            {
+                triggerFacts = CaptureWindowActivateTaskPaneTriggerFacts(
+                    null,
+                    null,
+                    "ThisAddIn.HandleWindowActivateEvent.NullFacts");
+            }
+
+            Excel.Workbook workbook = triggerFacts.Workbook;
+            Excel.Window window = triggerFacts.Window;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=WorkbookEventCoordinator action=enter event=WindowActivate triggerRole=TaskPaneDisplayRefreshTrigger workbook="
+                + triggerFacts.WorkbookDescriptor
+                + ", eventWindow="
+                + triggerFacts.WindowDescriptor
+                + ", activeState="
+                + triggerFacts.ActiveState
+                + ", captureOwner="
+                + triggerFacts.CaptureOwner);
+            _logger?.Info("TaskPane event entry. event=WindowActivate, workbook=" + SafeWorkbookFullName(workbook) + ", windowHwnd=" + SafeWindowHwnd(window) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+            NewCaseVisibilityObservation.Log(_logger, _excelInteropService, Application, workbook, window, "WindowActivate-event", "ThisAddIn.HandleWindowActivateEvent");
+            _windowActivatePaneHandlingService?.Handle(triggerFacts);
         }
 
         internal void HandleWindowActivateEvent(Excel.Workbook workbook, Excel.Window window)
         {
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=WorkbookEventCoordinator action=enter event=WindowActivate workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", eventWindow="
-                + FormatWindowDescriptor(window)
-                + ", activeState="
-                + FormatActiveExcelState());
-            _logger?.Info("TaskPane event entry. event=WindowActivate, workbook=" + SafeWorkbookFullName(workbook) + ", windowHwnd=" + SafeWindowHwnd(window) + ", activeWorkbook=" + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook()) + ", activeWindowHwnd=" + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
-            NewCaseVisibilityObservation.Log(_logger, _excelInteropService, Application, workbook, window, "WindowActivate-event", "ThisAddIn.HandleWindowActivateEvent");
-            _windowActivatePaneHandlingService?.Handle(workbook, window);
+            HandleWindowActivateEvent(CaptureWindowActivateTaskPaneTriggerFacts(
+                workbook,
+                window,
+                "ThisAddIn.HandleWindowActivateEvent.Legacy"));
         }
 
         private void Application_SheetActivate(object sh)
@@ -458,6 +483,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _workbookRoleResolver,
                 workbook,
                 targetWindow);
+            LogTaskPaneDisplayEntryDecision(request, displayEntryDecision, workbook, targetWindow);
             switch (displayEntryDecision.Result)
             {
                 case PaneDisplayPolicyResult.ShowExisting:
@@ -472,11 +498,67 @@ namespace CaseInfoSystem.ExcelAddIn
                     return;
             }
 
+            RefreshTaskPane(request, workbook, targetWindow);
+        }
+
+        private void LogTaskPaneDisplayEntryDecision(
+            TaskPaneDisplayRequest request,
+            TaskPaneDisplayEntryDecision decision,
+            Excel.Workbook workbook,
+            Excel.Window targetWindow)
+        {
+            if (request == null || !request.IsWindowActivateTrigger)
+            {
+                return;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=ThisAddIn action=window-activate-display-entry-decision reason="
+                + request.ToReasonString()
+                + ", triggerRole=TaskPaneDisplayRefreshTrigger"
+                + ", displayEntryResult="
+                + (decision == null ? PaneDisplayPolicyResult.Reject.ToString() : decision.Result.ToString())
+                + ", displayCompletionOutcome=False"
+                + ", recoveryOwner=False"
+                + ", foregroundGuaranteeOwner=False"
+                + ", hiddenExcelOwner=False"
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", targetWindow="
+                + FormatWindowDescriptor(targetWindow)
+                + FormatDisplayEntryStateTraceFields(decision == null ? null : decision.State)
+                + FormatDisplayRequestTraceFields(request));
+        }
+
+        private static string FormatDisplayEntryStateTraceFields(TaskPaneDisplayEntryState state)
+        {
+            if (state == null)
+            {
+                return ", displayEntryState=null";
+            }
+
+            return ", displayEntryState=present"
+                + ", hasTargetWindow=" + state.HasTargetWindow.ToString()
+                + ", hasResolvableWindowKey=" + state.HasResolvableWindowKey.ToString()
+                + ", hasManagedPane=" + state.HasManagedPane.ToString()
+                + ", hasExistingHost=" + state.HasExistingHost.ToString()
+                + ", isSameWorkbook=" + state.IsSameWorkbook.ToString()
+                + ", isRenderSignatureCurrent=" + state.IsRenderSignatureCurrent.ToString();
+        }
+
+        private void RefreshTaskPane(TaskPaneDisplayRequest request, Excel.Workbook workbook, Excel.Window window)
+        {
             string reason = request == null ? string.Empty : request.ToReasonString();
-            RefreshTaskPane(reason, workbook, targetWindow);
+            RefreshTaskPane(reason, workbook, window, request);
         }
 
         private void RefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
+        {
+            RefreshTaskPane(reason, workbook, window, request: null);
+        }
+
+        private void RefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window, TaskPaneDisplayRequest request)
         {
             int refreshCallId = ++_kernelFlickerTraceRefreshCallSequence;
             _logger?.Info(
@@ -490,8 +572,11 @@ namespace CaseInfoSystem.ExcelAddIn
                 + ", inputWindow="
                 + FormatWindowDescriptor(window)
                 + ", activeState="
-                + FormatActiveExcelState());
-            TaskPaneRefreshAttemptResult result = TryRefreshTaskPane(reason, workbook, window);
+                + FormatActiveExcelState()
+                + FormatDisplayRequestTraceFields(request));
+            TaskPaneRefreshAttemptResult result = request == null
+                ? TryRefreshTaskPane(reason, workbook, window)
+                : _taskPaneRefreshOrchestrationService.TryRefreshTaskPane(request, workbook, window);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=ThisAddIn action=refresh-call-end refreshCallId="
@@ -503,7 +588,36 @@ namespace CaseInfoSystem.ExcelAddIn
                 + ", inputWindow="
                 + FormatWindowDescriptor(window)
                 + ", result="
-                + (result == null ? "null" : result.IsRefreshSucceeded.ToString()));
+                + (result == null ? "null" : result.IsRefreshSucceeded.ToString())
+                + FormatDisplayRequestTraceFields(request));
+        }
+
+        private static string FormatDisplayRequestTraceFields(TaskPaneDisplayRequest request)
+        {
+            if (request == null)
+            {
+                return string.Empty;
+            }
+
+            string details =
+                ", displayRequestSource=" + request.Source.ToString()
+                + ", displayRequestRefreshIntent=" + request.RefreshIntent.ToString()
+                + ", displayTriggerReason=" + request.ToReasonString();
+            if (!request.IsWindowActivateTrigger)
+            {
+                return details;
+            }
+
+            WindowActivateTaskPaneTriggerFacts facts = request.WindowActivateTriggerFacts;
+            return details
+                + ", windowActivateTriggerRole=TaskPaneDisplayRefreshTrigger"
+                + ", windowActivateRecoveryOwner=False"
+                + ", windowActivateForegroundGuaranteeOwner=False"
+                + ", windowActivateHiddenExcelOwner=False"
+                + ", windowActivateCaptureOwner=" + (facts == null ? string.Empty : facts.CaptureOwner)
+                + ", windowActivateWorkbookPresent=" + (facts != null && facts.HasWorkbook).ToString()
+                + ", windowActivateWindowPresent=" + (facts != null && facts.HasWindow).ToString()
+                + ", windowActivateWindowHwnd=" + (facts == null ? string.Empty : facts.WindowHwnd);
         }
 
         private TaskPaneRefreshAttemptResult TryRefreshTaskPane(string reason, Excel.Workbook workbook, Excel.Window window)
@@ -1208,6 +1322,22 @@ namespace CaseInfoSystem.ExcelAddIn
         private string SafeWorkbookFullName(Excel.Workbook workbook)
         {
             return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
+        }
+
+        private WindowActivateTaskPaneTriggerFacts CaptureWindowActivateTaskPaneTriggerFacts(
+            Excel.Workbook workbook,
+            Excel.Window window,
+            string captureOwner)
+        {
+            return new WindowActivateTaskPaneTriggerFacts(
+                workbook,
+                window,
+                FormatWorkbookDescriptor(workbook),
+                FormatWindowDescriptor(window),
+                FormatActiveExcelState(),
+                SafeWorkbookFullName(workbook),
+                SafeWindowHwnd(window),
+                captureOwner);
         }
 
         private string FormatActiveExcelState()

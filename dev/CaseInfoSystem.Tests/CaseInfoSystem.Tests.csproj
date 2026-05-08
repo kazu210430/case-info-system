@@ -91,6 +91,7 @@
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
     <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
     <Compile Include="RebuildFallbackOutcomeTests.cs" />
+    <Compile Include="WindowActivatePaneHandlingServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
@@ -160,6 +161,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRetryCoordinator.cs" Link="Source\App\TaskPaneDisplayRetryCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshAttemptResult.cs" Link="Source\App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookWindowVisibilityService.cs" Link="Source\App\WorkbookWindowVisibilityService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WindowActivatePaneHandlingService.cs" Link="Source\App\WindowActivatePaneHandlingService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" Link="Source\App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneDisplayAttemptResult.cs" Link="Source\App\WorkbookTaskPaneDisplayAttemptResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneReadyShowAttemptWorker.cs" Link="Source\App\WorkbookTaskPaneReadyShowAttemptWorker.cs" />

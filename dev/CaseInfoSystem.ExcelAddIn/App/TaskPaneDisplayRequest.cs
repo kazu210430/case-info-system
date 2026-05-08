@@ -17,11 +17,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal TaskPaneDisplayRequest(
             TaskPaneDisplaySource source,
             TaskPaneDisplayRefreshIntent refreshIntent,
-            string detail)
+            string detail,
+            WindowActivateTaskPaneTriggerFacts windowActivateTriggerFacts = null)
         {
             Source = source;
             RefreshIntent = refreshIntent;
             Detail = detail ?? string.Empty;
+            WindowActivateTriggerFacts = windowActivateTriggerFacts;
         }
 
         internal TaskPaneDisplaySource Source { get; }
@@ -30,12 +32,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal string Detail { get; }
 
-        internal static TaskPaneDisplayRequest ForWindowActivate()
+        internal WindowActivateTaskPaneTriggerFacts WindowActivateTriggerFacts { get; }
+
+        internal static TaskPaneDisplayRequest ForWindowActivate(WindowActivateTaskPaneTriggerFacts triggerFacts = null)
         {
             return new TaskPaneDisplayRequest(
                 TaskPaneDisplaySource.WindowActivate,
                 TaskPaneDisplayRefreshIntent.Normal,
-                string.Empty);
+                string.Empty,
+                triggerFacts);
         }
 
         internal static TaskPaneDisplayRequest ForPostActionRefresh(string actionKind)
@@ -43,7 +48,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new TaskPaneDisplayRequest(
                 TaskPaneDisplaySource.PostActionRefresh,
                 TaskPaneDisplayRefreshIntent.ForceRefresh,
-                actionKind);
+                actionKind,
+                windowActivateTriggerFacts: null);
+        }
+
+        internal bool IsWindowActivateTrigger
+        {
+            get { return Source == TaskPaneDisplaySource.WindowActivate; }
         }
 
         internal string ToReasonString()

@@ -15,5 +15,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _addin.HandleWindowActivateEvent(workbook, window);
         }
+
+        internal void OnWindowActivate(WindowActivateTaskPaneTriggerFacts triggerFacts)
+        {
+            _addin.HandleWindowActivateEvent(triggerFacts);
+        }
     }
 }

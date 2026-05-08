@@ -194,13 +194,22 @@ owner:
 
 | outcome | meaning | trigger | guarantee | recovery | degraded / fail 条件 |
 | --- | --- | --- | --- | --- | --- |
-| `WhiteExcelPreventionNotRequired` | visible workbook が残っている、または white Excel prevention scope 外。 | post-close visible workbook check。 | shared app を quit しない。 | なし。 | visible workbook facts 不明なら not required にしない。 |
+| `WhiteExcelPreventionNotRequired` | queued key の target が current open workbook として残っている、visible workbook が残っている、または white Excel prevention scope 外。 | post-close still-open check / visible workbook check。 | shared app を quit しない。 | なし。 | still-open facts と visible workbook facts のどちらも判定できない場合は not required にしない。 |
 | `WhiteExcelPreventionQueued` | close 後 follow-up として no visible workbook quit 判定が予約された。 | managed close completion。 | quit completed ではない。 | scheduler が retry / check へ進む。 | queued を completed と混同しない。 |
 | `WhiteExcelPreventionCompleted` | visible workbook が無いことを確認し、shared/current app quit が完了した。 | post-close follow-up。 | white Excel prevention scope は閉じた。 | なし。 | quit 成功後の終了中 app は restore しない。 |
 | `WhiteExcelPreventionSkipped` | 既存条件により quit しなかった。 | visible workbook exists、ownership unknown、busy / retry exhausted 等。 | shared app は残る。 | retry / user guidance は既存または未定義 owner。 | skipped reason を trace。 |
 | `WhiteExcelPreventionDegraded` | quit 判定または実行が部分的で、Excel 残存可能性がある。 | busy retry、partial failure、trace gap。 | completed と同一視しない。 | fail closed / diagnostic。 | foreground recovery で success に丸めない。 |
 | `WhiteExcelPreventionFailed` | no visible workbook quit が必要だったが失敗した。 | `Application.Quit` exception 等。 | success にしない。 | user-facing guidance は未定義事項。 | visibility restore / WindowActivate で補完しない。 |
 | `WhiteExcelPreventionUnknown` | white Excel prevention outcome を正規化できない。 | insufficient facts。 | success に使わない。 | trace 正本化候補。 | raw log だけで completed と呼ばない。 |
+
+E-2 current-state 補足:
+
+- `WhiteExcelPreventionNotRequired` は current emitted outcome として 2 つの主な意味を持ちます。`outcomeReason=targetWorkbookStillOpen` は queued key と current open workbook key が一致したため quit しないこと、`outcomeReason=visibleWorkbookExists` は queued key の target は closed と読めるが shared/current app に visible workbook が残るため quit しないことを表します。
+- `targetWorkbookStillOpen` の判定は、close 前に queue へ積まれた key と、dequeue 時点の current `Application.Workbooks` 列挙から得た fresh open workbook key の比較です。close 済み workbook COM object の再参照ではありません。
+- immediate reopen 近接時に fresh reopened workbook が queued key と一致した場合、current-state では follow-up cancel ではなく still-open skip として `WhiteExcelPreventionNotRequired` を記録します。queued key を fresh reopen facts で置き換えません。
+- `WhiteExcelPreventionCompleted` は still-open false かつ visible workbook false の後に `Application.Quit()` が完了した場合だけです。reopen / display / foreground の成功を completed に読み替えません。
+- `WhiteExcelPreventionSkipped` は vocabulary 上の候補として残しますが、現行 `PostCloseFollowUpScheduler` の primary emitted outcome は `Queued` / `NotRequired` / `Completed` / `Failed` です。visible workbook がある場合の現行 emitted outcome は `Skipped` ではなく `NotRequired` です。
+- `WhiteExcelPreventionFailed` は no visible workbook quit の試行後に失敗した場合です。foreground recovery、visibility restore、WindowActivate dispatch、hidden cleanup の outcome で補完しません。
 
 ## Trace Vocabulary
 

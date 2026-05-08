@@ -134,7 +134,31 @@ reopen は close 前 workbook object の継続利用ではなく、新しい wor
 - quit 成功時に DisplayAlerts restore は行いません。quit failure 時は snapshot がある場合に DisplayAlerts を restore します。
 - Excel busy は retry queue に戻します。retry 上限後または他 exception は failure trace です。
 - `folderPath` は current request payload に含まれますが、scheduler 内の white Excel prevention 判定 primitive では使われていません。
-- user が WorkbookClose 直後に同じ CASE を即 reopen した場合の follow-up queue との競合扱いは current-state 上の未定義ポイントです。
+- user が WorkbookClose 直後に同じ CASE を即 reopen した場合でも、current-state は follow-up cancel / reopen gating ではなく、queued key と current `Application.Workbooks` 列挙による fail-closed 判定として動きます。正式な cancel / gating protocol は current-state 上の未定義ポイントとして残します。
+
+## E-2 post-close follow-up / immediate reopen current behavior
+
+E-2 では runtime 条件を変えず、post-close follow-up と immediate reopen が近接した場合の current behavior を次のように読むことにします。
+
+- close 前に `CaseWorkbookLifecycleService` が確定するのは queued key です。`workbook-close-immutable-facts-captured` と `workbook-close-follow-up-facts-captured` は close 前 workbook object から既存フローで得ていた facts を記録します。
+- reopen は別 owner です。interactive created CASE の reopen では `KernelCasePresentationService` / `CaseWorkbookOpenStrategy` が shared/current app 上で fresh workbook object を取得し、以後の workbook / window / DocProperty / TaskPane facts は reopen 後に再取得する facts です。
+- `PostCloseFollowUpScheduler` の still-open 判定は、queued key と current `Application.Workbooks` 列挙から得た fresh open workbook key を比較する判定です。closed workbook object の再参照ではありません。
+- immediate reopen 後の fresh workbook が queued key と一致する場合、current behavior では `targetWorkbookStillOpen=True` / `decision=skip-still-open` として quit せず、`WhiteExcelPreventionNotRequired` の `outcomeReason=targetWorkbookStillOpen` を記録します。これは follow-up cancel ではなく、dequeue 時の still-open skip です。
+- immediate reopen 後の fresh workbook が queued key と一致しない場合でも、visible workbook scan で visible workbook が見つかれば `WhiteExcelPreventionNotRequired` の `outcomeReason=visibleWorkbookExists` として quit しません。この場合、queued key の target は closed と読まれ、fresh visible workbook の存在だけが quit 抑止理由です。
+- still-open が false で、visible workbook も無い場合だけ `Application.Quit()` を試行し、成功時に `WhiteExcelPreventionCompleted` を記録します。quit 成功後に終了中 `Application` を restore しない境界は変えません。
+- `WhiteExcelPreventionFailed` は no visible workbook quit が試行され、例外等で完了しなかった場合の failure trace です。foreground recovery、visibility recovery、WindowActivate dispatch で補完しません。
+
+### E-2 classification
+
+| classification | current decision |
+| --- | --- |
+| E-2a docs 追記のみ | 採用。queued key / fresh reopen facts / still-open / WhiteExcelPrevention outcome の意味を docs で固定します。 |
+| E-2b tests 追加のみ | 今回は未採用。既存 `PostCloseFollowUpSchedulerTests` が visible workbook skip、quit success/failure、still-open skip diagnostic を持つため、まず docs で current behavior を固定します。 |
+| E-2c diagnostic trace / outcome vocabulary の軽微整合 | 今回は docs vocabulary の意味補足に限定します。runtime trace field や emitted condition は変更しません。 |
+| E-2d private helper 化が必要なもの | 未採用。still-open / visible scan の実装分解は行いません。 |
+| E-2e follow-up cancel / reopen gating / visible 判定 / Quit 条件 | 禁止。今回の整理では実装しません。 |
+
+E-2 の結果、競合時の current-state は「queued key と fresh open workbook facts を比較するが、queued key 自体は rewrite しない」と表現します。fresh reopen facts は display / refresh protocol 側で再取得され、post-close follow-up request payload の captured facts と混ぜません。
 
 ## foreground / visibility との境界
 
@@ -186,7 +210,7 @@ current-state 上、`WindowActivate` は次の owner ではありません。
 ## current-state 上の未定義ポイント
 
 - user close と system close を event facts だけで区別する正規化 vocabulary は未定義です。
-- WorkbookClose 直後に同一 CASE が即 reopen された場合、post-close follow-up queue と reopen の競合をどう trace / fail closed 化するかは未定義です。
+- WorkbookClose 直後に同一 CASE が即 reopen された場合、current behavior は E-2 の still-open / visible workbook scan として整理しました。ただし follow-up cancel、reopen gating、user-facing UX を含む正式な競合 protocol は未定義です。
 - `PostCloseFollowUpScheduler` の quit failure 後に user-facing UX を出すかは未定義です。
 - scheduler request の `folderPath` は payload に残っていますが、white Excel prevention primitive としての意味は未定義です。
 - temporary read-only workbook close、master/kernel helper close、hidden session close を CASE managed close protocol に含めるかは current-state では分けて扱っています。

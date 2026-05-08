@@ -49,7 +49,7 @@
 - `experimental-isolated-inner-save` は route 名どおり、current/shared app ではなく dedicated hidden `Application` を生成し、close 時の inner save を含む経路です。
 - 互換のため旧環境変数 `CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL` でも同 route に到達しますが、契約上の正本は `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` です。
 - `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外です。
-- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
+- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
 
 ### 不明点
 
@@ -226,7 +226,7 @@ Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` 
 - save 前の visibility restore は保存状態正規化のための owner-side cleanup であり、shared/current app の表示経路へ昇格させる意味ではありません。
 - cleanup は `CloseWorkbookQuietly`、`Application.Quit`、`ComObjectReleaseService.FinalRelease` まで含めて hidden session 内で完結します。
 - session の目的は、未 open の Base / Accounting workbook へ反映するための owner 付き hidden 作業を、処理後に orphaned `EXCEL.EXE` を残さず閉じることです。
-- hidden reflection session と他の hidden lifecycle の接続は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md` を参照します。
+- hidden reflection session と他の hidden lifecycle の接続は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、owner / protocol の target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md` を参照します。
 
 ## 会計書類セット
 

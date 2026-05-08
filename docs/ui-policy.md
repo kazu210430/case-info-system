@@ -27,7 +27,7 @@
 - interactive route と `CreateCaseBatch` はどちらも save 前に owned workbook window を `normal + visible` へ正規化します。
 - interactive route の save 前正規化は保存状態の正規化であり、最終表示責務は shared/current app への handoff 後にだけ成立します。
 - `app-cache` は `CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外であり、裏Excel一般化の根拠にしません。
-- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md` を参照します。
+- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、owner / protocol の target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md` を参照します。
 
 ## 禁止事項
 

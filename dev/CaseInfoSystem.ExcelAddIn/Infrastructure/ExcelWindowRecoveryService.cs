@@ -82,13 +82,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private sealed class WindowMutationTraceContext
         {
-            internal WindowMutationTraceContext(string workbookFullName, string reason)
+            internal WindowMutationTraceContext(Excel.Workbook workbook, string workbookFullName, string reason)
             {
+                Workbook = workbook;
                 WorkbookFullName = workbookFullName ?? string.Empty;
                 Reason = reason ?? string.Empty;
                 RestoreSkipped = NotApplicable;
                 RestoreSkipReason = NotEvaluated;
             }
+
+            internal Excel.Workbook Workbook { get; }
 
             internal string WorkbookFullName { get; }
 
@@ -197,7 +200,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
 
             string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
-            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(workbookFullName, reason);
+            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(workbook, workbookFullName, reason);
             bool recoveredScreenUpdating = EnsureScreenUpdatingEnabled(reason, workbookFullName);
             Excel.Window window = ResolveWindow(workbook, traceContext);
             TraceWindowMutation(traceContext, "recovery-start", window);
@@ -254,7 +257,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 + ", ensureWindowVisible="
                 + ensureWindowVisible.ToString()
                 + ", activateWindow="
-                + activateWindow.ToString());
+                + activateWindow.ToString()
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook, workbookFullName));
             return true;
         }
 
@@ -295,7 +299,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal bool ShowApplicationWindow(string reason, string workbookFullName)
         {
-            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(workbookFullName, reason);
+            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(null, workbookFullName, reason);
             try
             {
                 TraceWindowMutation(traceContext, "show-application-visible-before", GetCurrentActiveWindowForTracing());
@@ -327,7 +331,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal bool TryBringApplicationToForeground(string reason, string workbookFullName)
         {
-            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(workbookFullName, reason);
+            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(null, workbookFullName, reason);
             try
             {
                 TraceWindowMutation(traceContext, "application-foreground-before", GetCurrentActiveWindowForTracing());
@@ -354,7 +358,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         /// <summary>
         internal bool EnsureApplicationVisible(string reason, string workbookFullName)
         {
-            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(workbookFullName, reason);
+            WindowMutationTraceContext traceContext = new WindowMutationTraceContext(null, workbookFullName, reason);
             return EnsureApplicationVisible(GetCurrentActiveWindowForTracing(), traceContext);
         }
 
@@ -671,7 +675,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 .Append(", changedFields=")
                 .Append(changedFields)
                 .Append(", failure=")
-                .Append(snapshot.Failure);
+                .Append(snapshot.Failure)
+                .Append(NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, traceContext.Workbook, traceContext.WorkbookFullName));
             _logger.Info(builder.ToString());
             traceContext.PreviousSnapshot = snapshot;
         }

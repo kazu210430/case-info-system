@@ -177,7 +177,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", fallbackCause=AttemptsExhausted"
                 + ", fallbackHandoff=true"
                 + ", activeState="
-                + FormatActiveState());
+                + FormatActiveState()
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             _logger?.Info(
                 "TaskPane wait-ready fallback handoff. reason="
                 + (reason ?? string.Empty)
@@ -188,7 +189,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", maxAttempts="
                 + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
                 + ", fallbackCause=AttemptsExhausted"
-                + ", fallbackHandoff=true");
+                + ", fallbackHandoff=true"
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                null,
+                "ready-show-fallback-handoff",
+                "TaskPaneRefreshOrchestrationService.ScheduleWorkbookTaskPaneRefresh",
+                SafeWorkbookFullName(workbook),
+                "reason=" + (reason ?? string.Empty) + ",fallbackCause=AttemptsExhausted");
             if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null))
             {
                 _logger?.Info(
@@ -259,6 +271,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ShowWorkbookTaskPaneWhenReady(Excel.Workbook workbook, string reason)
         {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=wait-ready-enqueued reason="
+                + (reason ?? string.Empty)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", activeState="
+                + FormatActiveState()
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+            _logger?.Info(
+                "TaskPane wait-ready enqueued. reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + SafeWorkbookFullName(workbook)
+                + ", readyShowReason="
+                + (reason ?? string.Empty)
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                null,
+                "ready-show-enqueued",
+                "TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady",
+                SafeWorkbookFullName(workbook),
+                "reason=" + (reason ?? string.Empty));
             _workbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(
                 workbook,
                 reason,

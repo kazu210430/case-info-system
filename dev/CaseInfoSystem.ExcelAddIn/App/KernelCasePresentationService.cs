@@ -114,13 +114,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_caseWorkbookOpenStrategy.RegisterKnownCasePath (result.CaseWorkbookPath);
 				_transientPaneSuppressionService.SuppressPath (result.CaseWorkbookPath, "KernelCasePresentationService.OpenCreatedCase");
 				waitSession.UpdateStage (CreatedCasePresentationWaitService.PreparingOpenStageTitle);
+				_logger.Info ("Created CASE workbook open started. path=" + result.CaseWorkbookPath + NewCaseVisibilityObservation.FormatCorrelationFields (_excelInteropService, null, result.CaseWorkbookPath));
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, null, null, "case-workbook-open-started", "KernelCasePresentationService.OpenCreatedCase", result.CaseWorkbookPath);
 				workbook = OpenCreatedCaseWorkbook (result);
-				_logger.Info ("Kernel prompt CASE workbook opened. path=" + result.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				_logger.Info ("Kernel prompt CASE workbook opened. path=" + result.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds + NewCaseVisibilityObservation.FormatCorrelationFields (_excelInteropService, workbook, result.CaseWorkbookPath));
 				if (workbook == null) {
 					throw new InvalidOperationException ("CASE workbook could not be opened.");
 				}
 				string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
 				NewCaseVisibilityObservation.AttachAlias (result.CaseWorkbookPath, workbookFullName);
+				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "case-workbook-open-completed", "KernelCasePresentationService.OpenCreatedCase", result.CaseWorkbookPath);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
 					NewCaseDefaultTimingLogHelper.AttachWorkbookAlias (result.CaseWorkbookPath, workbookFullName);
 				}

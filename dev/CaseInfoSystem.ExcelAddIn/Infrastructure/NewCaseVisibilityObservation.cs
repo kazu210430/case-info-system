@@ -1,6 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using Excel = Microsoft.Office.Interop.Excel;
 
@@ -9,6 +13,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     internal static class NewCaseVisibilityObservation
     {
         private const string LogPrefix = "[NewCaseVisibilityObservation]";
+        private const string SystemRootPropertyName = "SYSTEM_ROOT";
+        private const string TaskPaneMasterVersionProp = "TASKPANE_MASTER_VERSION";
+        private const string TaskPaneBaseMasterVersionProp = "TASKPANE_BASE_MASTER_VERSION";
         private static readonly object SyncRoot = new object();
         private static readonly Dictionary<string, Session> Sessions = new Dictionary<string, Session>(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(2);
@@ -143,10 +150,43 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + ", eventWindow=" + FormatWindowDescriptor(window)
                     + ", activeWorkbook=" + FormatWorkbookDescriptor(excelInteropService, activeWorkbook)
                     + ", activeWindow=" + FormatWindowDescriptor(activeWindow)
+                    + FormatCorrelationFields(excelInteropService, workbook, session.PrimaryCaseWorkbookPath, includeObservationSessionId: false)
                     + FormatDetail(detail));
             }
             catch
             {
+            }
+        }
+
+        internal static string FormatCorrelationFields(
+            ExcelInteropService excelInteropService,
+            Excel.Workbook workbook,
+            string explicitCaseWorkbookPath = null,
+            bool includeObservationSessionId = true)
+        {
+            try
+            {
+                string workbookPath = ResolveObservedWorkbookPath(excelInteropService, workbook, explicitCaseWorkbookPath);
+                string workbookName = SafeWorkbookName(workbook);
+                string workbookId = BuildStableWorkbookId(workbookPath, workbookName);
+                string observationSessionId = includeObservationSessionId
+                    ? ResolveObservationSessionId(explicitCaseWorkbookPath, excelInteropService, workbook)
+                    : string.Empty;
+
+                return (includeObservationSessionId
+                        ? ", observationSessionId=\"" + observationSessionId + "\""
+                        : string.Empty)
+                    + ", traceKey=\"" + workbookId + "\""
+                    + ", workbookId=\"" + workbookId + "\""
+                    + ", workbookPath=\"" + workbookPath + "\""
+                    + ", workbookName=\"" + workbookName + "\""
+                    + ", systemRoot=\"" + TryGetDocumentPropertySafe(excelInteropService, workbook, SystemRootPropertyName) + "\""
+                    + ", taskPaneMasterVersion=\"" + TryGetDocumentPropertySafe(excelInteropService, workbook, TaskPaneMasterVersionProp) + "\""
+                    + ", taskPaneBaseMasterVersion=\"" + TryGetDocumentPropertySafe(excelInteropService, workbook, TaskPaneBaseMasterVersionProp) + "\"";
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 
@@ -218,6 +258,112 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private static string NormalizeKey(string key)
         {
             return string.IsNullOrWhiteSpace(key) ? string.Empty : key.Trim();
+        }
+
+        private static string ResolveObservationSessionId(string explicitCaseWorkbookPath, ExcelInteropService excelInteropService, Excel.Workbook workbook)
+        {
+            try
+            {
+                Session session = ResolveTrackedSession(explicitCaseWorkbookPath, excelInteropService, workbook);
+                return session == null ? string.Empty : session.SessionId;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string ResolveObservedWorkbookPath(ExcelInteropService excelInteropService, Excel.Workbook workbook, string explicitCaseWorkbookPath)
+        {
+            string workbookFullName = NormalizeKey(SafeWorkbookFullName(excelInteropService, workbook));
+            if (!string.IsNullOrWhiteSpace(workbookFullName))
+            {
+                return workbookFullName;
+            }
+
+            return NormalizeKey(explicitCaseWorkbookPath);
+        }
+
+        private static string BuildStableWorkbookId(string workbookPath, string workbookName)
+        {
+            string identitySource = !string.IsNullOrWhiteSpace(workbookPath)
+                ? workbookPath
+                : NormalizeKey(workbookName);
+            if (string.IsNullOrWhiteSpace(identitySource))
+            {
+                return "WB-UNKNOWN";
+            }
+
+            byte[] bytes = Encoding.UTF8.GetBytes(identitySource.ToUpperInvariant());
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] hash = sha256.ComputeHash(bytes);
+                StringBuilder builder = new StringBuilder("WB-");
+                for (int index = 0; index < 6 && index < hash.Length; index++)
+                {
+                    builder.Append(hash[index].ToString("X2", CultureInfo.InvariantCulture));
+                }
+
+                return builder.ToString();
+            }
+        }
+
+        private static string TryGetDocumentPropertySafe(ExcelInteropService excelInteropService, Excel.Workbook workbook, string propertyName)
+        {
+            object documentProperties = null;
+            object documentProperty = null;
+            try
+            {
+                if (workbook == null || string.IsNullOrWhiteSpace(propertyName))
+                {
+                    return string.Empty;
+                }
+
+                if (excelInteropService != null)
+                {
+                    return excelInteropService.TryGetDocumentProperty(workbook, propertyName) ?? string.Empty;
+                }
+
+                documentProperties = workbook.CustomDocumentProperties;
+                if (documentProperties == null)
+                {
+                    return string.Empty;
+                }
+
+                if (documentProperties is IDictionary<string, string> stringDictionary
+                    && stringDictionary.TryGetValue(propertyName, out string stringValue))
+                {
+                    return stringValue ?? string.Empty;
+                }
+
+                if (documentProperties is IDictionary dictionary)
+                {
+                    return Convert.ToString(dictionary[propertyName], CultureInfo.InvariantCulture) ?? string.Empty;
+                }
+
+                PropertyInfo indexerProperty = documentProperties.GetType().GetProperty("Item");
+                documentProperty = indexerProperty == null
+                    ? null
+                    : indexerProperty.GetValue(documentProperties, new object[] { propertyName });
+                if (documentProperty == null)
+                {
+                    return string.Empty;
+                }
+
+                PropertyInfo valueProperty = documentProperty.GetType().GetProperty("Value");
+                return valueProperty == null
+                    ? Convert.ToString(documentProperty, CultureInfo.InvariantCulture) ?? string.Empty
+                    : Convert.ToString(valueProperty.GetValue(documentProperty, null), CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(documentProperty);
+                ComObjectReleaseService.Release(documentProperties);
+            }
         }
 
         private static Excel.Application ResolveApplication(Excel.Application application, Excel.Workbook workbook)

@@ -52,8 +52,23 @@ namespace Microsoft.Office.Core
 
 namespace Microsoft.Office.Interop.Excel
 {
+    public enum XlWindowState
+    {
+        xlNormal = -4143,
+        xlMinimized = -4140,
+        xlMaximized = -4137
+    }
+
     public class Application
     {
+        public int Hwnd { get; set; }
+
+        public bool Visible { get; set; } = true;
+
+        public bool ScreenUpdating { get; set; } = true;
+
+        public bool DisplayAlerts { get; set; } = true;
+
         public bool EnableEvents { get; set; } = true;
 
         public Workbook ActiveWorkbook { get; set; }
@@ -205,7 +220,11 @@ namespace Microsoft.Office.Interop.Excel
 
     public sealed class Window
     {
+        public int Hwnd { get; set; }
+
         public bool Visible { get; set; } = true;
+
+        public XlWindowState WindowState { get; set; } = XlWindowState.xlNormal;
 
         public void Activate()
         {

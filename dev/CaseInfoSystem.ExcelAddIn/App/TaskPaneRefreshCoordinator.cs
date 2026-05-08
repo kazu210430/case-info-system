@@ -179,7 +179,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", foregroundSkipReason="
                 + foregroundSkipReason
                 + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString());
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                null,
+                null,
+                context == null ? workbook : context.Workbook,
+                context == null ? window : context.Window,
+                "foreground-recovery-decision",
+                "TaskPaneRefreshCoordinator.TryRefreshTaskPane",
+                ResolveObservedWorkbookPath(context, workbook),
+                "reason=" + (reason ?? string.Empty) + ",foregroundRecoveryStarted=" + foregroundRecoveryStarted.ToString() + ",foregroundSkipReason=" + foregroundSkipReason);
             if (foregroundRecoveryStarted)
             {
                 GuaranteeFinalForegroundAfterRefresh(context, workbook, reason, stopwatch);
@@ -318,6 +329,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private bool TryRefreshPaneAndScheduleWarmup(WorkbookContext context, string reason, Stopwatch stopwatch)
         {
+            string observedWorkbookPath = ResolveObservedWorkbookPath(context, null);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                null,
+                null,
+                context == null ? null : context.Workbook,
+                context == null ? null : context.Window,
+                "taskpane-refresh-started",
+                "TaskPaneRefreshCoordinator.TryRefreshPaneAndScheduleWarmup",
+                observedWorkbookPath,
+                "reason=" + (reason ?? string.Empty) + ",refreshSource=" + (reason ?? string.Empty));
             bool refreshed = _taskPaneManager.RefreshPane(context, reason);
             NewCaseDefaultTimingLogHelper.LogTaskPaneReadyWaitToRefreshCompleted(
                 _logger,
@@ -333,10 +355,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatContextDescriptor(context)
                 + ", refreshed="
                 + refreshed.ToString()
+                + ", refreshSource="
+                + (reason ?? string.Empty)
                 + ", scheduleWarmup="
                 + (refreshed && context != null && context.Role == WorkbookRole.Case).ToString()
                 + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString());
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, null));
             NewCaseVisibilityObservation.Log(
                 _logger,
                 null,
@@ -345,8 +370,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 context == null ? null : context.Window,
                 "taskpane-refresh-completed",
                 "TaskPaneRefreshCoordinator.TryRefreshPaneAndScheduleWarmup",
-                context == null ? null : SafeWorkbookFullName(context.Workbook, context.WorkbookFullName),
-                "reason=" + (reason ?? string.Empty) + ",refreshed=" + refreshed.ToString());
+                observedWorkbookPath,
+                "reason=" + (reason ?? string.Empty) + ",refreshSource=" + (reason ?? string.Empty) + ",refreshed=" + refreshed.ToString());
             if (refreshed && context != null && context.Role == WorkbookRole.Case)
             {
                 _scheduleWordWarmup();
@@ -364,7 +389,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", context="
                 + FormatContextDescriptor(context)
                 + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString());
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                null,
+                null,
+                context == null ? workbook : context.Workbook,
+                context == null ? null : context.Window,
+                "final-foreground-guarantee-started",
+                "TaskPaneRefreshCoordinator.GuaranteeFinalForegroundAfterRefresh",
+                ResolveObservedWorkbookPath(context, workbook),
+                "reason=" + (reason ?? string.Empty));
 
             Stopwatch stopwatch2 = Stopwatch.StartNew();
             bool recovered = workbook != null
@@ -387,7 +423,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", recovered="
                 + recovered.ToString()
                 + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString());
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, workbook));
             NewCaseVisibilityObservation.Log(
                 _logger,
                 null,
@@ -433,7 +470,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", protectionSkipReason="
                 + protectionSkipReason
                 + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString());
+                + stopwatch.ElapsedMilliseconds.ToString()
+                + FormatObservationCorrelationFields(context, protectedWorkbook));
             if (protectionStartRequested)
             {
                 _casePaneHostBridge.BeginCaseWorkbookActivateProtection(
@@ -509,6 +547,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 return string.Empty;
             }
+        }
+
+        private static string ResolveObservedWorkbookPath(WorkbookContext context, Excel.Workbook workbook)
+        {
+            if (context != null)
+            {
+                return SafeWorkbookFullName(context.Workbook, context.WorkbookFullName);
+            }
+
+            return SafeWorkbookFullName(workbook, null);
+        }
+
+        private static string FormatObservationCorrelationFields(WorkbookContext context, Excel.Workbook workbook)
+        {
+            Excel.Workbook observedWorkbook = context == null ? workbook : context.Workbook;
+            return NewCaseVisibilityObservation.FormatCorrelationFields(
+                null,
+                observedWorkbook,
+                ResolveObservedWorkbookPath(context, workbook));
         }
 
         private static string FormatWindowDescriptor(Excel.Window window)

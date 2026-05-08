@@ -44,6 +44,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateLookupResult.cs" Link="Source\Domain\DocumentTemplateLookupResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateResolutionSource.cs" Link="Source\Domain\DocumentTemplateResolutionSource.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\DocumentTemplateSpec.cs" Link="Source\Domain\DocumentTemplateSpec.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationMode.cs" Link="Source\Domain\KernelCaseCreationMode.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\MasterTemplateRecord.cs" Link="Source\Domain\MasterTemplateRecord.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseTemplateSnapshotService.cs" Link="Source\Infrastructure\CaseTemplateSnapshotService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ComObjectReleaseService.cs" Link="Source\Infrastructure\ComObjectReleaseService.cs" />
@@ -51,6 +52,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterWorkbookReadAccessService.cs" Link="Source\Infrastructure\MasterWorkbookReadAccessService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateCatalogService.cs" Link="Source\Infrastructure\MasterTemplateCatalogService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\MasterTemplateSheetReaderAdapter.cs" Link="Source\Infrastructure\MasterTemplateSheetReaderAdapter.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\NewCaseVisibilityObservation.cs" Link="Source\Infrastructure\NewCaseVisibilityObservation.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" Link="Source\Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotChunkStorageHelper.cs" Link="Source\Infrastructure\TaskPaneSnapshotChunkStorageHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs" Link="Source\Infrastructure\TaskPaneSnapshotCacheService.cs" />

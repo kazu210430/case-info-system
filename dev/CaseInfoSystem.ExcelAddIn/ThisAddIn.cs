@@ -297,7 +297,8 @@ namespace CaseInfoSystem.ExcelAddIn
                     "Excel WindowActivate fired. workbook="
                     + (_excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook))
                     + ", windowHwnd="
-                    + SafeWindowHwnd(window));
+                    + SafeWindowHwnd(window)
+                    + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
                 _workbookEventCoordinator.OnWindowActivate(workbook, window);
             });
         }

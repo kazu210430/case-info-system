@@ -61,7 +61,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWorkbookDescriptor(workbook)
                 + ", activeState="
                 + FormatActiveExcelState());
-            _logger?.Info("Excel WorkbookOpen fired. workbook=" + SafeWorkbookFullName(workbook));
+            _logger?.Info(
+                "Excel WorkbookOpen fired. workbook="
+                + SafeWorkbookFullName(workbook)
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=WorkbookEventCoordinator action=enter event=WorkbookOpen workbook="
@@ -93,7 +96,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWorkbookDescriptor(workbook)
                 + ", activeState="
                 + FormatActiveExcelState());
-            _logger?.Info("Excel WorkbookActivate fired. workbook=" + SafeWorkbookFullName(workbook));
+            _logger?.Info(
+                "Excel WorkbookActivate fired. workbook="
+                + SafeWorkbookFullName(workbook)
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=WorkbookEventCoordinator action=enter event=WorkbookActivate workbook="

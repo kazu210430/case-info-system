@@ -89,6 +89,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			long num = 0L;
 			MasterWorkbookReadAccessResult readAccess = null;
+			string caseListCaption = GetCaseListCaption (workbook);
+			string rebuildFallback = string.Empty;
+			string resolvedMasterPath = string.Empty;
+			long latestMasterVersion = 0L;
+			long caseMasterVersion = 0L;
+			long embeddedMasterVersion = 0L;
 			try {
 				long masterVersion = 0L;
 				num = 5L;
@@ -97,17 +103,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					num = 8L;
 					if (!TaskPaneSnapshotFormat.IsCompatible (text)) {
 						ClearSnapshotCache (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT", "TASKPANE_SNAPSHOT_CACHE_");
-						_logger.Info ("Task pane snapshot incompatible CASE cache was cleared. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (text));
+						AppendFallbackReason (ref rebuildFallback, "CaseCacheIncompatible");
+						_logger.Info ("Task pane snapshot incompatible CASE cache was cleared. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (text) + FormatObservationContext (workbook));
 						text = string.Empty;
 					}
 					if (!string.IsNullOrWhiteSpace (text) && TryReadLatestMasterVersion (workbook, out masterVersion)) {
-						long documentPropertyLong = GetDocumentPropertyLong (workbook, "TASKPANE_MASTER_VERSION", 0L);
-						if (masterVersion <= 0 || masterVersion <= documentPropertyLong) {
+						latestMasterVersion = masterVersion;
+						caseMasterVersion = GetDocumentPropertyLong (workbook, "TASKPANE_MASTER_VERSION", 0L);
+						if (masterVersion <= 0 || masterVersion <= caseMasterVersion) {
 							string snapshotText2 = ApplyDynamicSpecialButtonOverrides (text, workbook);
-							_logger.Info ("Task pane snapshot source=CaseCache, caseListCaption=" + GetCaseListCaption (workbook) + ", cacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT") ?? string.Empty));
+							_logger.Info ("Task pane snapshot source=CaseCache, caseListCaption=" + caseListCaption + ", cacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT") ?? string.Empty) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
 							return new TaskPaneBuildResult (snapshotText2, updatedCaseSnapshotCache: false);
 						}
-						_logger.Info ("Task pane snapshot case cache is stale. caseMasterVersion=" + documentPropertyLong + ", latestMasterVersion=" + masterVersion);
+						AppendFallbackReason (ref rebuildFallback, "CaseCacheStale");
+						_logger.Info ("Task pane snapshot case cache is stale. caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
 					}
 				}
 				num = 10L;
@@ -116,37 +125,47 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					num = 12L;
 					if (!TaskPaneSnapshotFormat.IsCompatible (text2)) {
 						ClearSnapshotCache (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT", "TASKPANE_BASE_SNAPSHOT_");
-						_logger.Info ("Task pane snapshot incompatible Base cache was cleared. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (text2));
+						AppendFallbackReason (ref rebuildFallback, "BaseCacheIncompatible");
+						_logger.Info ("Task pane snapshot incompatible Base cache was cleared. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (text2) + FormatObservationContext (workbook));
 						text2 = string.Empty;
 					}
 					if (!string.IsNullOrWhiteSpace (text2)) {
 						string text3 = _excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_MASTER_VERSION") ?? string.Empty;
 						long result = 0L;
 						long.TryParse (text3, out result);
+						embeddedMasterVersion = result;
 						if (!TryReadLatestMasterVersion (workbook, out masterVersion)) {
+							AppendFallbackReason (ref rebuildFallback, "LatestMasterVersionUnavailable");
 							string snapshotText3 = ApplyDynamicSpecialButtonOverrides (text2, workbook);
 							SaveCaseSnapshotCache (workbook, snapshotText3);
 							if (!string.IsNullOrWhiteSpace (text3)) {
 								_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", text3);
 							}
-							_logger.Info ("Task pane snapshot source=BaseCacheFallback, caseListCaption=" + GetCaseListCaption (workbook) + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT") ?? string.Empty));
+							_logger.Info ("Task pane snapshot source=BaseCacheFallback, caseListCaption=" + caseListCaption + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT") ?? string.Empty) + ", embeddedMasterVersion=" + embeddedMasterVersion + ", latestMasterVersion=" + latestMasterVersion + ", rebuildFallback=" + rebuildFallback + FormatObservationContext (workbook));
 							return new TaskPaneBuildResult (snapshotText3, updatedCaseSnapshotCache: true);
 						}
+						latestMasterVersion = masterVersion;
 						if (masterVersion <= 0 || masterVersion <= result) {
 							string snapshotText4 = ApplyDynamicSpecialButtonOverrides (text2, workbook);
 							SaveCaseSnapshotCache (workbook, snapshotText4);
 							if (!string.IsNullOrWhiteSpace (text3)) {
 								_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", text3);
 							}
-							_logger.Info ("Task pane snapshot source=BaseCache, caseListCaption=" + GetCaseListCaption (workbook) + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT") ?? string.Empty));
+							_logger.Info ("Task pane snapshot source=BaseCache, caseListCaption=" + caseListCaption + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_SNAPSHOT_COUNT") ?? string.Empty) + ", embeddedMasterVersion=" + embeddedMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
 							return new TaskPaneBuildResult (snapshotText4, updatedCaseSnapshotCache: true);
 						}
-						_logger.Info ("Task pane snapshot base cache is stale. embeddedMasterVersion=" + result + ", latestMasterVersion=" + masterVersion);
+						AppendFallbackReason (ref rebuildFallback, "BaseCacheStale");
+						_logger.Info ("Task pane snapshot base cache is stale. embeddedMasterVersion=" + embeddedMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
 					}
 				}
 				num = 20L;
 				if (readAccess == null) {
-					string resolvedMasterPath = _masterWorkbookReadAccessService.ResolveMasterPath (workbook, MasterWorkbookPathResolutionMode.TaskPaneSnapshotBuilder);
+					if (string.IsNullOrWhiteSpace (rebuildFallback)) {
+						rebuildFallback = "CacheUnavailable";
+					}
+					resolvedMasterPath = _masterWorkbookReadAccessService.ResolveMasterPath (workbook, MasterWorkbookPathResolutionMode.TaskPaneSnapshotBuilder);
+					_logger.Info ("Task pane snapshot rebuild fallback selected. rebuildFallback=" + rebuildFallback + ", caseListCaption=" + caseListCaption + ", latestMasterVersion=" + latestMasterVersion + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
+					_logger.Info ("Task pane snapshot MasterListRebuild started. rebuildFallback=" + rebuildFallback + ", caseListCaption=" + caseListCaption + ", latestMasterVersion=" + latestMasterVersion + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
 					readAccess = _masterWorkbookReadAccessService.OpenReadOnly (
 						resolvedMasterPath,
 						MasterWorkbookOpenSearchMode.FullPathOrFileName,
@@ -171,7 +190,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				num = 70L;
 				string snapshotText5 = string.Join ("\r\n", list);
 				SaveCaseSnapshotCache (workbook, snapshotText5);
-				_logger.Info ("Task pane snapshot source=MasterListRebuild, caseListCaption=" + GetCaseListCaption (workbook) + ", masterVersion=" + documentPropertyLong2);
+				_logger.Info ("Task pane snapshot source=MasterListRebuild, caseListCaption=" + caseListCaption + ", masterVersion=" + documentPropertyLong2 + ", latestMasterVersion=" + documentPropertyLong2 + ", rebuildFallback=" + rebuildFallback + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
 				return new TaskPaneBuildResult (snapshotText5, updatedCaseSnapshotCache: true);
 			} catch (Exception ex) {
 				_logger.Error ("TaskPaneSnapshotBuilderService.BuildSnapshotText failed. step=" + num, ex);
@@ -480,6 +499,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			long result;
 			return long.TryParse (text, out result) ? result.ToString ("00") : text;
+		}
+
+		private string FormatObservationContext (Workbook workbook)
+		{
+			return NewCaseVisibilityObservation.FormatCorrelationFields (_excelInteropService, workbook);
+		}
+
+		private static void AppendFallbackReason (ref string rebuildFallback, string reason)
+		{
+			if (string.IsNullOrWhiteSpace (reason)) {
+				return;
+			}
+			if (string.IsNullOrWhiteSpace (rebuildFallback)) {
+				rebuildFallback = reason;
+				return;
+			}
+			if (rebuildFallback.IndexOf (reason, StringComparison.OrdinalIgnoreCase) >= 0) {
+				return;
+			}
+			rebuildFallback += "|" + reason;
 		}
 
 		private long GetDocumentPropertyLong (Workbook workbook, string propName, long defaultValue)

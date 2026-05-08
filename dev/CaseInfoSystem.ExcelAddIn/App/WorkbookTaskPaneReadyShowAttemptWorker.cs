@@ -68,7 +68,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", activeWorkbook="
                 + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook())
                 + ", activeWindowHwnd="
-                + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+                + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow())
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             _logger?.Info(
                 "TaskPane wait-ready start. reason="
                 + (reason ?? string.Empty)
@@ -83,7 +84,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", activeWorkbook="
                 + SafeWorkbookFullName(_excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook())
                 + ", activeWindowHwnd="
-                + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
+                + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow())
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             _taskPaneDisplayRetryCoordinator.ShowWhenReady(
                 workbook,
                 reason,
@@ -106,7 +108,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attempt="
                 + attemptNumber.ToString(CultureInfo.InvariantCulture)
                 + ", maxAttempts="
-                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture));
+                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
             _logger?.Info(
                 "TaskPane wait-ready attempt start. reason="
                 + (reason ?? string.Empty)
@@ -115,7 +118,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attempt="
                 + attemptNumber.ToString(CultureInfo.InvariantCulture)
                 + ", maxAttempts="
-                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture));
+                + ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                null,
+                "ready-show-attempt",
+                "WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce",
+                SafeWorkbookFullName(workbook),
+                "reason=" + (reason ?? string.Empty) + ",attempt=" + attemptNumber.ToString(CultureInfo.InvariantCulture));
             bool visibleCasePaneAlreadyShown = false;
             WorkbookTaskPaneDisplayAttemptResult result = _workbookTaskPaneDisplayAttemptCoordinator.TryShowOnce(
                 workbook,
@@ -195,7 +209,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + (targetWindow != null).ToString()
                             + ", visibleCasePaneEarlyComplete=true"
                             + ", renderCurrentCheckBypassed=true"
-                            + ", earlyCompleteBasis=retainedHost+metadataJoin+visibilityRetention");
+                            + ", earlyCompleteBasis=retainedHost+metadataJoin+visibilityRetention"
+                            + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, targetWorkbook));
                         NewCaseVisibilityObservation.Log(
                             _logger,
                             _excelInteropService,
@@ -225,11 +240,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + ", visibleCasePaneEarlyComplete="
                         + visibleCasePaneAlreadyShown.ToString()
                         + ", refreshed="
-                        + attemptRefreshed.ToString());
+                        + attemptRefreshed.ToString()
+                        + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, targetWorkbook));
                     return refreshAttemptResult;
                 });
             bool refreshed = result.RefreshAttemptResult.IsRefreshSucceeded;
             bool windowResolved = result.WorkbookWindow != null;
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                result.WorkbookWindow,
+                "ready-show-attempt-result",
+                "WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce",
+                SafeWorkbookFullName(workbook),
+                "reason=" + (reason ?? string.Empty)
+                + ",attempt="
+                + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                + ",windowResolved="
+                + windowResolved.ToString()
+                + ",refreshed="
+                + refreshed.ToString()
+                + ",visibleCasePaneEarlyComplete="
+                + visibleCasePaneAlreadyShown.ToString());
             if (refreshed
                 && visibleCasePaneAlreadyShown
                 && string.Equals(reason, CreatedCasePostReleaseReason, StringComparison.OrdinalIgnoreCase))
@@ -268,7 +302,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + SafeWindowHwnd(result.WorkbookWindow)
                     + ", visibleCasePaneEarlyComplete="
                     + visibleCasePaneAlreadyShown.ToString()
-                    + ", fallbackCause=AttemptsExhausted");
+                    + ", fallbackCause=AttemptsExhausted"
+                    + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
+                NewCaseVisibilityObservation.Log(
+                    _logger,
+                    _excelInteropService,
+                    null,
+                    workbook,
+                    result.WorkbookWindow,
+                    "ready-show-attempts-exhausted",
+                    "WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce",
+                    SafeWorkbookFullName(workbook),
+                    "reason=" + (reason ?? string.Empty)
+                    + ",attempt="
+                    + attemptNumber.ToString(CultureInfo.InvariantCulture)
+                    + ",windowResolved="
+                    + windowResolved.ToString());
             }
 
             return refreshed;

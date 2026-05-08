@@ -21,12 +21,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (workbook == null)
             {
-                return WorkbookWindowVisibilityEnsureResult.Create(
-                    WorkbookWindowVisibilityEnsureOutcome.WorkbookMissing,
-                    string.Empty,
-                    null,
-                    0L,
-                    visibleAfterSet: null);
+                return LogEnsureVisibleOutcome(
+                    reason,
+                    workbook,
+                    WorkbookWindowVisibilityEnsureResult.Create(
+                        WorkbookWindowVisibilityEnsureOutcome.WorkbookMissing,
+                        string.Empty,
+                        null,
+                        0L,
+                        visibleAfterSet: null));
             }
 
             string workbookFullName = _excelInteropService.GetWorkbookFullName(workbook);
@@ -49,12 +52,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + workbookFullName
                         + ", elapsedMs="
                         + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
-                    return WorkbookWindowVisibilityEnsureResult.Create(
-                        WorkbookWindowVisibilityEnsureOutcome.WindowUnresolved,
-                        workbookFullName,
-                        null,
-                        stopwatch.ElapsedMilliseconds,
-                        visibleAfterSet: null);
+                    return LogEnsureVisibleOutcome(
+                        reason,
+                        workbook,
+                        WorkbookWindowVisibilityEnsureResult.Create(
+                            WorkbookWindowVisibilityEnsureOutcome.WindowUnresolved,
+                            workbookFullName,
+                            null,
+                            stopwatch.ElapsedMilliseconds,
+                            visibleAfterSet: null));
                 }
 
                 bool isVisible;
@@ -72,22 +78,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         + ", elapsedMs="
                         + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture),
                         ex);
-                    return WorkbookWindowVisibilityEnsureResult.Create(
-                        WorkbookWindowVisibilityEnsureOutcome.VisibilityReadFailed,
-                        workbookFullName,
-                        workbookWindow,
-                        stopwatch.ElapsedMilliseconds,
-                        visibleAfterSet: null);
+                    return LogEnsureVisibleOutcome(
+                        reason,
+                        workbook,
+                        WorkbookWindowVisibilityEnsureResult.Create(
+                            WorkbookWindowVisibilityEnsureOutcome.VisibilityReadFailed,
+                            workbookFullName,
+                            workbookWindow,
+                            stopwatch.ElapsedMilliseconds,
+                            visibleAfterSet: null));
                 }
 
                 if (isVisible)
                 {
-                    return WorkbookWindowVisibilityEnsureResult.Create(
-                        WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
-                        workbookFullName,
-                        workbookWindow,
-                        stopwatch.ElapsedMilliseconds,
-                        visibleAfterSet: true);
+                    return LogEnsureVisibleOutcome(
+                        reason,
+                        workbook,
+                        WorkbookWindowVisibilityEnsureResult.Create(
+                            WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
+                            workbookFullName,
+                            workbookWindow,
+                            stopwatch.ElapsedMilliseconds,
+                            visibleAfterSet: true));
                 }
 
                 workbookWindow.Visible = true;
@@ -101,12 +113,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     visibleAfterSet = null;
                 }
 
-                return WorkbookWindowVisibilityEnsureResult.Create(
-                    WorkbookWindowVisibilityEnsureOutcome.MadeVisible,
-                    workbookFullName,
-                    workbookWindow,
-                    stopwatch.ElapsedMilliseconds,
-                    visibleAfterSet);
+                return LogEnsureVisibleOutcome(
+                    reason,
+                    workbook,
+                    WorkbookWindowVisibilityEnsureResult.Create(
+                        WorkbookWindowVisibilityEnsureOutcome.MadeVisible,
+                        workbookFullName,
+                        workbookWindow,
+                        stopwatch.ElapsedMilliseconds,
+                        visibleAfterSet));
             }
             catch (Exception ex)
             {
@@ -118,13 +133,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture),
                     ex);
-                return WorkbookWindowVisibilityEnsureResult.Create(
-                    WorkbookWindowVisibilityEnsureOutcome.Failed,
-                    workbookFullName,
-                    null,
-                    stopwatch.ElapsedMilliseconds,
-                    visibleAfterSet: null);
+                return LogEnsureVisibleOutcome(
+                    reason,
+                    workbook,
+                    WorkbookWindowVisibilityEnsureResult.Create(
+                        WorkbookWindowVisibilityEnsureOutcome.Failed,
+                        workbookFullName,
+                        null,
+                        stopwatch.ElapsedMilliseconds,
+                        visibleAfterSet: null));
             }
+        }
+
+        private WorkbookWindowVisibilityEnsureResult LogEnsureVisibleOutcome(
+            string reason,
+            Excel.Workbook workbook,
+            WorkbookWindowVisibilityEnsureResult result)
+        {
+            _logger.Info(
+                "Workbook window visibility recovery evaluated. reason="
+                + (reason ?? string.Empty)
+                + ", outcome="
+                + (result == null ? string.Empty : result.Outcome.ToString())
+                + ", workbook="
+                + (result == null ? string.Empty : result.WorkbookFullName)
+                + ", windowHwnd="
+                + (result == null ? string.Empty : result.WindowHwnd)
+                + ", visibleAfterSet="
+                + (result == null || !result.VisibleAfterSet.HasValue ? string.Empty : result.VisibleAfterSet.Value.ToString())
+                + ", elapsedMs="
+                + (result == null ? string.Empty : result.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture))
+                + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook, result == null ? null : result.WorkbookFullName));
+            return result;
         }
     }
 

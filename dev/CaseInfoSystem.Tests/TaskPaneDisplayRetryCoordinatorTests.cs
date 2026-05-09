@@ -403,28 +403,89 @@ namespace CaseInfoSystem.Tests
                 ", foregroundOutcomeStatus=",
                 ", foregroundOutcomeDisplayCompletable=",
                 "\"foreground-recovery-decision\"",
-                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"",
-                "\"reason=\" + (reason ?? string.Empty)",
-                "\",foregroundRecoveryStarted=\" + foregroundRecoveryStarted.ToString()",
-                "\",foregroundSkipReason=\" + (foregroundSkipReason ?? string.Empty)",
-                "\",foregroundOutcomeStatus=\" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString())");
+                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"");
             AssertContainsInOrder(
                 startedTrace,
                 "action=final-foreground-guarantee-start",
                 "\"final-foreground-guarantee-started\"",
-                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"",
-                "\"reason=\" + (reason ?? string.Empty)");
+                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"");
             AssertContainsInOrder(
                 completedTrace,
                 "action=final-foreground-guarantee-end",
                 ", recovered=",
                 "\"final-foreground-guarantee-completed\"",
-                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"");
+        }
+
+        [Fact]
+        public void ForegroundTraceObservationDetails_PreserveFieldSetAndOrder()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string decisionDetailsSource = ReadForegroundDecisionObservationDetailsSource(orchestrationSource);
+            string startedDetailsSource = ReadFinalForegroundStartedObservationDetailsSource(orchestrationSource);
+            string completedDetailsSource = ReadFinalForegroundCompletedObservationDetailsSource(orchestrationSource);
+
+            AssertContainsInOrder(
+                decisionDetailsSource,
+                "\"reason=\" + (reason ?? string.Empty)",
+                "\",foregroundRecoveryStarted=\" + foregroundRecoveryStarted.ToString()",
+                "\",foregroundSkipReason=\" + (foregroundSkipReason ?? string.Empty)",
+                "\",foregroundOutcomeStatus=\" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString())");
+            Assert.DoesNotContain("foregroundOutcomeDisplayCompletable", decisionDetailsSource);
+            Assert.DoesNotContain("recovered=", decisionDetailsSource);
+            Assert.DoesNotContain("case-display-completed", decisionDetailsSource);
+
+            Assert.Contains("\"reason=\" + (reason ?? string.Empty)", startedDetailsSource);
+            Assert.DoesNotContain("foregroundRecoveryStarted", startedDetailsSource);
+            Assert.DoesNotContain("foregroundOutcomeStatus", startedDetailsSource);
+            Assert.DoesNotContain("recovered=", startedDetailsSource);
+            Assert.DoesNotContain("case-display-completed", startedDetailsSource);
+
+            AssertContainsInOrder(
+                completedDetailsSource,
                 "\"reason=\" + (reason ?? string.Empty)",
                 "\",recovered=\" + (executionResult != null && executionResult.Recovered).ToString()",
+                "\",foregroundOutcomeStatus=\"");
+            Assert.DoesNotContain("foregroundRecoveryStarted", completedDetailsSource);
+            Assert.DoesNotContain("foregroundSkipReason", completedDetailsSource);
+            Assert.DoesNotContain("case-display-completed", completedDetailsSource);
+        }
+
+        [Fact]
+        public void ForegroundTraceCompletedDetails_MapsRecoveredToSucceededOtherwiseDegraded()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completedDetailsSource = ReadFinalForegroundCompletedObservationDetailsSource(orchestrationSource);
+
+            AssertContainsInOrder(
+                completedDetailsSource,
                 "\",foregroundOutcomeStatus=\"",
+                "executionResult != null && executionResult.Recovered",
                 "? ForegroundGuaranteeOutcomeStatus.RequiredSucceeded.ToString()",
                 ": ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString()");
+            Assert.DoesNotContain("ForegroundGuaranteeOutcomeStatus.RequiredFailed", completedDetailsSource);
+            Assert.DoesNotContain("case-display-completed", completedDetailsSource);
+        }
+
+        [Fact]
+        public void ForegroundTraceDetailsAssembly_DoesNotOwnExecutionWindowActivateOrCompletion()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string detailsSource =
+                ReadForegroundDecisionObservationDetailsSource(orchestrationSource)
+                + ReadFinalForegroundStartedObservationDetailsSource(orchestrationSource)
+                + ReadFinalForegroundCompletedObservationDetailsSource(orchestrationSource);
+
+            Assert.DoesNotContain("_taskPaneRefreshCoordinator", detailsSource);
+            Assert.DoesNotContain("ExecuteFinalForegroundGuaranteeRecovery", detailsSource);
+            Assert.DoesNotContain("BeginPostForegroundProtection", detailsSource);
+            Assert.DoesNotContain("WindowActivate", detailsSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", detailsSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", detailsSource);
+            Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", detailsSource);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", detailsSource);
+            Assert.DoesNotContain("IsCompleted", detailsSource);
+            Assert.DoesNotContain("case-display-completed", detailsSource);
         }
 
         [Fact]
@@ -513,6 +574,54 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("\"case-display-completed\"", source);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", source);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", source);
+        }
+
+        private static string ReadForegroundDecisionObservationDetailsSource(string source)
+        {
+            string helperSource = ReadOptionalMethod(source, "private static string BuildForegroundRecoveryDecisionDetails")
+                + ReadOptionalMethod(source, "private static string BuildForegroundRecoveryDecisionObservationDetails");
+            if (!string.IsNullOrEmpty(helperSource))
+            {
+                return helperSource;
+            }
+
+            string methodSource = ReadMethod(source, "private void LogForegroundGuaranteeDecision");
+            return Slice(
+                methodSource,
+                "\"reason=\" + (reason ?? string.Empty)",
+                ");");
+        }
+
+        private static string ReadFinalForegroundStartedObservationDetailsSource(string source)
+        {
+            string helperSource = ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeStartedDetails")
+                + ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeStartedObservationDetails");
+            if (!string.IsNullOrEmpty(helperSource))
+            {
+                return helperSource;
+            }
+
+            string methodSource = ReadMethod(source, "private void LogFinalForegroundGuaranteeStarted");
+            return Slice(
+                methodSource,
+                "\"reason=\" + (reason ?? string.Empty)",
+                ");");
+        }
+
+        private static string ReadFinalForegroundCompletedObservationDetailsSource(string source)
+        {
+            string helperSource = ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeCompletedDetails")
+                + ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeCompletedObservationDetails");
+            if (!string.IsNullOrEmpty(helperSource))
+            {
+                return helperSource;
+            }
+
+            string methodSource = ReadMethod(source, "private void LogFinalForegroundGuaranteeCompleted");
+            return Slice(
+                methodSource,
+                "\"reason=\" + (reason ?? string.Empty)",
+                ");");
         }
 
         private static string ReadForegroundExecutionClassificationSource(string source)

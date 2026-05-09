@@ -344,14 +344,78 @@ foreground decision は UI helper 化できません。
 Phase 4 の候補順は次です。ここでは service 新設を前提にせず、まず docs / tests / contract 固定で扱います。
 
 1. R02 の boundary tests と fail-closed 固定は Phase 4 最初の safe unit として完了済み。
-2. R16 の timer cleanup owner 固定。
+2. R16 の timer lifecycle owner 固定は完了済み。
 3. R06 の ready retry scheduler 固定は safe unit として完了済み。
-4. R10/R11/R12 の outcome mapping tests。
-5. R15 の WindowActivate observation contract 固定。
-6. R08 の pending retry state を current nested service から明確 owner へ昇格するか検討。
-7. R09 の window resolver contract 固定。
-8. R13 foreground decision は Phase 5 の foreground linkage / completion 接続候補として残し、Phase 4 では runtime extraction しない。
-9. R04/R14 display session は最後に扱う。
+4. R10/R11/R12 の normalized outcome mapping は完了済み。
+5. R15 の WindowActivate downstream observation contract 固定は完了済み。
+6. R08 の pending retry owner file boundary separation は完了済み。
+7. R09 の window resolver / `activateWorkbook` route matrix は docs freeze 済み。Phase 4 では runtime extraction しない。
+8. R13 foreground outcome contract は docs freeze 済み。foreground linkage / completion 接続は Phase 5 候補として残し、Phase 4 では runtime extraction しない。
+9. R04/R14 display session は Phase 5 候補として残す。
+
+## Phase 4 closure note
+
+Phase 4 safe-first ownership separation は、ここで終了扱いにします。
+
+Phase 4 は「巨大クラスを小さくする」フェーズではありませんでした。目的は、route / retry / trace / completion の意味を変えずに、safe-first で切れる owner を分離し、lifecycle visibility と danger boundary localization を高め、Phase 5 前に freeze line を安定させることでした。
+
+完了扱いにする runtime separation:
+
+| unit | 完了内容 | safe-first として扱えた理由 |
+| --- | --- | --- |
+| R02 refresh precondition / fail-closed policy | `TaskPaneRefreshPreconditionPolicy` に policy boundary を分離。 | completion / retry / foreground owner ではなく、fail-closed 判定の局所化だったため。 |
+| R16 timer lifecycle ownership | `TaskPaneRetryTimerLifecycle` に timer create / register / stop / unregister / dispose を集約。 | retry sequencing と callback meaning を変えず、lifecycle visibility だけを高めたため。 |
+| R06 ready-show retry scheduler ownership | `TaskPaneReadyShowRetryScheduler` に 80ms retry schedule / firing observation を分離。 | attempt sequencing と fallback handoff を既存 owner に残したため。 |
+| R10/R11/R12 normalized outcome mapping | visibility / source / rebuild fallback の normalized outcome mapping を固定。 | raw result を completion に読み替えず、decision object の意味だけを局所化したため。 |
+| R15 WindowActivate downstream observation | `WindowActivateDownstreamObservation` に downstream observation を分離。 | `WindowActivate dispatch != completion` を維持し、trace / route observation に限定したため。 |
+| R08 pending retry owner file boundary | `PendingPaneRefreshRetryService` を pending retry owner file boundary として明確化。 | pending retry success / active fallback success を completion と読まない前提を維持したため。 |
+
+Phase 4 終了前に docs freeze 済みの protocol boundary:
+
+- ready-show retry contract truth。
+- R07 pending fallback semantics。
+- R09 window resolver / `activateWorkbook` route matrix。
+- active fallback truth table。
+- foreground outcome contract。
+
+残っている候補は、もはや safe-first runtime extraction ではなく display recovery protocol の核心領域です。
+
+| area | Phase 5 送りにする理由 | Phase 4 runtime extraction STOP |
+| --- | --- | --- |
+| R04/R14 display session | display-handoff と `case-display-completed` one-time emit の session boundary を持つ。 | state bag 化すると completion owner が見えなくなるため STOP。 |
+| R05 callback/completion convergence | worker raw result を normalized outcomes と completion 判定へ再収束させる橋。 | callback meaning を変えやすいため STOP。 |
+| R07 fallback handoff | ready-show exhaustion、immediate refresh、WorkbookOpen stabilization、pending retry entry をまたぐ。 | retry sequencing / fallback meaning に触れるため STOP。 |
+| R09 window resolver | route-specific `activateWorkbook` intent と window availability boundary を持つ。 | foreground / completion / retry success と誤結合しやすいため STOP。 |
+| R13 foreground linkage | `RequiredSucceeded` / `RequiredDegraded` / `NotRequired` を display-completable terminal として completion input にする。 | foreground outcome semantics を丸めやすいため STOP。 |
+
+これ以上 Phase 4 で runtime extraction を続けると、completion semantics、callback meaning、retry sequencing、display session boundary、foreground outcome semantics、trace contract に近づきます。その作業は safe-first ownership separation ではなく protocol rewrite になりやすいため、Phase 4 の scope から外します。
+
+Phase 5 の入口は、単なる orchestration shrink ではなく protocol-preserving convergence redesign です。Phase 5 では次を同じ設計面として扱います。
+
+- completion ownership clarification。
+- callback meaning clarification。
+- display session convergence mapping。
+- foreground linkage と completion convergence の距離固定。
+- retry convergence と display session completion の接続整理。
+
+Phase 5 初手候補:
+
+- R05 callback/completion convergence。
+- R10/R13/R14 foreground + completion convergence。
+- display protocol convergence map。
+
+Phase 4 closure 後も immutable freeze line として維持するもの:
+
+- attempt 1 -> 80ms attempt 2 -> pending fallback。
+- pending retry 400ms / 3 attempts。
+- pending != completion。
+- WindowActivate dispatch != completion。
+- case-display-completed one-time emit。
+- display session boundary。
+- trace contract。
+- callback meaning。
+- retry sequencing。
+- foreground outcome semantics。
 
 ## Phase 3 へ渡す freeze line 候補
 

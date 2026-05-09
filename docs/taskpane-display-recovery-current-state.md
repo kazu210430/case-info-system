@@ -12,6 +12,8 @@
 - `docs/flows.md`
 - `docs/ui-policy.md`
 - `docs/taskpane-refresh-policy.md`
+- `docs/taskpane-display-recovery-freeze-line.md`
+- `docs/taskpane-refresh-orchestration-target-boundary-map.md`
 - `docs/current-flow-source-of-truth.md`
 - `docs/case-display-recovery-protocol-current-state.md`
 - `docs/case-display-recovery-protocol-target-state.md`
@@ -28,8 +30,57 @@
 | Phase 1 | 現行巨大クラスの responsibility inventory を作る | `docs/taskpane-refresh-orchestration-responsibility-inventory.md` で `TaskPaneRefreshOrchestrationService` の responsibility inventory を固定する。 |
 | Phase 2 | 理想責務境界との対応表を作る | `docs/taskpane-refresh-orchestration-target-boundary-map.md` で、この文書の「本来あるべき責務境界」を R01-R16 の対応表へ展開する。 |
 | Phase 3 | 変更禁止領域を固定する | `docs/taskpane-display-recovery-freeze-line.md` を正本として、この文書の「変更禁止順序」と「fail-closed 条件」を freeze line へ展開する。 |
-| Phase 4 | 安全単位ごとに ownership を分離する | この文書で fixed とした route / retry / trace / order を変えずに owner だけを分ける。 |
-| Phase 5 | 不要 orchestration を縮退させる | Phase 4 後にだけ判断する。現時点では行わない。 |
+| Phase 4 | safe-first ownership separation を閉じる | route / retry / trace / order を変えず、semantics owner ではない層の owner separation を完了扱いにする。これ以上の runtime extraction は Phase 5 の protocol-preserving redesign 前に行わない。 |
+| Phase 5 | protocol-preserving convergence redesign として orchestration shrink を扱う | completion convergence、callback meaning、display session ownership、foreground linkage を同時に扱う。単なる class shrink として始めない。 |
+
+## Phase 4 closure current-state
+
+Phase 4 safe-first ownership separation はここで終了扱いです。
+
+Phase 4 の目的は「巨大クラスを小さくする」ことではなく、次の 4 点でした。
+
+- ownership separation。
+- lifecycle visibility。
+- danger boundary localization。
+- freeze line stabilization。
+
+safe-first で切れる runtime owner は概ね分離済みです。具体的には、R02 refresh precondition / fail-closed policy、R16 timer lifecycle、R06 ready-show retry scheduler、R10/R11/R12 normalized outcome mapping、R15 WindowActivate downstream observation、R08 pending retry owner file boundary separation が Phase 4 の runtime separation として完了済みです。
+
+また、Phase 4 終了前の docs freeze として、ready-show retry contract truth、R07 pending fallback semantics、R09 window resolver / `activateWorkbook` route matrix、active fallback truth table、foreground outcome contract を固定済みです。これらは Phase 5 で protocol core に触る前の前提として扱います。
+
+残件は safe-first extraction ではなく、display recovery protocol の核心領域です。
+
+- completion convergence。
+- display session ownership。
+- foreground linkage。
+- protocol entry meaning。
+- retry convergence。
+- callback-to-completion bridge。
+
+したがって、これ以上 Phase 4 として runtime extraction を続けません。追加 extraction は completion semantics、callback meaning、retry sequencing、display session boundary、foreground outcome semantics、trace contract に近づき、safe-first ではなく protocol rewrite になりやすいためです。
+
+Phase 5 の入口は、単なる「orchestration shrink」ではなく、protocol-preserving convergence redesign として扱います。最初に設計単位として扱う候補は、R05 callback/completion convergence、R10/R13/R14 foreground + completion convergence、display protocol convergence map です。
+
+現時点で runtime extraction STOP とする領域:
+
+- R04/R14 display session。
+- R05 callback/completion convergence。
+- R07 fallback handoff。
+- R09 window resolver。
+- R13 foreground linkage。
+
+immutable freeze line:
+
+- attempt 1 -> 80ms attempt 2 -> pending fallback。
+- pending retry 400ms / 3 attempts。
+- pending != completion。
+- WindowActivate dispatch != completion。
+- case-display-completed one-time emit。
+- display session boundary。
+- trace contract。
+- callback meaning。
+- retry sequencing。
+- foreground outcome semantics。
 
 ## 対象範囲
 

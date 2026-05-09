@@ -353,6 +353,65 @@ foreground outcome != completion、display-completable input != completion、`Re
 
 次はすぐ runtime へ進まず、Phase 5 runtime の一区切り判断を docs-only / read-only で行う候補があります。
 
+### Phase 5 runtime closure boundary
+
+Phase 5 runtime は、R13 foreground display-completable input helper 化後の時点で一度区切ります。
+
+ここまでで完了した safe unit は、すべて private / pure / local helper として切れる範囲に限定されています。
+
+| completed safe unit | closure 上の意味 | owner 移動 |
+| --- | --- | --- |
+| R14 completion hard gate decision helper | completion hard gate の yes/no decision を局所化。 | なし。R14 completion owner は残る。 |
+| R14 `case-display-completed` payload helper | completion trace details assembly を局所化。 | なし。emit owner / trace owner / session owner は残る。 |
+| R10/R11/R12 normalized outcome chain helper | R10 -> R11 -> R12 の呼び出し順を局所化。 | なし。normalized outcome は completion owner ではない。 |
+| R13 foreground classification helper | execution result から `RequiredSucceeded` / `RequiredDegraded` への分類を局所化。 | なし。foreground execution / trace / completion owner は残る。 |
+| R13 foreground trace details helpers | foreground observation details assembly を局所化。 | なし。trace emit owner / foreground execution owner は残る。 |
+| R13 foreground display-completable input helper | R14 hard gate が読む foreground input 判定を局所化。 | なし。completion owner / emit owner / session owner は残る。 |
+
+完了済み helper 群は、completion owner、emit owner、session lifecycle、callback meaning、pending retry semantics、WindowActivate semantics、trace contract を持ちません。
+
+未移動 owner:
+
+- R14 completion gate。
+- `case-display-completed` emit owner。
+- display session boundary。
+- session lookup。
+- `IsCompleted` guard。
+- lock。
+- `_createdCaseDisplaySessions` からの dictionary remove。
+- `NewCaseVisibilityObservation.Complete(...)`。
+- callback meaning。
+- pending retry。
+- WindowActivate handling。
+- trace owner / payload contract。
+
+STOP 継続:
+
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 横断 extraction。
+
+これらは completion owner、session lifecycle、callback meaning、route semantics、trace contract に近い領域です。現時点で runtime extraction すると、protocol-preserving helper 化ではなく protocol rewrite になりやすいため STOP を継続します。
+
+次に進む場合は、runtime 実装から始めません。read-only 棚卸し、tests-first 評価、docs freeze を先に行い、その後に freeze line を変えない最小単位だけを改めて GO / STOP 判定します。
+
+closure 後も immutable freeze line として維持するもの:
+
+- foreground outcome != completion。
+- display-completable input != completion。
+- normalized outcome != completion。
+- callback != completion。
+- pending != completion。
+- WindowActivate dispatch != completion。
+- `case-display-completed` one-time emit。
+- display session boundary。
+- trace contract。
+- trace payload field set / order / names / values。
+- retry sequencing。
+- foreground outcome semantics。
+- `RequiredDegraded` は success / failure / direct completion ではない。
+
 ## R07 runtime extraction STOP
 
 R07 は、現時点では runtime extraction を行いません。`ScheduleWorkbookTaskPaneRefresh(...)` は単なる delayed timer schedule helper ではなく、ready-show fallback handoff trace、`WorkbookOpen` skip、workbook target tracking、window resolve、pre-timer immediate refresh、pending retry start decision を 1 つの protocol entry として束ねています。

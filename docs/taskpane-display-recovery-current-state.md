@@ -460,6 +460,79 @@ display-completable mapping:
 
 - 次はすぐ runtime へ進まず、Phase 5 runtime の一区切り判断を docs-only / read-only で行う候補があります。
 
+### Phase 5 runtime closure note
+
+Phase 5 runtime は、foreground display-completable helper 化後の時点で一度区切ります。
+
+ここまでで safe に切れる private / pure / local helper は現時点で概ね取り切りました。残る runtime 候補は、completion owner、display session lifecycle、callback meaning、route semantics、trace contract に近く、ここから先を runtime 実装として進めると protocol-preserving refactor ではなく semantics rewrite になりやすい領域です。
+
+Phase 5 runtime 完了済み helper:
+
+1. R14 completion hard gate decision helper。
+2. R14 `case-display-completed` payload helper。
+3. R10/R11/R12 normalized outcome chain helper。
+4. R13 foreground classification helper。
+5. R13 foreground trace details helpers。
+6. R13 foreground display-completable input helper。
+
+完了済み helper 群の性質:
+
+- すべて private / local helper です。
+- owner 移動はありません。
+- completion owner を持ちません。
+- emit owner を持ちません。
+- session lifecycle を持ちません。
+- callback meaning を変更しません。
+- pending retry semantics を変更しません。
+- WindowActivate semantics を変更しません。
+- trace contract を変更しません。
+
+未移動 owner:
+
+- R14 completion gate は未移動です。
+- `case-display-completed` emit owner は未移動です。
+- display session boundary は未移動です。
+- session lookup は未移動です。
+- `IsCompleted` guard は未移動です。
+- lock は未移動です。
+- dictionary remove は未移動です。
+- `NewCaseVisibilityObservation.Complete(...)` は未移動です。
+- callback meaning は未移動です。
+- pending retry は未移動です。
+- WindowActivate handling は未移動です。
+- trace owner / payload contract は未移動です。
+
+STOP 継続領域:
+
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 横断 extraction。
+
+これらは completion owner、session lifecycle、callback meaning、route semantics、trace contract に近く、現時点で runtime extraction すると protocol rewrite になりやすいため STOP を継続します。
+
+次の進め方:
+
+- 次に進む場合も runtime 実装から入りません。
+- read-only 棚卸し、tests-first 評価、docs freeze を先に行います。
+- その後に、freeze line を変えない最小単位だけを改めて GO / STOP 判定します。
+
+維持する immutable freeze line:
+
+- foreground outcome != completion。
+- display-completable input != completion。
+- normalized outcome != completion。
+- callback != completion。
+- pending != completion。
+- WindowActivate dispatch != completion。
+- `case-display-completed` one-time emit。
+- display session boundary。
+- trace contract。
+- trace payload field set / order / names / values。
+- retry sequencing。
+- foreground outcome semantics。
+- `RequiredDegraded` は success / failure / direct completion ではありません。
+
 ## 対象範囲
 
 対象に含めるもの:

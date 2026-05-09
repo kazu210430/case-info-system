@@ -965,10 +965,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "foreground-recovery-decision",
                 "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
                 ResolveObservedWorkbookPath(context, workbook),
-                "reason=" + (reason ?? string.Empty)
-                + ",foregroundRecoveryStarted=" + foregroundRecoveryStarted.ToString()
-                + ",foregroundSkipReason=" + (foregroundSkipReason ?? string.Empty)
-                + ",foregroundOutcomeStatus=" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString()));
+                BuildForegroundRecoveryDecisionDetails(
+                    reason,
+                    foregroundRecoveryStarted,
+                    foregroundSkipReason,
+                    outcome));
         }
 
         private void LogFinalForegroundGuaranteeStarted(
@@ -996,7 +997,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "final-foreground-guarantee-started",
                 "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
                 ResolveObservedWorkbookPath(context, workbook),
-                "reason=" + (reason ?? string.Empty));
+                BuildFinalForegroundGuaranteeStartedDetails(reason));
         }
 
         private void LogFinalForegroundGuaranteeCompleted(
@@ -1027,12 +1028,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "final-foreground-guarantee-completed",
                 "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
                 ResolveObservedWorkbookPath(context, workbook),
-                "reason=" + (reason ?? string.Empty)
+                BuildFinalForegroundGuaranteeCompletedDetails(reason, executionResult));
+        }
+
+        private static string BuildForegroundRecoveryDecisionDetails(
+            string reason,
+            bool foregroundRecoveryStarted,
+            string foregroundSkipReason,
+            ForegroundGuaranteeOutcome outcome)
+        {
+            return "reason=" + (reason ?? string.Empty)
+                + ",foregroundRecoveryStarted=" + foregroundRecoveryStarted.ToString()
+                + ",foregroundSkipReason=" + (foregroundSkipReason ?? string.Empty)
+                + ",foregroundOutcomeStatus=" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString());
+        }
+
+        private static string BuildFinalForegroundGuaranteeStartedDetails(string reason)
+        {
+            return "reason=" + (reason ?? string.Empty);
+        }
+
+        private static string BuildFinalForegroundGuaranteeCompletedDetails(
+            string reason,
+            ForegroundGuaranteeExecutionResult executionResult)
+        {
+            return "reason=" + (reason ?? string.Empty)
                 + ",recovered=" + (executionResult != null && executionResult.Recovered).ToString()
                 + ",foregroundOutcomeStatus="
                 + (executionResult != null && executionResult.Recovered
                     ? ForegroundGuaranteeOutcomeStatus.RequiredSucceeded.ToString()
-                    : ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString()));
+                    : ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString());
         }
 
         private CreatedCaseDisplaySession BeginCreatedCaseDisplaySession(Excel.Workbook workbook, string reason)

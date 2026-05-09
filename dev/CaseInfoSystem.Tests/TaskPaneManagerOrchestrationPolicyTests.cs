@@ -122,6 +122,57 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(expected, result);
         }
 
+        [Fact]
+        public void DecideRefreshPrecondition_SkipsWorkbookOpenWindowDependencyBeforeProtectionProbe()
+        {
+            bool protectionProbeCalled = false;
+            Excel.Workbook workbook = new Excel.Workbook();
+
+            TaskPaneRefreshPreconditionDecision decision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+                "WorkbookOpen",
+                workbook,
+                window: null,
+                shouldIgnoreDuringProtection: () =>
+                {
+                    protectionProbeCalled = true;
+                    return true;
+                });
+
+            Assert.False(decision.CanRefresh);
+            Assert.Equal("skip-workbook-open-window-dependent-refresh", decision.SkipActionName);
+            Assert.False(protectionProbeCalled);
+        }
+
+        [Fact]
+        public void DecideRefreshPrecondition_ReturnsIgnoreDuringProtection_WhenProtectionProbeBlocks()
+        {
+            Excel.Workbook workbook = new Excel.Workbook();
+
+            TaskPaneRefreshPreconditionDecision decision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+                "WorkbookActivate",
+                workbook,
+                window: null,
+                shouldIgnoreDuringProtection: () => true);
+
+            Assert.False(decision.CanRefresh);
+            Assert.Equal("ignore-during-protection", decision.SkipActionName);
+        }
+
+        [Fact]
+        public void DecideRefreshPrecondition_ReturnsProceed_WhenNoGateBlocks()
+        {
+            Excel.Workbook workbook = new Excel.Workbook();
+
+            TaskPaneRefreshPreconditionDecision decision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+                "WorkbookActivate",
+                workbook,
+                new Excel.Window { Hwnd = 101 },
+                shouldIgnoreDuringProtection: () => false);
+
+            Assert.True(decision.CanRefresh);
+            Assert.Equal(string.Empty, decision.SkipActionName);
+        }
+
         [Theory]
         [InlineData(true, false, false)]
         [InlineData(false, true, false)]

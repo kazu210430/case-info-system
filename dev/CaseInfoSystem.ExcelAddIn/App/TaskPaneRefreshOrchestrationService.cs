@@ -103,13 +103,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatActiveState()
                 + FormatDisplayRequestTraceFields(displayRequest));
             LogWindowActivateDisplayRefreshTriggerStart(displayRequest, reason, workbook, window, refreshAttemptId);
-            RefreshPreconditionEvaluationResult preconditionEvaluationResult = RefreshPreconditionEvaluator.Evaluate(reason, workbook, window, _casePaneHostBridge);
-            if (!preconditionEvaluationResult.CanRefresh)
+            TaskPaneRefreshPreconditionDecision preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+                reason,
+                workbook,
+                window,
+                () => _casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window));
+            if (!preconditionDecision.CanRefresh)
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
                     + " source=TaskPaneRefreshOrchestrationService action="
-                    + preconditionEvaluationResult.SkipActionName
+                    + preconditionDecision.SkipActionName
                     + " refreshAttemptId="
                     + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
                     + ", reason="
@@ -126,7 +130,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     window,
                     TaskPaneRefreshAttemptResult.Skipped(),
                     stopwatch,
-                    preconditionEvaluationResult.SkipActionName,
+                    preconditionDecision.SkipActionName,
                     null,
                     null);
                 skippedResult = CompleteRefreshSourceSelectionOutcome(
@@ -135,7 +139,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     window,
                     skippedResult,
                     stopwatch,
-                    preconditionEvaluationResult.SkipActionName,
+                    preconditionDecision.SkipActionName,
                     null);
                 skippedResult = CompleteRebuildFallbackOutcome(
                     reason,
@@ -143,7 +147,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     window,
                     skippedResult,
                     stopwatch,
-                    preconditionEvaluationResult.SkipActionName,
+                    preconditionDecision.SkipActionName,
                     null);
                 LogWindowActivateDisplayRefreshTriggerOutcome(
                     displayRequest,
@@ -153,7 +157,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     skippedResult,
                     stopwatch,
                     refreshAttemptId,
-                    preconditionEvaluationResult.SkipActionName);
+                    preconditionDecision.SkipActionName);
                 return skippedResult;
             }
 
@@ -1877,24 +1881,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal bool IsCompleted { get; set; }
         }
 
-        private static class RefreshPreconditionEvaluator
-        {
-            internal static RefreshPreconditionEvaluationResult Evaluate(string reason, Excel.Workbook workbook, Excel.Window window, ICasePaneHostBridge casePaneHostBridge)
-            {
-                if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window))
-                {
-                    return RefreshPreconditionEvaluationResult.SkipWorkbookOpenWindowDependentRefresh();
-                }
-
-                if (casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window))
-                {
-                    return RefreshPreconditionEvaluationResult.IgnoreDuringProtection();
-                }
-
-                return RefreshPreconditionEvaluationResult.Proceed();
-            }
-        }
-
         private static class RefreshDispatchShell
         {
             internal static RefreshDispatchExecutionResult Dispatch(
@@ -1945,34 +1931,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return attemptResult.IsRefreshSucceeded.ToString()
                     + ",foregroundOutcome="
                     + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString());
-            }
-        }
-
-        private sealed class RefreshPreconditionEvaluationResult
-        {
-            private RefreshPreconditionEvaluationResult(bool canRefresh, string skipActionName)
-            {
-                CanRefresh = canRefresh;
-                SkipActionName = skipActionName ?? string.Empty;
-            }
-
-            internal bool CanRefresh { get; }
-
-            internal string SkipActionName { get; }
-
-            internal static RefreshPreconditionEvaluationResult Proceed()
-            {
-                return new RefreshPreconditionEvaluationResult(true, string.Empty);
-            }
-
-            internal static RefreshPreconditionEvaluationResult SkipWorkbookOpenWindowDependentRefresh()
-            {
-                return new RefreshPreconditionEvaluationResult(false, "skip-workbook-open-window-dependent-refresh");
-            }
-
-            internal static RefreshPreconditionEvaluationResult IgnoreDuringProtection()
-            {
-                return new RefreshPreconditionEvaluationResult(false, "ignore-during-protection");
             }
         }
 

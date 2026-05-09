@@ -251,6 +251,100 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ForegroundOutcome_WhenRequiredExecutionSucceeds_RemainsInputOnlyNotCompletionOwner()
+        {
+            ForegroundGuaranteeOutcome outcome = ForegroundGuaranteeOutcome.RequiredSucceeded(
+                ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                "foregroundRecoverySucceeded");
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(CreateDisplayCompletableVisibilityOutcome())
+                .WithForegroundGuaranteeOutcome(outcome);
+
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, outcome.Status);
+            Assert.True(outcome.WasRequired);
+            Assert.True(outcome.WasExecutionAttempted);
+            Assert.True(outcome.IsTerminal);
+            Assert.True(outcome.IsDisplayCompletable);
+            Assert.Equal(ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow, outcome.TargetKind);
+            Assert.True(outcome.RecoverySucceeded.GetValueOrDefault());
+            Assert.True(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        [Fact]
+        public void ForegroundOutcome_WhenRequiredExecutionReturnsFalse_DoesNotRoundToSuccessFailureOrCompletion()
+        {
+            ForegroundGuaranteeOutcome outcome = ForegroundGuaranteeOutcome.RequiredDegraded(
+                ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                "foregroundRecoveryReturnedFalse");
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(CreateDisplayCompletableVisibilityOutcome())
+                .WithForegroundGuaranteeOutcome(outcome);
+
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredDegraded, outcome.Status);
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, outcome.Status);
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredFailed, outcome.Status);
+            Assert.True(outcome.WasRequired);
+            Assert.True(outcome.WasExecutionAttempted);
+            Assert.True(outcome.IsTerminal);
+            Assert.True(outcome.IsDisplayCompletable);
+            Assert.False(outcome.RecoverySucceeded.GetValueOrDefault());
+            Assert.True(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        [Fact]
+        public void ForegroundOutcome_WhenRequiredFailed_BlocksCompletionHardGateInput()
+        {
+            ForegroundGuaranteeOutcome outcome = ForegroundGuaranteeOutcome.RequiredFailed(
+                ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                "foregroundRecoveryNotAttempted");
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(CreateDisplayCompletableVisibilityOutcome())
+                .WithForegroundGuaranteeOutcome(outcome);
+
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredFailed, outcome.Status);
+            Assert.True(outcome.WasRequired);
+            Assert.False(outcome.WasExecutionAttempted);
+            Assert.True(outcome.IsTerminal);
+            Assert.False(outcome.IsDisplayCompletable);
+            Assert.False(outcome.RecoverySucceeded.GetValueOrDefault());
+            Assert.False(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        [Fact]
+        public void ForegroundOutcome_WhenNotRequired_IsDisplayCompletableButNotForegroundSuccess()
+        {
+            ForegroundGuaranteeOutcome outcome = ForegroundGuaranteeOutcome.NotRequired("foregroundNotRequired");
+
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.NotRequired, outcome.Status);
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, outcome.Status);
+            Assert.False(outcome.WasRequired);
+            Assert.False(outcome.WasExecutionAttempted);
+            Assert.True(outcome.IsTerminal);
+            Assert.True(outcome.IsDisplayCompletable);
+            Assert.Equal(ForegroundGuaranteeTargetKind.NotRequired, outcome.TargetKind);
+            Assert.False(outcome.RecoverySucceeded.HasValue);
+        }
+
+        [Fact]
+        public void ForegroundOutcome_WhenSkippedAlreadyVisible_IsTerminalButNotForegroundSuccess()
+        {
+            ForegroundGuaranteeOutcome outcome = ForegroundGuaranteeOutcome.SkippedAlreadyVisible(
+                "visibleCasePaneAlreadyShown");
+
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.SkippedAlreadyVisible, outcome.Status);
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, outcome.Status);
+            Assert.False(outcome.WasRequired);
+            Assert.False(outcome.WasExecutionAttempted);
+            Assert.True(outcome.IsTerminal);
+            Assert.True(outcome.IsDisplayCompletable);
+            Assert.Equal(ForegroundGuaranteeTargetKind.AlreadyVisible, outcome.TargetKind);
+            Assert.False(outcome.RecoverySucceeded.HasValue);
+        }
+
+        [Fact]
         public void RefreshAttemptResult_KeepsVisibilityAndForegroundOutcomesSeparateForCompletionGate()
         {
             VisibilityRecoveryOutcome visibilityOutcome = VisibilityRecoveryOutcome.Completed(

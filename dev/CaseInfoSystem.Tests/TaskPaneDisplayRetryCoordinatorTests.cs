@@ -273,6 +273,8 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionSkipPath);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", preconditionSkipPath);
             Assert.DoesNotContain("case-display-completed", preconditionSkipPath);
+            Assert.DoesNotContain("foreground-recovery-decision", preconditionSkipPath);
+            Assert.DoesNotContain("final-foreground-guarantee", preconditionSkipPath);
         }
 
         [Fact]
@@ -358,6 +360,71 @@ namespace CaseInfoSystem.Tests
                 "\"TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome\"",
                 "string statusAction = \"rebuild-fallback-\" + outcome.Status.ToString().ToLowerInvariant()",
                 "\"TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome\"");
+        }
+
+        [Fact]
+        public void ForegroundOutcomeChain_DoesNotOwnCompletionSessionOrOneTimeEmit()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string foregroundOutcomeChainSource =
+                ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteForegroundGuaranteeOutcome")
+                + ReadMethod(orchestrationSource, "private ForegroundGuaranteeOutcome ExecuteForegroundGuaranteeAndBuildOutcome")
+                + ReadMethod(orchestrationSource, "private void LogForegroundGuaranteeDecision")
+                + ReadMethod(orchestrationSource, "private void LogFinalForegroundGuaranteeStarted")
+                + ReadMethod(orchestrationSource, "private void LogFinalForegroundGuaranteeCompleted");
+
+            Assert.DoesNotContain("case-display-completed", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("IsCompleted", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("EvaluateCreatedCaseDisplayCompletionDecision", foregroundOutcomeChainSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", foregroundOutcomeChainSource);
+        }
+
+        [Fact]
+        public void ForegroundTraceActionsSourcesAndDetails_PreserveContract()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string decisionTrace = ReadMethod(orchestrationSource, "private void LogForegroundGuaranteeDecision");
+            string startedTrace = ReadMethod(orchestrationSource, "private void LogFinalForegroundGuaranteeStarted");
+            string completedTrace = ReadMethod(orchestrationSource, "private void LogFinalForegroundGuaranteeCompleted");
+
+            AssertContainsInOrder(
+                decisionTrace,
+                "action=foreground-recovery-decision",
+                ", refreshSucceeded=",
+                ", resolvedWindowPresent=",
+                ", recoveryServicePresent=",
+                ", foregroundRecoveryStarted=",
+                ", foregroundRecoverySkipped=",
+                ", foregroundSkipReason=",
+                ", foregroundOutcomeStatus=",
+                ", foregroundOutcomeDisplayCompletable=",
+                "\"foreground-recovery-decision\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"",
+                "\"reason=\" + (reason ?? string.Empty)",
+                "\",foregroundRecoveryStarted=\" + foregroundRecoveryStarted.ToString()",
+                "\",foregroundSkipReason=\" + (foregroundSkipReason ?? string.Empty)",
+                "\",foregroundOutcomeStatus=\" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString())");
+            AssertContainsInOrder(
+                startedTrace,
+                "action=final-foreground-guarantee-start",
+                "\"final-foreground-guarantee-started\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"",
+                "\"reason=\" + (reason ?? string.Empty)");
+            AssertContainsInOrder(
+                completedTrace,
+                "action=final-foreground-guarantee-end",
+                ", recovered=",
+                "\"final-foreground-guarantee-completed\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"",
+                "\"reason=\" + (reason ?? string.Empty)",
+                "\",recovered=\" + (executionResult != null && executionResult.Recovered).ToString()",
+                "\",foregroundOutcomeStatus=\"",
+                "? ForegroundGuaranteeOutcomeStatus.RequiredSucceeded.ToString()",
+                ": ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString()");
         }
 
         [Fact]

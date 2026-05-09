@@ -35,7 +35,14 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(1, application.QuitCallCount);
             Assert.False(application.DisplayAlerts);
-            Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionCompleted", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionCompleted")
+                    && ContainsFragment(message, "hasVisibleWorkbook=False")
+                    && ContainsFragment(message, "quitAttempted=True")
+                    && ContainsFragment(message, "quitCompleted=True")
+                    && ContainsFragment(message, "outcomeReason=noVisibleWorkbookQuitCompleted")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
         }
 
         [Fact]
@@ -64,7 +71,14 @@ namespace CaseInfoSystem.Tests
             Assert.Equal("quit failed", exception.Message);
             Assert.Equal(1, application.QuitCallCount);
             Assert.True(application.DisplayAlerts);
-            Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionFailed", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionFailed")
+                    && ContainsFragment(message, "hasVisibleWorkbook=False")
+                    && ContainsFragment(message, "quitAttempted=True")
+                    && ContainsFragment(message, "quitCompleted=False")
+                    && ContainsFragment(message, "outcomeReason=quitFailed")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
         }
 
         [Fact]
@@ -91,7 +105,15 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(0, application.QuitCallCount);
             Assert.True(application.DisplayAlerts);
-            Assert.Contains(loggerMessages, message => message.IndexOf("WhiteExcelPreventionNotRequired", StringComparison.OrdinalIgnoreCase) >= 0);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionNotRequired")
+                    && ContainsFragment(message, "hasVisibleWorkbook=True")
+                    && ContainsFragment(message, "quitAttempted=False")
+                    && ContainsFragment(message, "quitCompleted=False")
+                    && ContainsFragment(message, "outcomeReason=visibleWorkbookExists")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
+            Assert.False(loggerMessages.Exists(message => ContainsFragment(message, "WhiteExcelPreventionSkipped")));
         }
 
         [Fact]
@@ -105,11 +127,16 @@ namespace CaseInfoSystem.Tests
 
             Assert.Contains(
                 loggerMessages,
-                message => message.IndexOf("WhiteExcelPreventionQueued", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf(@"workbook=C:\cases\case.xlsx", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("pendingQueueCount=1", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("attemptsRemaining=20", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("folderPathPresent=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                message => ContainsFragment(message, "WhiteExcelPreventionQueued")
+                    && ContainsFragment(message, @"workbook=C:\cases\case.xlsx")
+                    && ContainsFragment(message, "hasVisibleWorkbook=unknown")
+                    && ContainsFragment(message, "quitAttempted=False")
+                    && ContainsFragment(message, "quitCompleted=False")
+                    && ContainsFragment(message, "outcomeReason=postCloseFollowUpQueued")
+                    && ContainsFragment(message, "pendingQueueCount=1")
+                    && ContainsFragment(message, "attemptsRemaining=20")
+                    && ContainsFragment(message, "folderPathPresent=True")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
         }
 
         [Fact]
@@ -133,20 +160,60 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(0, application.QuitCallCount);
             Assert.Contains(
                 loggerMessages,
-                message => message.IndexOf("action=post-close-follow-up-request-dequeued", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf(@"workbook=C:\cases\case.xlsx", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("pendingQueueCount=0", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("attemptsRemaining=20", StringComparison.OrdinalIgnoreCase) >= 0);
+                message => ContainsFragment(message, "action=post-close-follow-up-request-dequeued")
+                    && ContainsFragment(message, @"workbook=C:\cases\case.xlsx")
+                    && ContainsFragment(message, "pendingQueueCount=0")
+                    && ContainsFragment(message, "attemptsRemaining=20"));
             Assert.Contains(
                 loggerMessages,
-                message => message.IndexOf("action=post-close-follow-up-decision", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("targetWorkbookStillOpen=True", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("decision=skip-still-open", StringComparison.OrdinalIgnoreCase) >= 0);
+                message => ContainsFragment(message, "action=post-close-follow-up-decision")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=True")
+                    && ContainsFragment(message, "decision=skip-still-open"));
             Assert.Contains(
                 loggerMessages,
-                message => message.IndexOf("WhiteExcelPreventionNotRequired", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("outcomeReason=targetWorkbookStillOpen", StringComparison.OrdinalIgnoreCase) >= 0
-                    && message.IndexOf("targetWorkbookStillOpen=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                message => ContainsFragment(message, "WhiteExcelPreventionNotRequired")
+                    && ContainsFragment(message, "hasVisibleWorkbook=unknown")
+                    && ContainsFragment(message, "quitAttempted=False")
+                    && ContainsFragment(message, "quitCompleted=False")
+                    && ContainsFragment(message, "outcomeReason=targetWorkbookStillOpen")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=True"));
+        }
+
+        [Fact]
+        public void ExecutePendingPostCloseQueue_WhenTargetClosedButVisibleWorkbookExists_LogsVisibleWorkbookFactSeparatelyFromStillOpenFact()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application();
+            var visibleWorkbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\other.xlsx",
+                Name = "other.xlsx",
+                Path = @"C:\cases"
+            };
+
+            visibleWorkbook.Windows[1].Visible = true;
+            application.Workbooks.Add(visibleWorkbook);
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
+
+            InvokeSchedule(scheduler, @"C:\cases\closed.xlsx", @"C:\cases");
+            InvokeExecutePendingPostCloseQueue(scheduler);
+
+            Assert.Equal(0, application.QuitCallCount);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "action=post-close-follow-up-decision")
+                    && ContainsFragment(message, @"workbook=C:\cases\closed.xlsx")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=False")
+                    && ContainsFragment(message, "decision=scan-visible-workbooks"));
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionNotRequired")
+                    && ContainsFragment(message, "hasVisibleWorkbook=True")
+                    && ContainsFragment(message, "quitAttempted=False")
+                    && ContainsFragment(message, "quitCompleted=False")
+                    && ContainsFragment(message, "outcomeReason=visibleWorkbookExists")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
+            Assert.False(loggerMessages.Exists(message => ContainsFragment(message, "WhiteExcelPreventionSkipped")));
         }
 
         private static object CreateScheduler(Excel.Application application, Logger logger)
@@ -205,6 +272,13 @@ namespace CaseInfoSystem.Tests
             {
                 throw ex.InnerException;
             }
+        }
+
+        private static bool ContainsFragment(string message, string fragment)
+        {
+            return message != null
+                && fragment != null
+                && message.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

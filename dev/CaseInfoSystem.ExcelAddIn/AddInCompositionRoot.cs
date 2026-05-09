@@ -26,7 +26,6 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Action<string, Excel.Workbook, Excel.Window> _refreshTaskPaneByReason;
         private readonly Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> _refreshTaskPane;
         private readonly Action _scheduleWordWarmup;
-        private readonly int _pendingPaneRefreshMaxAttempts;
         private readonly string _kernelSheetCommandSheetCodeName;
         private readonly string _kernelSheetCommandCellAddress;
 
@@ -48,7 +47,6 @@ namespace CaseInfoSystem.ExcelAddIn
             Action<string, Excel.Workbook, Excel.Window> refreshTaskPaneByReason,
             Action<TaskPaneDisplayRequest, Excel.Workbook, Excel.Window> refreshTaskPane,
             Action scheduleWordWarmup,
-            int pendingPaneRefreshMaxAttempts,
             string kernelSheetCommandSheetCodeName,
             string kernelSheetCommandCellAddress)
         {
@@ -69,7 +67,6 @@ namespace CaseInfoSystem.ExcelAddIn
             _refreshTaskPaneByReason = refreshTaskPaneByReason;
             _refreshTaskPane = refreshTaskPane;
             _scheduleWordWarmup = scheduleWordWarmup;
-            _pendingPaneRefreshMaxAttempts = pendingPaneRefreshMaxAttempts;
             _kernelSheetCommandSheetCodeName = kernelSheetCommandSheetCodeName;
             _kernelSheetCommandCellAddress = kernelSheetCommandCellAddress;
         }
@@ -343,8 +340,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _scheduleWordWarmup,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount,
-                casePaneHostBridge,
-                _pendingPaneRefreshMaxAttempts)
+                casePaneHostBridge)
                 .Compose(
                     pathCompatibilityService,
                     ExcelInteropService,
@@ -592,7 +588,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
         private readonly ICasePaneHostBridge _casePaneHostBridge;
-        private readonly int _pendingPaneRefreshMaxAttempts;
+        internal const int ReadyShowRetryMaxAttempts = WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts;
 
         internal AddInTaskPaneCompositionFactory(
             ThisAddIn addIn,
@@ -607,8 +603,7 @@ namespace CaseInfoSystem.ExcelAddIn
             Action scheduleWordWarmup,
             Func<KernelHomeForm> getKernelHomeForm,
             Func<int> getTaskPaneRefreshSuppressionCount,
-            ICasePaneHostBridge casePaneHostBridge,
-            int pendingPaneRefreshMaxAttempts)
+            ICasePaneHostBridge casePaneHostBridge)
         {
             _addIn = addIn;
             _application = application;
@@ -623,7 +618,6 @@ namespace CaseInfoSystem.ExcelAddIn
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
             _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
-            _pendingPaneRefreshMaxAttempts = pendingPaneRefreshMaxAttempts;
         }
 
         internal AddInTaskPaneComposition Compose(
@@ -659,7 +653,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 excelInteropService,
                 _resolveWorkbookPaneWindow,
                 _isTaskPaneRefreshSucceeded);
-            var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts);
+            var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(ReadyShowRetryMaxAttempts);
             var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
             var workbookTaskPaneReadyShowAttemptWorker = new WorkbookTaskPaneReadyShowAttemptWorker(
                 excelInteropService,

@@ -8,8 +8,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
     internal sealed class WorkbookTaskPaneReadyShowAttemptWorker
     {
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
-        private const int ReadyShowMaxAttempts = 2;
-        private const int ReadyShowRetryDelayMs = 80;
+        internal const int ReadyShowMaxAttempts = 2;
+        internal const int ReadyShowRetryDelayMs = 80;
 
         private readonly ExcelInteropService _excelInteropService;
         private readonly Logger _logger;

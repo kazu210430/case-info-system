@@ -278,7 +278,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", workbook="
                 + FormatWorkbookDescriptor(workbook)
                 + ", maxAttempts="
-                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                 + ", fallbackCause=AttemptsExhausted"
                 + ", fallbackHandoff=true"
                 + ", activeState="
@@ -292,7 +292,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", readyShowReason="
                 + (reason ?? string.Empty)
                 + ", maxAttempts="
-                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                 + ", fallbackCause=AttemptsExhausted"
                 + ", fallbackHandoff=true"
                 + NewCaseVisibilityObservation.FormatCorrelationFields(_excelInteropService, workbook));
@@ -438,12 +438,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attempt="
                 + attemptNumber.ToString(CultureInfo.InvariantCulture)
                 + ", maxAttempts="
-                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                 + ", retryScheduled=true"
                 + ", retryDelayMs="
-                + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture)
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture)
                 + ", delayMs="
-                + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
             _logger?.Info(
                 "TaskPane wait-ready retry scheduled. reason="
                 + (reason ?? string.Empty)
@@ -454,10 +454,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attempt="
                 + attemptNumber.ToString(CultureInfo.InvariantCulture)
                 + ", maxAttempts="
-                + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                 + ", retryScheduled=true"
                 + ", retryDelayMs="
-                + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
+                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
 
             if (retryAction == null)
             {
@@ -465,7 +465,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             _retryTimerLifecycle.ScheduleWaitReadyRetryTimer(
-                WorkbookPaneWindowResolveDelayMs,
+                WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs,
                 () =>
             {
                 _logger?.Info(
@@ -479,9 +479,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", attempt="
                     + attemptNumber.ToString(CultureInfo.InvariantCulture)
                     + ", maxAttempts="
-                    + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                     + ", retryDelayMs="
-                    + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
+                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
                 _logger?.Info(
                     "TaskPane wait-ready retry firing. reason="
                     + (reason ?? string.Empty)
@@ -492,9 +492,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", attempt="
                     + attemptNumber.ToString(CultureInfo.InvariantCulture)
                     + ", maxAttempts="
-                    + WorkbookPaneWindowResolveAttempts.ToString(CultureInfo.InvariantCulture)
+                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
                     + ", retryDelayMs="
-                    + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
+                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
                 retryAction();
             });
         }

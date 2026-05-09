@@ -158,7 +158,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 // 非同期 UI 更新
                 RequestTaskPaneDisplayForTargetWindow,
                 ScheduleWordWarmup,
-                TaskPaneRefreshOrchestrationService.PendingPaneRefreshMaxAttempts,
                 KernelSheetCommandSheetCodeName,
                 KernelSheetCommandCellAddress);
         }

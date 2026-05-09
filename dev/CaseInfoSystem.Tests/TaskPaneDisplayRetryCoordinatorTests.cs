@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.App;
 using Xunit;
 
@@ -38,13 +39,14 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ShowWhenReady_SchedulesFallbackAfterMaxAttempts()
+        public void ShowWhenReady_WhenReadyShowAttemptsExhausted_SchedulesFallbackWithoutAttempt3()
         {
             var attempts = new List<int>();
+            var scheduledAttempts = new List<int>();
             bool shown = false;
             bool fallbackScheduled = false;
             string fallbackReason = null;
-            var coordinator = new TaskPaneDisplayRetryCoordinator(maxAttempts: 2);
+            var coordinator = new TaskPaneDisplayRetryCoordinator(WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts);
 
             coordinator.ShowWhenReady(
                 workbook: null,
@@ -54,7 +56,11 @@ namespace CaseInfoSystem.Tests
                     attempts.Add(attemptNumber);
                     return false;
                 },
-                scheduleRetry: (_, __, ___, continueAction) => continueAction(),
+                scheduleRetry: (_, __, attemptNumber, continueAction) =>
+                {
+                    scheduledAttempts.Add(attemptNumber);
+                    continueAction();
+                },
                 onShown: () => shown = true,
                 scheduleFallback: (_, reason) =>
                 {
@@ -63,9 +69,47 @@ namespace CaseInfoSystem.Tests
                 });
 
             Assert.Equal(new[] { 1, 2 }, attempts);
+            Assert.Equal(new[] { 2 }, scheduledAttempts);
+            Assert.DoesNotContain(3, attempts);
+            Assert.DoesNotContain(3, scheduledAttempts);
             Assert.False(shown);
             Assert.True(fallbackScheduled);
             Assert.Equal("fallback", fallbackReason);
+        }
+
+        [Fact]
+        public void ReadyShowRetryContract_UsesTwoAttemptsSeparateFromPendingRetry()
+        {
+            Assert.Equal(2, WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts);
+            Assert.Equal(80, WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs);
+
+            string repoRoot = FindRepositoryRoot();
+            string compositionSource = File.ReadAllText(Path.Combine(repoRoot, "dev", "CaseInfoSystem.ExcelAddIn", "AddInCompositionRoot.cs"));
+            string orchestrationSource = File.ReadAllText(Path.Combine(repoRoot, "dev", "CaseInfoSystem.ExcelAddIn", "App", "TaskPaneRefreshOrchestrationService.cs"));
+            string thisAddInSource = File.ReadAllText(Path.Combine(repoRoot, "dev", "CaseInfoSystem.ExcelAddIn", "ThisAddIn.cs"));
+
+            Assert.Contains("new TaskPaneDisplayRetryCoordinator(ReadyShowRetryMaxAttempts)", compositionSource);
+            Assert.DoesNotContain("new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts)", compositionSource);
+            Assert.DoesNotContain("TaskPaneRefreshOrchestrationService.PendingPaneRefreshMaxAttempts", thisAddInSource);
+            Assert.Contains("internal const int PendingPaneRefreshIntervalMs = 400;", orchestrationSource);
+            Assert.Contains("internal const int PendingPaneRefreshMaxAttempts = 3;", orchestrationSource);
+        }
+
+        private static string FindRepositoryRoot()
+        {
+            DirectoryInfo current = new DirectoryInfo(Directory.GetCurrentDirectory());
+            while (current != null)
+            {
+                if (File.Exists(Path.Combine(current.FullName, "build.ps1"))
+                    && Directory.Exists(Path.Combine(current.FullName, "dev", "CaseInfoSystem.ExcelAddIn")))
+                {
+                    return current.FullName;
+                }
+
+                current = current.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Repository root was not found.");
         }
     }
 }

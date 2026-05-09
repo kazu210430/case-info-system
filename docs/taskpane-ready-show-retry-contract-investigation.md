@@ -255,3 +255,18 @@ R06 ready-show retry scheduler ownership を安全に分離する前に、次を
 3. tests で `attempt 1 -> 80ms attempt 2 -> pending fallback`、attempt 3 不在、pending retry `400ms / 3 attempts` 維持を固定する。
 4. trace / callback / completion / display session boundary が変わっていないことを確認する。
 5. 上記完了後に R06 ready-show retry scheduler ownership 分離を再開する。
+
+## Runtime alignment 完了メモ
+
+2026-05-09 の runtime alignment safe unit で、ready-show retry coordinator の production composition は `ReadyShowMaxAttempts = 2` を使う形に揃えました。
+
+この alignment の範囲:
+
+- ready-show retry max attempts は `2`。
+- ready-show retry delay は `80ms`。
+- production runtime の ready-show sequence は `attempt 1 -> 80ms attempt 2 -> pending fallback`。
+- `PendingPaneRefreshMaxAttempts = 3` は pending retry `400ms / 3 attempts` 専用値として維持する。
+- `PendingPaneRefreshMaxAttempts` を ready-show retry coordinator へ渡さない。
+- attempt 3 は ready-show path に存在しないことを tests で固定する。
+
+この alignment では、R06 ownership 分離、callback 意味、completion 条件、display session boundary、trace 名、trace 意味、R16 timer lifecycle ownership は変更しません。

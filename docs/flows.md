@@ -5,6 +5,7 @@
 この文書では、コードから確認できる主要フローのみを扱います。帳票ごとの差し込み詳細や業務ルールは対象外です。
 
 - TaskPane refresh の policy 正本: `docs/taskpane-refresh-policy.md`
+- TaskPane 表示回復の current-state 正本: `docs/taskpane-display-recovery-current-state.md`
 
 ## 新規 CASE 作成
 

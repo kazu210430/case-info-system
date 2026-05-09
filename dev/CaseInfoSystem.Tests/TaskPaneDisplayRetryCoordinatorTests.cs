@@ -428,6 +428,41 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ForegroundExecutionResultClassification_RequiresAttemptedRecoveredForRequiredSucceeded()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string classificationSource = ReadForegroundExecutionClassificationSource(orchestrationSource);
+
+            AssertContainsInOrder(
+                classificationSource,
+                "executionResult.ExecutionAttempted && executionResult.Recovered",
+                "ForegroundGuaranteeOutcome.RequiredSucceeded(targetKind, \"foregroundRecoverySucceeded\")",
+                "ForegroundGuaranteeOutcome.RequiredDegraded(targetKind, \"foregroundRecoveryReturnedFalse\")");
+            Assert.DoesNotContain("ForegroundGuaranteeOutcome.RequiredFailed", classificationSource);
+            Assert.DoesNotContain("ForegroundGuaranteeOutcome.NotRequired", classificationSource);
+        }
+
+        [Fact]
+        public void ForegroundExecutionResultClassification_IsOutcomeMappingOnlyWithoutRuntimeOwners()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string classificationSource = ReadForegroundExecutionClassificationSource(orchestrationSource);
+
+            Assert.DoesNotContain("_taskPaneRefreshCoordinator", classificationSource);
+            Assert.DoesNotContain("ExecuteFinalForegroundGuaranteeRecovery", classificationSource);
+            Assert.DoesNotContain("BeginPostForegroundProtection", classificationSource);
+            Assert.DoesNotContain("WindowActivate", classificationSource);
+            Assert.DoesNotContain("LogForegroundGuarantee", classificationSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", classificationSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", classificationSource);
+            Assert.DoesNotContain("EvaluateCreatedCaseDisplayCompletionDecision", classificationSource);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", classificationSource);
+            Assert.DoesNotContain("case-display-completed", classificationSource);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", classificationSource);
+            Assert.DoesNotContain("IsCompleted", classificationSource);
+        }
+
+        [Fact]
         public void PendingRetryAndActiveFallbackRefreshSuccessStopRetryWithoutCompletionOwnership()
         {
             string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
@@ -478,6 +513,24 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("\"case-display-completed\"", source);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", source);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", source);
+        }
+
+        private static string ReadForegroundExecutionClassificationSource(string source)
+        {
+            const string predicate = "executionResult.ExecutionAttempted && executionResult.Recovered";
+            const string succeededFactory = "ForegroundGuaranteeOutcome.RequiredSucceeded";
+            const string degradedFactory = "ForegroundGuaranteeOutcome.RequiredDegraded";
+
+            int start = source.IndexOf(predicate, StringComparison.Ordinal);
+            Assert.True(start >= 0, "Expected foreground classification predicate was not found.");
+            int succeeded = source.IndexOf(succeededFactory, start, StringComparison.Ordinal);
+            Assert.True(succeeded > start, "Expected RequiredSucceeded classification branch was not found.");
+            int degraded = source.IndexOf(degradedFactory, succeeded, StringComparison.Ordinal);
+            Assert.True(degraded > succeeded, "Expected RequiredDegraded classification branch was not found.");
+            int end = source.IndexOf(';', degraded);
+            Assert.True(end > degraded, "Expected foreground classification branch to end with a semicolon.");
+
+            return source.Substring(start, end - start + 1);
         }
 
         private static void AssertContainsInOrder(string source, params string[] fragments)

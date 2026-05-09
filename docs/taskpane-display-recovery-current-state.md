@@ -171,6 +171,45 @@ immediate refresh は pending timer 開始前の refresh re-entry です。immed
 
 `PendingPaneRefreshRetryService` 内の active CASE context fallback は、tracked workbook を見失った時の target-lost resiliency fallback です。これは completion fallback ではなく、成功時も refresh / outcome / completion chain に戻れた場合だけ display completion の材料になります。
 
+### R08 active CASE fallback current-state
+
+`PendingPaneRefreshRetryService` の pending retry tick は、tracked workbook を優先し、tracked workbook を見失った場合だけ active CASE context fallback を試します。
+
+現行分岐:
+
+- attempts が残っていない場合は timer を停止します。
+- tracked workbook が見つかる場合は、その workbook の window resolve を行い、workbook target refresh を試します。
+- tracked workbook を見失ったが active context が CASE の場合は、active CASE context fallback として `TryRefreshTaskPane(reason, null, null)` を試します。
+- tracked workbook を見失い、active context が null または CASE 以外の場合は timer を停止します。
+- tracked workbook route または active CASE fallback route の refresh success 時は timer を停止します。
+
+active CASE fallback は、tracked workbook を見失った場合でも active workbook が CASE として解決できるなら refresh attempt を継続する target-lost resiliency fallback です。これは completion fallback、foreground fallback、display session completion、created CASE display completion の代替経路ではありません。
+
+truth table:
+
+| tracked workbook exists | active context is CASE | attempts remaining | refresh attempted | refresh target | timer continues | completion meaning | trace / outcome meaning |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| true | 該当なし | yes | yes | tracked workbook + resolved pane window | refresh success なら stop。refresh failure かつ attempts が残る場合だけ継続。 | active fallback 自体は completion を emit しない。tracked refresh success も `case-display-completed` ではない。 | `defer-retry-start` / `defer-retry-end` は workbook-target retry attempt の観測。`refreshed=true` は refresh attempt result であり completion trace ではない。 |
+| false | true | yes | yes | active CASE context via `TryRefreshTaskPane(reason, null, null)` | refresh success なら stop。refresh failure かつ attempts が残る場合だけ継続。 | active fallback 自体は completion を emit しない。fallback refresh success も completion fallback ではない。 | `defer-active-context-fallback-start` / `defer-active-context-fallback-end` は target-lost resiliency fallback の観測。`refreshed=true` は active refresh attempt result。 |
+| false | false | yes | no | none | stop | active fallback 自体は completion を emit しない。stop は completion ではない。 | `defer-active-context-fallback-stop` は active CASE fallback 不成立の観測。success / recovered / foreground を意味しない。 |
+| any | any | no | no | none | stop | active fallback 自体は completion を emit しない。attempts exhausted は completion ではない。 | attempts exhausted による timer stop は retry lifecycle の観測であり、display failure / completion trace ではない。 |
+
+stop conditions:
+
+- refresh success。
+- attempts exhausted。
+- active context が CASE でない。
+- tracked workbook / active fallback のどちらでも refresh attempt できない。
+
+ただし、stop は completion ではありません。pending retry が stopped になっても、`case-display-completed` は emit されません。created CASE display completion は、既存の display session boundary と normalized outcome chain が pane visible、visibility terminal / display-completable、foreground terminal / display-completable を満たした場合だけ成立します。
+
+trace / outcome の読み方:
+
+- `defer-retry-start` / `defer-retry-end` / `defer-active-context-fallback-start` / `defer-active-context-fallback-end` / `defer-active-context-fallback-stop` は観測 trace です。
+- trace source string、trace payload、trace 名は現行契約として維持します。
+- `refreshed=true` は refresh attempt result であり、recovered event、foreground success、display session completion、`case-display-completed` のいずれでもありません。
+- active CASE fallback から戻った attempt result も、orchestration 側の completion owner が既存条件を満たすまで completion にはなりません。
+
 ## Retry
 
 現行実装値:

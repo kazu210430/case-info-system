@@ -143,6 +143,38 @@ pending retry からの復帰は、timer が動いたことではなく、同じ
 - pending retry attempts exhausted は display failure / observation であり、completion ではありません。
 - pending retry が refresh path を再呼び出しても、`case-display-completed` は orchestration の completion 条件を満たすまで emit しません。
 
+### active CASE fallback truth table
+
+`PendingPaneRefreshRetryService` の active CASE fallback は target-lost resiliency fallback です。tracked workbook を見失った場合でも、active context が CASE として解決できるなら refresh attempt を継続するための経路であり、completion fallback、foreground fallback、display session completion、created CASE display completion の代替経路ではありません。
+
+| tracked workbook exists | active context is CASE | attempts remaining | refresh attempted | refresh target | timer continues | completion meaning | trace / outcome meaning |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| true | 該当なし | yes | yes | tracked workbook + resolved pane window | refresh success なら stop。refresh failure かつ attempts が残る場合だけ継続。 | active fallback 自体は completion を emit しない。tracked workbook refresh success も completion ではない。 | `defer-retry-start` / `defer-retry-end` は workbook-target retry attempt の観測。`refreshed=true` は refresh attempt result。 |
+| false | true | yes | yes | active CASE context | refresh success なら stop。refresh failure かつ attempts が残る場合だけ継続。 | active fallback 自体は completion を emit しない。active CASE fallback success も completion ではない。 | `defer-active-context-fallback-start` / `defer-active-context-fallback-end` は target-lost resiliency fallback の観測。 |
+| false | false | yes | no | none | stop | active fallback 自体は completion を emit しない。stop は completion ではない。 | `defer-active-context-fallback-stop` は fallback 不成立の観測。success / recovered / foreground を意味しない。 |
+| any | any | no | no | none | stop | active fallback 自体は completion を emit しない。attempts exhausted は completion ではない。 | attempts exhausted による stop は retry lifecycle の観測。completion trace ではない。 |
+
+固定する stop conditions:
+
+- tracked workbook route または active CASE fallback route の refresh success。
+- attempts exhausted。
+- active context が CASE でない。
+- tracked workbook / active fallback のどちらでも refresh attempt できない。
+
+stop の読み替え禁止:
+
+- stop = recovered ではありません。
+- stop = foreground success ではありません。
+- stop = display session completion ではありません。
+- stop = `case-display-completed` ではありません。
+
+trace / outcome の freeze line:
+
+- trace source string / trace payload / trace 名を変更しません。
+- `defer-retry-start` / `defer-retry-end` / `defer-active-context-fallback-start` / `defer-active-context-fallback-end` / `defer-active-context-fallback-stop` は observation trace です。
+- `refreshed=true` は refresh attempt result であり、単独では completion trace ではありません。
+- pending retry success は、existing refresh / outcome / completion chain に戻れたという材料に留まり、`case-display-completed` は display session owner の条件を満たした場合だけ emit できます。
+
 ### Phase 4 合格基準
 
 - pending retry `400ms / 3 attempts` と active CASE context fallback が削られていないこと。

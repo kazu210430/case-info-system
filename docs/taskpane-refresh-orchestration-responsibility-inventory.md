@@ -340,18 +340,18 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 現行 owner | `TaskPaneRefreshOrchestrationService.StopPendingPaneRefreshTimer(...)` / `StopWaitReadyRetryTimers(...)` |
-| 入力 | pending retry timer、wait-ready retry timer list |
-| 出力 | timers stop / disposal |
-| lifecycle 上の位置 | immediate refresh success、pending retry success、ready-show shown callback、explicit stop |
+| 現行 owner | `TaskPaneRetryTimerLifecycle`。停止入口は `TaskPaneRefreshOrchestrationService.StopPendingPaneRefreshTimer(...)`、pending retry callback owner は `PendingPaneRefreshRetryService` のまま |
+| 入力 | pending retry timer start request、wait-ready retry timer request |
+| 出力 | timer create / register / stop / unregister / disposal |
+| lifecycle 上の位置 | immediate refresh success、pending retry success / exhausted / stop、ready-show shown callback、explicit stop |
 | retry 有無 | retry を止める責務 |
 | fail-closed 条件 | timer がない場合は何もしない |
 | trace 責務 | 専用 trace は薄い。周辺の success / scheduled trace で観測する |
 | window dependency | なし |
 | UI dependency | WinForms Timer lifecycle |
 | COM dependency | なし |
-| 変更理由 | timer leak / duplicate retry 防止 |
-| 将来変更されやすい点 | pending retry と ready-show retry の cleanup owner を分けるか |
+| 変更理由 | timer leak / duplicate retry 防止。R16 では retry semantics を動かさず、timer lifecycle owner だけを分離済み |
+| 将来変更されやすい点 | R06 ready retry scheduler / R08 pending retry state の owner をさらに分けるか |
 
 ## 強く結合している責務
 

@@ -280,6 +280,7 @@
     <Compile Include="App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="App\TaskPaneRefreshCoordinator.cs" />
     <Compile Include="App\TaskPaneRefreshOrchestrationService.cs" />
+    <Compile Include="App\TaskPaneRetryTimerLifecycle.cs" />
     <Compile Include="App\TransientPaneSuppressionService.cs" />
     <Compile Include="App\WorkbookWindowVisibilityService.cs" />
     <Compile Include="App\WorkbookCaseTaskPaneRefreshCommandService.cs" />

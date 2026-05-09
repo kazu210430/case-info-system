@@ -23,6 +23,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneRefreshCoordinator _taskPaneRefreshCoordinator;
         private readonly WorkbookTaskPaneReadyShowAttemptWorker _workbookTaskPaneReadyShowAttemptWorker;
         private readonly WorkbookPaneWindowResolver _workbookPaneWindowResolver;
+        private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
         private readonly ICasePaneHostBridge _casePaneHostBridge;
@@ -30,7 +31,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly object _createdCaseDisplaySessionSyncRoot = new object();
         private readonly Dictionary<string, CreatedCaseDisplaySession> _createdCaseDisplaySessions = new Dictionary<string, CreatedCaseDisplaySession>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly List<System.Windows.Forms.Timer> _waitReadyRetryTimers = new List<System.Windows.Forms.Timer>();
         private int _kernelFlickerTraceRefreshAttemptSequence;
         private int _createdCaseDisplaySessionSequence;
 
@@ -58,12 +58,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
             _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
+            _retryTimerLifecycle = new TaskPaneRetryTimerLifecycle();
             _pendingPaneRefreshRetryService = new PendingPaneRefreshRetryService(
                 _excelInteropService,
                 _workbookSessionService,
                 _logger,
                 PendingPaneRefreshIntervalMs,
                 PendingPaneRefreshMaxAttempts,
+                _retryTimerLifecycle,
                 TryRefreshTaskPane,
                 ResolveWorkbookPaneWindow,
                 StopPendingPaneRefreshTimer,
@@ -420,7 +422,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal void StopPendingPaneRefreshTimer()
         {
             _pendingPaneRefreshRetryService.StopTimer();
-            StopWaitReadyRetryTimers();
+            _retryTimerLifecycle.StopWaitReadyRetryTimers();
         }
 
         private void ScheduleTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber, Action retryAction)
@@ -462,18 +464,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            System.Windows.Forms.Timer retryTimer = new System.Windows.Forms.Timer
+            _retryTimerLifecycle.ScheduleWaitReadyRetryTimer(
+                WorkbookPaneWindowResolveDelayMs,
+                () =>
             {
-                Interval = WorkbookPaneWindowResolveDelayMs
-            };
-
-            EventHandler tickHandler = null;
-            tickHandler = (sender, args) =>
-            {
-                retryTimer.Stop();
-                retryTimer.Tick -= tickHandler;
-                _waitReadyRetryTimers.Remove(retryTimer);
-                retryTimer.Dispose();
                 _logger?.Info(
                     KernelFlickerTracePrefix
                     + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry-firing reason="
@@ -502,27 +496,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", retryDelayMs="
                     + WorkbookPaneWindowResolveDelayMs.ToString(CultureInfo.InvariantCulture));
                 retryAction();
-            };
-
-            _waitReadyRetryTimers.Add(retryTimer);
-            retryTimer.Tick += tickHandler;
-            retryTimer.Start();
-        }
-
-        private void StopWaitReadyRetryTimers()
-        {
-            if (_waitReadyRetryTimers.Count == 0)
-            {
-                return;
-            }
-
-            foreach (System.Windows.Forms.Timer retryTimer in _waitReadyRetryTimers.ToArray())
-            {
-                retryTimer.Stop();
-                retryTimer.Dispose();
-            }
-
-            _waitReadyRetryTimers.Clear();
+            });
         }
 
         private TaskPaneRefreshAttemptResult CompleteVisibilityRecoveryOutcome(
@@ -2134,6 +2108,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Logger _logger;
         private readonly int _pendingPaneRefreshIntervalMs;
         private readonly int _pendingPaneRefreshMaxAttempts;
+        private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
         private readonly Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> _tryRefreshTaskPane;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
         private readonly Action _stopPendingPaneRefreshTimer;
@@ -2144,14 +2119,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Func<Excel.Window, string> _safeWindowHwnd;
         private readonly PendingPaneRefreshRetryState _retryState = new PendingPaneRefreshRetryState();
 
-        private System.Windows.Forms.Timer _pendingPaneRefreshTimer;
-
         internal PendingPaneRefreshRetryService(
             ExcelInteropService excelInteropService,
             WorkbookSessionService workbookSessionService,
             Logger logger,
             int pendingPaneRefreshIntervalMs,
             int pendingPaneRefreshMaxAttempts,
+            TaskPaneRetryTimerLifecycle retryTimerLifecycle,
             Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> tryRefreshTaskPane,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
             Action stopPendingPaneRefreshTimer,
@@ -2166,6 +2140,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger = logger;
             _pendingPaneRefreshIntervalMs = pendingPaneRefreshIntervalMs;
             _pendingPaneRefreshMaxAttempts = pendingPaneRefreshMaxAttempts;
+            _retryTimerLifecycle = retryTimerLifecycle ?? throw new ArgumentNullException(nameof(retryTimerLifecycle));
             _tryRefreshTaskPane = tryRefreshTaskPane ?? throw new ArgumentNullException(nameof(tryRefreshTaskPane));
             _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow ?? throw new ArgumentNullException(nameof(resolveWorkbookPaneWindow));
             _stopPendingPaneRefreshTimer = stopPendingPaneRefreshTimer ?? throw new ArgumentNullException(nameof(stopPendingPaneRefreshTimer));
@@ -2197,27 +2172,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal int BeginRetrySequence(string reason)
         {
             _retryState.BeginRetrySequence(reason, _pendingPaneRefreshMaxAttempts);
-            EnsurePendingPaneRefreshTimer();
-            _pendingPaneRefreshTimer.Stop();
-            _pendingPaneRefreshTimer.Start();
+            _retryTimerLifecycle.StartPendingPaneRefreshTimer(
+                _pendingPaneRefreshIntervalMs,
+                PendingPaneRefreshTimer_Tick);
             return _retryState.AttemptsRemaining;
         }
 
         internal void StopTimer()
         {
-            _pendingPaneRefreshTimer?.Stop();
-        }
-
-        private void EnsurePendingPaneRefreshTimer()
-        {
-            if (_pendingPaneRefreshTimer != null)
-            {
-                return;
-            }
-
-            _pendingPaneRefreshTimer = new System.Windows.Forms.Timer();
-            _pendingPaneRefreshTimer.Interval = _pendingPaneRefreshIntervalMs;
-            _pendingPaneRefreshTimer.Tick += PendingPaneRefreshTimer_Tick;
+            _retryTimerLifecycle.StopPendingPaneRefreshTimer();
         }
 
         private void PendingPaneRefreshTimer_Tick(object sender, EventArgs e)

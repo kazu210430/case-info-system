@@ -459,7 +459,7 @@ protection / suppression:
 Phase 4 safe-first の安全領域:
 
 1. R02 refresh precondition / fail-closed policy boundary は Phase 4 最初の safe unit として完了済み。
-2. R16 timer lifecycle boundary の owner 明確化。
+2. R16 timer lifecycle boundary の owner 明確化は Phase 4 R16 safe unit で完了済み。`TaskPaneRetryTimerLifecycle` が ready-show retry timer と pending retry timer の create / register / stop / unregister / dispose を持ち、retry 順序・pending 条件・completion 条件は変更しない。
 3. R06 ready-show retry timer の owner 明確化。
 4. R10/R11/R12 normalized outcome mapping の decision object 化検討。
 5. R15 WindowActivate downstream observation contract の整理。

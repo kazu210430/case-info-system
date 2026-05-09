@@ -904,6 +904,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 reason,
                 executionResult.Recovered);
 
+            return ClassifyRequiredForegroundExecutionOutcome(targetKind, executionResult);
+        }
+
+        private static ForegroundGuaranteeOutcome ClassifyRequiredForegroundExecutionOutcome(
+            ForegroundGuaranteeTargetKind targetKind,
+            ForegroundGuaranteeExecutionResult executionResult)
+        {
             return executionResult.ExecutionAttempted && executionResult.Recovered
                 ? ForegroundGuaranteeOutcome.RequiredSucceeded(targetKind, "foregroundRecoverySucceeded")
                 : ForegroundGuaranteeOutcome.RequiredDegraded(targetKind, "foregroundRecoveryReturnedFalse");

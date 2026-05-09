@@ -321,6 +321,65 @@ normalized outcome chain helper の意味:
 - route / dispatch shell 整理。
 - R07/R09/R13/R14 横断 extraction。
 
+### Phase 5 R13 classification runtime state
+
+Phase 5 R13 foreground classification helper 化後の runtime refactor 完了点は次の 4 点です。
+
+- completion hard gate yes/no decision の private helper 化。
+- `case-display-completed` details payload assembly の private helper 化。
+- R10/R11/R12 normalized outcome chain 呼び出しの private helper 化。
+- R13 foreground execution result classification の private helper 化。
+
+いずれも `TaskPaneRefreshOrchestrationService` 内の局所 helper 化です。owner 移動ではありません。
+
+R13 classification helper の意味:
+
+- `ClassifyRequiredForegroundExecutionOutcome(...)` は execution result を foreground outcome に分類するだけです。
+- `ExecutionAttempted && Recovered` の場合だけ `RequiredSucceeded` を返します。
+- それ以外は現行通り `RequiredDegraded` を返します。
+- `RequiredDegraded` を `RequiredFailed` へ丸めません。
+- `RequiredDegraded` を success / failure / direct completion へ読み替えません。
+- helper は foreground execution 呼び出し、trace emit、WindowActivate handling、R14 completion gate、`case-display-completed` emit、session lookup、one-time emit guard を持ちません。
+
+未移動 owner:
+
+- foreground execution 呼び出しは未移動です。
+- foreground trace emit は未移動です。
+- WindowActivate handling は未移動です。
+- R14 completion gate は未移動です。
+- `case-display-completed` emit owner は未移動です。
+- display session boundary は未移動です。
+- session lookup は未移動です。
+- `IsCompleted` guard は未移動です。
+- lock は未移動です。
+- dictionary remove は未移動です。
+- `NewCaseVisibilityObservation.Complete(...)` は未移動です。
+- trace owner / payload contract は未移動です。
+
+維持した freeze line:
+
+- foreground outcome != completion。
+- `RequiredDegraded` は success / failure / direct completion ではありません。
+- `RequiredSucceeded` は input only です。
+- `RequiredFailed` は completion gate を通しません。
+- `NotRequired` は foreground success ではありません。
+- `SkippedAlreadyVisible` は foreground success ではありません。
+- callback != completion、pending != completion、WindowActivate dispatch != completion は維持します。
+- `case-display-completed` one-time emit、display session boundary、trace contract、foreground outcome semantics は維持します。
+
+次 runtime 候補:
+
+- 次 runtime 候補はまだ GO ではありません。
+- 次に runtime を触る場合は、foreground trace details assembly helper 化の tests-first 評価を先に置きます。
+
+現時点 STOP:
+
+- foreground display-completable helper 化。
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 横断 extraction。
+
 ## 対象範囲
 
 対象に含めるもの:

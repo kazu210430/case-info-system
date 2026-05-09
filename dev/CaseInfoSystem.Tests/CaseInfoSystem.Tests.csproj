@@ -93,6 +93,7 @@
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
     <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
     <Compile Include="RebuildFallbackOutcomeTests.cs" />
+    <Compile Include="TaskPaneNormalizedOutcomeMapperTests.cs" />
     <Compile Include="WindowActivatePaneHandlingServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
@@ -163,6 +164,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRetryCoordinator.cs" Link="Source\App\TaskPaneDisplayRetryCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneReadyShowRetryScheduler.cs" Link="Source\App\TaskPaneReadyShowRetryScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRetryTimerLifecycle.cs" Link="Source\App\TaskPaneRetryTimerLifecycle.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneNormalizedOutcomeMapper.cs" Link="Source\App\TaskPaneNormalizedOutcomeMapper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshAttemptResult.cs" Link="Source\App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookWindowVisibilityService.cs" Link="Source\App\WorkbookWindowVisibilityService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WindowActivatePaneHandlingService.cs" Link="Source\App\WindowActivatePaneHandlingService.cs" />

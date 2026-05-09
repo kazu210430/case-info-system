@@ -277,6 +277,7 @@
     <Compile Include="App\TaskPanePostActionRefreshPolicy.cs" />
     <Compile Include="App\TaskPaneRefreshPreconditionPolicy.cs" />
     <Compile Include="App\TaskPaneDisplayRetryCoordinator.cs" />
+    <Compile Include="App\TaskPaneNormalizedOutcomeMapper.cs" />
     <Compile Include="App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="App\TaskPaneRefreshCoordinator.cs" />
     <Compile Include="App\TaskPaneRefreshOrchestrationService.cs" />

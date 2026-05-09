@@ -1317,22 +1317,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return CreatedCaseDisplayCompletionDecision.Blocked();
             }
 
-            if (!attemptResult.IsForegroundGuaranteeTerminal)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (attemptResult.ForegroundGuaranteeOutcome == null)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (!attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)
+            if (!IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome))
             {
                 return CreatedCaseDisplayCompletionDecision.Blocked();
             }
 
             return CreatedCaseDisplayCompletionDecision.Allowed();
+        }
+
+        private static bool IsForegroundDisplayCompletableTerminalInput(ForegroundGuaranteeOutcome outcome)
+        {
+            return outcome != null
+                && outcome.IsTerminal
+                && outcome.IsDisplayCompletable;
         }
 
         private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)

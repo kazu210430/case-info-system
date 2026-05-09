@@ -159,9 +159,14 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("attemptResult.VisibilityRecoveryOutcome == null", orchestrationSource);
             Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsTerminal", orchestrationSource);
             Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable", orchestrationSource);
-            Assert.Contains("!attemptResult.IsForegroundGuaranteeTerminal", orchestrationSource);
-            Assert.Contains("attemptResult.ForegroundGuaranteeOutcome == null", orchestrationSource);
-            Assert.Contains("!attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable", orchestrationSource);
+            Assert.Contains(
+                "!IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome)",
+                orchestrationSource);
+
+            string foregroundInputSource = ReadOptionalForegroundDisplayCompletableDecisionSource(orchestrationSource);
+            Assert.Contains("outcome != null", foregroundInputSource);
+            Assert.Contains("outcome.IsTerminal", foregroundInputSource);
+            Assert.Contains("outcome.IsDisplayCompletable", foregroundInputSource);
         }
 
         [Fact]

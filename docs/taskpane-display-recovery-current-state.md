@@ -82,6 +82,138 @@ immutable freeze line:
 - retry sequencing。
 - foreground outcome semantics。
 
+## Phase 5 display protocol convergence contract
+
+Phase 5 の開始点として、display protocol convergence contract を docs-only で固定します。
+
+Phase 5 は「巨大 orchestration を分割する」ことを目的にしません。目的は、現在の runtime protocol を保ったまま、completion ownership、callback meaning、foreground linkage、retry convergence、display session boundary を同じ読み方へ収束させることです。
+
+今回固定する convergence topology:
+
+```text
+raw facts
+↓
+R10/R11/R12 normalization
+↓
+R13 foreground interpretation
+↓
+R14 completion gate
+↓
+one-time emit
+```
+
+この topology の読み方:
+
+- raw facts は ready-show attempt、already-visible path、refresh path、pending retry、active CASE fallback、WindowActivate downstream observation、foreground execution raw result から来る観測事実です。
+- R10/R11/R12 は visibility / refresh source / rebuild fallback を completion 判定可能な normalized outcome に変換します。ただし completion owner ではありません。
+- R13 は foreground outcome を completion input として解釈します。ただし foreground outcome chain 自体は emit owner ではありません。
+- R14 だけが completion gate であり、created CASE display session の one-time emit owner です。
+- one-time emit は `case-display-completed` だけです。worker、retry、WindowActivate、foreground、fallback、host-flow へ emit ownership を戻しません。
+
+### Callback meaning freeze
+
+ready-show callback は、`shown raw facts` を orchestration convergence chain に戻す callback です。completion callback ではありません。
+
+読み替え禁止:
+
+- ready-show callback = display completed。
+- ready-show callback = recovery completed。
+- ready-show callback = foreground completed。
+- ready-show callback = final success。
+
+`WorkbookTaskPaneReadyShowAttemptWorker` は attempt を実行し、`WorkbookTaskPaneReadyShowAttemptOutcome` を返します。`TaskPaneDisplayRetryCoordinator` は attempt sequencing を扱い、shown 時に callback を呼びます。ただし callback 後も、visibility outcome、refresh source outcome、rebuild fallback outcome、foreground outcome、created-case display session の completion gate を通るまで `case-display-completed` ではありません。
+
+### Non-completion events contract
+
+次の trace / event / result は completion に見えやすいですが、completion ではありません。いずれも `case-display-completed` の直接代替にしません。
+
+| event / result | completion ではない理由 |
+| --- | --- |
+| `taskpane-already-visible` | visible host の raw fact です。already-visible path の success 相当 fact であって、R10/R11/R12/R13/R14 を通る前の completion ではありません。 |
+| `taskpane-refresh-completed` | refresh execution の完了観測です。pane visible / visibility terminal / foreground terminal / display session one-time gate を満たすまでは completion ではありません。 |
+| `foreground-recovery-decision` | foreground outcome の decision trace です。completion input にはなり得ますが emit owner ではありません。 |
+| `final-foreground-guarantee-completed` | foreground execution bridge の完了観測です。`RequiredSucceeded` / `RequiredDegraded` 等へ正規化され、R14 gate を通るまでは completion ではありません。 |
+| `display-refresh-trigger-dispatched` | WindowActivate 由来の downstream refresh entry へ渡した観測です。display success ではありません。 |
+| `window-activate-display-refresh-trigger-outcome` | WindowActivate downstream refresh の観測です。completion trace ではありません。 |
+| `defer-retry-end refreshed=true` | pending retry の refresh attempt result です。retry owner は convergence owner ではありません。 |
+| `defer-active-context-fallback-end refreshed=true` | target-lost resiliency fallback の refresh attempt result です。active fallback success は completion ではありません。 |
+| `resolve-window-success` 相当の window resolve success | window availability fact です。foreground success、retry success、display completed のいずれでもありません。 |
+| `ready-show-attempt-result refreshed=true` | attempt raw result です。callback 後の normalized outcome chain と completion gate を満たすまで completion ではありません。 |
+| `RequiredSucceeded` foreground outcome | display-completable terminal input です。foreground success を direct completion と読みません。 |
+| `RequiredDegraded` foreground outcome | display-completable terminal input です。success / failure へ丸めず、direct completion と読みません。 |
+
+completion trace は `case-display-completed` だけです。
+
+### Foreground と completion の距離
+
+foreground outcome は completion input ですが、foreground outcome chain 自体は completion owner ではありません。
+
+固定する意味:
+
+- foreground decision / execution / outcome は R13 の interpretation です。
+- R13 は R14 の input を作れますが、R14 を代替しません。
+- `RequiredDegraded` は display-completable terminal として扱います。
+- `RequiredDegraded` を success / failure へ丸めません。
+- `RequiredDegraded` を completion へ直接読み替えません。
+
+### Pending / active fallback と completion の距離
+
+pending retry success、active fallback success は completion ではありません。
+
+固定する意味:
+
+- `PendingPaneRefreshRetryService` は pending retry `400ms / 3 attempts`、tracked workbook retry、active CASE context fallback の owner です。
+- pending retry owner は convergence owner ではありません。
+- active CASE fallback は target-lost resiliency fallback です。completion fallback ではありません。
+- retry success / fallback success は raw fact として existing refresh / outcome / completion chain に戻るだけです。
+- `refreshed=true` を recovered、foreground success、display completed、`case-display-completed` のいずれにも読み替えません。
+
+### One-time emit owner
+
+`case-display-completed` の one-time emit owner は orchestration convergence owner だけです。
+
+固定する owner:
+
+- `TaskPaneRefreshOrchestrationService` が current owner です。
+- R14 completion gate が created CASE display session の completion hard gate です。
+- worker、retry、WindowActivate、foreground、fallback、host-flow、TaskPaneManager へ ownership を戻しません。
+
+completion hard gate は、少なくとも次をすべて必要とします。
+
+- created CASE display reason であること。
+- refresh attempt result が存在すること。
+- refresh success であること。
+- pane visible であること。
+- visibility outcome が terminal かつ display-completable であること。
+- foreground guarantee が terminal であること。
+- foreground outcome が display-completable であること。
+- created CASE display session が解決できること。
+- session が未完了であること。
+
+この hard gate を満たした場合だけ、session ごとに 1 回だけ `case-display-completed` を emit します。
+
+### Phase 5 boundary
+
+Phase 5 は runtime extraction を急ぐフェーズではありません。
+
+優先すること:
+
+- convergence topology clarification。
+- ownership preservation。
+- protocol-preserving redesign。
+- completion ownership clarification。
+- callback meaning clarification。
+- display session convergence mapping。
+
+禁止する読み方:
+
+- R10/R11/R12 normalized outcome を completion owner とみなす。
+- R13 foreground outcome を emit owner とみなす。
+- pending / active fallback success を completion とみなす。
+- WindowActivate dispatch / downstream observation を completion とみなす。
+- ready-show callback を completion callback とみなす。
+- one-time emit owner を lower-level worker / retry / foreground / WindowActivate へ分散する。
+
 ## 対象範囲
 
 対象に含めるもの:

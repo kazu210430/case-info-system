@@ -61,6 +61,97 @@
 | R15 | `WindowActivatePaneHandlingService` + `WindowActivateDownstreamObservation` | display route / trigger observation boundary | WindowActivate dispatch 後、refresh entry の start / outcome。 | 部分的に必須。誤認防止 trace は近接が必要。 | 完了済み。R15 safe unit として downstream observation owner を分離。 | 中 | 中 | 既存 observation boundary。 | 部分的 | いいえ | はい |
 | R16 | `TaskPaneRetryTimerLifecycle`。停止入口は `StopPendingPaneRefreshTimer(...)` | timer lifecycle boundary | success / shown callback / explicit stop。 | いいえ。 | はい。Phase 4 R16 safe unit で timer lifecycle owner を分離済み。 | 低 | 低 | 完了。timer lifecycle owner。 | いいえ | いいえ | いいえ |
 
+## Phase 5 convergence boundary map
+
+Phase 5 では、Rxx を単なる extraction candidate ではなく display protocol convergence topology として読み直します。
+
+convergence topology:
+
+```text
+raw facts
+↓
+R10/R11/R12 normalization
+↓
+R13 foreground interpretation
+↓
+R14 completion gate
+↓
+one-time emit
+```
+
+| topology layer | 関連 R | current owner / input | Phase 5 固定 |
+| --- | --- | --- | --- |
+| raw facts | R05 / R07 / R08 / R09 / R15 | ready-show worker outcome、pending retry result、active fallback result、window resolve result、WindowActivate downstream observation。 | raw facts は completion ではない。callback、retry success、WindowActivate dispatch、window resolve success を direct completion と読まない。 |
+| normalization | R10 / R11 / R12 | visibility / refresh source / rebuild fallback outcome mapping。 | normalized outcome は completion input になれるが completion owner ではない。 |
+| foreground interpretation | R13 | foreground decision / execution raw result / `ForegroundGuaranteeOutcome`。 | foreground outcome は completion input だが emit owner ではない。`RequiredDegraded` は display-completable terminal であり success / failure へ丸めない。 |
+| completion gate | R14 | created CASE display session、hard gate、one-time emit state。 | R14 だけが completion gate / one-time emit owner。 |
+| one-time emit | R14 | `case-display-completed`。 | session ごとに 1 回だけ emit。worker / retry / WindowActivate / foreground / fallback へ ownership を戻さない。 |
+
+### R05 callback / completion convergence freeze
+
+R05 の callback は `shown raw facts` を orchestration convergence chain に戻す境界です。completion callback ではありません。
+
+固定する読み方:
+
+- `TaskPaneDisplayRetryCoordinator` は attempt sequencing owner です。
+- `WorkbookTaskPaneReadyShowAttemptWorker` は ready-show attempt raw fact owner です。
+- `HandleWorkbookTaskPaneShown(...)` は raw facts を R10/R11/R12/R13/R14 の chain に戻す convergence entry です。
+- callback 後も R14 hard gate を満たすまで `case-display-completed` ではありません。
+
+読み替え禁止:
+
+- callback = display completed。
+- callback = recovery completed。
+- callback = foreground completed。
+- callback = final success。
+
+### R10/R11/R12 normalized outcome freeze
+
+R10/R11/R12 は completion 判定可能な facts を作る normalized outcome boundary です。
+
+固定する読み方:
+
+- visibility outcome は pane visible / terminal / display-completable の input です。
+- refresh source outcome は source / fallback / rebuild required の input です。
+- rebuild fallback outcome は continuation 可否の input です。
+- normalized outcome は completion ではありません。
+- normalized outcome owner を one-time emit owner とみなしません。
+
+### R13 foreground interpretation freeze
+
+R13 は foreground outcome chain です。completion input ですが completion owner ではありません。
+
+固定する読み方:
+
+- foreground decision は refresh success、pane visible、refresh completed、foreground window、recovery service availability を見て required / not-required / degraded を解釈します。
+- `final-foreground-guarantee-completed` は foreground execution completion observation であり、display completion ではありません。
+- `RequiredSucceeded` は direct completion ではありません。
+- `RequiredDegraded` は display-completable terminal ですが、success / failure へ丸めず、direct completion と読みません。
+
+### R14 completion hard gate freeze
+
+R14 は display session convergence の hard gate です。
+
+固定する読み方:
+
+- created CASE display session は ready-show acceptance で開始します。
+- completion は `case-display-completed` の one-time emit だけです。
+- emit は created CASE display reason、refresh success、pane visible、visibility terminal / display-completable、foreground terminal / display-completable、session が解決できること、session 未完了を満たす場合だけ成立します。
+- R14 は state bag helper ではなく completion ownership boundary です。
+
+### Non-completion owner map
+
+| owner / boundary | completion ではないもの |
+| --- | --- |
+| `WorkbookTaskPaneReadyShowAttemptWorker` | `taskpane-already-visible`、`ready-show-attempt-result refreshed=true`、attempt shown raw facts。 |
+| `PendingPaneRefreshRetryService` | `defer-retry-end refreshed=true`、`defer-active-context-fallback-end refreshed=true`、timer stop。 |
+| `WorkbookPaneWindowResolver` / R09 | `resolve-window-success` 相当、`activateWorkbook=true` の activation request。 |
+| `WindowActivatePaneHandlingService` / `WindowActivateDownstreamObservation` | `display-refresh-trigger-dispatched`、`window-activate-display-refresh-trigger-outcome`。 |
+| R10/R11/R12 outcome mapping | normalized outcome。 |
+| R13 foreground chain | `foreground-recovery-decision`、`final-foreground-guarantee-completed`、`RequiredSucceeded`、`RequiredDegraded`。 |
+
+Phase 5 で redesign する場合も、この map を保った protocol-preserving convergence redesign に限定します。
+
 ## R07 runtime extraction STOP
 
 R07 は、現時点では runtime extraction を行いません。`ScheduleWorkbookTaskPaneRefresh(...)` は単なる delayed timer schedule helper ではなく、ready-show fallback handoff trace、`WorkbookOpen` skip、workbook target tracking、window resolve、pre-timer immediate refresh、pending retry start decision を 1 つの protocol entry として束ねています。

@@ -27,6 +27,108 @@
 - docs に根拠がない仕様値の意味は、正式業務仕様とは断定しません。ただし現行 runtime 契約としては変更禁止にします。
 - 「helper 化してよいか」は、処理が小さいかどうかではなく、completion / retry / trace / fail-closed の意味を保てるかで判断します。
 
+## Phase 5 Immutable Protocol Freeze Line
+
+Phase 5 開始時点で、display protocol convergence contract を immutable protocol freeze line として追加固定します。
+
+convergence topology:
+
+```text
+raw facts
+↓
+R10/R11/R12 normalization
+↓
+R13 foreground interpretation
+↓
+R14 completion gate
+↓
+one-time emit
+```
+
+固定する ownership:
+
+- R10/R11/R12 は completion owner ではありません。
+- R13 は completion input を作る interpretation であり、emit owner ではありません。
+- R14 だけが completion gate / one-time emit owner です。
+- `case-display-completed` は session ごとに 1 回だけ emit します。
+- one-time emit owner を worker、retry、WindowActivate、foreground、fallback、TaskPaneManager、host-flow へ戻しません。
+
+immutable freeze line:
+
+- attempt 1 -> 80ms attempt 2 -> pending fallback。
+- pending retry 400ms / 3 attempts。
+- pending != completion。
+- pending retry success != completion。
+- active fallback success != completion。
+- WindowActivate dispatch != completion。
+- WindowActivate downstream observation != completion。
+- callback != completion。
+- normalized outcome != completion。
+- foreground outcome != completion。
+- foreground execution completed != completion。
+- `case-display-completed` one-time emit。
+- display session boundary。
+- trace contract。
+- callback meaning。
+- retry sequencing。
+- foreground outcome semantics。
+- completion hard gate。
+
+### Callback != completion
+
+ready-show callback は、`shown raw facts` を orchestration convergence chain に戻す callback です。completion callback ではありません。
+
+読み替え禁止:
+
+- callback = display completed。
+- callback = recovery completed。
+- callback = foreground completed。
+- callback = final success。
+
+callback 後の raw facts は、R10/R11/R12 normalization、R13 foreground interpretation、R14 completion gate を通った場合だけ completion に寄与できます。
+
+### Non-completion event freeze
+
+次を completion trace / completion event / direct success と読まないことを固定します。
+
+| event / result | freeze line |
+| --- | --- |
+| `taskpane-already-visible` | visible raw fact。completion ではない。 |
+| `taskpane-refresh-completed` | refresh path observation。completion ではない。 |
+| `foreground-recovery-decision` | foreground decision trace。completion ではない。 |
+| `final-foreground-guarantee-completed` | foreground execution completion observation。completion ではない。 |
+| `display-refresh-trigger-dispatched` | WindowActivate dispatch observation。completion ではない。 |
+| `window-activate-display-refresh-trigger-outcome` | downstream refresh observation。completion ではない。 |
+| `defer-retry-end refreshed=true` | pending retry attempt result。completion ではない。 |
+| `defer-active-context-fallback-end refreshed=true` | active CASE fallback attempt result。completion ではない。 |
+| `resolve-window-success` 相当 | window availability fact。completion ではない。 |
+| `ready-show-attempt-result refreshed=true` | ready-show attempt raw result。completion ではない。 |
+| `RequiredSucceeded` | foreground display-completable terminal input。direct completion ではない。 |
+| `RequiredDegraded` | foreground display-completable terminal input。success / failure / direct completion へ丸めない。 |
+
+completion trace は `case-display-completed` だけです。
+
+### Completion hard gate
+
+`case-display-completed` は、R14 の completion hard gate がすべての条件を満たした場合だけ emit できます。
+
+hard gate:
+
+- created CASE display reason であること。
+- `TaskPaneRefreshAttemptResult` が存在すること。
+- `attemptResult.IsRefreshSucceeded == true`。
+- `attemptResult.IsPaneVisible == true`。
+- `VisibilityRecoveryOutcome` が存在すること。
+- `VisibilityRecoveryOutcome.IsTerminal == true`。
+- `VisibilityRecoveryOutcome.IsDisplayCompletable == true`。
+- `attemptResult.IsForegroundGuaranteeTerminal == true`。
+- `ForegroundGuaranteeOutcome` が存在すること。
+- `ForegroundGuaranteeOutcome.IsDisplayCompletable == true`。
+- created CASE display session が解決できること。
+- session が未完了であること。
+
+この hard gate は callback、pending retry success、WindowActivate dispatch、foreground outcome、normalized outcome のどれか単独では満たせません。
+
 ## 1. Ready-Show Retry 順序
 
 ### 固定する順序

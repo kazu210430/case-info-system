@@ -1141,16 +1141,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             int? attemptNumber = null,
             TaskPaneDisplayRequest displayRequest = null)
         {
-            if (!IsCreatedCaseDisplayReason(reason)
-                || attemptResult == null
-                || !attemptResult.IsRefreshSucceeded
-                || !attemptResult.IsPaneVisible
-                || attemptResult.VisibilityRecoveryOutcome == null
-                || !attemptResult.VisibilityRecoveryOutcome.IsTerminal
-                || !attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable
-                || !attemptResult.IsForegroundGuaranteeTerminal
-                || attemptResult.ForegroundGuaranteeOutcome == null
-                || !attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)
+            CreatedCaseDisplayCompletionDecision completionDecision =
+                EvaluateCreatedCaseDisplayCompletionDecision(reason, attemptResult);
+            if (!completionDecision.CanComplete)
             {
                 return;
             }
@@ -1249,6 +1242,59 @@ namespace CaseInfoSystem.ExcelAddIn.App
             NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
         }
 
+        private static CreatedCaseDisplayCompletionDecision EvaluateCreatedCaseDisplayCompletionDecision(
+            string reason,
+            TaskPaneRefreshAttemptResult attemptResult)
+        {
+            if (!IsCreatedCaseDisplayReason(reason)
+                || attemptResult == null)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (!attemptResult.IsRefreshSucceeded)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (!attemptResult.IsPaneVisible)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (attemptResult.VisibilityRecoveryOutcome == null)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (!attemptResult.VisibilityRecoveryOutcome.IsTerminal)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (!attemptResult.IsForegroundGuaranteeTerminal)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (attemptResult.ForegroundGuaranteeOutcome == null)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            if (!attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)
+            {
+                return CreatedCaseDisplayCompletionDecision.Blocked();
+            }
+
+            return CreatedCaseDisplayCompletionDecision.Allowed();
+        }
+
         private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)
         {
             if (!IsCreatedCaseDisplayReason(reason))
@@ -1340,6 +1386,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal string Reason { get; }
 
             internal bool IsCompleted { get; set; }
+        }
+
+        private struct CreatedCaseDisplayCompletionDecision
+        {
+            private CreatedCaseDisplayCompletionDecision(bool canComplete)
+            {
+                CanComplete = canComplete;
+            }
+
+            internal bool CanComplete { get; }
+
+            internal static CreatedCaseDisplayCompletionDecision Allowed()
+            {
+                return new CreatedCaseDisplayCompletionDecision(true);
+            }
+
+            internal static CreatedCaseDisplayCompletionDecision Blocked()
+            {
+                return new CreatedCaseDisplayCompletionDecision(false);
+            }
         }
 
         private static class RefreshDispatchShell

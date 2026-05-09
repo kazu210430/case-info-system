@@ -165,6 +165,63 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void CaseDisplayCompletedDetailsPayload_PreservesFieldSetAndOrder()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+
+            AssertContainsInOrder(
+                orchestrationSource,
+                "if (!completionDecision.CanComplete)",
+                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
+                "bool shouldEmit = false;",
+                "if (!shouldEmit)",
+                "string details =",
+                "\"reason=\" + (reason ?? string.Empty)",
+                "\",sessionId=\" + resolvedSession.SessionId",
+                "\",completionSource=\" + (completionSource ?? string.Empty)",
+                "\",completion=\" + attemptResult.CompletionBasis",
+                "\",paneVisible=\" + attemptResult.IsPaneVisible.ToString()",
+                "\",visibilityRecoveryStatus=\" + attemptResult.VisibilityRecoveryOutcome.Status.ToString()",
+                "\",visibilityRecoveryDisplayCompletable=\" + attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable.ToString()",
+                "\",visibilityRecoveryPaneVisible=\" + attemptResult.VisibilityRecoveryOutcome.IsPaneVisible.ToString()",
+                "\",visibilityRecoveryTargetKind=\" + attemptResult.VisibilityRecoveryOutcome.TargetKind.ToString()",
+                "\",visibilityPaneVisibleSource=\" + attemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()",
+                "\",visibilityRecoveryReason=\" + attemptResult.VisibilityRecoveryOutcome.Reason",
+                "\",visibilityRecoveryDegradedReason=\" + attemptResult.VisibilityRecoveryOutcome.DegradedReason",
+                "\",refreshSourceStatus=\" + attemptResult.RefreshSourceSelectionOutcome.Status.ToString()",
+                "\",refreshSourceSelectedSource=\" + attemptResult.RefreshSourceSelectionOutcome.SelectedSource.ToString()",
+                "\",refreshSourceSelectionReason=\" + attemptResult.RefreshSourceSelectionOutcome.SelectionReason",
+                "\",refreshSourceFallbackReasons=\" + attemptResult.RefreshSourceSelectionOutcome.FallbackReasons",
+                "\",refreshSourceCacheFallback=\" + attemptResult.RefreshSourceSelectionOutcome.IsCacheFallback.ToString()",
+                "\",refreshSourceRebuildRequired=\" + attemptResult.RefreshSourceSelectionOutcome.IsRebuildRequired.ToString()",
+                "\",refreshSourceCanContinue=\" + attemptResult.RefreshSourceSelectionOutcome.CanContinueRefresh.ToString()",
+                "\",refreshSourceFailureReason=\" + attemptResult.RefreshSourceSelectionOutcome.FailureReason",
+                "\",refreshSourceDegradedReason=\" + attemptResult.RefreshSourceSelectionOutcome.DegradedReason",
+                "\",rebuildFallbackStatus=\" + attemptResult.RebuildFallbackOutcome.Status.ToString()",
+                "\",rebuildFallbackRequired=\" + attemptResult.RebuildFallbackOutcome.IsRequired.ToString()",
+                "\",rebuildFallbackCanContinue=\" + attemptResult.RebuildFallbackOutcome.CanContinueRefresh.ToString()",
+                "\",rebuildFallbackSnapshotSource=\" + attemptResult.RebuildFallbackOutcome.SnapshotSource.ToString()",
+                "\",rebuildFallbackReasons=\" + attemptResult.RebuildFallbackOutcome.FallbackReasons",
+                "\",rebuildFallbackFailureReason=\" + attemptResult.RebuildFallbackOutcome.FailureReason",
+                "\",rebuildFallbackDegradedReason=\" + attemptResult.RebuildFallbackOutcome.DegradedReason",
+                "\",refreshCompleted=\" + attemptResult.IsRefreshCompleted.ToString()",
+                "\",foregroundGuaranteeTerminal=\" + attemptResult.IsForegroundGuaranteeTerminal.ToString()",
+                "\",foregroundGuaranteeRequired=\" + attemptResult.WasForegroundGuaranteeRequired.ToString()",
+                "\",foregroundGuaranteeStatus=\" + attemptResult.ForegroundGuaranteeOutcome.Status.ToString()",
+                "\",foregroundGuaranteeDisplayCompletable=\" + attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable.ToString()",
+                "\",foregroundGuaranteeExecutionAttempted=\" + attemptResult.ForegroundGuaranteeOutcome.WasExecutionAttempted.ToString()",
+                "\",foregroundGuaranteeTargetKind=\" + attemptResult.ForegroundGuaranteeOutcome.TargetKind.ToString()",
+                "\",foregroundRecoverySucceeded=\"",
+                "\",foregroundOutcomeReason=\" + attemptResult.ForegroundGuaranteeOutcome.Reason",
+                "WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest)",
+                "details += \",attempt=\" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);",
+                "_logger?.Info(",
+                "\"case-display-completed\"",
+                "details);",
+                "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
+        }
+
+        [Fact]
         public void ReadyShowCallback_ReturnsFactsToConvergenceChainBeforeCompletionGate()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");

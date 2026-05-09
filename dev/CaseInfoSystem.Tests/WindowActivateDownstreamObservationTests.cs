@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using CaseInfoSystem.ExcelAddIn.App;
@@ -135,6 +136,34 @@ namespace CaseInfoSystem.Tests
             Assert.Contains(
                 "displayRequestSource=PostActionRefresh",
                 WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(request));
+        }
+
+        [Fact]
+        public void FormatDisplayRequestTraceFields_WhenWindowActivateRequest_PreservesCaseDisplayCompletedPayloadFields()
+        {
+            WindowActivateTaskPaneTriggerFacts facts = CreateFacts(out _, out _);
+            TaskPaneDisplayRequest request = TaskPaneDisplayRequest.ForWindowActivate(facts);
+
+            string details = WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(request);
+
+            string[] fields = details.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(
+                new[]
+                {
+                    "displayRequestSource=WindowActivate",
+                    "displayRequestRefreshIntent=Normal",
+                    "displayTriggerReason=WindowActivate",
+                    "windowActivateTriggerRole=TaskPaneDisplayRefreshTrigger",
+                    "windowActivateRecoveryOwner=False",
+                    "windowActivateForegroundGuaranteeOwner=False",
+                    "windowActivateHiddenExcelOwner=False",
+                    "windowActivateCaptureOwner=WindowActivateDownstreamObservationTests",
+                    "windowActivateWorkbookPresent=True",
+                    "windowActivateWindowPresent=True",
+                    "windowActivateWindowHwnd=123"
+                },
+                fields);
+            Assert.DoesNotContain("case-display-completed", details);
         }
 
         private static WindowActivateDownstreamObservation CreateObservation(List<string> messages)

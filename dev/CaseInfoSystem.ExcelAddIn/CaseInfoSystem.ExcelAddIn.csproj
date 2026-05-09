@@ -281,6 +281,7 @@
     <Compile Include="App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="App\TaskPaneRefreshCoordinator.cs" />
     <Compile Include="App\TaskPaneRefreshOrchestrationService.cs" />
+    <Compile Include="App\PendingPaneRefreshRetryService.cs" />
     <Compile Include="App\TaskPaneReadyShowRetryScheduler.cs" />
     <Compile Include="App\TaskPaneRetryTimerLifecycle.cs" />
     <Compile Include="App\TransientPaneSuppressionService.cs" />

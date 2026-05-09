@@ -263,6 +263,64 @@ helper の意味:
 - route / dispatch shell 整理。
 - R07/R09/R13/R14 をまたぐ runtime extraction。
 
+### Phase 5 third runtime state
+
+Phase 5 第三実装後の runtime refactor 完了点は次の 3 点です。
+
+- completion hard gate yes/no decision の private helper 化。
+- `case-display-completed` details payload assembly の private helper 化。
+- R10/R11/R12 normalized outcome chain 呼び出しの private helper 化。
+
+いずれも `TaskPaneRefreshOrchestrationService` 内の局所 helper 化です。owner 移動ではありません。
+
+normalized outcome chain helper の意味:
+
+- `CompleteNormalizedOutcomeChain(...)` は `CompleteVisibilityRecoveryOutcome(...)`、`CompleteRefreshSourceSelectionOutcome(...)`、`CompleteRebuildFallbackOutcome(...)` を既存順序で呼ぶだけです。
+- helper は `TaskPaneRefreshAttemptResult` を受け取り、R10 -> R11 -> R12 の順に normalized outcome を付与した result を返すだけです。
+- helper は completion 判定を持ちません。
+- helper は foreground 判定を持ちません。
+- helper は session lookup を持ちません。
+- helper は one-time emit guard を持ちません。
+- helper は `case-display-completed` emit を持ちません。
+- helper は WindowActivate semantics を持ちません。
+- helper は callback / pending の意味付けを持ちません。
+
+未移動 owner:
+
+- R13 foreground interpretation は未移動です。
+- R14 completion gate は未移動です。
+- `case-display-completed` emit owner は未移動です。
+- display session boundary は未移動です。
+- session lookup は未移動です。
+- `IsCompleted` guard は未移動です。
+- lock は未移動です。
+- dictionary remove は未移動です。
+- `NewCaseVisibilityObservation.Complete(...)` は未移動です。
+- WindowActivate handling は未移動です。
+- trace owner / payload contract は未移動です。
+
+維持した contract:
+
+- trace 名、trace source、trace payload field set / order / names / values は維持します。
+- normal refresh path は R10/R11/R12 normalized outcome chain -> R13 foreground interpretation -> WindowActivate downstream observation -> R14 completion gate の距離を維持します。
+- ready-show callback path は R10/R11/R12 normalized outcome chain -> R13 foreground interpretation -> R14 completion gate の距離を維持します。
+- precondition skip path は R10/R11/R12 normalized outcome chain -> WindowActivate downstream observation -> return であり、R13/R14 へ進みません。
+- normalized outcome != completion、foreground outcome != completion、callback != completion、pending != completion、WindowActivate dispatch != completion は維持します。
+- `case-display-completed` one-time emit、display session boundary、retry sequencing、foreground outcome semantics は維持します。
+
+次 runtime 候補:
+
+- 第三実装後の次 runtime 候補はまだ GO ではありません。
+- 次に runtime を触る場合は、改めて tests-first / safety net 評価を置きます。
+
+現時点 STOP:
+
+- foreground display-completable 判定 helper 化。
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 横断 extraction。
+
 ## 対象範囲
 
 対象に含めるもの:

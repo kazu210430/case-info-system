@@ -185,6 +185,44 @@ R14 で未移動のもの:
 - route / dispatch shell 整理。
 - R07/R09/R13/R14 をまたぐ runtime extraction。
 
+### Phase 5 third runtime state boundary
+
+Phase 5 第三実装後、runtime で完了済みの安全単位は次の 3 点です。
+
+| completed safe unit | 意味 | owner 移動 |
+| --- | --- | --- |
+| R14 hard gate decision helper | visibility / foreground display-completable facts に基づく yes/no decision を private helper 化。 | なし。R14 completion owner は `TaskPaneRefreshOrchestrationService` に残る。 |
+| R14 payload assembly helper | `case-display-completed` details payload assembly を private helper 化。 | なし。emit owner / trace owner / session owner は移動しない。 |
+| R10/R11/R12 normalized outcome chain helper | `CompleteVisibilityRecoveryOutcome(...)` -> `CompleteRefreshSourceSelectionOutcome(...)` -> `CompleteRebuildFallbackOutcome(...)` の既存順序を private helper 化。 | なし。normalized outcome は completion owner ではない。 |
+
+`CompleteNormalizedOutcomeChain(...)` は R10 -> R11 -> R12 の呼び出しだけを担います。completion 判定、foreground 判定、session lookup、one-time emit guard、`case-display-completed` emit、WindowActivate semantics、callback / pending の意味付けは持ちません。
+
+第三実装後も未移動のもの:
+
+- R13 foreground interpretation。
+- R14 completion gate。
+- `case-display-completed` emit owner。
+- display session boundary。
+- session lookup。
+- `IsCompleted` guard。
+- lock。
+- `_createdCaseDisplaySessions` からの dictionary remove。
+- `NewCaseVisibilityObservation.Complete(...)`。
+- WindowActivate handling。
+- trace owner / payload contract。
+
+trace 名、trace source、trace payload field set / order / names / values は維持します。normal refresh / ready-show callback / precondition skip の各 path は、R10/R11/R12 normalized outcome chain と R13/R14 との距離を変えません。
+
+次 runtime 候補はまだ GO ではありません。次に runtime を触る場合は、改めて tests-first / safety net 評価を先に置きます。
+
+現時点 STOP:
+
+- foreground display-completable 判定 helper 化。
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 横断 extraction。
+
 ## R07 runtime extraction STOP
 
 R07 は、現時点では runtime extraction を行いません。`ScheduleWorkbookTaskPaneRefresh(...)` は単なる delayed timer schedule helper ではなく、ready-show fallback handoff trace、`WorkbookOpen` skip、workbook target tracking、window resolve、pre-timer immediate refresh、pending retry start decision を 1 つの protocol entry として束ねています。

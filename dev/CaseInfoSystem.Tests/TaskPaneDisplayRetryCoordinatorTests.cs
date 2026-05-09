@@ -234,6 +234,48 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void NormalRefreshPath_KeepsNormalizedOutcomeChainBeforeForegroundWindowActivateAndCompletion()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string normalRefreshPath = Slice(
+                orchestrationSource,
+                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
+                "return attemptResult;");
+
+            AssertNormalizedOutcomeChainBefore(
+                normalRefreshPath,
+                "CompleteForegroundGuaranteeOutcome(",
+                orchestrationSource);
+            AssertContainsInOrder(
+                normalRefreshPath,
+                "CompleteForegroundGuaranteeOutcome(",
+                "_windowActivateDownstreamObservation.LogOutcome(",
+                "TryCompleteCreatedCaseDisplaySession(");
+        }
+
+        [Fact]
+        public void PreconditionSkipPath_KeepsNormalizedOutcomeChainBeforeWindowActivateAndReturnWithoutForegroundOrCompletion()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string preconditionSkipPath = Slice(
+                orchestrationSource,
+                "if (!preconditionDecision.CanRefresh)",
+                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(");
+
+            AssertNormalizedOutcomeChainBefore(
+                preconditionSkipPath,
+                "_windowActivateDownstreamObservation.LogOutcome(",
+                orchestrationSource);
+            AssertContainsInOrder(
+                preconditionSkipPath,
+                "_windowActivateDownstreamObservation.LogOutcome(",
+                "return skippedResult;");
+            Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionSkipPath);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", preconditionSkipPath);
+            Assert.DoesNotContain("case-display-completed", preconditionSkipPath);
+        }
+
+        [Fact]
         public void ReadyShowCallback_ReturnsFactsToConvergenceChainBeforeCompletionGate()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
@@ -250,16 +292,72 @@ namespace CaseInfoSystem.Tests
             Assert.Contains(
                 "outcome => HandleWorkbookTaskPaneShown(createdCaseDisplaySession, workbook, reason, outcome)",
                 readyShowHandoff);
+            AssertNormalizedOutcomeChainBefore(
+                callbackHandler,
+                "CompleteForegroundGuaranteeOutcome(",
+                orchestrationSource);
             AssertContainsInOrder(
                 callbackHandler,
-                "CompleteVisibilityRecoveryOutcome(",
-                "CompleteRefreshSourceSelectionOutcome(",
-                "CompleteRebuildFallbackOutcome(",
                 "CompleteForegroundGuaranteeOutcome(",
                 "TryCompleteCreatedCaseDisplaySession(");
             Assert.Contains("() => onShown?.Invoke(shownOutcome)", workerSource);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", workerSource);
             Assert.DoesNotContain("case-display-completed", workerSource);
+        }
+
+        [Fact]
+        public void NormalizedOutcomeChainMethods_DoNotOwnCompletionSessionOrOneTimeEmit()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string normalizedOutcomeChainSource =
+                ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteVisibilityRecoveryOutcome")
+                + ReadMethod(orchestrationSource, "private void LogVisibilityRecoveryOutcome")
+                + ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteRefreshSourceSelectionOutcome")
+                + ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionOutcome")
+                + ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionTrace")
+                + ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteRebuildFallbackOutcome")
+                + ReadMethod(orchestrationSource, "private void LogRebuildFallbackOutcome")
+                + ReadOptionalMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteNormalizedOutcomeChain");
+
+            Assert.DoesNotContain("case-display-completed", normalizedOutcomeChainSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", normalizedOutcomeChainSource);
+            Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", normalizedOutcomeChainSource);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", normalizedOutcomeChainSource);
+            Assert.DoesNotContain("IsCompleted", normalizedOutcomeChainSource);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", normalizedOutcomeChainSource);
+            Assert.DoesNotContain("EvaluateCreatedCaseDisplayCompletionDecision", normalizedOutcomeChainSource);
+        }
+
+        [Fact]
+        public void NormalizedOutcomeTraceActionsAndSources_RemainR10R11R12Specific()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string visibilityTrace = ReadMethod(orchestrationSource, "private void LogVisibilityRecoveryOutcome");
+            string refreshSourceTrace = ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionOutcome")
+                + ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionTrace");
+            string rebuildFallbackTrace = ReadMethod(orchestrationSource, "private void LogRebuildFallbackOutcome");
+
+            AssertContainsInOrder(
+                visibilityTrace,
+                "TaskPaneNormalizedOutcomeMapper.FormatVisibilityRecoveryDetails(",
+                "action=visibility-recovery-decision",
+                "\"visibility-recovery-decision\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteVisibilityRecoveryOutcome\"",
+                "\"visibility-recovery-\" + outcome.Status.ToString().ToLowerInvariant()",
+                "\"TaskPaneRefreshOrchestrationService.CompleteVisibilityRecoveryOutcome\"");
+            AssertContainsInOrder(
+                refreshSourceTrace,
+                "TaskPaneNormalizedOutcomeMapper.FormatRefreshSourceSelectionDetails(",
+                "TaskPaneNormalizedOutcomeMapper.FormatRefreshSourceSelectionAction(outcome)",
+                "\"refresh-source-rebuild-required\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteRefreshSourceSelectionOutcome\"");
+            AssertContainsInOrder(
+                rebuildFallbackTrace,
+                "TaskPaneNormalizedOutcomeMapper.FormatRebuildFallbackDetails(",
+                "\"rebuild-fallback-required\"",
+                "\"TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome\"",
+                "string statusAction = \"rebuild-fallback-\" + outcome.Status.ToString().ToLowerInvariant()",
+                "\"TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome\"");
         }
 
         [Fact]
@@ -328,6 +426,39 @@ namespace CaseInfoSystem.Tests
             }
         }
 
+        private static void AssertNormalizedOutcomeChainBefore(
+            string source,
+            string boundaryFragment,
+            string orchestrationSource)
+        {
+            int boundaryIndex = source.IndexOf(boundaryFragment, StringComparison.Ordinal);
+            Assert.True(boundaryIndex >= 0, "Expected boundary fragment was not found: " + boundaryFragment);
+
+            int visibilityIndex = source.IndexOf("CompleteVisibilityRecoveryOutcome(", StringComparison.Ordinal);
+            int refreshSourceIndex = source.IndexOf("CompleteRefreshSourceSelectionOutcome(", StringComparison.Ordinal);
+            int rebuildFallbackIndex = source.IndexOf("CompleteRebuildFallbackOutcome(", StringComparison.Ordinal);
+            if (visibilityIndex >= 0
+                && refreshSourceIndex > visibilityIndex
+                && rebuildFallbackIndex > refreshSourceIndex
+                && rebuildFallbackIndex < boundaryIndex)
+            {
+                return;
+            }
+
+            int chainHelperIndex = source.IndexOf("CompleteNormalizedOutcomeChain(", StringComparison.Ordinal);
+            Assert.True(
+                chainHelperIndex >= 0 && chainHelperIndex < boundaryIndex,
+                "Expected R10/R11/R12 direct chain or CompleteNormalizedOutcomeChain before " + boundaryFragment + ".");
+            string helperSource = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteNormalizedOutcomeChain");
+            AssertContainsInOrder(
+                helperSource,
+                "CompleteVisibilityRecoveryOutcome(",
+                "CompleteRefreshSourceSelectionOutcome(",
+                "CompleteRebuildFallbackOutcome(");
+            Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", helperSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", helperSource);
+        }
+
         private static string Slice(string source, string startFragment, string endFragment)
         {
             int start = source.IndexOf(startFragment, StringComparison.Ordinal);
@@ -335,6 +466,40 @@ namespace CaseInfoSystem.Tests
             int end = source.IndexOf(endFragment, start + startFragment.Length, StringComparison.Ordinal);
             Assert.True(end > start, "Expected end fragment was not found: " + endFragment);
             return source.Substring(start, end - start);
+        }
+
+        private static string ReadOptionalMethod(string source, string signatureFragment)
+        {
+            return source.IndexOf(signatureFragment, StringComparison.Ordinal) >= 0
+                ? ReadMethod(source, signatureFragment)
+                : string.Empty;
+        }
+
+        private static string ReadMethod(string source, string signatureFragment)
+        {
+            int start = source.IndexOf(signatureFragment, StringComparison.Ordinal);
+            Assert.True(start >= 0, "Expected method signature was not found: " + signatureFragment);
+            int openBrace = source.IndexOf('{', start);
+            Assert.True(openBrace > start, "Expected method body was not found: " + signatureFragment);
+
+            int depth = 0;
+            for (int index = openBrace; index < source.Length; index++)
+            {
+                if (source[index] == '{')
+                {
+                    depth++;
+                }
+                else if (source[index] == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return source.Substring(start, index - start + 1);
+                    }
+                }
+            }
+
+            throw new InvalidOperationException("Method body was not closed: " + signatureFragment);
         }
 
         private static string ReadAppSource(string appFileName)

@@ -164,6 +164,151 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("attempt=2", details);
         }
 
+        [Fact]
+        public void FormatVisibilityRecoveryDetails_PreservesFieldOrder()
+        {
+            VisibilityRecoveryOutcome outcome = VisibilityRecoveryOutcome.Completed(
+                "refreshedShown",
+                VisibilityRecoveryTargetKind.ActiveWorkbookFallback,
+                PaneVisibleSource.RefreshedShown,
+                workbookWindowEnsureStatus: null,
+                fullRecoveryAttempted: false,
+                fullRecoverySucceeded: null);
+            TaskPaneRefreshAttemptResult attemptResult = CreateShownAttempt(null);
+
+            string details = TaskPaneNormalizedOutcomeMapper.FormatVisibilityRecoveryDetails(
+                "KernelCasePresentationService.ShowCreatedCase.PostRelease",
+                outcome,
+                attemptResult,
+                "ready-show-attempt",
+                2,
+                workbookWindowEnsureFacts: null);
+
+            Assert.Equal(
+                new[]
+                {
+                    "reason",
+                    "completionSource",
+                    "visibilityRecoveryStatus",
+                    "visibilityRecoveryReason",
+                    "visibilityRecoveryTerminal",
+                    "visibilityRecoveryDisplayCompletable",
+                    "visibilityRecoveryPaneVisible",
+                    "visibilityRecoveryTargetKind",
+                    "visibilityPaneVisibleSource",
+                    "visibilityRecoveryDegradedReason",
+                    "refreshSucceeded",
+                    "refreshCompleted",
+                    "preContextFullRecoveryAttempted",
+                    "preContextFullRecoverySucceeded",
+                    "attempt"
+                },
+                ExtractFieldNames(details));
+            Assert.Contains("completionSource=ready-show-attempt", details);
+            Assert.Contains("visibilityRecoveryStatus=Completed", details);
+            Assert.Contains("visibilityRecoveryDisplayCompletable=True", details);
+            Assert.Contains("attempt=2", details);
+        }
+
+        [Fact]
+        public void FormatRefreshSourceSelectionDetails_PreservesFieldOrder()
+        {
+            TaskPaneRefreshAttemptResult attemptResult = CreateShownAttempt(CreateBuildResult(
+                TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.MasterListRebuild,
+                snapshotText: "snapshot",
+                fallbackReasons: "CaseCacheStale",
+                masterListRebuildAttempted: true,
+                masterListRebuildSucceeded: true));
+            RefreshSourceSelectionOutcome outcome =
+                TaskPaneNormalizedOutcomeMapper.BuildRefreshSourceSelectionOutcome(attemptResult);
+
+            string details = TaskPaneNormalizedOutcomeMapper.FormatRefreshSourceSelectionDetails(
+                "KernelCasePresentationService.ShowCreatedCase.PostRelease",
+                outcome,
+                attemptResult,
+                "refresh",
+                1);
+
+            Assert.Equal(
+                new[]
+                {
+                    "reason",
+                    "completionSource",
+                    "refreshSourceStatus",
+                    "selectedSource",
+                    "selectionReason",
+                    "fallbackReasons",
+                    "refreshSourceTerminal",
+                    "refreshSourceCanContinue",
+                    "cacheFallback",
+                    "rebuildRequired",
+                    "masterListRebuildAttempted",
+                    "masterListRebuildSucceeded",
+                    "snapshotTextAvailable",
+                    "updatedCaseSnapshotCache",
+                    "failureReason",
+                    "degradedReason",
+                    "refreshSucceeded",
+                    "refreshCompleted",
+                    "paneVisible",
+                    "attempt"
+                },
+                ExtractFieldNames(details));
+            Assert.Contains("completionSource=refresh", details);
+            Assert.Contains("refreshSourceStatus=RebuildRequired", details);
+            Assert.Contains("rebuildRequired=True", details);
+            Assert.Contains("attempt=1", details);
+        }
+
+        [Fact]
+        public void FormatRebuildFallbackDetails_PreservesFieldOrder()
+        {
+            TaskPaneRefreshAttemptResult attemptResult = CreateShownAttempt(CreateBuildResult(
+                TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.MasterListRebuild,
+                snapshotText: "snapshot",
+                fallbackReasons: "CaseCacheStale",
+                masterListRebuildAttempted: true,
+                masterListRebuildSucceeded: true));
+            RebuildFallbackOutcome outcome =
+                TaskPaneNormalizedOutcomeMapper.BuildRebuildFallbackOutcome(attemptResult);
+
+            string details = TaskPaneNormalizedOutcomeMapper.FormatRebuildFallbackDetails(
+                "KernelCasePresentationService.ShowCreatedCase.PostRelease",
+                outcome,
+                attemptResult,
+                "refresh",
+                1);
+
+            Assert.Equal(
+                new[]
+                {
+                    "reason",
+                    "completionSource",
+                    "rebuildFallbackStatus",
+                    "rebuildFallbackRequired",
+                    "rebuildFallbackTerminal",
+                    "rebuildFallbackCanContinue",
+                    "snapshotSource",
+                    "fallbackReasons",
+                    "masterListRebuildAttempted",
+                    "masterListRebuildSucceeded",
+                    "snapshotTextAvailable",
+                    "updatedCaseSnapshotCache",
+                    "failureReason",
+                    "degradedReason",
+                    "outcomeReason",
+                    "refreshSucceeded",
+                    "refreshCompleted",
+                    "paneVisible",
+                    "attempt"
+                },
+                ExtractFieldNames(details));
+            Assert.Contains("completionSource=refresh", details);
+            Assert.Contains("rebuildFallbackStatus=Completed", details);
+            Assert.Contains("rebuildFallbackRequired=True", details);
+            Assert.Contains("attempt=1", details);
+        }
+
         private static TaskPaneRefreshAttemptResult CreateShownAttempt(
             TaskPaneSnapshotBuilderService.TaskPaneBuildResult buildResult)
         {
@@ -197,6 +342,20 @@ namespace CaseInfoSystem.Tests
                 masterListRebuildSucceeded,
                 failureReason,
                 degradedReason);
+        }
+
+        private static string[] ExtractFieldNames(string details)
+        {
+            string[] fields = details.Split(',');
+            string[] names = new string[fields.Length];
+            for (int index = 0; index < fields.Length; index++)
+            {
+                int separator = fields[index].IndexOf('=');
+                Assert.True(separator > 0, "Expected key=value field: " + fields[index]);
+                names[index] = fields[index].Substring(0, separator);
+            }
+
+            return names;
         }
     }
 }

@@ -206,4 +206,76 @@ namespace CaseInfoSystem.Tests
                 preContextRecoverySucceeded: null);
         }
     }
+
+    public sealed class VisibilityForegroundOutcomeBoundaryTests
+    {
+        [Fact]
+        public void VisibilityOutcome_WhenPaneVisibleWithDegradedRawFacts_RemainsVisibilityOutcomeOnly()
+        {
+            VisibilityRecoveryOutcome outcome = VisibilityRecoveryOutcome.Degraded(
+                "paneVisibleWithDegradedRecoveryFacts",
+                VisibilityRecoveryTargetKind.ExplicitWorkbookWindow,
+                PaneVisibleSource.RefreshedShown,
+                WorkbookWindowVisibilityEnsureOutcome.MadeVisible,
+                fullRecoveryAttempted: true,
+                fullRecoverySucceeded: false,
+                degradedReason: "preContextRecoveryReturnedFalse");
+
+            Assert.Equal(VisibilityRecoveryOutcomeStatus.Degraded, outcome.Status);
+            Assert.True(outcome.IsTerminal);
+            Assert.True(outcome.IsPaneVisible);
+            Assert.True(outcome.IsDisplayCompletable);
+            Assert.Equal(VisibilityRecoveryTargetKind.ExplicitWorkbookWindow, outcome.TargetKind);
+            Assert.Equal(PaneVisibleSource.RefreshedShown, outcome.PaneVisibleSource);
+            Assert.Equal(WorkbookWindowVisibilityEnsureOutcome.MadeVisible, outcome.WorkbookWindowEnsureStatus);
+            Assert.True(outcome.FullRecoveryAttempted);
+            Assert.False(outcome.FullRecoverySucceeded.GetValueOrDefault());
+            Assert.Equal("preContextRecoveryReturnedFalse", outcome.DegradedReason);
+        }
+
+        [Fact]
+        public void ForegroundOutcome_WhenRequiredExecutionReturnsFalse_RemainsForegroundOutcomeOnly()
+        {
+            ForegroundGuaranteeOutcome outcome = ForegroundGuaranteeOutcome.RequiredDegraded(
+                ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                "foregroundRecoveryReturnedFalse");
+
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredDegraded, outcome.Status);
+            Assert.True(outcome.WasRequired);
+            Assert.True(outcome.WasExecutionAttempted);
+            Assert.True(outcome.IsTerminal);
+            Assert.True(outcome.IsDisplayCompletable);
+            Assert.Equal(ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow, outcome.TargetKind);
+            Assert.False(outcome.RecoverySucceeded.GetValueOrDefault());
+            Assert.Equal("foregroundRecoveryReturnedFalse", outcome.Reason);
+        }
+
+        [Fact]
+        public void RefreshAttemptResult_KeepsVisibilityAndForegroundOutcomesSeparateForCompletionGate()
+        {
+            VisibilityRecoveryOutcome visibilityOutcome = VisibilityRecoveryOutcome.Completed(
+                "refreshedShown",
+                VisibilityRecoveryTargetKind.ExplicitWorkbookWindow,
+                PaneVisibleSource.RefreshedShown,
+                WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
+                fullRecoveryAttempted: false,
+                fullRecoverySucceeded: null);
+            ForegroundGuaranteeOutcome foregroundOutcome = ForegroundGuaranteeOutcome.RequiredFailed(
+                ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                "foregroundRecoveryNotAttempted");
+
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(visibilityOutcome)
+                .WithForegroundGuaranteeOutcome(foregroundOutcome);
+
+            Assert.True(result.IsRefreshSucceeded);
+            Assert.True(result.IsPaneVisible);
+            Assert.True(result.VisibilityRecoveryOutcome.IsDisplayCompletable);
+            Assert.Equal(VisibilityRecoveryOutcomeStatus.Completed, result.VisibilityRecoveryOutcome.Status);
+            Assert.True(result.IsForegroundGuaranteeTerminal);
+            Assert.False(result.ForegroundGuaranteeOutcome.IsDisplayCompletable);
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredFailed, result.ForegroundGuaranteeOutcome.Status);
+        }
+    }
 }

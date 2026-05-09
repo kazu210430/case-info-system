@@ -94,6 +94,36 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(WindowActivateActivationAttempt.NotAttempted, outcome.ActivationAttempt);
         }
 
+        [Fact]
+        public void DispatchOutcomes_AreDiagnosticTriggersNotRecoveryOrForegroundOwners()
+        {
+            WindowActivateTaskPaneTriggerFacts facts = CreateFacts(out _, out _);
+            TaskPaneDisplayRequest request = TaskPaneDisplayRequest.ForWindowActivate(facts);
+            WindowActivateDispatchOutcome[] outcomes =
+            {
+                WindowActivateDispatchOutcome.Observed(facts),
+                WindowActivateDispatchOutcome.Ignored(facts, request, "caseProtection"),
+                WindowActivateDispatchOutcome.Deferred(facts, request, "casePaneRefreshSuppressed"),
+                WindowActivateDispatchOutcome.Dispatched(facts, request, "displayRequestDispatched"),
+                WindowActivateDispatchOutcome.Failed(facts, "triggerFactsMissing"),
+            };
+
+            foreach (WindowActivateDispatchOutcome outcome in outcomes)
+            {
+                Assert.False(outcome.IsDisplayCompletionOutcome);
+                Assert.False(outcome.IsRecoveryOwner);
+                Assert.False(outcome.IsForegroundGuaranteeOwner);
+                Assert.False(outcome.IsHiddenExcelOwner);
+                Assert.Equal(WindowActivateActivationAttempt.NotAttempted, outcome.ActivationAttempt);
+            }
+
+            Assert.False(outcomes[0].IsTerminal);
+            Assert.True(outcomes[1].IsTerminal);
+            Assert.True(outcomes[2].IsTerminal);
+            Assert.True(outcomes[3].IsTerminal);
+            Assert.True(outcomes[4].IsTerminal);
+        }
+
         private static WindowActivateTaskPaneTriggerFacts CreateFacts(out Excel.Workbook workbook, out Excel.Window window)
         {
             var application = new Excel.Application();

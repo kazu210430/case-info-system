@@ -14,6 +14,7 @@
   - `docs/case-display-recovery-protocol-target-state.md`
   - `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`
   - `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`
+  - `docs/white-excel-prevention-boundary-current-state.md`
 
 この文書は vocabulary を固定するだけです。コード変更、enum 実装、helper / service 抽出、runtime 条件変更、visibility 制御変更、cleanup 条件変更、reopen 条件変更、build / test / `DeployDebugAddIn` 実行は行いません。
 
@@ -210,6 +211,7 @@ E-2 current-state 補足:
 - `WhiteExcelPreventionCompleted` は still-open false かつ visible workbook false の後に `Application.Quit()` が完了した場合だけです。reopen / display / foreground の成功を completed に読み替えません。
 - `WhiteExcelPreventionSkipped` は vocabulary 上の候補として残しますが、現行 `PostCloseFollowUpScheduler` の primary emitted outcome は `Queued` / `NotRequired` / `Completed` / `Failed` です。visible workbook がある場合の現行 emitted outcome は `Skipped` ではなく `NotRequired` です。
 - `WhiteExcelPreventionFailed` は no visible workbook quit の試行後に失敗した場合です。foreground recovery、visibility restore、WindowActivate dispatch、hidden cleanup の outcome で補完しません。
+- G-0 の詳しい owner / trigger / primitive / trace owner、visible workbook 判定、target workbook still-open 判定、G-1 安全単位は `docs/white-excel-prevention-boundary-current-state.md` を参照します。
 
 ## Trace Vocabulary
 

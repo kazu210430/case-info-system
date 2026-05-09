@@ -515,6 +515,8 @@ build / 実機確認ポイント:
 
 ### G. white Excel recovery の normalized outcome 化
 
+G-0 の current-state / target boundary は `docs/white-excel-prevention-boundary-current-state.md` で固定します。G-1 で runtime に触る場合も、同文書の安全単位 / 危険単位を前提にします。
+
 目的:
 
 - no visible workbook quit を white Excel prevention protocol として outcome 化する。

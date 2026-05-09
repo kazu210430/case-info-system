@@ -27,7 +27,7 @@
 - interactive route と `CreateCaseBatch` はどちらも save 前に owned workbook window を `normal + visible` へ正規化します。
 - interactive route の save 前正規化は保存状態の正規化であり、最終表示責務は shared/current app への handoff 後にだけ成立します。
 - `app-cache` は `CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外であり、裏Excel一般化の根拠にしません。
-- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、owner / protocol の target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` を参照します。
+- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、owner / protocol の target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md`、white Excel prevention / recovery の current-state と target boundary は `docs/white-excel-prevention-boundary-current-state.md` を参照します。
 
 ## 禁止事項
 
@@ -143,6 +143,7 @@ close / quit のうち `CASE managed close` と `post-close quit` では、visib
 - `Quit` 成功後は終了中 `Application` を restore しません。
 - `Quit` 失敗時だけ `DisplayAlerts` を restore します。
 - これは今回安定化対象の managed close / quit 経路の話であり、全 close 経路の一般ルールではありません。
+- `targetWorkbookStillOpen` / `visibleWorkbookExists` / `WhiteExcelPrevention*` outcome の current meaning は `docs/white-excel-prevention-boundary-current-state.md` を参照します。
 
 ### 不明点
 

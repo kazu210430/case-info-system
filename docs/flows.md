@@ -49,7 +49,7 @@
 - `experimental-isolated-inner-save` は route 名どおり、current/shared app ではなく dedicated hidden `Application` を生成し、close 時の inner save を含む経路です。
 - 互換のため旧環境変数 `CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL` でも同 route に到達しますが、契約上の正本は `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` です。
 - `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外です。
-- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
+- hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md`、white Excel prevention / recovery の current-state と target boundary は `docs/white-excel-prevention-boundary-current-state.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
 
 ### 不明点
 
@@ -350,6 +350,8 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 3. `Quit` 成功後は終了中 `Application` を restore しません。
 4. `Quit` 失敗時だけ `DisplayAlerts` を restore します。
 5. 設計目標は CASE close 後に白 Excel を残さないことです。
+
+white Excel prevention / recovery の current-state、`targetWorkbookStillOpen` と `visibleWorkbookExists` の意味、G-1 で触るべき安全単位は `docs/white-excel-prevention-boundary-current-state.md` を参照します。
 
 ### Shadow copy / 実機反映
 

@@ -35,6 +35,7 @@
 - interactive created CASE の reopen は、hidden create session close 後に `KernelCasePresentationService` が `CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay(...)` を呼び、shared/current app 上で新しい workbook object を取得する流れです。
 - reopen 後の visibility / recovery / foreground / TaskPane completion は display / refresh protocol 側の責務です。WorkbookClose owner や post-close follow-up owner ではありません。
 - `WindowActivate` は display / refresh dispatch trigger です。close 条件、reopen 判断、hidden cleanup、retained cleanup、white Excel prevention、foreground guarantee の owner ではありません。
+- white Excel prevention / recovery の G-0 current-state と target boundary は `docs/white-excel-prevention-boundary-current-state.md` を参照します。
 
 ## owner / trigger / primitive / trace owner
 
@@ -125,6 +126,8 @@ reopen は close 前 workbook object の継続利用ではなく、新しい wor
 - previous window restore の成否と shared app state restore outcome
 
 ## post-close follow-up と white Excel prevention
+
+G-0 の詳細な current meaning は `docs/white-excel-prevention-boundary-current-state.md` を参照します。この節は WorkbookClose / reopen protocol から見た接続点を扱います。
 
 - `PostCloseFollowUpScheduler.Schedule(workbookKey, folderPath)` は close 前に予約され、UI queue で遅延実行されます。
 - follow-up はまず workbook key で still-open check を行います。対象 workbook がまだ open の場合、quit しません。

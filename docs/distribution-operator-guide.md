@@ -31,7 +31,7 @@
 - Release Add-in package を生成します
 - 既存の `配布用` フォルダがあれば作り直します
 - Release 出力物から `案件情報System.exe` と `Addins` をコピーします
-- 実行時ルートの正本から `Kernel`、`Base`、`雛形`、PDF をコピーします
+- 実行時ルートの正本から `Kernel`、`Base`、`雛形` をコピーします
 - `distribution-assets\初回セットアップ.bat` を配布用へコピーします
 - Release VSTO manifest から `CaseInfoSystem.Internal.cer` を書き出して同梱します
 - 配布用にコピー済みの `Kernel` / `Base` に対して docprops を正規化します
@@ -43,7 +43,7 @@
 - 作業場所が `C:\Users\kazu2\Documents\案件情報System\開発用` であること
 - 実行時ルートが `C:\Users\kazu2\Documents\案件情報System` であること
 - 実行時ルート直下の `案件情報System_Kernel.xlsx` と `案件情報System_Base.xlsx` が配布したい版であること
-- 実行時ルート直下の `雛形` と `案件情報System_利用開始ガイド.pdf` が配布したい版であること
+- 実行時ルート直下の `雛形` が配布したい版であること
 - Release 用証明書ファイルが既定パスに配置されていること
 - 配布対象の版やタイミングが確定していること
 
@@ -54,7 +54,6 @@
 - `案件情報System.exe`
 - `案件情報System_Kernel.xlsx`
 - `案件情報System_Base.xlsx`
-- `利用開始ガイド.pdf`
 - `初回セットアップ.bat`
 - `CaseInfoSystem.Internal.cer`
 - `Addins`
@@ -85,7 +84,7 @@
 - 署名まわりの問題か、ビルド成果物の問題かを切り分けます
 
 ### ZIP 生成で止まる場合
-- 実行時ルート直下の `Kernel` / `Base` / `雛形` / PDF が存在するか確認します
+- 実行時ルート直下の `Kernel` / `Base` / `雛形` が存在するか確認します
 - `配布用` フォルダや `案件情報System.zip` を別プロセスが掴んでいないか確認します
 - `配布用` フォルダを手で編集していないか確認します
 

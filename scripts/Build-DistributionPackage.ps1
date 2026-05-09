@@ -218,7 +218,6 @@ $releaseWordAddIn = Join-Path $releasePackageRoot 'CaseInfoSystem.WordAddIn'
 
 $kernelWorkbook = Join-Path $runtimeRoot '案件情報System_Kernel.xlsx'
 $baseWorkbook = Join-Path $runtimeRoot '案件情報System_Base.xlsx'
-$sourceGuidePdf = Join-Path $runtimeRoot '案件情報System_利用開始ガイド.pdf'
 $sourceTemplates = Join-Path $runtimeRoot '雛形'
 $normalizeScript = Join-Path $repoRoot 'scripts\Normalize-DistributionWorkbookDocProps.ps1'
 $setupBatchTemplate = Join-Path $repoRoot 'distribution-assets\初回セットアップ.bat'
@@ -256,7 +255,6 @@ try {
     Write-Step 'Checking runtime source assets'
     Assert-FileExists -Path $kernelWorkbook -Label 'Runtime Kernel workbook'
     Assert-FileExists -Path $baseWorkbook -Label 'Runtime Base workbook'
-    Assert-FileExists -Path $sourceGuidePdf -Label 'Runtime user guide PDF'
     Assert-DirectoryExists -Path $sourceTemplates -Label 'Runtime template folder'
     Assert-FileExists -Path $normalizeScript -Label 'Docprops normalization script'
     Assert-FileExists -Path $setupBatchTemplate -Label 'Initial setup batch template'
@@ -283,7 +281,6 @@ try {
     Write-Step 'Copying runtime source assets'
     Copy-Item -LiteralPath $kernelWorkbook -Destination (Join-Path $distributionRoot '案件情報System_Kernel.xlsx') -Force
     Copy-Item -LiteralPath $baseWorkbook -Destination (Join-Path $distributionRoot '案件情報System_Base.xlsx') -Force
-    Copy-Item -LiteralPath $sourceGuidePdf -Destination (Join-Path $distributionRoot '利用開始ガイド.pdf') -Force
     Copy-Item -LiteralPath $setupBatchTemplate -Destination (Join-Path $distributionRoot '初回セットアップ.bat') -Force
     Copy-DirectoryContents -SourcePath $sourceTemplates -DestinationPath (Join-Path $distributionRoot '雛形') -ExcludeNamePatterns @('~$*')
     New-Item -ItemType Directory -Path (Join-Path $distributionRoot 'logs') -Force | Out-Null

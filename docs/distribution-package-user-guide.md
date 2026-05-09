@@ -46,7 +46,6 @@
 - `案件情報System.exe`
 - `案件情報System_Kernel.xlsx`
 - `案件情報System_Base.xlsx`
-- `利用開始ガイド.pdf`
 - `初回セットアップ.bat`
 - `CaseInfoSystem.Internal.cer`
 - `Addins` フォルダ

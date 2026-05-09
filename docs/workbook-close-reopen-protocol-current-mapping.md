@@ -23,6 +23,16 @@
 
 この文書は current-state の棚卸しだけを扱います。WorkbookClose 条件、reopen 条件、post-close follow-up 条件、foreground / visibility 条件、hidden cleanup / retained cleanup 条件、WindowActivate dispatch 条件は変更しません。
 
+## H consolidation note
+
+この文書は WorkbookClose / reopen / post-close follow-up の detail current mapping です。top-level lifecycle の正本は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、語彙の正本は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` として読む。
+
+- WorkbookClose は close 前 immutable facts を採取し、close 後 workbook COM object を再参照しない protocol として扱います。
+- reopen は close 済み workbook の延長ではなく、fresh workbook / window / context facts を取得する protocol として扱います。
+- post-close follow-up は close 前に予約された queued key と current `Application.Workbooks` の fresh facts で still-open / visible workbook / quit を判断します。
+- immediate reopen 近接時は follow-up cancel / reopen gating として読まず、current-state では dequeue 時の still-open skip または visible workbook skip として扱います。
+- white Excel prevention の outcome reason は `docs/white-excel-prevention-boundary-current-state.md` を detail 正本にし、この文書では close / reopen から見た接続点だけを扱います。
+
 ## current mapping summary
 
 - WorkbookClose event は `ThisAddIn.Application_WorkbookBeforeClose(...)` で受け、`WorkbookLifecycleCoordinator.OnWorkbookBeforeClose(...)` が CASE / Kernel / Accounting lifecycle へ順に渡します。

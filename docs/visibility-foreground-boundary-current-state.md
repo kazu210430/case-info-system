@@ -23,6 +23,16 @@
 
 今回の文書は current-state を記録するだけです。foreground primitive、retry 条件、visibility 判定、`WindowActivate` dispatch、hidden cleanup、white Excel prevention、WorkbookClose / reopen、retained cleanup / isolated app lifetime の条件は変更しません。
 
+## H consolidation note
+
+この文書は visibility / foreground の detail current-state です。top-level lifecycle の正本は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、語彙の正本は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` として読む。
+
+- `visibility restore` は docs vocabulary の umbrella term です。保存状態正規化、hidden-for-display preparation、lightweight ensure、full recovery primitive をまとめて説明する時に使います。
+- `visibility recovery` / `VisibilityRecoveryOutcome` は current code / trace vocabulary です。`TaskPaneRefreshOrchestrationService` が normalized outcome として扱う current-state 名として残します。
+- `visibility restore` と `visibility recovery` は別 owner を示すための語彙ではありません。どちらも foreground guarantee、hidden cleanup、retained cleanup、white Excel prevention の代替ではありません。
+- `foreground guarantee` は `TaskPaneRefreshOrchestrationService` が decision / outcome / trace owner、`ExcelWindowRecoveryService` が execution primitive owner です。`TaskPaneRefreshCoordinator` は execution bridge と raw facts return に留めて読む。
+- `WindowActivate` は trigger / dispatch boundary です。visibility recovery owner、foreground guarantee owner、CASE display completed owner、cleanup owner として読まない。
+
 ## current-state summary
 
 - visibility restore は単一 owner の 1 protocol ではなく、保存状態正規化、hidden-for-display 準備、presentation 前の lightweight ensure、refresh 前後の full recovery facts 正規化に分かれています。
@@ -197,7 +207,7 @@ white Excel prevention:
 
 ## current-state 上の未定義ポイント
 
-- `VisibilityRecoveryOutcome` は current code にありますが、docs vocabulary の `VisibilityRestore*` と完全に同じ命名ではありません。current-state では「visibility restore / recovery の境界」として読み替えず併記します。
+- `VisibilityRecoveryOutcome` は current code / trace vocabulary、`VisibilityRestore*` は docs vocabulary / target-style naming です。current-state では `visibility restore` を umbrella term、`VisibilityRecoveryOutcome` を current emitted / observed outcome として併記します。
 - `VisibilityRecoveryOutcome.Degraded` は current code 上 display-completable です。degraded を将来どの UX / trace severity とするかは未定義です。
 - `ForegroundGuaranteeOutcome.RequiredFailed` は vocabulary と型にはありますが、current observed execution path は required execution後に `RequiredSucceeded` / `RequiredDegraded` へ寄っています。どの failure を `RequiredFailed` とするかは current-state では未定義です。
 - `LogVisibilityRecoveryOutcome(...)` の detailed observation は created CASE display reason に寄ります。全 refresh reason に同じ normalized trace coverage を出すかは未定義です。

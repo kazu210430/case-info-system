@@ -32,20 +32,50 @@
 
 この文書は current-state を記録するだけです。コード変更、Excel visibility 制御変更、hidden cleanup 条件変更、WorkbookClose / reopen 条件変更、foreground / visibility / rebuild / refresh source 条件変更は行いません。
 
-## stash 整理結果
+## H current-state consolidation index
 
-作業前に `stash@{0}` を確認しました。
+A-G 完了後の current-state docs は、次の関係で読む。
 
-- 対象 stash: `stash@{0}: On codex/windowactivate-owner-boundary: pre-ff-merge debug package artifacts`
-- 内容:
-  - `dev/Deploy/DebugPackage/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn.dll`
-  - `dev/Deploy/DebugPackage/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn.dll.manifest`
-  - `dev/Deploy/DebugPackage/CaseInfoSystem.ExcelAddIn/CaseInfoSystem.ExcelAddIn.vsto`
-  - `dev/Deploy/DebugPackage/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn.dll`
-  - `dev/Deploy/DebugPackage/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn.dll.manifest`
-  - `dev/Deploy/DebugPackage/CaseInfoSystem.WordAddIn/CaseInfoSystem.WordAddIn.vsto`
-- 判定: `dev/Deploy/DebugPackage` 配下の DLL / manifest / `.vsto` 生成物のみ。
-- 実施: stash を drop 済み。drop した stash id は `78747a8e7b9d1856f770a7cfe267307a3dd4c7bb`。
+### source-of-truth docs
+
+- この文書
+  - hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の top-level current-state 正本。
+  - owner、cleanup、visibility、WorkbookClose / reopen、white Excel prevention との接続点を protocol 単位で固定する。
+- `docs/hidden-excel-lifecycle-outcome-vocabulary.md`
+  - lifecycle term、normalized outcome、owner vocabulary、trace vocabulary の正本。
+  - `raw facts` と `normalized outcome`、`trace owner` と `action owner`、`recovery owner` と `cleanup owner` を分ける。
+
+### reference docs
+
+- `docs/architecture.md`、`docs/flows.md`、`docs/ui-policy.md`
+  - system structure / flow / UI policy の前提。
+  - lifecycle current-state の詳細 owner はこの文書と detail docs を参照する。
+- `docs/lifecycle-redesign-cross-review.md`
+  - A-G 完了後レビューと H へ進む前の gap map。
+  - H 後の current-state 正本ではなく、次フェーズ判断の履歴 reference として読む。
+- `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、`docs/case-display-recovery-protocol-target-state.md`
+  - target-state reference。
+  - target-only outcome や未実装 protocol を current emitted outcome として読まない。
+
+### detail docs
+
+- `docs/workbook-close-reopen-protocol-current-mapping.md`
+  - WorkbookClose / reopen / post-close follow-up の detail current mapping。
+- `docs/visibility-foreground-boundary-current-state.md`
+  - visibility restore / visibility recovery / foreground guarantee の detail current-state。
+- `docs/white-excel-prevention-boundary-current-state.md`
+  - white Excel prevention の detail current-state。white Excel recovery UX は current-state では未定義。
+- `docs/case-workbook-lifecycle-current-state.md`
+  - `CaseWorkbookLifecycleService`、managed close、post-close quit の lifecycle service detail。
+- `docs/case-display-recovery-protocol-current-state.md`
+  - CASE display / recovery / ready-show / rebuild fallback / refresh source / WindowActivate の detail current-state。
+
+### 読み方
+
+- detail docs が同じ禁止事項や owner 境界を繰り返す場合、用語は `docs/hidden-excel-lifecycle-outcome-vocabulary.md`、top-level lifecycle 関係はこの文書、protocol 固有の raw facts は各 detail doc を正本にする。
+- `visibility restore` は docs vocabulary の umbrella term、`VisibilityRecoveryOutcome` / `visibility recovery` は current code / trace vocabulary として扱う。
+- `white Excel prevention` は現行 runtime の close / quit protocol。`white Excel recovery` は user-facing UX / manual guidance が未定義の領域として扱う。
+- `case-display-completed` は `TaskPaneRefreshOrchestrationService` の created-case display session terminal trace。`WindowActivate`、pane visible、foreground guarantee、hidden cleanup、white Excel prevention の別名にしない。
 
 ## current-state summary
 

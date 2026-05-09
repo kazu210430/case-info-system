@@ -18,6 +18,20 @@
 - `case-display-completed` remains owned by `TaskPaneRefreshOrchestrationService` and now consumes `ForegroundGuaranteeOutcome.IsTerminal` plus `IsDisplayCompletable`.
 - Retry counts, ready-show timing, visibility recovery conditions, foreground recovery execution conditions, rebuild fallback, `WindowActivate` behavior, hidden session behavior, and CASE creation behavior are unchanged.
 
+## H consolidation note
+
+この文書は CASE display / recovery の detail current-state です。top-level lifecycle の正本は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、lifecycle / outcome / owner vocabulary の正本は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` として読む。
+
+この文書内には phase ごとの current-state 追記が残っています。A-G 完了後の読み方は次の通りです。
+
+- `case-display-completed` の final owner は `TaskPaneRefreshOrchestrationService` です。
+- `display-handoff-completed` は created CASE display request を `TaskPaneRefreshOrchestrationService` が受理した境界の trace です。presentation / open-strategy 側の old `display-handoff-open-completed` とは分けます。
+- foreground guarantee の decision / outcome / trace owner は `TaskPaneRefreshOrchestrationService`、execution bridge は `TaskPaneRefreshCoordinator`、execution primitive は `ExcelWindowRecoveryService` です。
+- visibility recovery / `VisibilityRecoveryOutcome` は current code / trace vocabulary です。docs vocabulary の `visibility restore` と同じ owner 名としては扱わず、foreground guarantee や cleanup の代替にしません。
+- `WindowActivate` は trigger / dispatch boundary です。CASE display completed、visibility recovery、foreground guarantee、hidden cleanup、white Excel prevention の owner ではありません。
+- rebuild fallback / refresh source / snapshot source は display completion の detail に含まれますが、それ単独で `case-display-completed` を成立させません。
+- target-state sections / target-state docs は implementation candidate の reference です。current emitted outcome、current owner、runtime 条件としては読まない。
+
 ## 位置づけ
 
 この文書は、CASE display / recovery protocol の current-state 正本です。目的は、現行 `main` で実際に動いている owner と順序を、観測ログと現コードを根拠に固定することです。

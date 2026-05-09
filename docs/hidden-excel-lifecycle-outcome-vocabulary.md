@@ -31,6 +31,36 @@
 - retained hidden app-cache は `CaseWorkbookOpenStrategy` の例外境界です。session close と cached `Application` cleanup を混同しません。
 - `WorkbookClose` 後は、close 前に採取済みの immutable facts だけを使い、close 済み workbook COM object を再参照しません。
 
+## Current-State Vocabulary Normalization
+
+A-G 後の current-state docs では、次の語彙を統一して読む。
+
+| docs term / code term | current-state の扱い | 読み替えてはいけないもの |
+| --- | --- | --- |
+| `visibility restore` | docs vocabulary の umbrella term。owner-owned workbook window を visible / normal へ戻す保存状態正規化、lightweight ensure、full recovery primitive を含む。 | foreground guarantee、hidden cleanup、retained cleanup、white Excel prevention。 |
+| `visibility recovery` / `VisibilityRecoveryOutcome` | current code / trace vocabulary。`TaskPaneRefreshOrchestrationService` が normalized outcome として扱う。 | target-state の `VisibilityRestore*` enum が runtime emitted 済みであるという読み方。 |
+| `foreground guarantee` / `ForegroundGuaranteeOutcome` | CASE display / refresh protocol 内の foreground obligation。decision / outcome / trace owner は `TaskPaneRefreshOrchestrationService`、execution primitive は `ExcelWindowRecoveryService`。 | `WindowActivate` 発火、workbook window visible 化、hidden cleanup success。 |
+| `case-display-completed` | `TaskPaneRefreshOrchestrationService` が emit する created-case display session の success-only terminal trace。 | pane visible、refresh completed、display handoff、WindowActivate dispatch、white Excel prevention completed。 |
+| `WindowActivate dispatch` / `WindowActivateDispatchOutcome` | `WindowActivatePaneHandlingService` が扱う trigger / dispatch diagnostic。 | visibility recovery owner、foreground guarantee owner、CASE display completed owner、cleanup owner。 |
+| `hidden cleanup` | hidden session が所有する workbook close、isolated app quit、COM release、cache return / poison 判定。 | retained cached app disposal completed、foreground success、white Excel prevention completed。 |
+| `retained cleanup` | `CaseWorkbookOpenStrategy` の retained hidden app-cache が cached `Application` を timeout / poison / feature flag disabled / shutdown 等で破棄する cleanup。 | app-cache session close の return-to-idle。 |
+| `isolated app lifetime` | isolated app を生成した owner が close / quit / COM release まで閉じる lifetime。 | shared/current app の no visible workbook quit、retained cache keep。 |
+| `white Excel prevention` | `PostCloseFollowUpScheduler` の close / quit protocol。visible workbook が無い場合だけ shared/current app quit を試みる。 | display recovery、foreground guarantee、WindowActivate dispatch、hidden cleanup。 |
+| `white Excel recovery` | user-facing UX / manual guidance / retry protocol は current-state では未定義。 | `ExcelWindowRecoveryService` の CASE display recovery primitive。 |
+| `WorkbookClose` | close 前 immutable facts を使い、close 後 workbook COM object を再参照しない close lifecycle。 | reopen 後の fresh workbook facts。 |
+| `reopen` | close 済み workbook の延長ではなく、fresh workbook / window / context facts を取得する open。 | post-close follow-up の queued key rewrite。 |
+| `post-close follow-up` | close 前に予約された queued key と current `Application.Workbooks` の fresh facts で still-open / visible workbook / quit を判断する deferred protocol。 | follow-up cancel / reopen gating。現行では未定義。 |
+
+Current emitted outcome と target-only vocabulary は分ける。
+
+| area | current-state で読める emitted / observed outcome | target-only または未確認として扱う outcome |
+| --- | --- | --- |
+| retained cleanup | `RetainedInstanceCleanupCompleted` / `RetainedInstanceCleanupSkipped` / `RetainedInstanceCleanupDegraded`、session close 側の `RetainedInstanceReturnedToIdle` / `RetainedInstancePoisoned`。 | `RetainedInstanceCleanupNotRequired` / `RetainedInstanceCleanupFailed` / `RetainedInstanceOwnershipUnknown` は target vocabulary であり、detail docs が emitted を確認するまでは current emitted outcome としない。 |
+| white Excel prevention | `WhiteExcelPreventionQueued` / `WhiteExcelPreventionNotRequired` / `WhiteExcelPreventionCompleted` / `WhiteExcelPreventionFailed`。 | `WhiteExcelPreventionSkipped` は vocabulary / target boundary 上の候補。現行 primary emitted outcome としては扱わない。 |
+| visibility | `VisibilityRecoveryOutcome` と related trace。 | `VisibilityRestore*` は docs vocabulary / target-style naming。runtime enum 実装済みとは読まない。 |
+| foreground | `ForegroundGuaranteeOutcome`。 | `RequiredFailed` の emitted path や UX severity は current-state では未定義のまま扱う。 |
+| CASE display | `case-display-completed` は `TaskPaneRefreshOrchestrationService` emit。 | worker / coordinator / host-flow の lower-level success を final completion と呼ばない。 |
+
 ## Lifecycle Terms
 
 | term | definition | owner | lifecycle scope | cleanup scope | 触ってよい owner | 触ってはいけない owner |
@@ -58,6 +88,7 @@
 | --- | --- | --- | --- |
 | `decision owner` | protocol unit を実行するか、skip / required / failed / unknown のどれにするかを判断する owner。 | facts を見て decision を作る。例: foreground guarantee decision は `TaskPaneRefreshOrchestrationService`。 | primitive owner、trigger owner。 |
 | `primitive owner` | COM 操作、window 操作、close / quit / release など実際の mutation を行う owner。 | 既存条件内で primitive を実行し、execution facts を返す。例: full recovery primitive は `ExcelWindowRecoveryService`。 | outcome owner。primitive 成功を protocol completion と同一視しない。 |
+| `action owner` | action / mutation を実行する owner。current-state docs では `primitive owner` と同じ層として読む。 | close、quit、release、window visible、foreground promotion などの実行 owner を指す。 | trace owner。trace を出しただけで action owner にならない。 |
 | `outcome owner` | raw facts と primitive result を protocol vocabulary に正規化する owner。 | normalized outcome を 1 箇所で決める。 | raw trace owner、lower-level helper。 |
 | `trace owner` | raw event trace または normalized trace を emit する owner。 | raw trace と normalized outcome trace を分ける。 | action owner。trace を出しただけで cleanup / recovery owner にならない。 |
 | `recovery owner` | visibility recovery / foreground recovery など回復 protocol を調停する owner。 | recovery が必要かを判断し、primitive owner へ委譲する。 | trigger owner、cleanup owner。 |

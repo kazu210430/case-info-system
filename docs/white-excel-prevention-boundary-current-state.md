@@ -42,6 +42,16 @@
 
 この文書は current-state を棚卸しするだけです。不明点は補完せず、G-1 以降の確認事項として残します。
 
+## H consolidation note
+
+この文書は white Excel prevention の detail current-state です。top-level lifecycle の正本は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、outcome / owner vocabulary の正本は `docs/hidden-excel-lifecycle-outcome-vocabulary.md` として読む。
+
+- current runtime で実装済みとして読む語は `white Excel prevention` です。
+- `white Excel recovery` は、すでに白 Excel になった状態への user-facing UX / manual guidance / retry protocol を指す未定義領域です。`ExcelWindowRecoveryService` の CASE display recovery primitive と混同しません。
+- `WhiteExcelPreventionNotRequired` は current-state では `targetWorkbookStillOpen` と `visibleWorkbookExists` の 2 つの主な reason を持ちます。どちらも quit しない decision であり、display success ではありません。
+- `WhiteExcelPreventionSkipped` は vocabulary / target boundary 上の候補であり、現行 primary emitted outcome としては扱いません。
+- post-close follow-up は queued key と current `Application.Workbooks` の fresh facts を比較します。follow-up cancel / reopen gating は current-state では未定義です。
+
 ## current-state summary
 
 - white Excel prevention は close / quit protocol です。表示回復、foreground guarantee、WindowActivate dispatch、hidden cleanup、retained cleanup の代替ではありません。

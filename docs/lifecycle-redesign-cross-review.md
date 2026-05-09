@@ -4,6 +4,8 @@
 
 この文書は、hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle redesign の A-G 完了後レビューです。実装には入らず、現行 `main` の docs / tests / trace assertion を横断して、まだ残る ownership 混在、protocol 未定義、trace gap、次に触るべき安全単位を整理します。
 
+H current-state consolidation 後は、この文書を A-G 完了時点の review / gap map として読む。current-state の source-of-truth / reference / detail docs の関係、語彙読み替え、current emitted outcome と target-only vocabulary の分離は、`docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md` と `docs/hidden-excel-lifecycle-outcome-vocabulary.md` を正本にする。
+
 - レビュー開始時の `main` / `origin/main` / `HEAD`: `e49ed38389cfae6a999f07689cceefb611ca9e10`
 - 作業ブランチ: `codex/lifecycle-redesign-cross-review`
 - 成果物: この docs-only 文書

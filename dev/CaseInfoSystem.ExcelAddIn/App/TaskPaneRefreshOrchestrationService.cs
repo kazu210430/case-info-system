@@ -25,6 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly WorkbookPaneWindowResolver _workbookPaneWindowResolver;
         private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
         private readonly TaskPaneReadyShowRetryScheduler _readyShowRetryScheduler;
+        private readonly WindowActivateDownstreamObservation _windowActivateDownstreamObservation;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
         private readonly ICasePaneHostBridge _casePaneHostBridge;
@@ -65,6 +66,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 _retryTimerLifecycle,
                 workbook => FormatWorkbookDescriptor(workbook),
                 workbook => SafeWorkbookFullName(workbook));
+            _windowActivateDownstreamObservation = new WindowActivateDownstreamObservation(
+                _logger,
+                workbook => FormatWorkbookDescriptor(workbook),
+                window => FormatWindowDescriptor(window),
+                () => FormatActiveState());
             _pendingPaneRefreshRetryService = new PendingPaneRefreshRetryService(
                 _excelInteropService,
                 _workbookSessionService,
@@ -109,8 +115,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", activeState="
                 + FormatActiveState()
-                + FormatDisplayRequestTraceFields(displayRequest));
-            LogWindowActivateDisplayRefreshTriggerStart(displayRequest, reason, workbook, window, refreshAttemptId);
+                + WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest));
+            _windowActivateDownstreamObservation.LogStart(displayRequest, reason, workbook, window, refreshAttemptId);
             TaskPaneRefreshPreconditionDecision preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
                 reason,
                 workbook,
@@ -157,11 +163,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     stopwatch,
                     preconditionDecision.SkipActionName,
                     null);
-                LogWindowActivateDisplayRefreshTriggerOutcome(
+                _windowActivateDownstreamObservation.LogOutcome(
                     displayRequest,
                     reason,
-                    workbook,
-                    window,
                     skippedResult,
                     stopwatch,
                     refreshAttemptId,
@@ -219,11 +223,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatWindowDescriptor(window)
                 + ", result="
                 + RefreshDispatchExecutionResult.FormatResultText(attemptResult));
-            LogWindowActivateDisplayRefreshTriggerOutcome(
+            _windowActivateDownstreamObservation.LogOutcome(
                 displayRequest,
                 reason,
-                workbook,
-                window,
                 attemptResult,
                 stopwatch,
                 refreshAttemptId,
@@ -1216,7 +1218,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     ? attemptResult.ForegroundGuaranteeOutcome.RecoverySucceeded.Value.ToString()
                     : string.Empty)
                 + ",foregroundOutcomeReason=" + attemptResult.ForegroundGuaranteeOutcome.Reason
-                + FormatDisplayRequestDetailFields(displayRequest);
+                + WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest);
             if (attemptNumber.HasValue)
             {
                 details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
@@ -1245,156 +1247,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 resolvedSession.WorkbookFullName,
                 details);
             NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
-        }
-
-        private void LogWindowActivateDisplayRefreshTriggerStart(
-            TaskPaneDisplayRequest displayRequest,
-            string reason,
-            Excel.Workbook workbook,
-            Excel.Window window,
-            int refreshAttemptId)
-        {
-            if (!IsWindowActivateDisplayRequest(displayRequest))
-            {
-                return;
-            }
-
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=window-activate-display-refresh-trigger-start refreshAttemptId="
-                + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
-                + ", reason="
-                + (reason ?? string.Empty)
-                + ", triggerRole=TaskPaneDisplayRefreshTrigger"
-                + ", windowActivateDispatchStatus=Dispatched"
-                + ", activationAttempt=NotAttempted"
-                + ", downstreamRecoveryDelegated=False"
-                + ", displayCompletionOutcome=False"
-                + ", recoveryOwner=False"
-                + ", foregroundGuaranteeOwner=False"
-                + ", hiddenExcelOwner=False"
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", inputWindow="
-                + FormatWindowDescriptor(window)
-                + ", activeState="
-                + FormatActiveState()
-                + FormatDisplayRequestTraceFields(displayRequest));
-        }
-
-        private void LogWindowActivateDisplayRefreshTriggerOutcome(
-            TaskPaneDisplayRequest displayRequest,
-            string reason,
-            Excel.Workbook workbook,
-            Excel.Window window,
-            TaskPaneRefreshAttemptResult attemptResult,
-            Stopwatch stopwatch,
-            int refreshAttemptId,
-            string completionSource)
-        {
-            if (!IsWindowActivateDisplayRequest(displayRequest))
-            {
-                return;
-            }
-
-            VisibilityRecoveryOutcome visibilityOutcome = attemptResult == null ? null : attemptResult.VisibilityRecoveryOutcome;
-            RefreshSourceSelectionOutcome refreshSourceOutcome = attemptResult == null ? null : attemptResult.RefreshSourceSelectionOutcome;
-            RebuildFallbackOutcome rebuildOutcome = attemptResult == null ? null : attemptResult.RebuildFallbackOutcome;
-            ForegroundGuaranteeOutcome foregroundOutcome = attemptResult == null ? null : attemptResult.ForegroundGuaranteeOutcome;
-            bool downstreamRecoveryDelegated = (attemptResult != null && attemptResult.PreContextRecoveryAttempted)
-                || (foregroundOutcome != null && foregroundOutcome.WasExecutionAttempted);
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=window-activate-display-refresh-trigger-outcome refreshAttemptId="
-                + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
-                + ", reason="
-                + (reason ?? string.Empty)
-                + ", completionSource="
-                + (completionSource ?? string.Empty)
-                + ", triggerRole=TaskPaneDisplayRefreshTrigger"
-                + ", windowActivateDispatchStatus=Dispatched"
-                + ", activationAttempt="
-                + (downstreamRecoveryDelegated
-                    ? WindowActivateActivationAttempt.Delegated.ToString()
-                    : WindowActivateActivationAttempt.NotAttempted.ToString())
-                + ", downstreamRecoveryDelegated="
-                + downstreamRecoveryDelegated.ToString()
-                + ", displayCompletionOutcome=False"
-                + ", recoveryOwner=False"
-                + ", foregroundGuaranteeOwner=False"
-                + ", hiddenExcelOwner=False"
-                + ", refreshSucceeded="
-                + (attemptResult != null && attemptResult.IsRefreshSucceeded).ToString()
-                + ", refreshSkipped="
-                + (attemptResult != null && attemptResult.WasSkipped).ToString()
-                + ", contextRejected="
-                + (attemptResult != null && attemptResult.WasContextRejected).ToString()
-                + ", paneVisible="
-                + (attemptResult != null && attemptResult.IsPaneVisible).ToString()
-                + ", refreshCompleted="
-                + (attemptResult != null && attemptResult.IsRefreshCompleted).ToString()
-                + ", visibilityRecoveryStatus="
-                + (visibilityOutcome == null ? VisibilityRecoveryOutcomeStatus.Unknown.ToString() : visibilityOutcome.Status.ToString())
-                + ", visibilityRecoveryReason="
-                + (visibilityOutcome == null ? string.Empty : visibilityOutcome.Reason)
-                + ", refreshSourceStatus="
-                + (refreshSourceOutcome == null ? RefreshSourceSelectionOutcomeStatus.Unknown.ToString() : refreshSourceOutcome.Status.ToString())
-                + ", refreshSourceSelectedSource="
-                + (refreshSourceOutcome == null ? TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.None.ToString() : refreshSourceOutcome.SelectedSource.ToString())
-                + ", rebuildFallbackStatus="
-                + (rebuildOutcome == null ? RebuildFallbackOutcomeStatus.Unknown.ToString() : rebuildOutcome.Status.ToString())
-                + ", foregroundGuaranteeStatus="
-                + (foregroundOutcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : foregroundOutcome.Status.ToString())
-                + ", foregroundExecutionAttempted="
-                + (foregroundOutcome != null && foregroundOutcome.WasExecutionAttempted).ToString()
-                + ", preContextFullRecoveryAttempted="
-                + (attemptResult != null && attemptResult.PreContextRecoveryAttempted).ToString()
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)
-                + FormatDisplayRequestTraceFields(displayRequest));
-        }
-
-        private static bool IsWindowActivateDisplayRequest(TaskPaneDisplayRequest displayRequest)
-        {
-            return displayRequest != null && displayRequest.IsWindowActivateTrigger;
-        }
-
-        private static string FormatDisplayRequestTraceFields(TaskPaneDisplayRequest displayRequest)
-        {
-            if (displayRequest == null)
-            {
-                return string.Empty;
-            }
-
-            return FormatDisplayRequestDetailFields(displayRequest);
-        }
-
-        private static string FormatDisplayRequestDetailFields(TaskPaneDisplayRequest displayRequest)
-        {
-            if (displayRequest == null)
-            {
-                return string.Empty;
-            }
-
-            string details =
-                ", displayRequestSource=" + displayRequest.Source.ToString()
-                + ", displayRequestRefreshIntent=" + displayRequest.RefreshIntent.ToString()
-                + ", displayTriggerReason=" + displayRequest.ToReasonString();
-            if (!displayRequest.IsWindowActivateTrigger)
-            {
-                return details;
-            }
-
-            WindowActivateTaskPaneTriggerFacts facts = displayRequest.WindowActivateTriggerFacts;
-            return details
-                + ", windowActivateTriggerRole=TaskPaneDisplayRefreshTrigger"
-                + ", windowActivateRecoveryOwner=False"
-                + ", windowActivateForegroundGuaranteeOwner=False"
-                + ", windowActivateHiddenExcelOwner=False"
-                + ", windowActivateCaptureOwner=" + (facts == null ? string.Empty : facts.CaptureOwner)
-                + ", windowActivateWorkbookPresent=" + (facts != null && facts.HasWorkbook).ToString()
-                + ", windowActivateWindowPresent=" + (facts != null && facts.HasWindow).ToString()
-                + ", windowActivateWindowHwnd=" + (facts == null ? string.Empty : facts.WindowHwnd);
         }
 
         private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)

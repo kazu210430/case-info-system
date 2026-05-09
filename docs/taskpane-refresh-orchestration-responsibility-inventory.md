@@ -323,7 +323,7 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 現行 owner | capture / dispatch は `WindowActivatePaneHandlingService`、downstream outcome trace は `TaskPaneRefreshOrchestrationService` |
+| 現行 owner | capture / dispatch は `WindowActivatePaneHandlingService`、downstream observation trace は `WindowActivateDownstreamObservation`。`TaskPaneRefreshOrchestrationService` は refresh path ordering と completion 接続を維持する |
 | 入力 | `TaskPaneDisplayRequest.ForWindowActivate(...)`、workbook、window、refresh attempt result |
 | 出力 | downstream trigger start / outcome trace |
 | lifecycle 上の位置 | WindowActivate dispatch 後、refresh entry の開始と終了 |

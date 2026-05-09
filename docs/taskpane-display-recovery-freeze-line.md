@@ -462,7 +462,7 @@ Phase 4 safe-first の安全領域:
 2. R16 timer lifecycle boundary の owner 明確化は Phase 4 R16 safe unit で完了済み。`TaskPaneRetryTimerLifecycle` が ready-show retry timer と pending retry timer の create / register / stop / unregister / dispose を持ち、retry 順序・pending 条件・completion 条件は変更しない。
 3. R06 ready-show retry scheduler の owner 明確化は Phase 4 R06 safe unit で完了済み。`TaskPaneReadyShowRetryScheduler` が 80ms retry scheduling と scheduled / firing trace emission を持ち、`TaskPaneDisplayRetryCoordinator` は attempt sequencing、`WorkbookTaskPaneReadyShowAttemptWorker` は attempt 本体、`TaskPaneRetryTimerLifecycle` は timer lifecycle、`TaskPaneRefreshOrchestrationService` は ready-show acceptance / callback / fallback handoff / completion への収束を維持する。`attempt 1 -> 80ms retry attempt 2 -> pending retry fallback`、pending retry `400ms / 3 attempts`、callback 意味、completion 条件、display session boundary、trace 名と意味は変更しない。
 4. R10/R11/R12 normalized outcome mapping の decision object 化検討。
-5. R15 WindowActivate downstream observation contract の整理。
+5. R15 WindowActivate downstream observation boundary の owner 明確化は Phase 4 R15 safe unit で完了済み。`WindowActivateDownstreamObservation` が `window-activate-display-refresh-trigger-start` / `window-activate-display-refresh-trigger-outcome` と WindowActivate display request trace fields を持ち、`WindowActivatePaneHandlingService` は dispatch gate、`TaskPaneRefreshOrchestrationService` は refresh path ordering / completion 接続 / display session boundary を維持する。`WindowActivate dispatch != completion`、`case-display-completed` one-time emit、foreground outcome semantics、trace 名と意味、callback 意味、retry sequencing は変更しない。
 
 Phase 4 でもまだ触ってはいけない領域:
 

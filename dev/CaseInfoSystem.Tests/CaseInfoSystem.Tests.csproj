@@ -94,6 +94,7 @@
     <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
     <Compile Include="RebuildFallbackOutcomeTests.cs" />
     <Compile Include="TaskPaneNormalizedOutcomeMapperTests.cs" />
+    <Compile Include="WindowActivateDownstreamObservationTests.cs" />
     <Compile Include="WindowActivatePaneHandlingServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
@@ -167,6 +168,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneNormalizedOutcomeMapper.cs" Link="Source\App\TaskPaneNormalizedOutcomeMapper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshAttemptResult.cs" Link="Source\App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookWindowVisibilityService.cs" Link="Source\App\WorkbookWindowVisibilityService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WindowActivateDownstreamObservation.cs" Link="Source\App\WindowActivateDownstreamObservation.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WindowActivatePaneHandlingService.cs" Link="Source\App\WindowActivatePaneHandlingService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" Link="Source\App\WorkbookTaskPaneDisplayAttemptCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookTaskPaneDisplayAttemptResult.cs" Link="Source\App\WorkbookTaskPaneDisplayAttemptResult.cs" />

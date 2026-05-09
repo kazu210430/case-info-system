@@ -391,6 +391,75 @@ R13 trace details helper の意味:
 - route / dispatch shell 整理。
 - R07/R09/R13/R14 横断 extraction。
 
+### Phase 5 R13 foreground display-completable runtime state
+
+Phase 5 foreground display-completable helper 化後の runtime refactor 完了点は次の 6 点です。
+
+- completion hard gate yes/no decision の private helper 化。
+- `case-display-completed` details payload assembly の private helper 化。
+- R10/R11/R12 normalized outcome chain 呼び出しの private helper 化。
+- R13 foreground execution result classification の private helper 化。
+- R13 foreground trace details assembly の private helper 化。
+- R13 foreground display-completable input 判定の private helper 化。
+
+いずれも `TaskPaneRefreshOrchestrationService` 内の局所 helper 化です。owner 移動ではありません。R13 foreground display-completable input 判定 helper は、R14 hard gate が読む foreground input 判定だけを局所化したものです。
+
+foreground display-completable helper の意味:
+
+- `IsForegroundDisplayCompletableTerminalInput(...)` は `outcome != null`、`outcome.IsTerminal`、`outcome.IsDisplayCompletable` だけを読みます。
+- helper は display-completable input 判定だけを担います。
+- display-completable input は completion ではありません。
+- helper は completion 判定全体、`case-display-completed` emit、session lookup、one-time emit guard、`IsCompleted` guard、lock、dictionary remove、foreground execution、WindowActivate handling、trace emit、callback / pending の意味付けを持ちません。
+
+display-completable mapping:
+
+| status | display-completable input | freeze line |
+| --- | --- | --- |
+| `RequiredSucceeded` | yes | input only。direct completion ではない。 |
+| `RequiredDegraded` | yes | success / failure / direct completion へ丸めない。 |
+| `NotRequired` | yes | foreground success ではない。 |
+| `SkippedAlreadyVisible` | yes | foreground success ではない。 |
+| `RequiredFailed` | no | completion gate を通さない。 |
+| `SkippedNoKnownTarget` | no | completion input に近づけない。 |
+| `Unknown` | no | non-terminal / pending foreground fact として扱う。 |
+
+未移動 owner:
+
+- R14 completion gate は未移動です。
+- `case-display-completed` emit owner は未移動です。
+- display session boundary は未移動です。
+- session lookup は未移動です。
+- `IsCompleted` guard は未移動です。
+- lock は未移動です。
+- dictionary remove は未移動です。
+- `NewCaseVisibilityObservation.Complete(...)` は未移動です。
+- foreground execution は未移動です。
+- WindowActivate handling は未移動です。
+- trace owner / payload contract は未移動です。
+
+維持した freeze line:
+
+- foreground outcome != completion。
+- display-completable input != completion。
+- `RequiredDegraded` は success / failure / direct completion ではありません。
+- `RequiredSucceeded` は input only です。
+- `RequiredFailed` は completion gate を通しません。
+- `NotRequired` は foreground success ではありません。
+- `SkippedAlreadyVisible` は foreground success ではありません。
+- callback != completion、pending != completion、WindowActivate dispatch != completion は維持します。
+- `case-display-completed` one-time emit、display session boundary、trace contract、foreground outcome semantics は維持します。
+
+現時点 STOP:
+
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 横断 extraction。
+
+次候補:
+
+- 次はすぐ runtime へ進まず、Phase 5 runtime の一区切り判断を docs-only / read-only で行う候補があります。
+
 ## 対象範囲
 
 対象に含めるもの:

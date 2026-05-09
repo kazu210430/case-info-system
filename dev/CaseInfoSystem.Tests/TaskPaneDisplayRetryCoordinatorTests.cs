@@ -90,6 +90,8 @@ namespace CaseInfoSystem.Tests
 
             Assert.Contains("new TaskPaneDisplayRetryCoordinator(ReadyShowRetryMaxAttempts)", compositionSource);
             Assert.DoesNotContain("new TaskPaneDisplayRetryCoordinator(_pendingPaneRefreshMaxAttempts)", compositionSource);
+            Assert.Contains("new TaskPaneReadyShowRetryScheduler", orchestrationSource);
+            Assert.DoesNotContain("private void ScheduleTaskPaneReadyRetry", orchestrationSource);
             Assert.DoesNotContain("TaskPaneRefreshOrchestrationService.PendingPaneRefreshMaxAttempts", thisAddInSource);
             Assert.Contains("internal const int PendingPaneRefreshIntervalMs = 400;", orchestrationSource);
             Assert.Contains("internal const int PendingPaneRefreshMaxAttempts = 3;", orchestrationSource);

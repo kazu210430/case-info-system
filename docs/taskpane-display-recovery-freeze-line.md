@@ -49,7 +49,7 @@ created CASE 表示後の ready-show は、次の順序で固定します。
 
 ### retry とみなすもの
 
-- ready-show retry と呼んでよいのは、attempt 1 の後に `ScheduleTaskPaneReadyRetry(...)` が `80ms` で attempt 2 を発火させる経路だけです。
+- ready-show retry と呼んでよいのは、attempt 1 の後に `TaskPaneReadyShowRetryScheduler` が `80ms` で attempt 2 を発火させる経路だけです。
 - ready-show の max attempts は `2` として扱います。
 - pending retry `400ms / 3 attempts` は ready-show exhaustion 後の fallback retry であり、ready-show retry そのものではありません。
 - `ResolveWorkbookPaneWindow(...)` 内の window resolve attempts は window resolve の内部試行であり、ready-show retry と同一視しません。
@@ -460,7 +460,7 @@ Phase 4 safe-first の安全領域:
 
 1. R02 refresh precondition / fail-closed policy boundary は Phase 4 最初の safe unit として完了済み。
 2. R16 timer lifecycle boundary の owner 明確化は Phase 4 R16 safe unit で完了済み。`TaskPaneRetryTimerLifecycle` が ready-show retry timer と pending retry timer の create / register / stop / unregister / dispose を持ち、retry 順序・pending 条件・completion 条件は変更しない。
-3. R06 ready-show retry timer の owner 明確化。
+3. R06 ready-show retry scheduler の owner 明確化は Phase 4 R06 safe unit で完了済み。`TaskPaneReadyShowRetryScheduler` が 80ms retry scheduling と scheduled / firing trace emission を持ち、`TaskPaneDisplayRetryCoordinator` は attempt sequencing、`WorkbookTaskPaneReadyShowAttemptWorker` は attempt 本体、`TaskPaneRetryTimerLifecycle` は timer lifecycle、`TaskPaneRefreshOrchestrationService` は ready-show acceptance / callback / fallback handoff / completion への収束を維持する。`attempt 1 -> 80ms retry attempt 2 -> pending retry fallback`、pending retry `400ms / 3 attempts`、callback 意味、completion 条件、display session boundary、trace 名と意味は変更しない。
 4. R10/R11/R12 normalized outcome mapping の decision object 化検討。
 5. R15 WindowActivate downstream observation contract の整理。
 

@@ -137,7 +137,7 @@ TaskPane 設計の現行正本は、次の整理で固定します。
 
 - Excel event / explicit request / ready-show から入る refresh orchestration の入口である
 - `ShowWorkbookTaskPaneWhenReady(...)` を ready-show 入口として持ち、ready-show attempt 本体は `WorkbookTaskPaneReadyShowAttemptWorker` へ委譲する
-- `ScheduleTaskPaneReadyRetry(...)` により ready-show retry `80ms` の scheduling を担う
+- `TaskPaneReadyShowRetryScheduler` により ready-show retry `80ms` の scheduling を担う
 - `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryService`、`WorkbookPaneWindowResolver` を使い、precondition、dispatch、pending retry fallback、window resolve 入口を調停する
 - `TaskPaneRefreshCoordinator` へ dispatch し、host selection / render / show 自体は行わない
 - retry / protection / ready-show の policy 正本は `docs/taskpane-refresh-policy.md` を参照する

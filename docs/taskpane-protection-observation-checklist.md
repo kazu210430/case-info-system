@@ -74,8 +74,8 @@
 | --- | --- | --- | --- | --- |
 | `TaskPane wait-ready start.` | `App/TaskPaneRefreshOrchestrationService.cs` `ShowWorkbookTaskPaneWhenReady(...)` | ready-show 開始、対象 workbook、active workbook、active window | その後に成功したか、retry に入ったか | CASE 新規作成直後や CASE 開き直し直後の ready-show 開始点として記録する |
 | `TaskPane wait-ready attempt start.` | `App/TaskPaneRefreshOrchestrationService.cs` `TryShowWorkbookTaskPaneOnce(...)` | wait-ready の attempt 番号 | この attempt がどの分岐で終わったかの全体像 | 1回目成功か retry 入りかを見る起点にする |
-| `TaskPane wait-ready retry scheduled.` | `App/TaskPaneRefreshOrchestrationService.cs` `ScheduleTaskPaneReadyRetry(...)` | wait-ready retry が予約されたこと、attempt 番号、`80ms` 遅延 | retry 後に最終成功したか | 即時成功しなかったケースの印として記録する |
-| `TaskPane wait-ready retry firing.` | `App/TaskPaneRefreshOrchestrationService.cs` retry timer tick | retry timer が実際に発火したこと | 発火後の refresh 成否 | retry 実発火の有無を記録する |
+| `TaskPane wait-ready retry scheduled.` | `App/TaskPaneReadyShowRetryScheduler.cs` `Schedule(...)` | wait-ready retry が予約されたこと、attempt 番号、`80ms` 遅延 | retry 後に最終成功したか | 即時成功しなかったケースの印として記録する |
+| `TaskPane wait-ready retry firing.` | `App/TaskPaneReadyShowRetryScheduler.cs` retry timer callback | retry timer が実際に発火したこと | 発火後の refresh 成否 | retry 実発火の有無を記録する |
 | `TaskPane wait-ready early-complete because visible CASE pane is already shown.` | `App/TaskPaneRefreshOrchestrationService.cs` early-complete 判定 | visible pane early-complete が成立したこと | host がどの経路で visible になっていたか | 「既に visible pane がある場合」の主要判定として使う |
 | `TaskPane wait-ready attempt refresh skipped because visible CASE pane is already shown.` | `App/TaskPaneRefreshOrchestrationService.cs` early-complete 後 | early-complete により refresh をスキップしたこと | 実際の pane 内容差分の有無 | 追加 refresh を避けたかの確認に使う |
 | `TaskPane wait-ready attempt refresh.` | `App/TaskPaneRefreshOrchestrationService.cs` attempt refresh 実行後 | attempt ごとの refresh 実行有無、`refreshed=true/false` | refresh 内部で何が起きたか | attempt 成否の記録に使う |

@@ -50,7 +50,7 @@
 
 - ready-show / explicit refresh / Excel event 由来 refresh の入口です。
 - `ShowWorkbookTaskPaneWhenReady(...)` を ready-show 入口として持ち、attempt 実行本体は `WorkbookTaskPaneReadyShowAttemptWorker` に委譲します。
-- `ScheduleTaskPaneReadyRetry(...)` が ready retry `80ms` の scheduling を担います。
+- `TaskPaneReadyShowRetryScheduler` が ready retry `80ms` の scheduling を担います。
 - `ScheduleWorkbookTaskPaneRefresh(...)` と `PendingPaneRefreshRetryService` が ready-show 失敗後の fallback refresh を受け持ちます。
 - `ResolveWorkbookPaneWindow(...)` は ready-show と refresh orchestration が共有する window resolve 入口です。
 
@@ -116,7 +116,7 @@
 - `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` が ready-show 入口であり、`WorkbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(...)` へ委譲します。
 - `WorkbookTaskPaneReadyShowAttemptWorker` は内部 helper として `TaskPaneDisplayRetryCoordinator` と `WorkbookTaskPaneDisplayAttemptCoordinator` を使い、attempt 1 を即時実行します。
 - `WorkbookPaneWindowResolveAttempts = 2` が ready-show 側の window 解決 attempt 上限として使われます。
-- ready retry は `TaskPaneRefreshOrchestrationService.ScheduleTaskPaneReadyRetry(...)` により `80ms` 間隔で行われます。
+- ready retry は `TaskPaneReadyShowRetryScheduler` により `80ms` 間隔で行われます。
 - `WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce(...)` では attempt 1 のときだけ `WorkbookWindowVisibilityService` による Workbook Window 可視化補助を行います。
 - visible pane early-complete の成立条件は、window 解決成功後に `HasVisibleCasePaneForWorkbookWindow(...)` が真になることです。
 - visible pane early-complete は既存 CASE pane の不要な refresh 回避に使われ、この分岐は CASE 専用です。

@@ -78,7 +78,7 @@
 - `KernelCasePresentationService` の `_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady(...)` は、`ThisAddInCasePaneHostBridge` を経由して `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` に到達する。
 - `ShowWorkbookTaskPaneWhenReady(...)` は `TaskPaneDisplayRetryCoordinator.ShowWhenReady(...)` を呼び、次を渡す。
   - `TryShowWorkbookTaskPaneOnce`
-  - `ScheduleTaskPaneReadyRetry`
+  - `TaskPaneReadyShowRetryScheduler.Schedule`
   - `StopPendingPaneRefreshTimer`
   - `ScheduleWorkbookTaskPaneRefresh`
 - 現行 `main` の `TaskPaneRefreshOrchestrationService` では、`RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` への helper split が main に反映済みである。
@@ -86,7 +86,7 @@
   - attempt 1 を即時実行
   - 失敗したら attempt 2 以降を `scheduleRetry` で予約
   - `attemptNumber > _maxAttempts` になったら `scheduleFallback` を呼ぶ
-- `ScheduleTaskPaneReadyRetry(...)` は `WorkbookPaneWindowResolveDelayMs` を Timer の `Interval` に設定しているため、ready-show retry の遅延は `80ms` である。
+- `TaskPaneReadyShowRetryScheduler.Schedule(...)` は ready-show retry delay `80ms` を Timer の `Interval` に設定するため、ready-show retry の遅延は `80ms` である。
 - `EnsurePendingPaneRefreshTimer()` は pending timer の `Interval` に `PendingPaneRefreshIntervalMs` を設定しているため、fallback timer の間隔は `400ms` である。
 - `ScheduleWorkbookTaskPaneRefresh(...)` は fallback 開始前に一度 `TryRefreshTaskPane(...)` を試し、成功した場合は timer を開始しない。
 - `PendingPaneRefreshTimer_Tick(...)` は残回数を 1 ずつ減らしながら retry を続け、成功時または残回数 0 以下で timer を停止する。

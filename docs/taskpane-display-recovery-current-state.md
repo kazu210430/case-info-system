@@ -154,7 +154,7 @@ route contract:
 | retry | owner | 値 | 意味 |
 | --- | --- | --- | --- |
 | ready-show max attempts | `WorkbookTaskPaneReadyShowAttemptWorker` / `TaskPaneDisplayRetryCoordinator` | `2` | ready-show の即時 attempt と delayed attempt の上限。 |
-| ready-show retry delay | `TaskPaneRefreshOrchestrationService.ScheduleTaskPaneReadyRetry(...)` | `80ms` | ready-show attempt 2 を発火させる delay。 |
+| ready-show retry delay | `TaskPaneReadyShowRetryScheduler` | `80ms` | ready-show attempt 2 を発火させる delay。 |
 | pending retry interval | `PendingPaneRefreshRetryService` | `400ms` | ready-show exhaustion 後の fallback refresh interval。 |
 | pending retry max attempts | `PendingPaneRefreshRetryService` | `3` | fallback refresh の attempts。 |
 | suppression / protection duration | `KernelHomeCasePaneSuppressionCoordinator` | `5秒` | activation refresh suppression と foreground protection の duration。 |
@@ -573,7 +573,7 @@ WindowActivate route:
 | created CASE presentation preparation | wait UI、suppression、initial recovery、ready-show request まで | `KernelCasePresentationService` | CASE 表示前処理と TaskPane display protocol の混同を減らす。 |
 | display protocol session | ready-show acceptance、attempt outcome、fallback、foreground outcome、final completion | `TaskPaneRefreshOrchestrationService` | `case-display-completed` の成立条件を 1 箇所で守る。 |
 | ready-show attempt | 1 attempt の window resolve、already-visible 判定、refresh delegate 呼び出し | `WorkbookTaskPaneReadyShowAttemptWorker` | retry / attempt 本体の変更を completion owner から分ける。 |
-| retry state | ready retry timer と pending retry state | `TaskPaneRefreshOrchestrationService` / `PendingPaneRefreshRetryService` | retry 値や fallback 監視の変更理由を局所化する。 |
+| retry state | ready retry scheduler と pending retry state | `TaskPaneReadyShowRetryScheduler` / `PendingPaneRefreshRetryService` | retry 値や fallback 監視の変更理由を局所化する。 |
 | pane visible state | host reuse、render、show、visible metadata | `TaskPaneHostFlowService` / `TaskPaneDisplayCoordinator` | host 表示の変更を display completion から分ける。 |
 | visibility primitive | lightweight visible ensure と full recovery primitive | `WorkbookWindowVisibilityService` / `ExcelWindowRecoveryService` | window mutation 条件を display protocol から分ける。 |
 | foreground guarantee | decision / outcome / trace と execution primitive の分離 | `TaskPaneRefreshOrchestrationService` / `TaskPaneRefreshCoordinator` / `ExcelWindowRecoveryService` | foreground 条件変更と Win32/COM primitive 変更を分ける。 |

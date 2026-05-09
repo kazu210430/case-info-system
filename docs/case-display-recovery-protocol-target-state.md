@@ -444,7 +444,7 @@ target-state では、foreground guarantee を次の 3 層に分けて扱う。
 
 #### retry / recovery / fallback との境界
 
-- ready retry `80ms` と pending retry `400ms` は `TaskPaneRefreshOrchestrationService` / `PendingPaneRefreshRetryService` の既存責務に残す。
+- ready retry `80ms` は `TaskPaneReadyShowRetryScheduler`、pending retry `400ms` は `TaskPaneRefreshOrchestrationService` / `PendingPaneRefreshRetryService` の既存責務に残す。
 - foreground guarantee outcome を理由に retry 回数や delay を変更しない。
 - lightweight visibility ensure は `WorkbookWindowVisibilityService` の責務に残す。
 - full window recovery / foreground promotion は `ExcelWindowRecoveryService` の責務に残す。
@@ -668,7 +668,7 @@ target-state の `pane visible` は、次のいずれかで成立する。
 
 #### retry / pending retry との境界
 
-- ready retry `80ms` は `TaskPaneRefreshOrchestrationService.ScheduleTaskPaneReadyRetry(...)` の既存責務に残す。
+- ready retry `80ms` は `TaskPaneReadyShowRetryScheduler` の既存責務に残す。
 - pending retry `400ms` は `PendingPaneRefreshRetryService` の既存責務に残す。
 - `VisibilityRecoveryOutcome.Failed` を理由に retry 回数、delay、ready 条件、pending 条件を変更しない。
 - pending retry が active CASE context fallback に入る場合、outcome には `TargetKind=ActiveWorkbookFallback` などを残す。explicit workbook target と同一視できない場合は fail-closed とする。

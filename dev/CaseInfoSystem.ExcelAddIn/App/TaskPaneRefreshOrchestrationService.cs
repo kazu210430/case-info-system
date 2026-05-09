@@ -24,6 +24,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly WorkbookTaskPaneReadyShowAttemptWorker _workbookTaskPaneReadyShowAttemptWorker;
         private readonly WorkbookPaneWindowResolver _workbookPaneWindowResolver;
         private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
+        private readonly TaskPaneReadyShowRetryScheduler _readyShowRetryScheduler;
         private readonly Func<KernelHomeForm> _getKernelHomeForm;
         private readonly Func<int> _getTaskPaneRefreshSuppressionCount;
         private readonly ICasePaneHostBridge _casePaneHostBridge;
@@ -59,6 +60,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
             _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
             _retryTimerLifecycle = new TaskPaneRetryTimerLifecycle();
+            _readyShowRetryScheduler = new TaskPaneReadyShowRetryScheduler(
+                _logger,
+                _retryTimerLifecycle,
+                workbook => FormatWorkbookDescriptor(workbook),
+                workbook => SafeWorkbookFullName(workbook));
             _pendingPaneRefreshRetryService = new PendingPaneRefreshRetryService(
                 _excelInteropService,
                 _workbookSessionService,
@@ -409,7 +415,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _workbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(
                 workbook,
                 reason,
-                ScheduleTaskPaneReadyRetry,
+                _readyShowRetryScheduler.Schedule,
                 outcome => HandleWorkbookTaskPaneShown(createdCaseDisplaySession, workbook, reason, outcome),
                 ScheduleWorkbookTaskPaneRefresh);
         }
@@ -423,80 +429,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _pendingPaneRefreshRetryService.StopTimer();
             _retryTimerLifecycle.StopWaitReadyRetryTimers();
-        }
-
-        private void ScheduleTaskPaneReadyRetry(Excel.Workbook workbook, string reason, int attemptNumber, Action retryAction)
-        {
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry-scheduled reason="
-                + (reason ?? string.Empty)
-                + ", readyShowReason="
-                + (reason ?? string.Empty)
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", attempt="
-                + attemptNumber.ToString(CultureInfo.InvariantCulture)
-                + ", maxAttempts="
-                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
-                + ", retryScheduled=true"
-                + ", retryDelayMs="
-                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture)
-                + ", delayMs="
-                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
-            _logger?.Info(
-                "TaskPane wait-ready retry scheduled. reason="
-                + (reason ?? string.Empty)
-                + ", workbook="
-                + SafeWorkbookFullName(workbook)
-                + ", readyShowReason="
-                + (reason ?? string.Empty)
-                + ", attempt="
-                + attemptNumber.ToString(CultureInfo.InvariantCulture)
-                + ", maxAttempts="
-                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
-                + ", retryScheduled=true"
-                + ", retryDelayMs="
-                + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
-
-            if (retryAction == null)
-            {
-                return;
-            }
-
-            _retryTimerLifecycle.ScheduleWaitReadyRetryTimer(
-                WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs,
-                () =>
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=wait-ready-retry-firing reason="
-                    + (reason ?? string.Empty)
-                    + ", readyShowReason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", attempt="
-                    + attemptNumber.ToString(CultureInfo.InvariantCulture)
-                    + ", maxAttempts="
-                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
-                    + ", retryDelayMs="
-                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
-                _logger?.Info(
-                    "TaskPane wait-ready retry firing. reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + SafeWorkbookFullName(workbook)
-                    + ", readyShowReason="
-                    + (reason ?? string.Empty)
-                    + ", attempt="
-                    + attemptNumber.ToString(CultureInfo.InvariantCulture)
-                    + ", maxAttempts="
-                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowMaxAttempts.ToString(CultureInfo.InvariantCulture)
-                    + ", retryDelayMs="
-                    + WorkbookTaskPaneReadyShowAttemptWorker.ReadyShowRetryDelayMs.ToString(CultureInfo.InvariantCulture));
-                retryAction();
-            });
         }
 
         private TaskPaneRefreshAttemptResult CompleteVisibilityRecoveryOutcome(

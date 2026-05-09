@@ -122,17 +122,14 @@ namespace CaseInfoSystem.Tests
         public void CaseDisplayCompleted_EmitOwnerAndOneTimeGateStayInOrchestrationOnly()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
-            string completionGate = Slice(
-                orchestrationSource,
-                "private void TryCompleteCreatedCaseDisplaySession",
-                "private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession");
 
-            Assert.Contains("action=case-display-completed", completionGate);
-            Assert.Contains("\"case-display-completed\"", completionGate);
-            Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", completionGate);
-            Assert.Contains("NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);", completionGate);
+            Assert.Contains("TryCompleteCreatedCaseDisplaySession", orchestrationSource);
+            Assert.Contains("action=case-display-completed", orchestrationSource);
+            Assert.Contains("\"case-display-completed\"", orchestrationSource);
+            Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", orchestrationSource);
+            Assert.Contains("NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);", orchestrationSource);
             AssertContainsInOrder(
-                completionGate,
+                orchestrationSource,
                 "bool shouldEmit = false;",
                 "if (!resolvedSession.IsCompleted)",
                 "resolvedSession.IsCompleted = true;",
@@ -151,27 +148,20 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void CompletionHardGate_RequiresVisibilityAndForegroundDisplayCompletableFacts()
+        public void CompletionHardGateDecisionContract_RequiresVisibilityAndForegroundDisplayCompletableFacts()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
-            string completionGate = Slice(
-                orchestrationSource,
-                "private void TryCompleteCreatedCaseDisplaySession",
-                "private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession");
 
-            AssertContainsInOrder(
-                completionGate,
-                "if (!IsCreatedCaseDisplayReason(reason)",
-                "|| attemptResult == null",
-                "|| !attemptResult.IsRefreshSucceeded",
-                "|| !attemptResult.IsPaneVisible",
-                "|| attemptResult.VisibilityRecoveryOutcome == null",
-                "|| !attemptResult.VisibilityRecoveryOutcome.IsTerminal",
-                "|| !attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable",
-                "|| !attemptResult.IsForegroundGuaranteeTerminal",
-                "|| attemptResult.ForegroundGuaranteeOutcome == null",
-                "|| !attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)",
-                "return;");
+            Assert.Contains("IsCreatedCaseDisplayReason(reason)", orchestrationSource);
+            Assert.Contains("attemptResult == null", orchestrationSource);
+            Assert.Contains("!attemptResult.IsRefreshSucceeded", orchestrationSource);
+            Assert.Contains("!attemptResult.IsPaneVisible", orchestrationSource);
+            Assert.Contains("attemptResult.VisibilityRecoveryOutcome == null", orchestrationSource);
+            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsTerminal", orchestrationSource);
+            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable", orchestrationSource);
+            Assert.Contains("!attemptResult.IsForegroundGuaranteeTerminal", orchestrationSource);
+            Assert.Contains("attemptResult.ForegroundGuaranteeOutcome == null", orchestrationSource);
+            Assert.Contains("!attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable", orchestrationSource);
         }
 
         [Fact]

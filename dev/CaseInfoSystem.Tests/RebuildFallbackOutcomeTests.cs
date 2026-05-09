@@ -276,6 +276,90 @@ namespace CaseInfoSystem.Tests
             Assert.True(result.IsForegroundGuaranteeTerminal);
             Assert.False(result.ForegroundGuaranteeOutcome.IsDisplayCompletable);
             Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredFailed, result.ForegroundGuaranteeOutcome.Status);
+            Assert.False(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        [Fact]
+        public void CompletionGateInput_WhenVisibilityIsNotDisplayCompletable_RemainsBlocked()
+        {
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(VisibilityRecoveryOutcome.Failed(
+                    "paneVisible=false",
+                    VisibilityRecoveryTargetKind.ExplicitWorkbookWindow,
+                    PaneVisibleSource.None,
+                    workbookWindowEnsureStatus: null,
+                    fullRecoveryAttempted: false,
+                    fullRecoverySucceeded: null))
+                .WithForegroundGuaranteeOutcome(ForegroundGuaranteeOutcome.NotRequired("foregroundNotRequired"));
+
+            Assert.True(result.IsRefreshSucceeded);
+            Assert.True(result.IsPaneVisible);
+            Assert.True(result.VisibilityRecoveryOutcome.IsTerminal);
+            Assert.False(result.VisibilityRecoveryOutcome.IsDisplayCompletable);
+            Assert.True(result.IsForegroundGuaranteeTerminal);
+            Assert.True(result.ForegroundGuaranteeOutcome.IsDisplayCompletable);
+            Assert.False(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        [Fact]
+        public void CompletionGateInput_WhenForegroundIsNotTerminal_RemainsBlocked()
+        {
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(CreateDisplayCompletableVisibilityOutcome())
+                .WithForegroundGuaranteeOutcome(ForegroundGuaranteeOutcome.Unknown("pendingForegroundGuaranteeOutcome"));
+
+            Assert.True(result.IsRefreshSucceeded);
+            Assert.True(result.IsPaneVisible);
+            Assert.True(result.VisibilityRecoveryOutcome.IsDisplayCompletable);
+            Assert.False(result.IsForegroundGuaranteeTerminal);
+            Assert.False(result.ForegroundGuaranteeOutcome.IsDisplayCompletable);
+            Assert.False(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        [Fact]
+        public void CompletionGateInput_WhenAllRequiredFactsAreDisplayCompletable_IsEligibleOnlyAsInput()
+        {
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(CreateDisplayCompletableVisibilityOutcome())
+                .WithForegroundGuaranteeOutcome(ForegroundGuaranteeOutcome.RequiredDegraded(
+                    ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                    "foregroundRecoveryReturnedFalse"));
+
+            Assert.True(result.IsRefreshSucceeded);
+            Assert.True(result.IsPaneVisible);
+            Assert.True(result.VisibilityRecoveryOutcome.IsTerminal);
+            Assert.True(result.VisibilityRecoveryOutcome.IsDisplayCompletable);
+            Assert.True(result.IsForegroundGuaranteeTerminal);
+            Assert.True(result.ForegroundGuaranteeOutcome.IsDisplayCompletable);
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredDegraded, result.ForegroundGuaranteeOutcome.Status);
+            Assert.True(SatisfiesCompletionHardGateInputContract(result));
+        }
+
+        private static VisibilityRecoveryOutcome CreateDisplayCompletableVisibilityOutcome()
+        {
+            return VisibilityRecoveryOutcome.Completed(
+                "refreshedShown",
+                VisibilityRecoveryTargetKind.ExplicitWorkbookWindow,
+                PaneVisibleSource.RefreshedShown,
+                WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
+                fullRecoveryAttempted: false,
+                fullRecoverySucceeded: null);
+        }
+
+        private static bool SatisfiesCompletionHardGateInputContract(TaskPaneRefreshAttemptResult result)
+        {
+            return result != null
+                && result.IsRefreshSucceeded
+                && result.IsPaneVisible
+                && result.VisibilityRecoveryOutcome != null
+                && result.VisibilityRecoveryOutcome.IsTerminal
+                && result.VisibilityRecoveryOutcome.IsDisplayCompletable
+                && result.IsForegroundGuaranteeTerminal
+                && result.ForegroundGuaranteeOutcome != null
+                && result.ForegroundGuaranteeOutcome.IsDisplayCompletable;
         }
     }
 }

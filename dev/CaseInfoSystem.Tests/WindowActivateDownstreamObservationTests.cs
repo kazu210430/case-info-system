@@ -74,6 +74,48 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void LogOutcome_WhenRefreshFactsAreDisplayCompletable_RemainsObservationNotCompletion()
+        {
+            WindowActivateTaskPaneTriggerFacts facts = CreateFacts(out _, out _);
+            TaskPaneDisplayRequest request = TaskPaneDisplayRequest.ForWindowActivate(facts);
+            TaskPaneRefreshAttemptResult attemptResult = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(VisibilityRecoveryOutcome.Completed(
+                    "refreshedShown",
+                    VisibilityRecoveryTargetKind.ExplicitWorkbookWindow,
+                    PaneVisibleSource.RefreshedShown,
+                    WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
+                    fullRecoveryAttempted: false,
+                    fullRecoverySucceeded: null))
+                .WithForegroundGuaranteeOutcome(ForegroundGuaranteeOutcome.RequiredSucceeded(
+                    ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                    "foregroundRecoverySucceeded"));
+            List<string> messages = new List<string>();
+            WindowActivateDownstreamObservation observation = CreateObservation(messages);
+
+            observation.LogOutcome(
+                request,
+                request.ToReasonString(),
+                attemptResult,
+                Stopwatch.StartNew(),
+                refreshAttemptId: 9,
+                completionSource: "refresh");
+
+            string message = Assert.Single(messages);
+            Assert.Contains("source=TaskPaneRefreshOrchestrationService action=window-activate-display-refresh-trigger-outcome", message);
+            Assert.Contains("refreshAttemptId=9", message);
+            Assert.Contains("displayCompletionOutcome=False", message);
+            Assert.Contains("recoveryOwner=False", message);
+            Assert.Contains("foregroundGuaranteeOwner=False", message);
+            Assert.Contains("hiddenExcelOwner=False", message);
+            Assert.Contains("refreshSucceeded=True", message);
+            Assert.Contains("paneVisible=True", message);
+            Assert.Contains("visibilityRecoveryStatus=Completed", message);
+            Assert.Contains("foregroundGuaranteeStatus=RequiredSucceeded", message);
+            Assert.DoesNotContain("case-display-completed", message);
+        }
+
+        [Fact]
         public void LogStartAndOutcome_WhenRequestIsNotWindowActivate_DoNotEmitDownstreamObservation()
         {
             TaskPaneDisplayRequest request = TaskPaneDisplayRequest.ForPostActionRefresh("doc");

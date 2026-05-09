@@ -321,14 +321,15 @@ normalized outcome chain helper の意味:
 - route / dispatch shell 整理。
 - R07/R09/R13/R14 横断 extraction。
 
-### Phase 5 R13 classification runtime state
+### Phase 5 R13 trace details runtime state
 
-Phase 5 R13 foreground classification helper 化後の runtime refactor 完了点は次の 4 点です。
+Phase 5 R13 foreground trace details helper 化後の runtime refactor 完了点は次の 5 点です。
 
 - completion hard gate yes/no decision の private helper 化。
 - `case-display-completed` details payload assembly の private helper 化。
 - R10/R11/R12 normalized outcome chain 呼び出しの private helper 化。
 - R13 foreground execution result classification の private helper 化。
+- R13 foreground trace details assembly の private helper 化。
 
 いずれも `TaskPaneRefreshOrchestrationService` 内の局所 helper 化です。owner 移動ではありません。
 
@@ -341,10 +342,20 @@ R13 classification helper の意味:
 - `RequiredDegraded` を success / failure / direct completion へ読み替えません。
 - helper は foreground execution 呼び出し、trace emit、WindowActivate handling、R14 completion gate、`case-display-completed` emit、session lookup、one-time emit guard を持ちません。
 
+R13 trace details helper の意味:
+
+- `BuildForegroundRecoveryDecisionDetails(...)` は `foreground-recovery-decision` observation details の文字列 assembly だけを担います。field set / order は `reason -> foregroundRecoveryStarted -> foregroundSkipReason -> foregroundOutcomeStatus` です。
+- `BuildFinalForegroundGuaranteeStartedDetails(...)` は `final-foreground-guarantee-started` observation details の文字列 assembly だけを担います。field set / order は `reason` です。
+- `BuildFinalForegroundGuaranteeCompletedDetails(...)` は `final-foreground-guarantee-completed` observation details の文字列 assembly だけを担います。field set / order は `reason -> recovered -> foregroundOutcomeStatus` です。
+- completed mapping は `recovered=true` の場合だけ `RequiredSucceeded`、`recovered=false` の場合は `RequiredDegraded` です。
+- `RequiredDegraded` を `RequiredFailed`、success、direct completion へ丸めません。
+- helper は foreground execution、WindowActivate handling、trace emit owner、R14 completion gate、`case-display-completed` emit、session lookup、one-time emit guard、callback / pending / normalized outcome の意味付けを持ちません。
+
 未移動 owner:
 
 - foreground execution 呼び出しは未移動です。
-- foreground trace emit は未移動です。
+- trace action / source / emit position は未移動です。
+- logger action / 発火順は未移動です。
 - WindowActivate handling は未移動です。
 - R14 completion gate は未移動です。
 - `case-display-completed` emit owner は未移動です。
@@ -370,7 +381,7 @@ R13 classification helper の意味:
 次 runtime 候補:
 
 - 次 runtime 候補はまだ GO ではありません。
-- 次に runtime を触る場合は、foreground trace details assembly helper 化の tests-first 評価を先に置きます。
+- 次に runtime を触る場合は、foreground display-completable 判定 helper 化の tests-first 評価を先に置きます。
 
 現時点 STOP:
 

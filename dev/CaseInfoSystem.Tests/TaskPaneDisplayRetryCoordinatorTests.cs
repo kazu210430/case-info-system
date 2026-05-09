@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using CaseInfoSystem.ExcelAddIn.App;
@@ -95,6 +96,192 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("TaskPaneRefreshOrchestrationService.PendingPaneRefreshMaxAttempts", thisAddInSource);
             Assert.Contains("internal const int PendingPaneRefreshIntervalMs = 400;", orchestrationSource);
             Assert.Contains("internal const int PendingPaneRefreshMaxAttempts = 3;", orchestrationSource);
+        }
+
+        private static string FindRepositoryRoot()
+        {
+            DirectoryInfo current = new DirectoryInfo(Directory.GetCurrentDirectory());
+            while (current != null)
+            {
+                if (File.Exists(Path.Combine(current.FullName, "build.ps1"))
+                    && Directory.Exists(Path.Combine(current.FullName, "dev", "CaseInfoSystem.ExcelAddIn")))
+                {
+                    return current.FullName;
+                }
+
+                current = current.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Repository root was not found.");
+        }
+    }
+
+    public sealed class DisplayConvergenceCompletionBoundarySourceTests
+    {
+        [Fact]
+        public void CaseDisplayCompleted_EmitOwnerAndOneTimeGateStayInOrchestrationOnly()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionGate = Slice(
+                orchestrationSource,
+                "private void TryCompleteCreatedCaseDisplaySession",
+                "private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession");
+
+            Assert.Contains("action=case-display-completed", completionGate);
+            Assert.Contains("\"case-display-completed\"", completionGate);
+            Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", completionGate);
+            Assert.Contains("NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);", completionGate);
+            AssertContainsInOrder(
+                completionGate,
+                "bool shouldEmit = false;",
+                "if (!resolvedSession.IsCompleted)",
+                "resolvedSession.IsCompleted = true;",
+                "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);",
+                "shouldEmit = true;",
+                "if (!shouldEmit)",
+                "return;",
+                "string details =");
+
+            AssertDoesNotOwnCompletion("WorkbookTaskPaneReadyShowAttemptWorker.cs");
+            AssertDoesNotOwnCompletion("PendingPaneRefreshRetryService.cs");
+            AssertDoesNotOwnCompletion("TaskPaneDisplayRetryCoordinator.cs");
+            AssertDoesNotOwnCompletion("TaskPaneRefreshCoordinator.cs");
+            AssertDoesNotOwnCompletion("WindowActivatePaneHandlingService.cs");
+            AssertDoesNotOwnCompletion("WindowActivateDownstreamObservation.cs");
+        }
+
+        [Fact]
+        public void CompletionHardGate_RequiresVisibilityAndForegroundDisplayCompletableFacts()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionGate = Slice(
+                orchestrationSource,
+                "private void TryCompleteCreatedCaseDisplaySession",
+                "private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession");
+
+            AssertContainsInOrder(
+                completionGate,
+                "if (!IsCreatedCaseDisplayReason(reason)",
+                "|| attemptResult == null",
+                "|| !attemptResult.IsRefreshSucceeded",
+                "|| !attemptResult.IsPaneVisible",
+                "|| attemptResult.VisibilityRecoveryOutcome == null",
+                "|| !attemptResult.VisibilityRecoveryOutcome.IsTerminal",
+                "|| !attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable",
+                "|| !attemptResult.IsForegroundGuaranteeTerminal",
+                "|| attemptResult.ForegroundGuaranteeOutcome == null",
+                "|| !attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable)",
+                "return;");
+        }
+
+        [Fact]
+        public void ReadyShowCallback_ReturnsFactsToConvergenceChainBeforeCompletionGate()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string readyShowHandoff = Slice(
+                orchestrationSource,
+                "CreatedCaseDisplaySession createdCaseDisplaySession = BeginCreatedCaseDisplaySession",
+                "internal Excel.Window ResolveWorkbookPaneWindow");
+            string callbackHandler = Slice(
+                orchestrationSource,
+                "private void HandleWorkbookTaskPaneShown",
+                "private void TryCompleteCreatedCaseDisplaySession");
+            string workerSource = ReadAppSource("WorkbookTaskPaneReadyShowAttemptWorker.cs");
+
+            Assert.Contains(
+                "outcome => HandleWorkbookTaskPaneShown(createdCaseDisplaySession, workbook, reason, outcome)",
+                readyShowHandoff);
+            AssertContainsInOrder(
+                callbackHandler,
+                "CompleteVisibilityRecoveryOutcome(",
+                "CompleteRefreshSourceSelectionOutcome(",
+                "CompleteRebuildFallbackOutcome(",
+                "CompleteForegroundGuaranteeOutcome(",
+                "TryCompleteCreatedCaseDisplaySession(");
+            Assert.Contains("() => onShown?.Invoke(shownOutcome)", workerSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", workerSource);
+            Assert.DoesNotContain("case-display-completed", workerSource);
+        }
+
+        [Fact]
+        public void PendingRetryAndActiveFallbackRefreshSuccessStopRetryWithoutCompletionOwnership()
+        {
+            string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
+
+            AssertContainsInOrder(
+                pendingSource,
+                "action=defer-retry-end",
+                "refreshed=",
+                "if (refreshed)",
+                "_stopPendingPaneRefreshTimer();");
+            AssertContainsInOrder(
+                pendingSource,
+                "action=defer-active-context-fallback-end",
+                "refreshed=",
+                "if (fallbackRefreshed)",
+                "_stopPendingPaneRefreshTimer();");
+            Assert.DoesNotContain("case-display-completed", pendingSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", pendingSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", pendingSource);
+        }
+
+        [Fact]
+        public void ForegroundAndNormalizedOutcomesDoNotOwnCompletionEmit()
+        {
+            string attemptResultSource = ReadAppSource("TaskPaneRefreshAttemptResult.cs");
+            string normalizedMapperSource = ReadAppSource("TaskPaneNormalizedOutcomeMapper.cs");
+            string requiredDegraded = Slice(
+                attemptResultSource,
+                "internal static ForegroundGuaranteeOutcome RequiredDegraded",
+                "internal static ForegroundGuaranteeOutcome RequiredFailed");
+
+            Assert.Contains("ForegroundGuaranteeOutcomeStatus.RequiredDegraded", requiredDegraded);
+            Assert.Contains("isTerminal: true", requiredDegraded);
+            Assert.Contains("isDisplayCompletable: true", requiredDegraded);
+            Assert.Contains("recoverySucceeded: false", requiredDegraded);
+            Assert.DoesNotContain("case-display-completed", attemptResultSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", attemptResultSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", attemptResultSource);
+            Assert.DoesNotContain("case-display-completed", normalizedMapperSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", normalizedMapperSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", normalizedMapperSource);
+        }
+
+        private static void AssertDoesNotOwnCompletion(string appFileName)
+        {
+            string source = ReadAppSource(appFileName);
+            Assert.DoesNotContain("action=case-display-completed", source);
+            Assert.DoesNotContain("\"case-display-completed\"", source);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", source);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", source);
+        }
+
+        private static void AssertContainsInOrder(string source, params string[] fragments)
+        {
+            int previousIndex = -1;
+            foreach (string fragment in fragments)
+            {
+                int index = source.IndexOf(fragment, previousIndex + 1, StringComparison.Ordinal);
+                Assert.True(
+                    index > previousIndex,
+                    "Expected to find '" + fragment + "' after index " + previousIndex.ToString() + ".");
+                previousIndex = index;
+            }
+        }
+
+        private static string Slice(string source, string startFragment, string endFragment)
+        {
+            int start = source.IndexOf(startFragment, StringComparison.Ordinal);
+            Assert.True(start >= 0, "Expected start fragment was not found: " + startFragment);
+            int end = source.IndexOf(endFragment, start + startFragment.Length, StringComparison.Ordinal);
+            Assert.True(end > start, "Expected end fragment was not found: " + endFragment);
+            return source.Substring(start, end - start);
+        }
+
+        private static string ReadAppSource(string appFileName)
+        {
+            string repoRoot = FindRepositoryRoot();
+            return File.ReadAllText(Path.Combine(repoRoot, "dev", "CaseInfoSystem.ExcelAddIn", "App", appFileName));
         }
 
         private static string FindRepositoryRoot()

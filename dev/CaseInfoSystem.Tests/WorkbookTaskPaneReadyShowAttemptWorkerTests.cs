@@ -77,6 +77,43 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ShowWhenReady_WhenVisibleCasePaneAlreadyShown_InvokesCallbackWithoutCompletionTrace()
+        {
+            var logs = new List<string>();
+            int refreshCallCount = 0;
+            var worker = CreateWorker(
+                maxAttempts: 2,
+                hasVisibleCasePaneForWorkbookWindow: (_, __) => true,
+                tryRefreshTaskPane: (_, __, ___) =>
+                {
+                    refreshCallCount++;
+                    return TaskPaneRefreshAttemptResult.Failed();
+                },
+                resolveWorkbookPaneWindow: (workbook, _, __) => workbook.Windows[1],
+                out Excel.Workbook workbook,
+                out _,
+                logs: logs);
+
+            WorkbookTaskPaneReadyShowAttemptOutcome shownOutcome = null;
+            bool fallbackScheduled = false;
+
+            worker.ShowWhenReady(
+                workbook,
+                "ready",
+                (_, __, ___, ____) => throw new InvalidOperationException("ready-show retry should not run"),
+                outcome => shownOutcome = outcome,
+                (_, __) => fallbackScheduled = true);
+
+            Assert.NotNull(shownOutcome);
+            Assert.True(shownOutcome.IsShown);
+            Assert.True(shownOutcome.VisibleCasePaneAlreadyShown);
+            Assert.Equal("visibleCasePaneAlreadyShown", shownOutcome.RefreshAttemptResult.CompletionBasis);
+            Assert.Equal(0, refreshCallCount);
+            Assert.False(fallbackScheduled);
+            Assert.False(logs.Exists(entry => entry.Contains("case-display-completed")));
+        }
+
+        [Fact]
         public void ShowWhenReady_WhenRetryRuns_DoesNotEnsureVisibilityAfterFirstAttempt()
         {
             bool? firstAttemptWindowVisible = null;
@@ -196,7 +233,8 @@ namespace CaseInfoSystem.Tests
             Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> tryRefreshTaskPane,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
             out Excel.Workbook workbook,
-            out Excel.Window window)
+            out Excel.Window window,
+            List<string> logs = null)
         {
             var application = new Excel.Application();
             workbook = new Excel.Workbook
@@ -212,7 +250,7 @@ namespace CaseInfoSystem.Tests
             application.ActiveWorkbook = workbook;
             application.ActiveWindow = window;
 
-            var logger = OrchestrationTestSupport.CreateLogger(new List<string>());
+            var logger = OrchestrationTestSupport.CreateLogger(logs ?? new List<string>());
             var excelInteropService = new ExcelInteropService(application, logger, new PathCompatibilityService());
             var workbookWindowVisibilityService = new WorkbookWindowVisibilityService(excelInteropService, logger);
             return new WorkbookTaskPaneReadyShowAttemptWorker(

@@ -152,206 +152,21 @@ R14 は display session convergence の hard gate です。
 
 Phase 5 で redesign する場合も、この map を保った protocol-preserving convergence redesign に限定します。
 
-### Phase 5 second runtime state boundary
+### Phase 5 runtime intermediate boundary summary
 
-Phase 5 第二実装後、runtime で完了済みの安全単位は次の 2 点です。
+Phase 5 の中間 helper note は、下の `Phase 5 runtime closure boundary` を正本とする boundary progression として扱います。詳細な現在地は `docs/taskpane-display-recovery-current-state.md` の closure note を参照します。
 
-| completed safe unit | 意味 | owner 移動 |
+| checkpoint | boundary summary | owner 移動 |
 | --- | --- | --- |
-| R14 hard gate decision helper | visibility / foreground display-completable facts に基づく yes/no decision を private helper 化。 | なし。R14 completion owner は `TaskPaneRefreshOrchestrationService` に残る。 |
-| R14 payload assembly helper | `case-display-completed` details payload assembly を private helper 化。 | なし。emit owner / trace owner / session owner は移動しない。 |
+| second runtime | R14 hard gate decision helper と R14 `case-display-completed` payload helper を追加。decision / details assembly の局所化のみ。 | なし。R14 completion / emit / session owner は残る。 |
+| third runtime | R10/R11/R12 normalized outcome chain helper を追加。R10 -> R11 -> R12 の順序だけを局所化。 | なし。normalized outcome は completion owner ではない。 |
+| R13 classification | foreground execution result classification helper を追加。`RequiredSucceeded` / `RequiredDegraded` の分類だけを局所化。 | なし。foreground execution / trace / completion owner は残る。 |
+| R13 trace details | foreground trace details helpers を追加。details 文字列 assembly のみを局所化。 | なし。trace emit / foreground execution / completion owner は残る。 |
+| foreground display-completable | R14 hard gate が読む foreground input 判定 helper を追加。 | なし。completion owner / emit owner / session owner は残る。 |
 
-R14 で未移動のもの:
+中間 checkpoint はいずれも `TaskPaneRefreshOrchestrationService` 内の private / local helper 化であり、completion 判定全体、`case-display-completed` emit、session lookup、one-time emit guard、WindowActivate handling、callback / pending semantics を持ちません。
 
-- completion owner。
-- `case-display-completed` emit owner。
-- one-time emit guard。
-- display session lookup。
-- `IsCompleted` guard。
-- lock。
-- `_createdCaseDisplaySessions` からの dictionary remove。
-- `NewCaseVisibilityObservation.Complete(...)`。
-- trace emit position。
-
-この到達点は R14 の protocol を state bag helper へ移すものではありません。`BuildCaseDisplayCompletedDetailsPayload(...)` は string / details assembly だけを担い、`EvaluateCreatedCaseDisplayCompletionDecision(...)` は yes/no decision だけを担います。どちらも completion emit、session lifecycle、callback / pending / foreground / normalized outcome semantics を持ちません。
-
-次 runtime 候補は R10/R11/R12 normalized outcome chain 呼び出し整理です。ただしこれはまだ GO ではなく、tests-first / safety net 評価を先に置きます。
-
-現時点 STOP:
-
-- display session lookup / one-time emit guard helper 化。
-- callback raw facts adapter。
-- foreground display-completable helper 化。
-- route / dispatch shell 整理。
-- R07/R09/R13/R14 をまたぐ runtime extraction。
-
-### Phase 5 third runtime state boundary
-
-Phase 5 第三実装後、runtime で完了済みの安全単位は次の 3 点です。
-
-| completed safe unit | 意味 | owner 移動 |
-| --- | --- | --- |
-| R14 hard gate decision helper | visibility / foreground display-completable facts に基づく yes/no decision を private helper 化。 | なし。R14 completion owner は `TaskPaneRefreshOrchestrationService` に残る。 |
-| R14 payload assembly helper | `case-display-completed` details payload assembly を private helper 化。 | なし。emit owner / trace owner / session owner は移動しない。 |
-| R10/R11/R12 normalized outcome chain helper | `CompleteVisibilityRecoveryOutcome(...)` -> `CompleteRefreshSourceSelectionOutcome(...)` -> `CompleteRebuildFallbackOutcome(...)` の既存順序を private helper 化。 | なし。normalized outcome は completion owner ではない。 |
-
-`CompleteNormalizedOutcomeChain(...)` は R10 -> R11 -> R12 の呼び出しだけを担います。completion 判定、foreground 判定、session lookup、one-time emit guard、`case-display-completed` emit、WindowActivate semantics、callback / pending の意味付けは持ちません。
-
-第三実装後も未移動のもの:
-
-- R13 foreground interpretation。
-- R14 completion gate。
-- `case-display-completed` emit owner。
-- display session boundary。
-- session lookup。
-- `IsCompleted` guard。
-- lock。
-- `_createdCaseDisplaySessions` からの dictionary remove。
-- `NewCaseVisibilityObservation.Complete(...)`。
-- WindowActivate handling。
-- trace owner / payload contract。
-
-trace 名、trace source、trace payload field set / order / names / values は維持します。normal refresh / ready-show callback / precondition skip の各 path は、R10/R11/R12 normalized outcome chain と R13/R14 との距離を変えません。
-
-次 runtime 候補はまだ GO ではありません。次に runtime を触る場合は、改めて tests-first / safety net 評価を先に置きます。
-
-現時点 STOP:
-
-- foreground display-completable 判定 helper 化。
-- display session lookup / one-time emit guard helper 化。
-- callback raw facts adapter。
-- route / dispatch shell 整理。
-- R07/R09/R13/R14 横断 extraction。
-
-### Phase 5 R13 trace details runtime state boundary
-
-Phase 5 R13 foreground trace details helper 化後、runtime で完了済みの安全単位は次の 5 点です。
-
-| completed safe unit | 意味 | owner 移動 |
-| --- | --- | --- |
-| R14 hard gate decision helper | visibility / foreground display-completable facts に基づく yes/no decision を private helper 化。 | なし。R14 completion owner は `TaskPaneRefreshOrchestrationService` に残る。 |
-| R14 payload assembly helper | `case-display-completed` details payload assembly を private helper 化。 | なし。emit owner / trace owner / session owner は移動しない。 |
-| R10/R11/R12 normalized outcome chain helper | `CompleteVisibilityRecoveryOutcome(...)` -> `CompleteRefreshSourceSelectionOutcome(...)` -> `CompleteRebuildFallbackOutcome(...)` の既存順序を private helper 化。 | なし。normalized outcome は completion owner ではない。 |
-| R13 classification helper | foreground execution result を `RequiredSucceeded` / `RequiredDegraded` に分類する処理を private helper 化。 | なし。R13 内の局所 helper 化であり、foreground execution / trace / completion owner は移動しない。 |
-| R13 trace details helper | foreground observation details payload assembly を private helper 化。 | なし。details 文字列 assembly のみであり、trace emit / foreground execution / completion owner は移動しない。 |
-
-`ClassifyRequiredForegroundExecutionOutcome(...)` は execution result から foreground outcome を返す分類だけを担います。`ExecutionAttempted && Recovered` の場合だけ `RequiredSucceeded` を返し、それ以外は現行通り `RequiredDegraded` を返します。`RequiredDegraded` を `RequiredFailed`、success、failure、direct completion へ丸めません。
-
-R13 trace details helper の意味:
-
-- `BuildForegroundRecoveryDecisionDetails(...)` は `foreground-recovery-decision` details の文字列 assembly だけを担う。field set / order は `reason -> foregroundRecoveryStarted -> foregroundSkipReason -> foregroundOutcomeStatus`。
-- `BuildFinalForegroundGuaranteeStartedDetails(...)` は `final-foreground-guarantee-started` details の文字列 assembly だけを担う。field set / order は `reason`。
-- `BuildFinalForegroundGuaranteeCompletedDetails(...)` は `final-foreground-guarantee-completed` details の文字列 assembly だけを担う。field set / order は `reason -> recovered -> foregroundOutcomeStatus`。
-- completed mapping は `recovered=true` の場合だけ `RequiredSucceeded`、`recovered=false` の場合は `RequiredDegraded`。
-- `RequiredDegraded` は `RequiredFailed`、success、direct completion へ丸めない。
-
-R13 classification helper が持たないもの:
-
-- foreground execution 呼び出し。
-- foreground trace emit。
-- WindowActivate handling。
-- R14 completion gate。
-- `case-display-completed` emit。
-- session lookup。
-- one-time emit guard。
-- callback / pending / normalized outcome の意味付け。
-
-R13 trace details helper 化後も未移動のもの:
-
-- foreground execution 呼び出し。
-- trace action / source / emit position。
-- logger action / 発火順。
-- WindowActivate handling。
-- R14 completion gate。
-- `case-display-completed` emit owner。
-- display session boundary。
-- session lookup。
-- `IsCompleted` guard。
-- lock。
-- `_createdCaseDisplaySessions` からの dictionary remove。
-- `NewCaseVisibilityObservation.Complete(...)`。
-- trace owner / payload contract。
-
-trace 名、trace source、trace payload field set / order / names / values は維持します。foreground outcome != completion、`RequiredDegraded` は success / failure / direct completion ではない、`RequiredSucceeded` は input only、`RequiredFailed` は completion gate を通さない、`NotRequired` / `SkippedAlreadyVisible` は foreground success ではない、callback != completion、pending != completion、WindowActivate dispatch != completion、`case-display-completed` one-time emit、display session boundary、foreground outcome semantics は維持します。
-
-次 runtime 候補はまだ GO ではありません。次に runtime を触る場合は、foreground display-completable 判定 helper 化の tests-first 評価を先に置きます。
-
-現時点 STOP:
-
-- foreground display-completable helper 化。
-- display session lookup / one-time emit guard helper 化。
-- callback raw facts adapter。
-- route / dispatch shell 整理。
-- R07/R09/R13/R14 横断 extraction。
-
-### Phase 5 R13 foreground display-completable runtime state boundary
-
-Phase 5 foreground display-completable helper 化後、runtime で完了済みの安全単位は次の 6 点です。
-
-| completed safe unit | 意味 | owner 移動 |
-| --- | --- | --- |
-| R14 hard gate decision helper | visibility / foreground display-completable facts に基づく yes/no decision を private helper 化。 | なし。R14 completion owner は `TaskPaneRefreshOrchestrationService` に残る。 |
-| R14 payload assembly helper | `case-display-completed` details payload assembly を private helper 化。 | なし。emit owner / trace owner / session owner は移動しない。 |
-| R10/R11/R12 normalized outcome chain helper | `CompleteVisibilityRecoveryOutcome(...)` -> `CompleteRefreshSourceSelectionOutcome(...)` -> `CompleteRebuildFallbackOutcome(...)` の既存順序を private helper 化。 | なし。normalized outcome は completion owner ではない。 |
-| R13 classification helper | foreground execution result を `RequiredSucceeded` / `RequiredDegraded` に分類する処理を private helper 化。 | なし。foreground execution / trace / completion owner は移動しない。 |
-| R13 trace details helper | foreground observation details payload assembly を private helper 化。 | なし。details 文字列 assembly のみであり、trace emit / foreground execution / completion owner は移動しない。 |
-| R13 foreground display-completable input helper | R14 hard gate が読む foreground input 判定を private helper 化。 | なし。completion owner / emit owner / session owner は移動しない。 |
-
-`IsForegroundDisplayCompletableTerminalInput(...)` は `outcome != null`、`outcome.IsTerminal`、`outcome.IsDisplayCompletable` だけを読みます。これは display-completable input 判定であり、completion 判定全体ではありません。
-
-display-completable terminal input:
-
-- `RequiredSucceeded`
-- `RequiredDegraded`
-- `NotRequired`
-- `SkippedAlreadyVisible`
-
-non-display-completable input:
-
-- `RequiredFailed`
-- `SkippedNoKnownTarget`
-- `Unknown`
-
-この mapping は `display-completable input != completion` を前提にします。`RequiredDegraded` は success / failure / direct completion へ丸めません。`NotRequired` / `SkippedAlreadyVisible` は foreground success ではありません。
-
-foreground display-completable helper が持たないもの:
-
-- completion 判定全体。
-- `case-display-completed` emit。
-- session lookup。
-- one-time emit guard。
-- `IsCompleted` guard。
-- lock。
-- `_createdCaseDisplaySessions` からの dictionary remove。
-- foreground execution。
-- WindowActivate handling。
-- trace emit。
-- callback / pending の意味付け。
-
-foreground display-completable helper 化後も未移動のもの:
-
-- R14 completion gate。
-- `case-display-completed` emit owner。
-- display session boundary。
-- session lookup。
-- `IsCompleted` guard。
-- lock。
-- `_createdCaseDisplaySessions` からの dictionary remove。
-- `NewCaseVisibilityObservation.Complete(...)`。
-- foreground execution。
-- WindowActivate handling。
-- trace owner / payload contract。
-
-foreground outcome != completion、display-completable input != completion、`RequiredDegraded` は success / failure / direct completion ではない、`RequiredSucceeded` は input only、`RequiredFailed` は completion gate を通さない、`NotRequired` / `SkippedAlreadyVisible` は foreground success ではない、callback != completion、pending != completion、WindowActivate dispatch != completion、`case-display-completed` one-time emit、display session boundary、trace contract、foreground outcome semantics は維持します。
-
-現時点 STOP:
-
-- display session lookup / one-time emit guard helper 化。
-- callback raw facts adapter。
-- route / dispatch shell 整理。
-- R07/R09/R13/R14 横断 extraction。
-
-次はすぐ runtime へ進まず、Phase 5 runtime の一区切り判断を docs-only / read-only で行う候補があります。
+中間 checkpoint の STOP / freeze line は closure boundary に集約します。display session lookup / one-time emit guard helper 化、callback raw facts adapter、route / dispatch shell 整理、R07/R09/R13/R14 横断 extraction は引き続き STOP です。
 
 ### Phase 5 runtime closure boundary
 

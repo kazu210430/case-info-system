@@ -1170,6 +1170,47 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            string details = BuildCaseDisplayCompletedDetailsPayload(
+                reason,
+                resolvedSession,
+                attemptResult,
+                completionSource,
+                attemptNumber,
+                displayRequest);
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=case-display-completed sessionId="
+                + resolvedSession.SessionId
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", window="
+                + FormatWindowDescriptor(window)
+                + ", completion="
+                + attemptResult.CompletionBasis);
+            NewCaseVisibilityObservation.Log(
+                _logger,
+                _excelInteropService,
+                null,
+                workbook,
+                window,
+                "case-display-completed",
+                "TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession",
+                resolvedSession.WorkbookFullName,
+                details);
+            NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
+        }
+
+        private static string BuildCaseDisplayCompletedDetailsPayload(
+            string reason,
+            CreatedCaseDisplaySession resolvedSession,
+            TaskPaneRefreshAttemptResult attemptResult,
+            string completionSource,
+            int? attemptNumber,
+            TaskPaneDisplayRequest displayRequest)
+        {
             string details =
                 "reason=" + (reason ?? string.Empty)
                 + ",sessionId=" + resolvedSession.SessionId
@@ -1217,29 +1258,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
             }
 
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=case-display-completed sessionId="
-                + resolvedSession.SessionId
-                + ", reason="
-                + (reason ?? string.Empty)
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", window="
-                + FormatWindowDescriptor(window)
-                + ", completion="
-                + attemptResult.CompletionBasis);
-            NewCaseVisibilityObservation.Log(
-                _logger,
-                _excelInteropService,
-                null,
-                workbook,
-                window,
-                "case-display-completed",
-                "TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession",
-                resolvedSession.WorkbookFullName,
-                details);
-            NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
+            return details;
         }
 
         private static CreatedCaseDisplayCompletionDecision EvaluateCreatedCaseDisplayCompletionDecision(

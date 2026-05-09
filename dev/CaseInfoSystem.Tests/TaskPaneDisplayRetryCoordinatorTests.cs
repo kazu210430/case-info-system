@@ -168,6 +168,10 @@ namespace CaseInfoSystem.Tests
         public void CaseDisplayCompletedDetailsPayload_PreservesFieldSetAndOrder()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string payloadHelper = Slice(
+                orchestrationSource,
+                "private static string BuildCaseDisplayCompletedDetailsPayload",
+                "private static CreatedCaseDisplayCompletionDecision");
 
             AssertContainsInOrder(
                 orchestrationSource,
@@ -175,6 +179,13 @@ namespace CaseInfoSystem.Tests
                 "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
                 "bool shouldEmit = false;",
                 "if (!shouldEmit)",
+                "string details = BuildCaseDisplayCompletedDetailsPayload(",
+                "_logger?.Info(",
+                "\"case-display-completed\"",
+                "details);",
+                "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
+            AssertContainsInOrder(
+                payloadHelper,
                 "string details =",
                 "\"reason=\" + (reason ?? string.Empty)",
                 "\",sessionId=\" + resolvedSession.SessionId",
@@ -215,10 +226,11 @@ namespace CaseInfoSystem.Tests
                 "\",foregroundOutcomeReason=\" + attemptResult.ForegroundGuaranteeOutcome.Reason",
                 "WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest)",
                 "details += \",attempt=\" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);",
-                "_logger?.Info(",
-                "\"case-display-completed\"",
-                "details);",
-                "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
+                "return details;");
+            Assert.DoesNotContain("_logger", payloadHelper);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", payloadHelper);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", payloadHelper);
+            Assert.DoesNotContain("IsCompleted", payloadHelper);
         }
 
         [Fact]

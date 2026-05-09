@@ -567,6 +567,39 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", normalizedMapperSource);
         }
 
+        [Fact]
+        public void ForegroundDisplayCompletableInputContract_IsMappingOnlyWithoutRuntimeOwners()
+        {
+            string attemptResultSource = ReadAppSource("TaskPaneRefreshAttemptResult.cs");
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string mappingSource =
+                ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome Unknown")
+                + ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome NotRequired")
+                + ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome SkippedAlreadyVisible")
+                + ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome SkippedNoKnownTarget")
+                + ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome RequiredSucceeded")
+                + ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome RequiredDegraded")
+                + ReadMethod(attemptResultSource, "internal static ForegroundGuaranteeOutcome RequiredFailed")
+                + ReadOptionalForegroundDisplayCompletableDecisionSource(orchestrationSource);
+
+            Assert.Contains("isTerminal: true", mappingSource);
+            Assert.Contains("isDisplayCompletable: true", mappingSource);
+            Assert.Contains("isDisplayCompletable: false", mappingSource);
+            Assert.Contains("ForegroundGuaranteeOutcomeStatus.RequiredDegraded", mappingSource);
+            Assert.Contains("ForegroundGuaranteeOutcomeStatus.RequiredFailed", mappingSource);
+            Assert.DoesNotContain("_taskPaneRefreshCoordinator", mappingSource);
+            Assert.DoesNotContain("ExecuteFinalForegroundGuaranteeRecovery", mappingSource);
+            Assert.DoesNotContain("BeginPostForegroundProtection", mappingSource);
+            Assert.DoesNotContain("WindowActivate", mappingSource);
+            Assert.DoesNotContain("_logger", mappingSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", mappingSource);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", mappingSource);
+            Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", mappingSource);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", mappingSource);
+            Assert.DoesNotContain("IsCompleted", mappingSource);
+            Assert.DoesNotContain("case-display-completed", mappingSource);
+        }
+
         private static void AssertDoesNotOwnCompletion(string appFileName)
         {
             string source = ReadAppSource(appFileName);
@@ -640,6 +673,21 @@ namespace CaseInfoSystem.Tests
             Assert.True(end > degraded, "Expected foreground classification branch to end with a semicolon.");
 
             return source.Substring(start, end - start + 1);
+        }
+
+        private static string ReadOptionalForegroundDisplayCompletableDecisionSource(string source)
+        {
+            string helperSource =
+                ReadOptionalMethod(source, "private static bool IsForegroundDisplayCompletableTerminalInput")
+                + ReadOptionalMethod(source, "private static bool HasForegroundDisplayCompletableTerminalInput")
+                + ReadOptionalMethod(source, "private static bool HasDisplayCompletableForegroundOutcome")
+                + ReadOptionalMethod(source, "private static bool IsForegroundGuaranteeDisplayCompletableInput");
+            if (!string.IsNullOrEmpty(helperSource))
+            {
+                return helperSource;
+            }
+
+            return ReadMethod(source, "private static CreatedCaseDisplayCompletionDecision EvaluateCreatedCaseDisplayCompletionDecision");
         }
 
         private static void AssertContainsInOrder(string source, params string[] fragments)

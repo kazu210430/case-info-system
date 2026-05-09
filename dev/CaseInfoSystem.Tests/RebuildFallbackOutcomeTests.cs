@@ -345,6 +345,81 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ForegroundDisplayCompletableInputMapping_PreservesTerminalInputContract()
+        {
+            ForegroundGuaranteeOutcome[] displayCompletableInputs =
+            {
+                ForegroundGuaranteeOutcome.RequiredSucceeded(
+                    ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                    "foregroundRecoverySucceeded"),
+                ForegroundGuaranteeOutcome.RequiredDegraded(
+                    ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                    "foregroundRecoveryReturnedFalse"),
+                ForegroundGuaranteeOutcome.NotRequired("foregroundNotRequired"),
+                ForegroundGuaranteeOutcome.SkippedAlreadyVisible("visibleCasePaneAlreadyShown"),
+            };
+            ForegroundGuaranteeOutcome[] nonDisplayCompletableInputs =
+            {
+                ForegroundGuaranteeOutcome.RequiredFailed(
+                    ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                    "foregroundRecoveryNotAttempted"),
+                ForegroundGuaranteeOutcome.SkippedNoKnownTarget("foregroundNoKnownTarget"),
+                ForegroundGuaranteeOutcome.Unknown("pendingForegroundGuaranteeOutcome"),
+            };
+
+            foreach (ForegroundGuaranteeOutcome outcome in displayCompletableInputs)
+            {
+                Assert.True(outcome.IsTerminal);
+                Assert.True(outcome.IsDisplayCompletable);
+                Assert.True(IsForegroundDisplayCompletableTerminalInputContract(outcome));
+            }
+
+            foreach (ForegroundGuaranteeOutcome outcome in nonDisplayCompletableInputs)
+            {
+                Assert.False(outcome.IsDisplayCompletable);
+                Assert.False(IsForegroundDisplayCompletableTerminalInputContract(outcome));
+            }
+
+            Assert.True(nonDisplayCompletableInputs[0].IsTerminal);
+            Assert.True(nonDisplayCompletableInputs[1].IsTerminal);
+            Assert.False(nonDisplayCompletableInputs[2].IsTerminal);
+        }
+
+        [Fact]
+        public void ForegroundDisplayCompletableInput_RemainsInputOnlyNotSuccessFailureOrDirectCompletion()
+        {
+            ForegroundGuaranteeOutcome degradedOutcome = ForegroundGuaranteeOutcome.RequiredDegraded(
+                ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow,
+                "foregroundRecoveryReturnedFalse");
+            ForegroundGuaranteeOutcome notRequiredOutcome = ForegroundGuaranteeOutcome.NotRequired("foregroundNotRequired");
+            ForegroundGuaranteeOutcome skippedAlreadyVisibleOutcome = ForegroundGuaranteeOutcome.SkippedAlreadyVisible(
+                "visibleCasePaneAlreadyShown");
+            TaskPaneRefreshAttemptResult result = TaskPaneRefreshAttemptResult
+                .VisibleAlreadySatisfied()
+                .WithVisibilityRecoveryOutcome(CreateDisplayCompletableVisibilityOutcome())
+                .WithForegroundGuaranteeOutcome(degradedOutcome);
+
+            Assert.True(IsForegroundDisplayCompletableTerminalInputContract(degradedOutcome));
+            Assert.Equal(ForegroundGuaranteeOutcomeStatus.RequiredDegraded, degradedOutcome.Status);
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, degradedOutcome.Status);
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredFailed, degradedOutcome.Status);
+            Assert.False(degradedOutcome.RecoverySucceeded.GetValueOrDefault());
+            Assert.True(SatisfiesCompletionHardGateInputContract(result));
+
+            Assert.True(IsForegroundDisplayCompletableTerminalInputContract(notRequiredOutcome));
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, notRequiredOutcome.Status);
+            Assert.False(notRequiredOutcome.WasRequired);
+            Assert.False(notRequiredOutcome.WasExecutionAttempted);
+            Assert.False(notRequiredOutcome.RecoverySucceeded.HasValue);
+
+            Assert.True(IsForegroundDisplayCompletableTerminalInputContract(skippedAlreadyVisibleOutcome));
+            Assert.NotEqual(ForegroundGuaranteeOutcomeStatus.RequiredSucceeded, skippedAlreadyVisibleOutcome.Status);
+            Assert.False(skippedAlreadyVisibleOutcome.WasRequired);
+            Assert.False(skippedAlreadyVisibleOutcome.WasExecutionAttempted);
+            Assert.False(skippedAlreadyVisibleOutcome.RecoverySucceeded.HasValue);
+        }
+
+        [Fact]
         public void RefreshAttemptResult_KeepsVisibilityAndForegroundOutcomesSeparateForCompletionGate()
         {
             VisibilityRecoveryOutcome visibilityOutcome = VisibilityRecoveryOutcome.Completed(
@@ -441,6 +516,13 @@ namespace CaseInfoSystem.Tests
                 WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible,
                 fullRecoveryAttempted: false,
                 fullRecoverySucceeded: null);
+        }
+
+        private static bool IsForegroundDisplayCompletableTerminalInputContract(ForegroundGuaranteeOutcome outcome)
+        {
+            return outcome != null
+                && outcome.IsTerminal
+                && outcome.IsDisplayCompletable;
         }
 
         private static bool SatisfiesCompletionHardGateInputContract(TaskPaneRefreshAttemptResult result)

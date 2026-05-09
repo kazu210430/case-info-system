@@ -86,6 +86,33 @@ pending fallback は、ready-show attempts が尽きた場合にだけ、ready-s
 - immediate refresh が success した場合は pending retry timer を開始しない。
 - immediate refresh が success しない場合だけ、`PendingPaneRefreshRetryService` が `400ms` interval / `3` attempts で retry する。
 
+### R07 handoff semantics freeze line
+
+`ScheduleWorkbookTaskPaneRefresh(...)` は、単なる timer helper ではありません。R07 の freeze line では、次を同じ protocol entry の意味として固定します。
+
+- ready-show fallback handoff trace。
+- `WorkbookOpen` skip。
+- workbook target tracking。
+- window resolve。
+- pre-timer immediate refresh。
+- pending retry start decision。
+
+現行 code 上、この entry は created CASE ready-show exhaustion 後の handoff と、`KernelHomeForm.OpenSheet.PostClose` の workbook-target delayed refresh entry の両方から使われます。この二重性を固定し、現時点では ready-show exhaustion 専用 owner として runtime extraction しません。
+
+immediate refresh は pending timer 開始前の re-entry です。次の読み替えは禁止します。
+
+- immediate refresh success = recovered。
+- immediate refresh success = `case-display-completed`。
+- immediate refresh success = display recovery completed。
+
+pending retry success も completion ではありません。immediate refresh / pending retry のどちらから戻った場合でも、completion は `TaskPaneRefreshOrchestrationService.TryCompleteCreatedCaseDisplaySession(...)` 相当の existing completion chain が、pane visible、visibility terminal / display-completable、foreground terminal / display-completable を満たした場合だけ成立します。
+
+`WorkbookOpen` skip は incidental guard ではなく、window stability boundary に関する runtime stabilization contract です。`ready-show-fallback-handoff` trace 後でも pending retry start とは限りません。`WorkbookOpen` 直後に workbook が存在し window が未解決な場合は、pending retry を開始せず後続イベントへ委ねます。この trace -> skip -> no pending start の順序を変えません。
+
+`PendingPaneRefreshRetryService` 内の active CASE context fallback は、tracked workbook を見失った場合の target-lost resiliency fallback です。これは completion fallback ではなく、active CASE context fallback が success したことだけを `case-display-completed` とみなしません。
+
+R07 は fallback handoff semantics、immediate refresh re-entry、`WorkbookOpen` precondition、pending retry entry、display session boundary、normalized outcome chain、completion owner、trace contract にまたがるため、現時点では orchestration ownership に残します。
+
 固定する開始禁止:
 
 - `WorkbookOpen` 直後の `workbook != null && window == null` による window-dependent skip を、pending fallback 開始条件にしません。

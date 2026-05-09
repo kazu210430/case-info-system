@@ -147,6 +147,30 @@ route contract:
 - pending retry は workbook target を追い、対象 workbook を見失っても active CASE context が残る場合は active refresh fallback を継続する。
 - pending retry は window resolve や refresh dispatch の意味を変えるものではなく、fallback scheduling の owner です。
 
+### R07 pending fallback handoff current-state
+
+`TaskPaneRefreshOrchestrationService.ScheduleWorkbookTaskPaneRefresh(...)` は、単なる delayed timer schedule helper ではありません。現行では次を 1 つの protocol entry として束ねています。
+
+- `ready-show-fallback-handoff` / `wait-ready-fallback-handoff` の trace。
+- `WorkbookOpen` window-dependent skip。
+- workbook target tracking。
+- workbook から pane 対象 window への resolve。
+- pending timer 開始前の immediate refresh。
+- pending retry を開始するかどうかの decision。
+
+この entry は、少なくとも次の 2 つの caller / reason から使われます。
+
+- created CASE ready-show exhaustion 後の handoff。代表 reason は `KernelCasePresentationService.ShowCreatedCase.PostRelease`。
+- `KernelHomeForm.OpenSheet.PostClose` の workbook-target delayed refresh entry。
+
+したがって、現時点では `ScheduleWorkbookTaskPaneRefresh(...)` を ready-show exhaustion 専用 entry として runtime extraction しません。ready-show handoff と workbook-target delayed refresh entry の二重性を持つ orchestration boundary として扱います。
+
+immediate refresh は pending timer 開始前の refresh re-entry です。immediate refresh が success した場合でも、それだけでは recovered、display recovery completed、`case-display-completed` のいずれも意味しません。completion は existing orchestration completion chain の条件を満たした場合だけ成立します。
+
+`WorkbookOpen` skip は null guard ではなく window stability boundary の runtime stabilization contract です。`ready-show-fallback-handoff` trace 後であっても、`reason == "WorkbookOpen" && workbook != null && window == null` の場合は pending retry start へ進めず、後続の `WorkbookActivate` / `WindowActivate` 側へ委ねます。
+
+`PendingPaneRefreshRetryService` 内の active CASE context fallback は、tracked workbook を見失った時の target-lost resiliency fallback です。これは completion fallback ではなく、成功時も refresh / outcome / completion chain に戻れた場合だけ display completion の材料になります。
+
 ## Retry
 
 現行実装値:

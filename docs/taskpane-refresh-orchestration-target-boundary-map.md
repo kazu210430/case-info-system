@@ -50,7 +50,7 @@
 | R04 | `ShowWorkbookTaskPaneWhenReady(...)` | display protocol session boundary | `KernelCasePresentationService` の post-release 後、ready-show enqueue。 | はい。session start と completion owner が同一 protocol。 | いいえ。R14 と一体。 | 高 | 低から中 | 単独 service 化は後回し。 | はい | いいえ | いいえ |
 | R05 | `WorkbookTaskPaneReadyShowAttemptWorker` + `HandleWorkbookTaskPaneShown(...)` | ready-show attempt result boundary | ready-show attempt が shown と判定された直後。 | はい。callback は outcome normalization と completion に接続する。 | いいえ。R10/R13/R14 と一体。 | 高 | 中 | attempt result adapter は候補だが後回し。 | はい | いいえ | はい |
 | R06 | `TaskPaneReadyShowRetryScheduler` | retry / fallback ownership boundary | ready-show attempt 1 失敗後、attempt 2 を 80ms で schedule。 | いいえ。ただし順序 contract は orchestration が見る。 | 完了済み。R06 safe unit として scheduler ownership を分離。 | 低 | 低 | 既存 scheduler boundary。 | いいえ | いいえ | いいえ |
-| R07 | `ScheduleWorkbookTaskPaneRefresh(...)` | retry / fallback ownership boundary | ready-show attempts exhausted 後、pending retry へ handoff。 | 部分的に必須。fallback が display session 結果に戻る。 | いいえ。R06/R08 と一体。 | 高 | 中 | 後回し候補。fallback coordinator。 | 部分的にはい | いいえ | はい |
+| R07 | `ScheduleWorkbookTaskPaneRefresh(...)` | retry / fallback ownership boundary | ready-show attempts exhausted 後の handoff と、workbook-target delayed refresh entry の二重性を持つ。 | はい。fallback handoff、immediate refresh、WorkbookOpen skip、pending retry entry、completion chain が近接する。 | いいえ。runtime extraction STOP。 | 高 | 中 | Phase 5 の protocol-preserving orchestration shrink 候補。 | はい | いいえ | はい |
 | R08 | `PendingPaneRefreshRetryService` | retry / fallback ownership boundary | pending retry timer tick、workbook target / active CASE fallback。 | いいえ。既に分離境界がある。 | はい。ただし R07 との contract 固定後。 | 中 | 中 | 強い候補。既存 nested service の独立候補。 | いいえ | いいえ | 部分的 |
 | R09 | `WorkbookPaneWindowResolver` | workbook pane window resolve boundary | ready-show attempt、fallback prepare、pending retry、coordinator ensure-window。 | いいえ。ただし activation policy は orchestration contract。 | 部分的。route 別 `activateWorkbook` 固定後。 | 中から高 | 中 | 候補。ただし UI helper ではない。 | 部分的 | いいえ | はい |
 | R10 | `CompleteVisibilityRecoveryOutcome(...)` | normalized outcome boundary | skip / refresh / ready-show callback 後。 | 部分的に必須。completion 判定に使う。 | はい。ただし display-completable 固定後。 | 中 | 中 | 候補。outcome builder / decision object。 | 部分的 | いいえ | はい |
@@ -60,6 +60,20 @@
 | R14 | `BeginCreatedCaseDisplaySession(...)` / `TryCompleteCreatedCaseDisplaySession(...)` | display protocol session boundary | ready-show acceptance で start、ready-show callback or refresh path 終端で completion。 | はい。最重要 coordinator 残存領域。 | いいえ。 | 高 | 低から中 | 現時点では service 化しない。 | はい | いいえ | はい |
 | R15 | `WindowActivatePaneHandlingService` + `WindowActivateDownstreamObservation` | display route / trigger observation boundary | WindowActivate dispatch 後、refresh entry の start / outcome。 | 部分的に必須。誤認防止 trace は近接が必要。 | 完了済み。R15 safe unit として downstream observation owner を分離。 | 中 | 中 | 既存 observation boundary。 | 部分的 | いいえ | はい |
 | R16 | `TaskPaneRetryTimerLifecycle`。停止入口は `StopPendingPaneRefreshTimer(...)` | timer lifecycle boundary | success / shown callback / explicit stop。 | いいえ。 | はい。Phase 4 R16 safe unit で timer lifecycle owner を分離済み。 | 低 | 低 | 完了。timer lifecycle owner。 | いいえ | いいえ | いいえ |
+
+## R07 runtime extraction STOP
+
+R07 は、現時点では runtime extraction を行いません。`ScheduleWorkbookTaskPaneRefresh(...)` は単なる delayed timer schedule helper ではなく、ready-show fallback handoff trace、`WorkbookOpen` skip、workbook target tracking、window resolve、pre-timer immediate refresh、pending retry start decision を 1 つの protocol entry として束ねています。
+
+現行 caller / reason には、created CASE ready-show exhaustion 後の handoff と、`KernelHomeForm.OpenSheet.PostClose` の workbook-target delayed refresh entry が含まれます。この二重性があるため、R07 を ready-show exhaustion 専用 owner として切り出すと protocol rewrite に化けやすいです。
+
+immediate refresh success と pending retry success は completion ではありません。どちらも existing refresh / outcome / completion chain への re-entry であり、`case-display-completed` は display session owner の条件を満たした場合だけ emit できます。
+
+`WorkbookOpen` skip は null guard ではなく window stability boundary の runtime stabilization contract です。handoff trace 後でも `WorkbookOpen` 直後の unresolved window では pending retry start へ進まず、後続の `WorkbookActivate` / `WindowActivate` 側へ委ねます。
+
+`PendingPaneRefreshRetryService` の active CASE context fallback は、tracked workbook を見失った場合の target-lost resiliency fallback です。completion fallback ではなく、成功しても completion owner は orchestration 側に残ります。
+
+R07 は Phase 5 で、protocol-preserving orchestration shrink として扱う候補です。Phase 4 では R07 runtime separation は STOP とし、R06/R08/R14/R10-R13 との freeze line を壊さないことを優先します。
 
 ## Coupling Matrix
 

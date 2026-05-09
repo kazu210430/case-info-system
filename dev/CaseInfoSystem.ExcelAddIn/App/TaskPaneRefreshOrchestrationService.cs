@@ -138,7 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + FormatWindowDescriptor(window)
                     + ", activeState="
                     + FormatActiveState());
-                TaskPaneRefreshAttemptResult skippedResult = CompleteVisibilityRecoveryOutcome(
+                TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
                     reason,
                     workbook,
                     window,
@@ -146,22 +146,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     stopwatch,
                     preconditionDecision.SkipActionName,
                     null,
-                    null);
-                skippedResult = CompleteRefreshSourceSelectionOutcome(
-                    reason,
-                    workbook,
-                    window,
-                    skippedResult,
-                    stopwatch,
-                    preconditionDecision.SkipActionName,
-                    null);
-                skippedResult = CompleteRebuildFallbackOutcome(
-                    reason,
-                    workbook,
-                    window,
-                    skippedResult,
-                    stopwatch,
-                    preconditionDecision.SkipActionName,
                     null);
                 _windowActivateDownstreamObservation.LogOutcome(
                     displayRequest,
@@ -180,7 +164,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 window,
                 _getKernelHomeForm,
                 _getTaskPaneRefreshSuppressionCount);
-            TaskPaneRefreshAttemptResult attemptResult = CompleteVisibilityRecoveryOutcome(
+            TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,
                 window,
@@ -188,22 +172,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 stopwatch,
                 "refresh",
                 null,
-                null);
-            attemptResult = CompleteRefreshSourceSelectionOutcome(
-                reason,
-                workbook,
-                window,
-                attemptResult,
-                stopwatch,
-                "refresh",
-                null);
-            attemptResult = CompleteRebuildFallbackOutcome(
-                reason,
-                workbook,
-                window,
-                attemptResult,
-                stopwatch,
-                "refresh",
                 null);
             attemptResult = CompleteForegroundGuaranteeOutcome(
                 reason,
@@ -431,6 +399,43 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _pendingPaneRefreshRetryService.StopTimer();
             _retryTimerLifecycle.StopWaitReadyRetryTimers();
+        }
+
+        private TaskPaneRefreshAttemptResult CompleteNormalizedOutcomeChain(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window inputWindow,
+            TaskPaneRefreshAttemptResult attemptResult,
+            Stopwatch stopwatch,
+            string completionSource,
+            int? attemptNumber,
+            WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+        {
+            attemptResult = CompleteVisibilityRecoveryOutcome(
+                reason,
+                workbook,
+                inputWindow,
+                attemptResult,
+                stopwatch,
+                completionSource,
+                attemptNumber,
+                workbookWindowEnsureFacts);
+            attemptResult = CompleteRefreshSourceSelectionOutcome(
+                reason,
+                workbook,
+                inputWindow,
+                attemptResult,
+                stopwatch,
+                completionSource,
+                attemptNumber);
+            return CompleteRebuildFallbackOutcome(
+                reason,
+                workbook,
+                inputWindow,
+                attemptResult,
+                stopwatch,
+                completionSource,
+                attemptNumber);
         }
 
         private TaskPaneRefreshAttemptResult CompleteVisibilityRecoveryOutcome(
@@ -1090,7 +1095,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             Stopwatch stopwatch = Stopwatch.StartNew();
-            TaskPaneRefreshAttemptResult attemptResult = CompleteVisibilityRecoveryOutcome(
+            TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,
                 outcome.WorkbookWindow,
@@ -1099,22 +1104,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "ready-show-attempt",
                 outcome.AttemptNumber,
                 outcome.WorkbookWindowEnsureFacts);
-            attemptResult = CompleteRefreshSourceSelectionOutcome(
-                reason,
-                workbook,
-                outcome.WorkbookWindow,
-                attemptResult,
-                stopwatch,
-                "ready-show-attempt",
-                outcome.AttemptNumber);
-            attemptResult = CompleteRebuildFallbackOutcome(
-                reason,
-                workbook,
-                outcome.WorkbookWindow,
-                attemptResult,
-                stopwatch,
-                "ready-show-attempt",
-                outcome.AttemptNumber);
             attemptResult = CompleteForegroundGuaranteeOutcome(
                 reason,
                 workbook,

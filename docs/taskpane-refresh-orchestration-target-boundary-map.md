@@ -152,6 +152,39 @@ R14 は display session convergence の hard gate です。
 
 Phase 5 で redesign する場合も、この map を保った protocol-preserving convergence redesign に限定します。
 
+### Phase 5 second runtime state boundary
+
+Phase 5 第二実装後、runtime で完了済みの安全単位は次の 2 点です。
+
+| completed safe unit | 意味 | owner 移動 |
+| --- | --- | --- |
+| R14 hard gate decision helper | visibility / foreground display-completable facts に基づく yes/no decision を private helper 化。 | なし。R14 completion owner は `TaskPaneRefreshOrchestrationService` に残る。 |
+| R14 payload assembly helper | `case-display-completed` details payload assembly を private helper 化。 | なし。emit owner / trace owner / session owner は移動しない。 |
+
+R14 で未移動のもの:
+
+- completion owner。
+- `case-display-completed` emit owner。
+- one-time emit guard。
+- display session lookup。
+- `IsCompleted` guard。
+- lock。
+- `_createdCaseDisplaySessions` からの dictionary remove。
+- `NewCaseVisibilityObservation.Complete(...)`。
+- trace emit position。
+
+この到達点は R14 の protocol を state bag helper へ移すものではありません。`BuildCaseDisplayCompletedDetailsPayload(...)` は string / details assembly だけを担い、`EvaluateCreatedCaseDisplayCompletionDecision(...)` は yes/no decision だけを担います。どちらも completion emit、session lifecycle、callback / pending / foreground / normalized outcome semantics を持ちません。
+
+次 runtime 候補は R10/R11/R12 normalized outcome chain 呼び出し整理です。ただしこれはまだ GO ではなく、tests-first / safety net 評価を先に置きます。
+
+現時点 STOP:
+
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- foreground display-completable helper 化。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 をまたぐ runtime extraction。
+
 ## R07 runtime extraction STOP
 
 R07 は、現時点では runtime extraction を行いません。`ScheduleWorkbookTaskPaneRefresh(...)` は単なる delayed timer schedule helper ではなく、ready-show fallback handoff trace、`WorkbookOpen` skip、workbook target tracking、window resolve、pre-timer immediate refresh、pending retry start decision を 1 つの protocol entry として束ねています。

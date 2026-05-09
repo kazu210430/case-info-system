@@ -214,6 +214,55 @@ Phase 5 は runtime extraction を急ぐフェーズではありません。
 - ready-show callback を completion callback とみなす。
 - one-time emit owner を lower-level worker / retry / foreground / WindowActivate へ分散する。
 
+### Phase 5 second runtime state
+
+Phase 5 第二実装後の runtime refactor 完了点は次の 2 点です。
+
+- completion hard gate yes/no decision の private helper 化。
+- `case-display-completed` details payload assembly の private helper 化。
+
+どちらも `TaskPaneRefreshOrchestrationService` 内の R14 orchestration に留まる局所 helper 化です。owner 移動ではありません。
+
+R14 owner preserved:
+
+- completion owner は未移動です。
+- `case-display-completed` emit owner は未移動です。
+- one-time emit guard は未移動です。
+- display session lookup は未移動です。
+- `IsCompleted` guard は未移動です。
+- lock は未移動です。
+- dictionary remove は未移動です。
+- `NewCaseVisibilityObservation.Complete(...)` は未移動です。
+- trace emit position は未移動です。
+
+helper の意味:
+
+- hard gate decision helper は、visibility / foreground display-completable facts に基づく yes/no decision だけを担います。
+- payload helper は、`case-display-completed` details payload assembly だけを担います。
+- どちらの helper も completion emit しません。
+- どちらの helper も session lifecycle を持ちません。
+- どちらの helper も callback / pending / foreground / normalized outcome の意味を変更しません。
+
+維持した contract:
+
+- emit 位置、trace 名、trace source、trace payload field set / order / names / values は維持します。
+- `NewCaseVisibilityObservation.Complete(...)` 呼び出し位置は維持します。
+- pending != completion、callback != completion、WindowActivate dispatch != completion、normalized outcome != completion、foreground outcome != completion は維持します。
+- `case-display-completed` one-time emit、display session boundary、retry sequencing、foreground outcome semantics は維持します。
+
+次 runtime 候補:
+
+- 次に runtime を触る場合の候補は、R10/R11/R12 normalized outcome chain 呼び出し整理です。
+- ただし、これはまだ GO ではありません。先に tests-first / safety net 評価が必要です。
+
+現時点 STOP:
+
+- display session lookup / one-time emit guard helper 化。
+- callback raw facts adapter。
+- foreground display-completable helper 化。
+- route / dispatch shell 整理。
+- R07/R09/R13/R14 をまたぐ runtime extraction。
+
 ## 対象範囲
 
 対象に含めるもの:

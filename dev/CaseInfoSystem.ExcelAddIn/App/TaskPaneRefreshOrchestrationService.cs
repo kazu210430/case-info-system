@@ -336,26 +336,57 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ScheduleActiveTaskPaneRefresh(string reason)
         {
-            _pendingPaneRefreshRetryService.TrackActiveTarget();
-            if (IsTaskPaneRefreshSucceeded(reason, null, null))
+            ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(reason);
+            if (TryRefreshActiveTaskPaneImmediately(activeHandoff))
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=defer-immediate-success reason="
-                    + (reason ?? string.Empty)
-                    + ", target=active");
-                StopPendingPaneRefreshTimer();
                 return;
             }
 
-            int attemptsRemaining = _pendingPaneRefreshRetryService.BeginRetrySequence(reason);
+            StartPendingRefreshRetryFromActiveHandoff(activeHandoff);
+        }
+
+        private ActiveTaskPaneRefreshHandoff BeginActiveTaskPaneRefreshHandoff(string reason)
+        {
+            _pendingPaneRefreshRetryService.TrackActiveTarget();
+            return new ActiveTaskPaneRefreshHandoff(reason);
+        }
+
+        private bool TryRefreshActiveTaskPaneImmediately(ActiveTaskPaneRefreshHandoff activeHandoff)
+        {
+            if (!IsTaskPaneRefreshSucceeded(activeHandoff.Reason, null, null))
+            {
+                return false;
+            }
+
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-immediate-success reason="
+                + (activeHandoff.Reason ?? string.Empty)
+                + ", target=active");
+            StopPendingPaneRefreshTimer();
+            return true;
+        }
+
+        private void StartPendingRefreshRetryFromActiveHandoff(ActiveTaskPaneRefreshHandoff activeHandoff)
+        {
+            int attemptsRemaining = _pendingPaneRefreshRetryService.BeginRetrySequence(activeHandoff.Reason);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshOrchestrationService action=defer-scheduled reason="
-                + (reason ?? string.Empty)
+                + (activeHandoff.Reason ?? string.Empty)
                 + ", target=active"
                 + ", attempts="
                 + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private readonly struct ActiveTaskPaneRefreshHandoff
+        {
+            internal ActiveTaskPaneRefreshHandoff(string reason)
+            {
+                Reason = reason;
+            }
+
+            internal string Reason { get; }
         }
 
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)

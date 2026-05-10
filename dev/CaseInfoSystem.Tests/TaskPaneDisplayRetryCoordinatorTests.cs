@@ -930,6 +930,43 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ActiveTaskPaneRefreshHandoffSchedulesPendingRetryWithoutCompletionOwnership()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string scheduleActive = ReadMethod(orchestrationSource, "internal void ScheduleActiveTaskPaneRefresh");
+            string beginActiveHandoff = ReadMethod(orchestrationSource, "private ActiveTaskPaneRefreshHandoff BeginActiveTaskPaneRefreshHandoff");
+            string immediateActiveRefresh = ReadMethod(orchestrationSource, "private bool TryRefreshActiveTaskPaneImmediately");
+            string startActiveRetry = ReadMethod(orchestrationSource, "private void StartPendingRefreshRetryFromActiveHandoff");
+            string activeRefreshHandoffFlow = scheduleActive
+                + beginActiveHandoff
+                + immediateActiveRefresh
+                + startActiveRetry;
+
+            AssertContainsInOrder(
+                scheduleActive,
+                "ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(reason);",
+                "TryRefreshActiveTaskPaneImmediately(activeHandoff)",
+                "return;",
+                "StartPendingRefreshRetryFromActiveHandoff(activeHandoff);");
+            AssertContainsInOrder(
+                activeRefreshHandoffFlow,
+                "_pendingPaneRefreshRetryService.TrackActiveTarget();",
+                "IsTaskPaneRefreshSucceeded(activeHandoff.Reason, null, null)",
+                "action=defer-immediate-success",
+                ", target=active",
+                "StopPendingPaneRefreshTimer();",
+                "BeginRetrySequence(activeHandoff.Reason);",
+                "action=defer-scheduled",
+                ", target=active",
+                ", attempts=");
+            Assert.DoesNotContain("TrackWorkbookTarget", activeRefreshHandoffFlow);
+            Assert.DoesNotContain("ResolveWorkbookPaneWindow", activeRefreshHandoffFlow);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", activeRefreshHandoffFlow);
+            Assert.DoesNotContain("case-display-completed", activeRefreshHandoffFlow);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", activeRefreshHandoffFlow);
+        }
+
+        [Fact]
         public void ReadyShowPendingFallbackAndRetrySequencing_PreservesAttemptsDelayAndActivationMatrix()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");

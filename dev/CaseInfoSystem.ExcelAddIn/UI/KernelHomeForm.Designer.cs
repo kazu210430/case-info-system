@@ -85,15 +85,15 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
             this.lblSystemRootTitle = new System.Windows.Forms.Label();
             this.lblSystemRootValue = new System.Windows.Forms.Label();
-            this.grpDateRule = new System.Windows.Forms.GroupBox();
+            this.grpDateRule = new SilverGroupBox();
             this.optDateNone = new System.Windows.Forms.RadioButton();
             this.optDateYY = new System.Windows.Forms.RadioButton();
             this.optDateYYYY = new System.Windows.Forms.RadioButton();
-            this.grpNameRule = new System.Windows.Forms.GroupBox();
+            this.grpNameRule = new SilverGroupBox();
             this.optNameCustDoc = new System.Windows.Forms.RadioButton();
             this.optNameDocCust = new System.Windows.Forms.RadioButton();
             this.optNameDoc = new System.Windows.Forms.RadioButton();
-            this.grpScreenSwitch = new System.Windows.Forms.GroupBox();
+            this.grpScreenSwitch = new SilverGroupBox();
             this.btnOpenCaseList = new System.Windows.Forms.Button();
             this.btnOpenTemplate = new System.Windows.Forms.Button();
             this.btnOpenUserData = new System.Windows.Forms.Button();
@@ -110,7 +110,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblExistingCaseTitleSuffix = new System.Windows.Forms.Label();
             this.btnCreateCaseSingle = new System.Windows.Forms.Button();
             this.btnCreateCaseBatch = new System.Windows.Forms.Button();
-            this.pnlExistingCaseTree = new System.Windows.Forms.Panel();
+            this.pnlExistingCaseTree = new SilverBorderPanel();
             this.label2 = new System.Windows.Forms.Label();
             this.lblExistingTreeDocName = new System.Windows.Forms.Label();
             this.lblExistingTreeCaseName = new System.Windows.Forms.Label();
@@ -123,7 +123,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             this.lblNewTreeRootPath = new System.Windows.Forms.Label();
             this.label4 = new System.Windows.Forms.Label();
             this.label1 = new System.Windows.Forms.Label();
-            this.pnlNewCaseTree = new System.Windows.Forms.Panel();
+            this.pnlNewCaseTree = new SilverBorderPanel();
             this.label5 = new System.Windows.Forms.Label();
             this.grpDateRule.SuspendLayout();
             this.grpNameRule.SuspendLayout();
@@ -492,7 +492,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // pnlExistingCaseTree
             // 
             this.pnlExistingCaseTree.BackColor = System.Drawing.SystemColors.Menu;
-            this.pnlExistingCaseTree.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.pnlExistingCaseTree.Controls.Add(this.label2);
             this.pnlExistingCaseTree.Controls.Add(this.lblExistingTreeDocName);
             this.pnlExistingCaseTree.Controls.Add(this.lblExistingTreeCaseName);
@@ -654,7 +653,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // pnlNewCaseTree
             // 
             this.pnlNewCaseTree.BackColor = System.Drawing.SystemColors.Menu;
-            this.pnlNewCaseTree.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.pnlNewCaseTree.Controls.Add(this.label5);
             this.pnlNewCaseTree.Controls.Add(this.label1);
             this.pnlNewCaseTree.Controls.Add(this.label4);

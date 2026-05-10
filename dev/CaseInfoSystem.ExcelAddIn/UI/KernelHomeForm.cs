@@ -997,5 +997,85 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
+		private sealed class SilverGroupBox : GroupBox
+		{
+			private const int CaptionLeft = 8;
+
+			public SilverGroupBox ()
+			{
+				SetStyle (
+					ControlStyles.UserPaint
+					| ControlStyles.AllPaintingInWmPaint
+					| ControlStyles.OptimizedDoubleBuffer
+					| ControlStyles.ResizeRedraw,
+					true);
+			}
+
+			protected override void OnPaint (PaintEventArgs e)
+			{
+				e.Graphics.Clear (BackColor);
+				if (Width <= 1 || Height <= 1) {
+					return;
+				}
+
+				int borderY = Font.Height / 2;
+				string caption = Text ?? string.Empty;
+				Size captionSize = TextRenderer.MeasureText (
+					e.Graphics,
+					caption,
+					Font,
+					new Size (int.MaxValue, int.MaxValue),
+					TextFormatFlags.NoPadding);
+				int captionRight = CaptionLeft + captionSize.Width + 4;
+
+				using (Pen pen = new Pen (Color.Silver)) {
+					e.Graphics.DrawLine (pen, 0, borderY, Math.Max (0, CaptionLeft - 2), borderY);
+					if (captionRight < Width - 1) {
+						e.Graphics.DrawLine (pen, captionRight, borderY, Width - 1, borderY);
+					}
+					e.Graphics.DrawLine (pen, 0, borderY, 0, Height - 1);
+					e.Graphics.DrawLine (pen, Width - 1, borderY, Width - 1, Height - 1);
+					e.Graphics.DrawLine (pen, 0, Height - 1, Width - 1, Height - 1);
+				}
+
+				if (caption.Length > 0) {
+					TextRenderer.DrawText (
+						e.Graphics,
+						caption,
+						Font,
+						new Point (CaptionLeft, 0),
+						ForeColor,
+						BackColor,
+						TextFormatFlags.NoPadding);
+				}
+			}
+		}
+
+		private sealed class SilverBorderPanel : Panel
+		{
+			public SilverBorderPanel ()
+			{
+				BorderStyle = BorderStyle.None;
+				SetStyle (
+					ControlStyles.UserPaint
+					| ControlStyles.AllPaintingInWmPaint
+					| ControlStyles.OptimizedDoubleBuffer
+					| ControlStyles.ResizeRedraw,
+					true);
+			}
+
+			protected override void OnPaint (PaintEventArgs e)
+			{
+				base.OnPaint (e);
+				if (Width <= 1 || Height <= 1) {
+					return;
+				}
+
+				using (Pen pen = new Pen (Color.Silver)) {
+					e.Graphics.DrawRectangle (pen, 0, 0, Width - 1, Height - 1);
+				}
+			}
+		}
+
     }
 }

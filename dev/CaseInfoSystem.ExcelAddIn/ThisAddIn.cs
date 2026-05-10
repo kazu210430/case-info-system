@@ -50,6 +50,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
         // Kernel 操作
         private KernelCaseCreationCommandService _kernelCaseCreationCommandService;
+        private KernelCommandService _kernelCommandService;
         private KernelUserDataReflectionService _kernelUserDataReflectionService;
         private WorkbookRibbonCommandService _workbookRibbonCommandService;
         private WorkbookCaseTaskPaneRefreshCommandService _workbookCaseTaskPaneRefreshCommandService;
@@ -181,6 +182,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             // Kernel 操作
             _kernelCaseCreationCommandService = compositionRoot.KernelCaseCreationCommandService;
+            _kernelCommandService = compositionRoot.KernelCommandService;
             _kernelUserDataReflectionService = compositionRoot.KernelUserDataReflectionService;
             _workbookRibbonCommandService = compositionRoot.WorkbookRibbonCommandService;
             _workbookCaseTaskPaneRefreshCommandService = compositionRoot.WorkbookCaseTaskPaneRefreshCommandService;
@@ -1064,6 +1066,27 @@ namespace CaseInfoSystem.ExcelAddIn
             ribbonCommandService?.CopySampleColumnBToHome(targetWorkbook);
         }
 
+        public void UpdateBaseDefinitionFromRibbon()
+        {
+            KernelCommandService kernelCommandService = _kernelCommandService;
+            if (kernelCommandService == null)
+            {
+                MessageBox.Show("Base定義更新サービスを利用できません。", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                WorkbookContext context = ResolveKernelCommandContextForRibbon();
+                kernelCommandService.Execute(context, KernelNavigationActionIds.SyncBaseHomeFieldInventory);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error("UpdateBaseDefinitionFromRibbon failed.", ex);
+                MessageBox.Show("Base定義更新を実行できませんでした。ログを確認してください。", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         public void ResetActiveWorkbookForDistribution()
         {
             Excel.Workbook targetWorkbook = ResolveRibbonTargetWorkbook();
@@ -1175,6 +1198,55 @@ namespace CaseInfoSystem.ExcelAddIn
 
             var openWorkbooks = _excelInteropService.GetOpenWorkbooks();
             return openWorkbooks.Count == 1 ? openWorkbooks[0] : null;
+        }
+
+        private WorkbookContext ResolveKernelCommandContextForRibbon()
+        {
+            Excel.Workbook workbook = ResolveRibbonTargetWorkbook();
+            string systemRoot = string.Empty;
+            if (workbook != null && _excelInteropService != null)
+            {
+                systemRoot = _excelInteropService.TryGetDocumentProperty(workbook, "SYSTEM_ROOT");
+            }
+
+            if ((workbook == null || string.IsNullOrWhiteSpace(systemRoot)) && _kernelWorkbookService != null)
+            {
+                string boundSystemRoot;
+                Excel.Workbook boundWorkbook;
+                if (_kernelWorkbookService.TryGetValidHomeWorkbookBinding(out boundWorkbook, out boundSystemRoot))
+                {
+                    workbook = boundWorkbook;
+                    systemRoot = boundSystemRoot;
+                }
+            }
+
+            if (workbook == null || _excelInteropService == null)
+            {
+                throw new InvalidOperationException("Kernel workbook context was not available for Base definition update.");
+            }
+
+            WorkbookRole role = _workbookRoleResolver == null
+                ? WorkbookRole.Unknown
+                : _workbookRoleResolver.Resolve(workbook);
+            return new WorkbookContext(
+                workbook,
+                TryGetActiveWindow(),
+                role,
+                systemRoot,
+                _excelInteropService.GetWorkbookFullName(workbook),
+                _excelInteropService.GetActiveSheetCodeName(workbook));
+        }
+
+        private Excel.Window TryGetActiveWindow()
+        {
+            try
+            {
+                return Application == null ? null : Application.ActiveWindow;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private WorkbookContext ResolveKernelReflectionContextForAutomation()

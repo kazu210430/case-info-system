@@ -207,11 +207,11 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 ## Base HOME フィールドキー同期
 
-Base HOME フィールドキー同期は `KernelCommandService` から `BaseHomeFieldInventorySyncService` を呼び出して実行されます。Base `ホーム` A列を変更した後、Kernel `CaseList_FieldInventory.ProposedFieldKey` を同じキーへ合わせるための補助入口です。
+Base HOME フィールドキー同期は、リボンの `Base定義更新` から `KernelCommandService` と `BaseHomeFieldInventorySyncService` を呼び出して実行されます。Base `ホーム` A列を変更した後、Kernel `CaseList_FieldInventory.ProposedFieldKey` を同じキーへ合わせるための補助入口です。
 
 ### フロー
 
-1. `KernelCommandService` が Kernel pane 由来の `WorkbookContext` を同期サービスへ渡します。
+1. リボン入口が active workbook または Kernel HOME binding から `WorkbookContext` を組み立て、`KernelCommandService` が同期サービスへ渡します。
 2. `BaseHomeFieldInventorySyncService` が対象 Kernel workbook と `SYSTEM_ROOT` の一致を確認します。
 3. `SYSTEM_ROOT` から Base workbook を解決し、Base `ホーム` A列のキーを読み取ります。
 4. Kernel `CaseList_FieldInventory` の既存行を読み取り、`SourceCell=B{Base HOME row}` を安定した行対応として使います。

@@ -87,6 +87,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal KernelCaseCreationCommandService KernelCaseCreationCommandService { get; private set; }
 
+        internal KernelCommandService KernelCommandService { get; private set; }
+
         internal KernelUserDataReflectionService KernelUserDataReflectionService { get; private set; }
 
         internal KernelCaseInteractionState KernelCaseInteractionState { get; private set; }
@@ -304,6 +306,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 kernelTemplateFolderOpenService,
                 _showKernelHomeFromKernelCommand,
                 _logger);
+            KernelCommandService = kernelCommandService;
             var kernelSheetCommandTriggerService = new KernelSheetCommandTriggerService(
                 kernelCommandService,
                 KernelWorkbookService,

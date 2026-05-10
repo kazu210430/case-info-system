@@ -117,27 +117,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + FormatActiveState()
                 + WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest));
             _windowActivateDownstreamObservation.LogStart(displayRequest, reason, workbook, window, refreshAttemptId);
-            TaskPaneRefreshPreconditionDecision preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+            TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(
                 reason,
                 workbook,
                 window,
-                () => _casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window));
+                refreshAttemptId);
             if (!preconditionDecision.CanRefresh)
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action="
-                    + preconditionDecision.SkipActionName
-                    + " refreshAttemptId="
-                    + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
-                    + ", reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", inputWindow="
-                    + FormatWindowDescriptor(window)
-                    + ", activeState="
-                    + FormatActiveState());
                 TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
                     reason,
                     workbook,
@@ -178,6 +164,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 routeDispatchExecutionResult,
                 stopwatch,
                 refreshAttemptId);
+        }
+
+        private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window window,
+            int refreshAttemptId)
+        {
+            TaskPaneRefreshPreconditionDecision preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+                reason,
+                workbook,
+                window,
+                () => _casePaneHostBridge.ShouldIgnoreTaskPaneRefreshDuringCaseProtection(reason, workbook, window));
+            if (!preconditionDecision.CanRefresh)
+            {
+                _logger?.Info(
+                    KernelFlickerTracePrefix
+                    + " source=TaskPaneRefreshOrchestrationService action="
+                    + preconditionDecision.SkipActionName
+                    + " refreshAttemptId="
+                    + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
+                    + ", reason="
+                    + (reason ?? string.Empty)
+                    + ", workbook="
+                    + FormatWorkbookDescriptor(workbook)
+                    + ", inputWindow="
+                    + FormatWindowDescriptor(window)
+                    + ", activeState="
+                    + FormatActiveState());
+            }
+
+            return preconditionDecision;
         }
 
         private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence(

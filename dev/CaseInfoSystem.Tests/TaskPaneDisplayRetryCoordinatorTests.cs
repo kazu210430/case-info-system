@@ -904,18 +904,25 @@ namespace CaseInfoSystem.Tests
         public void PendingRetryAndActiveFallbackRefreshSuccessStopRetryWithoutCompletionOwnership()
         {
             string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
+            string workbookTargetRetry = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingWorkbookTarget");
+            string activeContextFallback = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingActiveContextFallback");
+            string retryContinuation = ReadMethod(pendingSource, "private void ResolvePendingRetryContinuation");
 
             AssertContainsInOrder(
-                pendingSource,
+                workbookTargetRetry,
                 "action=defer-retry-end",
                 "refreshed=",
-                "if (refreshed)",
-                "_stopPendingPaneRefreshTimer();");
+                "? PendingRetryTickResult.StopRetrySequence()",
+                ": PendingRetryTickResult.ContinueRetrySequence();");
             AssertContainsInOrder(
-                pendingSource,
+                activeContextFallback,
                 "action=defer-active-context-fallback-end",
                 "refreshed=",
-                "if (fallbackRefreshed)",
+                "? PendingRetryTickResult.StopRetrySequence()",
+                ": PendingRetryTickResult.ContinueRetrySequence();");
+            AssertContainsInOrder(
+                retryContinuation,
+                "if (tickResult.ShouldStopTimer)",
                 "_stopPendingPaneRefreshTimer();");
             Assert.DoesNotContain("case-display-completed", pendingSource);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", pendingSource);
@@ -946,6 +953,9 @@ namespace CaseInfoSystem.Tests
             string schedulerSchedule = ReadMethod(schedulerSource, "internal void Schedule");
             string pendingBeginRetry = ReadMethod(pendingSource, "internal int BeginRetrySequence");
             string pendingTick = ReadMethod(pendingSource, "private void PendingPaneRefreshTimer_Tick");
+            string pendingWorkbookTargetRetry = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingWorkbookTarget");
+            string pendingActiveContextFallback = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingActiveContextFallback");
+            string pendingRetryContinuation = ReadMethod(pendingSource, "private void ResolvePendingRetryContinuation");
 
             Assert.Contains("internal const int ReadyShowMaxAttempts = 2;", workerSource);
             Assert.Contains("internal const int ReadyShowRetryDelayMs = 80;", workerSource);
@@ -1002,14 +1012,30 @@ namespace CaseInfoSystem.Tests
                 "PendingPaneRefreshTimer_Tick);");
             AssertContainsInOrder(
                 pendingTick,
+                "if (!_retryState.HasAttemptsRemaining)",
+                "ResolvePendingRetryContinuation(PendingRetryTickResult.StopRetrySequence());",
+                "PendingRetryTickResult tickResult = TryRefreshPendingWorkbookTarget();",
+                "if (!tickResult.Handled)",
+                "tickResult = TryRefreshPendingActiveContextFallback();",
+                "ResolvePendingRetryContinuation(tickResult);");
+            AssertContainsInOrder(
+                pendingWorkbookTargetRetry,
+                "ResolvePendingPaneRefreshWorkbook()",
+                "return PendingRetryTickResult.ContinueToActiveContextFallback();",
                 "_resolveWorkbookPaneWindow(targetWorkbook, _retryState.Reason, true);",
                 "_tryRefreshTaskPane(_retryState.Reason, targetWorkbook, workbookWindow)",
-                "if (refreshed)",
-                "_stopPendingPaneRefreshTimer();",
-                "return;",
+                "? PendingRetryTickResult.StopRetrySequence()",
+                ": PendingRetryTickResult.ContinueRetrySequence();");
+            AssertContainsInOrder(
+                pendingActiveContextFallback,
                 "WorkbookContext context =",
+                "return PendingRetryTickResult.StopRetrySequence();",
                 "bool fallbackRefreshed = _tryRefreshTaskPane(_retryState.Reason, null, null).IsRefreshSucceeded;",
-                "if (fallbackRefreshed)",
+                "? PendingRetryTickResult.StopRetrySequence()",
+                ": PendingRetryTickResult.ContinueRetrySequence();");
+            AssertContainsInOrder(
+                pendingRetryContinuation,
+                "if (tickResult.ShouldStopTimer)",
                 "_stopPendingPaneRefreshTimer();");
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", pendingFallbackHandoffFlow);
             Assert.DoesNotContain("case-display-completed", pendingFallbackHandoffFlow);

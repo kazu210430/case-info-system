@@ -94,44 +94,57 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (!_retryState.HasAttemptsRemaining)
             {
-                _stopPendingPaneRefreshTimer();
+                ResolvePendingRetryContinuation(PendingRetryTickResult.StopRetrySequence());
                 return;
             }
 
-            Excel.Workbook targetWorkbook = ResolvePendingPaneRefreshWorkbook();
-            if (targetWorkbook != null)
+            PendingRetryTickResult tickResult = TryRefreshPendingWorkbookTarget();
+            if (!tickResult.Handled)
             {
-                int attemptsRemaining = _retryState.ConsumeAttempt();
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=defer-retry-start reason="
-                    + _retryState.Reason
-                    + ", workbook="
-                    + _formatWorkbookDescriptor(targetWorkbook)
-                    + ", attemptsRemaining="
-                    + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
-                _logger?.Info("TaskPane timer retry start. reason=" + _retryState.Reason + ", workbook=" + _safeWorkbookFullName(targetWorkbook) + ", attemptsRemaining=" + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
-                Excel.Window workbookWindow = _resolveWorkbookPaneWindow(targetWorkbook, _retryState.Reason, true);
-                bool refreshed = _tryRefreshTaskPane(_retryState.Reason, targetWorkbook, workbookWindow).IsRefreshSucceeded;
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=defer-retry-end reason="
-                    + _retryState.Reason
-                    + ", workbook="
-                    + _formatWorkbookDescriptor(targetWorkbook)
-                    + ", resolvedWindow="
-                    + _formatWindowDescriptor(workbookWindow)
-                    + ", refreshed="
-                    + refreshed.ToString());
-                _logger?.Info("TaskPane timer retry result. reason=" + _retryState.Reason + ", workbook=" + _safeWorkbookFullName(targetWorkbook) + ", windowHwnd=" + _safeWindowHwnd(workbookWindow) + ", refreshed=" + refreshed.ToString());
-                if (refreshed)
-                {
-                    _stopPendingPaneRefreshTimer();
-                }
-
-                return;
+                tickResult = TryRefreshPendingActiveContextFallback();
             }
 
+            ResolvePendingRetryContinuation(tickResult);
+        }
+
+        private PendingRetryTickResult TryRefreshPendingWorkbookTarget()
+        {
+            Excel.Workbook targetWorkbook = ResolvePendingPaneRefreshWorkbook();
+            if (targetWorkbook == null)
+            {
+                return PendingRetryTickResult.ContinueToActiveContextFallback();
+            }
+
+            int attemptsRemaining = _retryState.ConsumeAttempt();
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-retry-start reason="
+                + _retryState.Reason
+                + ", workbook="
+                + _formatWorkbookDescriptor(targetWorkbook)
+                + ", attemptsRemaining="
+                + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+            _logger?.Info("TaskPane timer retry start. reason=" + _retryState.Reason + ", workbook=" + _safeWorkbookFullName(targetWorkbook) + ", attemptsRemaining=" + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+            Excel.Window workbookWindow = _resolveWorkbookPaneWindow(targetWorkbook, _retryState.Reason, true);
+            bool refreshed = _tryRefreshTaskPane(_retryState.Reason, targetWorkbook, workbookWindow).IsRefreshSucceeded;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-retry-end reason="
+                + _retryState.Reason
+                + ", workbook="
+                + _formatWorkbookDescriptor(targetWorkbook)
+                + ", resolvedWindow="
+                + _formatWindowDescriptor(workbookWindow)
+                + ", refreshed="
+                + refreshed.ToString());
+            _logger?.Info("TaskPane timer retry result. reason=" + _retryState.Reason + ", workbook=" + _safeWorkbookFullName(targetWorkbook) + ", windowHwnd=" + _safeWindowHwnd(workbookWindow) + ", refreshed=" + refreshed.ToString());
+            return refreshed
+                ? PendingRetryTickResult.StopRetrySequence()
+                : PendingRetryTickResult.ContinueRetrySequence();
+        }
+
+        private PendingRetryTickResult TryRefreshPendingActiveContextFallback()
+        {
             WorkbookContext context = _workbookSessionService == null ? null : _workbookSessionService.ResolveActiveContext("PendingPaneRefresh");
             if (context == null || context.Role != WorkbookRole.Case)
             {
@@ -145,8 +158,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + (context == null ? "null" : context.Role.ToString())
                     + ", attemptsRemaining="
                     + _retryState.AttemptsRemaining.ToString(CultureInfo.InvariantCulture));
-                _stopPendingPaneRefreshTimer();
-                return;
+                return PendingRetryTickResult.StopRetrySequence();
             }
 
             int fallbackAttemptsRemaining = _retryState.ConsumeAttempt();
@@ -189,7 +201,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + _retryState.WorkbookFullName
                 + ", refreshed="
                 + fallbackRefreshed.ToString());
-            if (fallbackRefreshed)
+            return fallbackRefreshed
+                ? PendingRetryTickResult.StopRetrySequence()
+                : PendingRetryTickResult.ContinueRetrySequence();
+        }
+
+        private void ResolvePendingRetryContinuation(PendingRetryTickResult tickResult)
+        {
+            if (tickResult.ShouldStopTimer)
             {
                 _stopPendingPaneRefreshTimer();
             }
@@ -203,6 +222,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return _excelInteropService.FindOpenWorkbook(_retryState.WorkbookFullName);
+        }
+
+        private readonly struct PendingRetryTickResult
+        {
+            private PendingRetryTickResult(bool handled, bool shouldStopTimer)
+            {
+                Handled = handled;
+                ShouldStopTimer = shouldStopTimer;
+            }
+
+            internal bool Handled { get; }
+
+            internal bool ShouldStopTimer { get; }
+
+            internal static PendingRetryTickResult ContinueToActiveContextFallback()
+            {
+                return new PendingRetryTickResult(handled: false, shouldStopTimer: false);
+            }
+
+            internal static PendingRetryTickResult ContinueRetrySequence()
+            {
+                return new PendingRetryTickResult(handled: true, shouldStopTimer: false);
+            }
+
+            internal static PendingRetryTickResult StopRetrySequence()
+            {
+                return new PendingRetryTickResult(handled: true, shouldStopTimer: true);
+            }
         }
 
         private sealed class PendingPaneRefreshRetryState

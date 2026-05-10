@@ -461,10 +461,10 @@ namespace CaseInfoSystem.Tests
         {
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["当方_郵便番号"] = "100-0001",
-                ["当方_住所"] = "東京都千代田区1-1",
-                ["当方_事務所名"] = "OpenAI法律事務所",
-                ["当方_電話"] = "03-1111-2222",
+                ["My郵便番号"] = "100-0001",
+                ["My住所"] = "東京都千代田区1-1",
+                ["My事務所名"] = "OpenAI法律事務所",
+                ["My電話"] = "03-1111-2222",
                 ["銀行・支店"] = "みずほ銀行 東京支店",
                 ["口座番号・名義"] = "1234567 OpenAI"
             };

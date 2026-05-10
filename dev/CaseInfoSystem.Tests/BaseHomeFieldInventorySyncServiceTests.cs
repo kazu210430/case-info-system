@@ -108,6 +108,36 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
+		public void BuildPlan_WhenAllowedMyFieldRenameIsRequested_AllowsUpdate()
+		{
+			BaseHomeFieldInventorySyncService.SyncPlan plan = BaseHomeFieldInventorySyncService.BuildPlan(
+				new[]
+				{
+					BaseRow(1, FieldKeyRenameMap.CurrentLawyerKey),
+					BaseRow(2, FieldKeyRenameMap.CurrentPostalCodeKey),
+					BaseRow(3, FieldKeyRenameMap.CurrentAddressKey),
+					BaseRow(4, FieldKeyRenameMap.CurrentOfficeNameKey),
+					BaseRow(5, FieldKeyRenameMap.CurrentPhoneKey),
+					BaseRow(6, FieldKeyRenameMap.CurrentFaxKey)
+				},
+				new[]
+				{
+					InventoryRow(2, "B1", FieldKeyRenameMap.LegacyLawyerKey),
+					InventoryRow(3, "B2", FieldKeyRenameMap.LegacyPostalCodeKey),
+					InventoryRow(4, "B3", FieldKeyRenameMap.LegacyAddressKey),
+					InventoryRow(5, "B4", FieldKeyRenameMap.LegacyOfficeNameKey),
+					InventoryRow(6, "B5", FieldKeyRenameMap.LegacyPhoneKey),
+					InventoryRow(7, "B6", FieldKeyRenameMap.LegacyFaxKey)
+				},
+				FieldKeyRenameMap.LegacyAndCurrentFieldKeys);
+
+			Assert.True(plan.CanApply);
+			Assert.Equal(6, plan.Updates.Count);
+			Assert.Contains(plan.Updates, update => update.OldFieldKey == FieldKeyRenameMap.LegacyLawyerKey && update.NewFieldKey == FieldKeyRenameMap.CurrentLawyerKey);
+			Assert.Contains(plan.Updates, update => update.OldFieldKey == FieldKeyRenameMap.LegacyFaxKey && update.NewFieldKey == FieldKeyRenameMap.CurrentFaxKey);
+		}
+
+		[Fact]
 		public void BuildPlan_WhenFinalFieldKeyWouldDuplicate_FailsClosed()
 		{
 			BaseHomeFieldInventorySyncService.SyncPlan plan = BaseHomeFieldInventorySyncService.BuildPlan(

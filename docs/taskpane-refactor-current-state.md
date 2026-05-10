@@ -72,6 +72,7 @@
 - `PendingPaneRefreshRetryState` により pending retry state が整理済みです。
 - `WorkbookPaneWindowResolver` により window resolver が整理済みです。
 - `TaskPaneRefreshPreconditionPolicy` は `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` の shared skip policy 正本です。
+- TaskPane refresh handoff 系の closure は `docs/taskpane-display-recovery-current-state.md` の `TaskPane refresh handoff closure note` を正本とします。
 
 ### 2. TaskPane 周辺で完了済みとして扱う bridge / 境界整理
 

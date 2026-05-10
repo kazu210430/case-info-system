@@ -313,6 +313,49 @@ STOP 継続領域:
 - foreground outcome semantics。
 - `RequiredDegraded` は success / failure / direct completion ではありません。
 
+### TaskPane refresh handoff closure note
+
+この節は、上の `Phase 5 runtime closure note` 後に main 正本化した TaskPane refresh handoff 系の構造改善を、closure としてまとめるものです。ここでいう closure は service 化 / adapter 化 / file boundary separation ではなく、同一 owner 内の private helper / private readonly struct による handoff orchestration の名前付けと読み順整理です。
+
+main 正本化済みの到達点:
+
+- R14 one-time completion safety tests と R14 one-time mark private method 化は main 正本化済みです。
+- callback raw facts は safety tests と private naming 整理が main 正本化済みです。
+- `TryRefreshTaskPaneCore(...)` は、start observation -> precondition / fail-closed -> route dispatch -> post-dispatch convergence の orchestration skeleton として読める状態です。
+- route dispatch、post-dispatch convergence、precondition / fail-closed boundary、fail-closed result handoff、refresh attempt start observation は、同一 class 内 private boundary として整理済みです。
+- active refresh / workbook fallback / pending retry start の流れは `RunTaskPaneRefreshHandoffFlow(...)` と `TaskPaneRefreshHandoffFlowInput` を中心に、handoff orchestration として一本化済みです。
+- active branch / workbook fallback branch / input naming は、active path と workbook fallback path の違いが読めるように整理済みです。
+- handoff flow helper 群は、entry -> shared handoff flow -> branch -> branch helper -> data-only input の読み順に寄せています。
+- `PendingPaneRefreshRetryService.PendingPaneRefreshTimer_Tick(...)` は、workbook-target retry -> active-context fallback -> continuation / stop decision の retry flow として読める状態です。
+
+handoff closure で持たせていない責務:
+
+- pending retry owner は移動していません。
+- timer lifecycle owner は移動していません。
+- completion owner は移動していません。
+- `case-display-completed` emit owner は移動していません。
+- display session / session lookup / one-time emit guard は移動していません。
+- route semantics と `activateWorkbook` matrix は変更していません。
+- callback meaning は変更していません。
+- retry values は変更していません。
+- trace payload field set / order / names / values は変更していません。
+- `NewCaseVisibilityObservation.Complete(...)` の owner は移動していません。
+
+この closure で固定する読み方:
+
+- `RunTaskPaneRefreshHandoffFlow(...)` は、active / workbook fallback / pending retry start の材料と呼び出し順をまとめる handoff orchestration です。
+- `TaskPaneRefreshHandoffFlowInput` は処理責務ではなく、active refresh または workbook fallback の data-only handoff input です。
+- active refresh success、workbook fallback immediate refresh success、pending retry success は、それ自体では completion / emit owner ではありません。
+- pending retry は completion / emit owner ではなく、既存 refresh / outcome / completion chain に戻るための retry scheduling boundary です。
+- WindowActivate dispatch / downstream observation は completion ではありません。
+- normalized outcome、foreground outcome、display-completable input は completion ではありません。
+
+HOLD / STOP 継続:
+
+- helper file boundary separation は引き続き HOLD です。
+- R07/R09/R13/R14 横断 extraction は引き続き STOP です。
+- pending retry owner、timer lifecycle owner、completion / emit / session owner、route semantics、callback meaning を別 owner へ移す整理は引き続き STOP です。
+
 ## 対象範囲
 
 対象に含めるもの:

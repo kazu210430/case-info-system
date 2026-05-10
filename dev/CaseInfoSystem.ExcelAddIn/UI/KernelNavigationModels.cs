@@ -34,6 +34,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal const string RegisterUserInfo = "register-user-info";
         internal const string OpenTemplateFolder = "open-template-folder";
         internal const string ReflectTemplate = "reflect-template";
+        internal const string SyncBaseHomeFieldInventory = "sync-base-home-field-inventory";
     }
 
     internal static class KernelNavigationDefinitions
@@ -56,6 +57,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             if (isTemplateList)
             {
                 definitions.Add(new KernelNavigationActionDefinition("open-template-folder", "雛形フォルダを開く", SectionAction, true, false));
+                definitions.Add(new KernelNavigationActionDefinition("sync-base-home-field-inventory", "Base HOMEキー同期", SectionAction, true, false));
                 definitions.Add(new KernelNavigationActionDefinition("reflect-template", "雛形登録・更新", SectionAction, true, false));
             }
 

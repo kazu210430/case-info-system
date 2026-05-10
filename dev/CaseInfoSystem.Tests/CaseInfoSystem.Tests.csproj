@@ -61,6 +61,7 @@
     <Compile Include="KernelWorkbookPromotionPolicyTests.cs" />
     <Compile Include="KernelWorkbookServicePolicyTests.cs" />
     <Compile Include="KernelTemplateSyncServiceTests.cs" />
+    <Compile Include="BaseHomeFieldInventorySyncServiceTests.cs" />
     <Compile Include="KernelStartupContextInspectorTests.cs" />
     <Compile Include="KernelHomeWindowIndependencePolicyTests.cs" />
     <Compile Include="KernelWorkbookStartupDisplayPolicyTests.cs" />
@@ -179,6 +180,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CaseTaskPaneViewStateBuilder.cs" Link="Source\App\CaseTaskPaneViewStateBuilder.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentNameOverrideScope.cs" Link="Source\App\DocumentNameOverrideScope.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelTemplateSyncService.cs" Link="Source\App\KernelTemplateSyncService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\BaseHomeFieldInventorySyncService.cs" Link="Source\App\BaseHomeFieldInventorySyncService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookService.cs" Link="Source\App\KernelWorkbookService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeDisplayVisibilityPolicy.cs" Link="Source\App\KernelWorkbookHomeDisplayVisibilityPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" Link="Source\App\KernelWorkbookHomeReleaseFallbackPolicy.cs" />

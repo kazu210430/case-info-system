@@ -22,6 +22,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly KernelTemplateSyncService _kernelTemplateSyncService;
 
+		private readonly BaseHomeFieldInventorySyncService _baseHomeFieldInventorySyncService;
+
 		private readonly KernelTemplateFolderOpenService _kernelTemplateFolderOpenService;
 
 		private readonly Action _showKernelHomeAction;
@@ -33,6 +35,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			IKernelUserDataReflectionService kernelUserDataReflectionService,
 			KernelUserDataRegistrationExecutionService kernelUserDataRegistrationExecutionService,
 			KernelTemplateSyncService kernelTemplateSyncService,
+			BaseHomeFieldInventorySyncService baseHomeFieldInventorySyncService,
 			KernelTemplateFolderOpenService kernelTemplateFolderOpenService,
 			Action showKernelHomeAction,
 			Logger logger)
@@ -41,6 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_kernelUserDataReflectionService = kernelUserDataReflectionService ?? throw new ArgumentNullException ("kernelUserDataReflectionService");
 			_kernelUserDataRegistrationExecutionService = kernelUserDataRegistrationExecutionService ?? throw new ArgumentNullException ("kernelUserDataRegistrationExecutionService");
 			_kernelTemplateSyncService = kernelTemplateSyncService ?? throw new ArgumentNullException ("kernelTemplateSyncService");
+			_baseHomeFieldInventorySyncService = baseHomeFieldInventorySyncService ?? throw new ArgumentNullException ("baseHomeFieldInventorySyncService");
 			_kernelTemplateFolderOpenService = kernelTemplateFolderOpenService ?? throw new ArgumentNullException ("kernelTemplateFolderOpenService");
 			_showKernelHomeAction = showKernelHomeAction ?? throw new ArgumentNullException ("showKernelHomeAction");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
@@ -73,6 +77,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				case "reflect-template":
 					ExecuteReflectTemplate (context);
 					break;
+				case "sync-base-home-field-inventory":
+					ExecuteSyncBaseHomeFieldInventory (context);
+					break;
 				default:
 					UserErrorService.ShowOkNotification ("未対応の操作です。actionId=" + actionId, "案件情報System", MessageBoxIcon.Asterisk);
 					break;
@@ -99,6 +106,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					break;
 				case "reflect-base-home":
 					ExecuteReflectBaseHomeOnly (context);
+					break;
+				case "sync-base-home-field-inventory":
+					ExecuteSyncBaseHomeFieldInventory (context);
 					break;
 				default:
 					_logger.Warn ("Kernel sheet command ignored. commandId=" + commandId);
@@ -134,6 +144,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch (Exception exception) {
 				_logger.Error ("ExecuteReflectTemplate failed.", exception);
 				UserErrorService.ShowOkNotification ("雛形登録・更新を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
+			}
+		}
+
+		private void ExecuteSyncBaseHomeFieldInventory (WorkbookContext context)
+		{
+			try {
+				BaseHomeFieldInventorySyncService.SyncResult syncResult = _baseHomeFieldInventorySyncService.Execute (context);
+				TemplateRegistrationResultForm.ShowNotice ("案件情報System", syncResult.Message);
+			} catch (Exception exception) {
+				_logger.Error ("ExecuteSyncBaseHomeFieldInventory failed.", exception);
+				UserErrorService.ShowOkNotification ("Base HOME キー同期を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxIcon.Exclamation);
 			}
 		}
 

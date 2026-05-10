@@ -225,6 +225,7 @@
     <Compile Include="App\KernelTemplateSyncPreparationService.cs" />
     <Compile Include="App\KernelTemplateSyncPreflightService.cs" />
     <Compile Include="App\KernelTemplateSyncService.cs" />
+    <Compile Include="App\BaseHomeFieldInventorySyncService.cs" />
     <Compile Include="App\KernelUserDataRegistrationExecutionService.cs" />
     <Compile Include="App\KernelUserDataReflectionService.cs" />
     <Compile Include="App\KernelWorkbookLifecycleService.cs" />

@@ -205,6 +205,28 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 各ファイルの除外理由
 - 各ファイルの警告内容
 
+## Base HOME フィールドキー同期
+
+Base HOME フィールドキー同期は `KernelCommandService` から `BaseHomeFieldInventorySyncService` を呼び出して実行されます。Base `ホーム` A列を変更した後、Kernel `CaseList_FieldInventory.ProposedFieldKey` を同じキーへ合わせるための補助入口です。
+
+### フロー
+
+1. `KernelCommandService` が Kernel pane 由来の `WorkbookContext` を同期サービスへ渡します。
+2. `BaseHomeFieldInventorySyncService` が対象 Kernel workbook と `SYSTEM_ROOT` の一致を確認します。
+3. `SYSTEM_ROOT` から Base workbook を解決し、Base `ホーム` A列のキーを読み取ります。
+4. Kernel `CaseList_FieldInventory` の既存行を読み取り、`SourceCell=B{Base HOME row}` を安定した行対応として使います。
+5. 空欄、重複、制御文字、対応行欠落、同期後の `ProposedFieldKey` 重複、重要キー変更を検出した場合は書き込み前に中断します。
+6. 問題がない場合だけ、対応する既存行の `ProposedFieldKey` を更新します。
+7. `SourceCell`、`ProposedNamedRange`、`Label`、`DataType`、`NormalizeRule`、その他既存列は変更しません。
+8. 同期結果を表示し、Word 雛形 CC Tag の更新と雛形登録・更新の実行を案内します。
+
+### 非対象
+
+- Word 雛形 CC Tag の自動書き換え
+- `CaseList_FieldInventory` の行削除、全再作成、列構成変更
+- 雛形登録検証ルールの緩和
+- 文書作成フローの差し込み仕様変更
+
 ## Kernel ユーザー情報反映
 
 Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` または `KernelCommandService` から `KernelUserDataReflectionService` を呼び出して実行されます。Kernel `shUserData` の値を Base HOME と会計書類セットへ反映する補助フローです。

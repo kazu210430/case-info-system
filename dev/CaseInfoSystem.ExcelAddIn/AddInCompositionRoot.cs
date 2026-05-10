@@ -288,11 +288,19 @@ namespace CaseInfoSystem.ExcelAddIn
                 masterTemplateCatalogService,
                 caseWorkbookLifecycleService,
                 _logger);
+            var baseHomeFieldInventorySyncService = new BaseHomeFieldInventorySyncService(
+                _application,
+                KernelWorkbookService,
+                ExcelInteropService,
+                pathCompatibilityService,
+                caseWorkbookLifecycleService,
+                _logger);
             var kernelCommandService = new KernelCommandService(
                 KernelWorkbookService,
                 KernelUserDataReflectionService,
                 kernelUserDataRegistrationExecutionService,
                 kernelTemplateSyncService,
+                baseHomeFieldInventorySyncService,
                 kernelTemplateFolderOpenService,
                 _showKernelHomeFromKernelCommand,
                 _logger);

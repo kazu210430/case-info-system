@@ -69,7 +69,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             _refreshCasePaneButton.ScreenTip = "CASE \u30D6\u30C3\u30AF\u306E\u6587\u66F8\u30DC\u30BF\u30F3\u30D1\u30CD\u30EB\u3092\u518D\u63CF\u753B\u3057\u307E\u3059\u3002";
             _refreshCasePaneButton.Click += RefreshCasePaneButton_Click;
 
-            _copySampleColumnButton.Label = "SampleB\u8EE2\u8A18";
+            _copySampleColumnButton.Label = "\u30C0\u30DF\u30FC\u30C7\u30FC\u30BF\u5165\u529B";
             _copySampleColumnButton.ScreenTip = "BASE / CASE \u30D6\u30C3\u30AF\u306E shSample \u30B7\u30FC\u30C8 B\u5217\u3092 shHOME \u3078\u8EE2\u8A18\u3057\u307E\u3059\u3002";
             _copySampleColumnButton.Click += CopySampleColumnButton_Click;
 

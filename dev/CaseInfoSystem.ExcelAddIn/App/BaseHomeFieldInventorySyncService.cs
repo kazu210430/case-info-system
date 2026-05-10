@@ -551,7 +551,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					continue;
 				}
 
-				worksheet.Cells[update.FieldInventoryRowNumber, proposedFieldKeyColumnIndex].Value2 = update.NewFieldKey ?? string.Empty;
+				Excel.Range targetCell = null;
+				try
+				{
+					targetCell = worksheet.Cells[update.FieldInventoryRowNumber, proposedFieldKeyColumnIndex] as Excel.Range;
+					if (targetCell == null)
+					{
+						throw new InvalidOperationException("CaseList_FieldInventory の ProposedFieldKey セルを取得できませんでした。");
+					}
+
+					targetCell.Value2 = update.NewFieldKey ?? string.Empty;
+				}
+				finally
+				{
+					ComObjectReleaseService.FinalRelease(targetCell);
+				}
 			}
 		}
 

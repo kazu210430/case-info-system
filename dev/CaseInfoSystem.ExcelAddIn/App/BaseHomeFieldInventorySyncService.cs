@@ -136,11 +136,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			"顧客_名前",
 			"顧客_よみ",
 			"顧客_敬称",
-			"当方_弁護士",
-			"当方_郵便番号",
-			"当方_住所",
-			"当方_事務所名",
-			"当方_電話"
+			FieldKeyRenameMap.LegacyLawyerKey,
+			FieldKeyRenameMap.CurrentLawyerKey,
+			FieldKeyRenameMap.LegacyPostalCodeKey,
+			FieldKeyRenameMap.CurrentPostalCodeKey,
+			FieldKeyRenameMap.LegacyAddressKey,
+			FieldKeyRenameMap.CurrentAddressKey,
+			FieldKeyRenameMap.LegacyOfficeNameKey,
+			FieldKeyRenameMap.CurrentOfficeNameKey,
+			FieldKeyRenameMap.LegacyPhoneKey,
+			FieldKeyRenameMap.CurrentPhoneKey,
+			FieldKeyRenameMap.LegacyFaxKey,
+			FieldKeyRenameMap.CurrentFaxKey
 		};
 
 		private readonly Excel.Application _application;
@@ -361,7 +368,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 
 				string oldKey = NormalizeKey(inventoryRow.ProposedFieldKey);
-				if (importantKeys.Contains(oldKey) && !string.Equals(oldKey, proposedKey, StringComparison.OrdinalIgnoreCase))
+				if (importantKeys.Contains(oldKey)
+					&& !string.Equals(oldKey, proposedKey, StringComparison.OrdinalIgnoreCase)
+					&& !FieldKeyRenameMap.IsAllowedLegacyToCurrentRename(oldKey, proposedKey))
 				{
 					plan.Errors.Add("重要キーの変更は自動同期できません。 row=" + baseRow.RowNumber.ToString() + ", old=" + oldKey + ", new=" + proposedKey);
 					continue;

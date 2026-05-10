@@ -16,7 +16,7 @@ namespace CaseInfoSystem.Tests
     {
         private const string CustomerNameKey = "顧客_名前";
         private const string CustomerHonorificKey = "顧客_敬称";
-        private const string LawyerKey = "当方_弁護士";
+        private const string LawyerKey = "My表示名";
 
         [Fact]
         public void Execute_WhenInputsAreValid_CopiesTemplateAndWritesInitialWorkbookData()

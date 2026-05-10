@@ -34,7 +34,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string CustomerHonorificKey = "\u9867\u5BA2_\u656C\u79F0";
 
-		private const string LawyerKey = "\u5F53\u65B9_\u5F01\u8B77\u58EB";
+		private const string LawyerKey = FieldKeyRenameMap.CurrentLawyerKey;
 
 		private const string SystemRootPropertyName = "SYSTEM_ROOT";
 
@@ -174,7 +174,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (caseContext == null || caseContext.CaseValues == null || string.IsNullOrWhiteSpace (key)) {
 				return string.Empty;
 			}
-			if (!caseContext.CaseValues.TryGetValue (key, out var value)) {
+			if (!FieldKeyRenameMap.TryGetValueWithAliases (caseContext.CaseValues, key, out var value)) {
 				return string.Empty;
 			}
 			return (value ?? string.Empty).Trim ();

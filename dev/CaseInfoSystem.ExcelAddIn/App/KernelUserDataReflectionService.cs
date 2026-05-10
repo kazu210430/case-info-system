@@ -25,10 +25,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string CaseHomeSheetCodeName = "shHOME";
         private const string CaseHomeSheetName = "ホーム";
         private const string UnprotectPassword = "";
-        private const string UserDataPostalCodeKey = "当方_郵便番号";
-        private const string UserDataAddressKey = "当方_住所";
-        private const string UserDataOfficeNameKey = "当方_事務所名";
-        private const string UserDataPhoneKey = "当方_電話";
+        private const string UserDataPostalCodeKey = FieldKeyRenameMap.CurrentPostalCodeKey;
+        private const string UserDataAddressKey = FieldKeyRenameMap.CurrentAddressKey;
+        private const string UserDataOfficeNameKey = FieldKeyRenameMap.CurrentOfficeNameKey;
+        private const string UserDataPhoneKey = FieldKeyRenameMap.CurrentPhoneKey;
         private const string UserDataAccountingNameRow1Key = "銀行・支店";
         private const string UserDataAccountingNameRow2Key = "口座番号・名義";
         private const string HiddenExcelCleanupCompleted = "HiddenExcelCleanupCompleted";
@@ -743,12 +743,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal string GetValue(string key)
             {
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    return string.Empty;
-                }
-
-                return _values.TryGetValue(key, out string value) ? (value ?? string.Empty) : string.Empty;
+                return FieldKeyRenameMap.GetValueWithAliases(_values, key);
             }
         }
 
@@ -809,13 +804,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     continue;
                 }
 
+                string sourceFieldKey = FieldKeyRenameMap.NormalizeToCurrent(mapping.SourceFieldKey);
+                string targetFieldKey = FieldKeyRenameMap.NormalizeToCurrent(mapping.TargetFieldKey);
                 string sourceValue;
-                if (!userDataValues.TryGetValue(mapping.SourceFieldKey, out sourceValue))
+                if (!FieldKeyRenameMap.TryGetValueWithAliases(userDataValues, sourceFieldKey, out sourceValue))
                 {
                     throw new InvalidOperationException("Kernel ユーザー情報にキーが見つかりません。 key=" + mapping.SourceFieldKey);
                 }
 
-                homeValuesByKey[mapping.TargetFieldKey] = sourceValue ?? string.Empty;
+                homeValuesByKey[targetFieldKey] = sourceValue ?? string.Empty;
             }
 
             return new BaseHomeReflectionPlan(homeValuesByKey);

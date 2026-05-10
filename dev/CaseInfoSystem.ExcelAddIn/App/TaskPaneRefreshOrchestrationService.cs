@@ -142,7 +142,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     reason,
                     workbook,
                     window,
-                    TaskPaneRefreshAttemptResult.Skipped(),
+                    TaskPaneRefreshAttemptResult.Skipped(preconditionDecision.SkipActionName),
                     stopwatch,
                     preconditionDecision.SkipActionName,
                     null,

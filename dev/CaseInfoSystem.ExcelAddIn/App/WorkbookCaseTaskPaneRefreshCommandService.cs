@@ -13,18 +13,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly WorkbookRoleResolver _workbookRoleResolver;
         private readonly ExcelInteropService _excelInteropService;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
-        private readonly Func<string, Excel.Workbook, Excel.Window, bool> _isTaskPaneRefreshSucceeded;
+        private readonly Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> _tryRefreshTaskPane;
 
         internal WorkbookCaseTaskPaneRefreshCommandService(
             WorkbookRoleResolver workbookRoleResolver,
             ExcelInteropService excelInteropService,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
-            Func<string, Excel.Workbook, Excel.Window, bool> isTaskPaneRefreshSucceeded)
+            Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> tryRefreshTaskPane)
         {
             _workbookRoleResolver = workbookRoleResolver;
             _excelInteropService = excelInteropService;
             _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow;
-            _isTaskPaneRefreshSucceeded = isTaskPaneRefreshSucceeded;
+            _tryRefreshTaskPane = tryRefreshTaskPane;
         }
 
         internal void Refresh(Excel.Workbook workbook)
@@ -35,7 +35,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            if (_workbookRoleResolver == null || _excelInteropService == null || _resolveWorkbookPaneWindow == null || _isTaskPaneRefreshSucceeded == null)
+            if (_workbookRoleResolver == null || _excelInteropService == null || _resolveWorkbookPaneWindow == null || _tryRefreshTaskPane == null)
             {
                 UserErrorService.ShowOkNotification("Pane 更新サービスを利用できません。", ProductTitle, MessageBoxIcon.Warning);
                 return;
@@ -49,8 +49,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             Excel.Window window = _resolveWorkbookPaneWindow(workbook, "RibbonCasePaneRefresh", true);
-            bool refreshed = _isTaskPaneRefreshSucceeded("RibbonCasePaneRefresh", workbook, window);
-            if (!refreshed)
+            TaskPaneRefreshAttemptResult refreshResult = _tryRefreshTaskPane("RibbonCasePaneRefresh", workbook, window);
+            WorkbookCaseTaskPaneRefreshCommandNotificationKind notificationKind =
+                WorkbookCaseTaskPaneRefreshCommandNotificationPolicy.Decide(refreshResult);
+            if (notificationKind == WorkbookCaseTaskPaneRefreshCommandNotificationKind.Updated)
+            {
+                UserErrorService.ShowOkNotification("文書ボタンパネルを更新しました", ProductTitle, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (notificationKind == WorkbookCaseTaskPaneRefreshCommandNotificationKind.Latest)
+            {
+                UserErrorService.ShowOkNotification("文書ボタンパネルは最新の状態です", ProductTitle, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (notificationKind == WorkbookCaseTaskPaneRefreshCommandNotificationKind.Failed)
             {
                 UserErrorService.ShowOkNotification("文書ボタンパネルを更新できませんでした。", ProductTitle, MessageBoxIcon.Warning);
             }

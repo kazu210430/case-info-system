@@ -881,10 +881,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal static TaskPaneRefreshAttemptResult Skipped()
         {
+            return Skipped("skipped");
+        }
+
+        internal static TaskPaneRefreshAttemptResult Skipped(string completionBasis)
+        {
             return new TaskPaneRefreshAttemptResult(
                 false,
                 wasSkipped: true,
-                completionBasis: "skipped",
+                completionBasis: completionBasis,
                 foregroundGuaranteeOutcome: ForegroundGuaranteeOutcome.SkippedNoKnownTarget("refreshSkipped"));
         }
 

@@ -170,6 +170,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();
+            return ContinuePostDispatchRefreshConvergence(
+                reason,
+                workbook,
+                window,
+                displayRequest,
+                routeDispatchExecutionResult,
+                stopwatch,
+                refreshAttemptId);
+        }
+
+        private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window window,
+            TaskPaneDisplayRequest displayRequest,
+            RefreshDispatchExecutionResult routeDispatchExecutionResult,
+            Stopwatch stopwatch,
+            int refreshAttemptId)
+        {
             TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,

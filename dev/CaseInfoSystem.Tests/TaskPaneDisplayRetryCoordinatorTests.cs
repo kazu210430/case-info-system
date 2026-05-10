@@ -378,19 +378,21 @@ namespace CaseInfoSystem.Tests
         public void NormalRefreshPath_KeepsNormalizedOutcomeChainBeforeForegroundWindowActivateAndCompletion()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
-            string normalRefreshPath = Slice(
-                orchestrationSource,
-                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
-                "return attemptResult;");
+            string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
+            string postDispatchConvergence = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence");
 
             AssertNormalizedOutcomeChainBefore(
-                normalRefreshPath,
+                postDispatchConvergence,
                 "CompleteForegroundGuaranteeOutcome(",
                 orchestrationSource);
             AssertContainsInOrder(
-                normalRefreshPath,
-                "RefreshDispatchShell.Dispatch(",
+                coreMethod,
+                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();",
+                "return ContinuePostDispatchRefreshConvergence(");
+            AssertContainsInOrder(
+                postDispatchConvergence,
                 "CompleteNormalizedOutcomeChain(",
+                "routeDispatchExecutionResult.AttemptResult,",
                 "CompleteForegroundGuaranteeOutcome(",
                 "_windowActivateDownstreamObservation.LogOutcome(",
                 "TryCompleteCreatedCaseDisplaySession(");
@@ -427,10 +429,7 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
-            string normalRefreshPath = Slice(
-                coreMethod,
-                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
-                "return attemptResult;");
+            string postDispatchConvergence = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence");
             string dispatchShell = ReadMethod(orchestrationSource, "internal static RefreshDispatchExecutionResult Dispatch");
 
             AssertContainsInOrder(
@@ -438,10 +437,11 @@ namespace CaseInfoSystem.Tests
                 "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
                 "if (!preconditionDecision.CanRefresh)",
                 "return skippedResult;",
-                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(");
+                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
+                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();",
+                "return ContinuePostDispatchRefreshConvergence(");
             AssertContainsInOrder(
-                normalRefreshPath,
-                "RefreshDispatchShell.Dispatch(",
+                postDispatchConvergence,
                 "TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(",
                 "attemptResult = CompleteForegroundGuaranteeOutcome(",
                 "_windowActivateDownstreamObservation.LogOutcome(",

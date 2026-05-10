@@ -239,6 +239,124 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void CaseDisplayCompleted_OneTimeGuardBlocksDuplicateBeforeEmitAndComplete()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+
+            AssertContainsInOrder(
+                completionMethod,
+                "CreatedCaseDisplayCompletionDecision completionDecision =",
+                "if (!completionDecision.CanComplete)",
+                "return;",
+                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
+                "if (resolvedSession == null)",
+                "return;",
+                "bool shouldEmit = false;",
+                "lock (_createdCaseDisplaySessionSyncRoot)",
+                "if (!resolvedSession.IsCompleted)",
+                "resolvedSession.IsCompleted = true;",
+                "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);",
+                "shouldEmit = true;",
+                "if (!shouldEmit)",
+                "return;",
+                "string details = BuildCaseDisplayCompletedDetailsPayload(",
+                "_logger?.Info(",
+                "action=case-display-completed",
+                "NewCaseVisibilityObservation.Log(",
+                "\"case-display-completed\"",
+                "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
+
+            string beforeShouldEmitReturn = Slice(
+                completionMethod,
+                "bool shouldEmit = false;",
+                "if (!shouldEmit)");
+            Assert.DoesNotContain("action=case-display-completed", beforeShouldEmitReturn);
+            Assert.DoesNotContain("\"case-display-completed\"", beforeShouldEmitReturn);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Log", beforeShouldEmitReturn);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", beforeShouldEmitReturn);
+
+            Assert.Equal(1, CountOccurrences(completionMethod, "NewCaseVisibilityObservation.Complete("));
+            Assert.Equal(1, CountOccurrences(completionMethod, "NewCaseVisibilityObservation.Log("));
+            Assert.Equal(1, CountOccurrences(completionMethod, "action=case-display-completed"));
+            Assert.Equal(1, CountOccurrences(completionMethod, "\"case-display-completed\""));
+            Assert.Equal(1, CountOccurrences(completionMethod, "resolvedSession.IsCompleted = true;"));
+            Assert.Equal(1, CountOccurrences(completionMethod, "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);"));
+            Assert.Equal(1, CountOccurrences(completionMethod, "shouldEmit = true;"));
+        }
+
+        [Fact]
+        public void CaseDisplayCompleted_MissingSessionReturnsBeforeOneTimeGuardEmitAndComplete()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string missingSessionGate = Slice(
+                completionMethod,
+                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
+                "bool shouldEmit = false;");
+
+            AssertContainsInOrder(
+                missingSessionGate,
+                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
+                "if (resolvedSession == null)",
+                "return;");
+            Assert.DoesNotContain("resolvedSession.IsCompleted", missingSessionGate);
+            Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", missingSessionGate);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", missingSessionGate);
+            Assert.DoesNotContain("action=case-display-completed", missingSessionGate);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Log", missingSessionGate);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", missingSessionGate);
+        }
+
+        [Fact]
+        public void CaseDisplaySessionLookup_DoesNotOwnEmitCompletionOrSessionMutation()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string lookupMethod = ReadMethod(orchestrationSource, "private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession");
+
+            AssertContainsInOrder(
+                lookupMethod,
+                "if (!IsCreatedCaseDisplayReason(reason))",
+                "return null;",
+                "string workbookFullName = SafeWorkbookFullName(workbook);",
+                "lock (_createdCaseDisplaySessionSyncRoot)",
+                "_createdCaseDisplaySessions.TryGetValue(workbookFullName, out CreatedCaseDisplaySession session)",
+                "return session;",
+                "if (_createdCaseDisplaySessions.Count == 1)",
+                "return activeSession;",
+                "return null;");
+            Assert.DoesNotContain("case-display-completed", lookupMethod);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", lookupMethod);
+            Assert.DoesNotContain("IsCompleted", lookupMethod);
+            Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", lookupMethod);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", lookupMethod);
+        }
+
+        [Fact]
+        public void CaseDisplayCompletionHardGateBlocksBeforeSessionLookupMutationEmitAndComplete()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string hardGateBlock = Slice(
+                completionMethod,
+                "CreatedCaseDisplayCompletionDecision completionDecision =",
+                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);");
+
+            AssertContainsInOrder(
+                hardGateBlock,
+                "CreatedCaseDisplayCompletionDecision completionDecision =",
+                "EvaluateCreatedCaseDisplayCompletionDecision(reason, attemptResult);",
+                "if (!completionDecision.CanComplete)",
+                "return;");
+            Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", hardGateBlock);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", hardGateBlock);
+            Assert.DoesNotContain("IsCompleted", hardGateBlock);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", hardGateBlock);
+            Assert.DoesNotContain("case-display-completed", hardGateBlock);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", hardGateBlock);
+        }
+
+        [Fact]
         public void NormalRefreshPath_KeepsNormalizedOutcomeChainBeforeForegroundWindowActivateAndCompletion()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
@@ -748,6 +866,23 @@ namespace CaseInfoSystem.Tests
             int end = source.IndexOf(endFragment, start + startFragment.Length, StringComparison.Ordinal);
             Assert.True(end > start, "Expected end fragment was not found: " + endFragment);
             return source.Substring(start, end - start);
+        }
+
+        private static int CountOccurrences(string source, string fragment)
+        {
+            int count = 0;
+            int index = 0;
+            while (true)
+            {
+                index = source.IndexOf(fragment, index, StringComparison.Ordinal);
+                if (index < 0)
+                {
+                    return count;
+                }
+
+                count++;
+                index += fragment.Length;
+            }
         }
 
         private static string ReadOptionalMethod(string source, string signatureFragment)

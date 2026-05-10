@@ -663,7 +663,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 workbookRoleResolver,
                 excelInteropService,
                 _resolveWorkbookPaneWindow,
-                _isTaskPaneRefreshSucceeded);
+                _tryRefreshTaskPane);
             var taskPaneDisplayRetryCoordinator = new TaskPaneDisplayRetryCoordinator(ReadyShowRetryMaxAttempts);
             var workbookTaskPaneDisplayAttemptCoordinator = new WorkbookTaskPaneDisplayAttemptCoordinator();
             var workbookTaskPaneReadyShowAttemptWorker = new WorkbookTaskPaneReadyShowAttemptWorker(

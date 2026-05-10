@@ -122,6 +122,8 @@ namespace CaseInfoSystem.Tests
         public void CaseDisplayCompleted_EmitOwnerAndOneTimeGateStayInOrchestrationOnly()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string markMethod = ReadMethod(orchestrationSource, "private bool TryMarkCreatedCaseDisplaySessionCompletedForEmit");
 
             Assert.Contains("TryCompleteCreatedCaseDisplaySession", orchestrationSource);
             Assert.Contains("action=case-display-completed", orchestrationSource);
@@ -129,15 +131,22 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", orchestrationSource);
             Assert.Contains("NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);", orchestrationSource);
             AssertContainsInOrder(
-                orchestrationSource,
+                completionMethod,
+                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
+                "return;",
+                "string details =");
+            AssertContainsInOrder(
+                markMethod,
                 "bool shouldEmit = false;",
+                "lock (_createdCaseDisplaySessionSyncRoot)",
                 "if (!resolvedSession.IsCompleted)",
                 "resolvedSession.IsCompleted = true;",
                 "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);",
                 "shouldEmit = true;",
-                "if (!shouldEmit)",
-                "return;",
-                "string details =");
+                "return shouldEmit;");
+            Assert.DoesNotContain("case-display-completed", markMethod);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", markMethod);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", markMethod);
 
             AssertDoesNotOwnCompletion("WorkbookTaskPaneReadyShowAttemptWorker.cs");
             AssertDoesNotOwnCompletion("PendingPaneRefreshRetryService.cs");
@@ -173,17 +182,18 @@ namespace CaseInfoSystem.Tests
         public void CaseDisplayCompletedDetailsPayload_PreservesFieldSetAndOrder()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
             string payloadHelper = Slice(
                 orchestrationSource,
                 "private static string BuildCaseDisplayCompletedDetailsPayload",
                 "private static CreatedCaseDisplayCompletionDecision");
 
             AssertContainsInOrder(
-                orchestrationSource,
+                completionMethod,
                 "if (!completionDecision.CanComplete)",
                 "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
-                "bool shouldEmit = false;",
-                "if (!shouldEmit)",
+                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
+                "return;",
                 "string details = BuildCaseDisplayCompletedDetailsPayload(",
                 "_logger?.Info(",
                 "\"case-display-completed\"",
@@ -243,6 +253,7 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string markMethod = ReadMethod(orchestrationSource, "private bool TryMarkCreatedCaseDisplaySessionCompletedForEmit");
 
             AssertContainsInOrder(
                 completionMethod,
@@ -252,13 +263,7 @@ namespace CaseInfoSystem.Tests
                 "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
                 "if (resolvedSession == null)",
                 "return;",
-                "bool shouldEmit = false;",
-                "lock (_createdCaseDisplaySessionSyncRoot)",
-                "if (!resolvedSession.IsCompleted)",
-                "resolvedSession.IsCompleted = true;",
-                "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);",
-                "shouldEmit = true;",
-                "if (!shouldEmit)",
+                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
                 "return;",
                 "string details = BuildCaseDisplayCompletedDetailsPayload(",
                 "_logger?.Info(",
@@ -266,23 +271,35 @@ namespace CaseInfoSystem.Tests
                 "NewCaseVisibilityObservation.Log(",
                 "\"case-display-completed\"",
                 "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
-
-            string beforeShouldEmitReturn = Slice(
-                completionMethod,
+            AssertContainsInOrder(
+                markMethod,
                 "bool shouldEmit = false;",
-                "if (!shouldEmit)");
-            Assert.DoesNotContain("action=case-display-completed", beforeShouldEmitReturn);
-            Assert.DoesNotContain("\"case-display-completed\"", beforeShouldEmitReturn);
-            Assert.DoesNotContain("NewCaseVisibilityObservation.Log", beforeShouldEmitReturn);
-            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", beforeShouldEmitReturn);
+                "lock (_createdCaseDisplaySessionSyncRoot)",
+                "if (!resolvedSession.IsCompleted)",
+                "resolvedSession.IsCompleted = true;",
+                "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);",
+                "shouldEmit = true;",
+                "return shouldEmit;");
+
+            string beforePayloadBuild = Slice(
+                completionMethod,
+                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
+                "string details = BuildCaseDisplayCompletedDetailsPayload(");
+            Assert.DoesNotContain("action=case-display-completed", beforePayloadBuild);
+            Assert.DoesNotContain("\"case-display-completed\"", beforePayloadBuild);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Log", beforePayloadBuild);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", beforePayloadBuild);
+            Assert.DoesNotContain("case-display-completed", markMethod);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", markMethod);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", markMethod);
 
             Assert.Equal(1, CountOccurrences(completionMethod, "NewCaseVisibilityObservation.Complete("));
             Assert.Equal(1, CountOccurrences(completionMethod, "NewCaseVisibilityObservation.Log("));
             Assert.Equal(1, CountOccurrences(completionMethod, "action=case-display-completed"));
             Assert.Equal(1, CountOccurrences(completionMethod, "\"case-display-completed\""));
-            Assert.Equal(1, CountOccurrences(completionMethod, "resolvedSession.IsCompleted = true;"));
-            Assert.Equal(1, CountOccurrences(completionMethod, "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);"));
-            Assert.Equal(1, CountOccurrences(completionMethod, "shouldEmit = true;"));
+            Assert.Equal(1, CountOccurrences(markMethod, "resolvedSession.IsCompleted = true;"));
+            Assert.Equal(1, CountOccurrences(markMethod, "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);"));
+            Assert.Equal(1, CountOccurrences(markMethod, "shouldEmit = true;"));
         }
 
         [Fact]
@@ -293,7 +310,7 @@ namespace CaseInfoSystem.Tests
             string missingSessionGate = Slice(
                 completionMethod,
                 "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
-                "bool shouldEmit = false;");
+                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))");
 
             AssertContainsInOrder(
                 missingSessionGate,
@@ -302,6 +319,7 @@ namespace CaseInfoSystem.Tests
                 "return;");
             Assert.DoesNotContain("resolvedSession.IsCompleted", missingSessionGate);
             Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", missingSessionGate);
+            Assert.DoesNotContain("TryMarkCreatedCaseDisplaySessionCompletedForEmit", missingSessionGate);
             Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", missingSessionGate);
             Assert.DoesNotContain("action=case-display-completed", missingSessionGate);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Log", missingSessionGate);

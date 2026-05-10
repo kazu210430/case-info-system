@@ -1175,18 +1175,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            bool shouldEmit = false;
-            lock (_createdCaseDisplaySessionSyncRoot)
-            {
-                if (!resolvedSession.IsCompleted)
-                {
-                    resolvedSession.IsCompleted = true;
-                    _createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);
-                    shouldEmit = true;
-                }
-            }
-
-            if (!shouldEmit)
+            if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))
             {
                 return;
             }
@@ -1222,6 +1211,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 resolvedSession.WorkbookFullName,
                 details);
             NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
+        }
+
+        private bool TryMarkCreatedCaseDisplaySessionCompletedForEmit(CreatedCaseDisplaySession resolvedSession)
+        {
+            bool shouldEmit = false;
+            lock (_createdCaseDisplaySessionSyncRoot)
+            {
+                if (!resolvedSession.IsCompleted)
+                {
+                    resolvedSession.IsCompleted = true;
+                    _createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);
+                    shouldEmit = true;
+                }
+            }
+
+            return shouldEmit;
         }
 
         private static string BuildCaseDisplayCompletedDetailsPayload(

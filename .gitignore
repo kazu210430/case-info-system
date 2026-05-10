@@ -30,6 +30,9 @@ build/hot-reload-backups/
 /dev/CaseInfoSystem.WordAddIn/*_TemporaryKey.pfx
 # - dev/Deploy/**
 
+# Generated Release Add-in package staging
+/dev/Deploy/Package/
+
 /build/
 /.github/build/*
 !/.github/build/packages/

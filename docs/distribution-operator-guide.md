@@ -16,6 +16,7 @@
 - 完了後に `案件情報System.zip` が生成されたことを確認します
 - 必要に応じて `配布用` フォルダの中身も確認します
 - 利用者には `案件情報System.zip` を渡します
+- `dev/Deploy/Package` は Release Add-in package の中間生成物であり、利用者へ渡す配布正本ではありません
 
 ## 4. 自動で行われる処理
 - Release Add-in package 生成

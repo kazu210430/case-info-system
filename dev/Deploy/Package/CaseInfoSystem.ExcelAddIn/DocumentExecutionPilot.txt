@@ -1,7 +1,0 @@
-# VSTO document execution pilot list
-# Format:
-#   key|templateFileName
-#
-# Notes:
-# - PilotOnly is kept only as a legacy compatibility label for DocumentExecutionMode.txt.
-# - Current runtime does not use this file for active document execution gating.

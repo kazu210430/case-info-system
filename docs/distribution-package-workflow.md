@@ -25,6 +25,9 @@
 - 開発用 `Kernel` / `Base` は正規化対象にしません
 - `logs` はコピー元を持たず、配布時に空フォルダを生成します
 - 当面の配布方式は ZIP とします
+- 配布正本は `CreateDistributionPackage.bat` で生成される `案件情報System.zip` です
+- `dev/Deploy/Package` は Release Add-in package の中間生成物であり、配布正本として扱いません
+- 旧 Release package 由来の生成物はリポジトリに保持しません
 
 ## 4. 想定フォルダ
 - 実行時ルート: `C:\Users\kazu2\Documents\案件情報System`
@@ -114,6 +117,7 @@
 ## 14. 禁止事項
 - 開発用フォルダ直下の運用ファイルをそのまま配布しません
 - 古い `配布用` フォルダを使い回しません
+- 古い `dev/Deploy/Package` 生成物を配布正本として使い回しません
 - 利用者向け手順として PowerShell を案内しません
 - 利用者向け手順として `.vsto` の直接実行を案内しません
 - 開発用 `Kernel` / `Base` を正規化しません

@@ -101,27 +101,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore(string reason, Excel.Workbook workbook, Excel.Window window, TaskPaneDisplayRequest displayRequest)
         {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            int refreshAttemptId = ++_kernelFlickerTraceRefreshAttemptSequence;
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=try-refresh-start refreshAttemptId="
-                + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
-                + ", reason="
-                + (reason ?? string.Empty)
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", inputWindow="
-                + FormatWindowDescriptor(window)
-                + ", activeState="
-                + FormatActiveState()
-                + WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest));
-            _windowActivateDownstreamObservation.LogStart(displayRequest, reason, workbook, window, refreshAttemptId);
+            TaskPaneRefreshAttemptStartObservation attemptObservation = StartTaskPaneRefreshAttemptObservation(
+                reason,
+                workbook,
+                window,
+                displayRequest);
             TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(
                 reason,
                 workbook,
                 window,
-                refreshAttemptId);
+                attemptObservation.RefreshAttemptId);
             if (!preconditionDecision.CanRefresh)
             {
                 TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
@@ -129,7 +118,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     workbook,
                     window,
                     TaskPaneRefreshAttemptResult.Skipped(preconditionDecision.SkipActionName),
-                    stopwatch,
+                    attemptObservation.Stopwatch,
                     preconditionDecision.SkipActionName,
                     null,
                     null);
@@ -137,8 +126,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     displayRequest,
                     reason,
                     skippedResult,
-                    stopwatch,
-                    refreshAttemptId,
+                    attemptObservation.Stopwatch,
+                    attemptObservation.RefreshAttemptId,
                     preconditionDecision.SkipActionName);
                 return skippedResult;
             }
@@ -162,8 +151,46 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 window,
                 displayRequest,
                 routeDispatchExecutionResult,
-                stopwatch,
-                refreshAttemptId);
+                attemptObservation.Stopwatch,
+                attemptObservation.RefreshAttemptId);
+        }
+
+        private TaskPaneRefreshAttemptStartObservation StartTaskPaneRefreshAttemptObservation(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window window,
+            TaskPaneDisplayRequest displayRequest)
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            int refreshAttemptId = ++_kernelFlickerTraceRefreshAttemptSequence;
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=try-refresh-start refreshAttemptId="
+                + refreshAttemptId.ToString(CultureInfo.InvariantCulture)
+                + ", reason="
+                + (reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(workbook)
+                + ", inputWindow="
+                + FormatWindowDescriptor(window)
+                + ", activeState="
+                + FormatActiveState()
+                + WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest));
+            _windowActivateDownstreamObservation.LogStart(displayRequest, reason, workbook, window, refreshAttemptId);
+            return new TaskPaneRefreshAttemptStartObservation(stopwatch, refreshAttemptId);
+        }
+
+        private readonly struct TaskPaneRefreshAttemptStartObservation
+        {
+            internal TaskPaneRefreshAttemptStartObservation(Stopwatch stopwatch, int refreshAttemptId)
+            {
+                Stopwatch = stopwatch;
+                RefreshAttemptId = refreshAttemptId;
+            }
+
+            internal Stopwatch Stopwatch { get; }
+
+            internal int RefreshAttemptId { get; }
         }
 
         private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary(

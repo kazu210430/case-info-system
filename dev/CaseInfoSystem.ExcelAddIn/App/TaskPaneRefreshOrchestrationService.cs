@@ -206,27 +206,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return preconditionDecision;
         }
 
-        private static TaskPaneRefreshFailClosedResultHandoff BuildFailClosedTaskPaneRefreshResultHandoff(
-            TaskPaneRefreshPreconditionDecision preconditionDecision)
-        {
-            return new TaskPaneRefreshFailClosedResultHandoff(
-                TaskPaneRefreshAttemptResult.Skipped(preconditionDecision.SkipActionName),
-                preconditionDecision.SkipActionName);
-        }
-
-        private readonly struct TaskPaneRefreshFailClosedResultHandoff
-        {
-            internal TaskPaneRefreshFailClosedResultHandoff(TaskPaneRefreshAttemptResult attemptResult, string skipActionName)
-            {
-                AttemptResult = attemptResult;
-                SkipActionName = skipActionName;
-            }
-
-            internal TaskPaneRefreshAttemptResult AttemptResult { get; }
-
-            internal string SkipActionName { get; }
-        }
-
         private TaskPaneRefreshAttemptResult ReturnFailClosedTaskPaneRefreshResult(
             string reason,
             Excel.Workbook workbook,
@@ -253,6 +232,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 attemptObservation.RefreshAttemptId,
                 failClosedHandoff.SkipActionName);
             return skippedResult;
+        }
+
+        private static TaskPaneRefreshFailClosedResultHandoff BuildFailClosedTaskPaneRefreshResultHandoff(
+            TaskPaneRefreshPreconditionDecision preconditionDecision)
+        {
+            return new TaskPaneRefreshFailClosedResultHandoff(
+                TaskPaneRefreshAttemptResult.Skipped(preconditionDecision.SkipActionName),
+                preconditionDecision.SkipActionName);
+        }
+
+        private readonly struct TaskPaneRefreshFailClosedResultHandoff
+        {
+            internal TaskPaneRefreshFailClosedResultHandoff(TaskPaneRefreshAttemptResult attemptResult, string skipActionName)
+            {
+                AttemptResult = attemptResult;
+                SkipActionName = skipActionName;
+            }
+
+            internal TaskPaneRefreshAttemptResult AttemptResult { get; }
+
+            internal string SkipActionName { get; }
         }
 
         private RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute(
@@ -1268,38 +1268,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 callbackFacts.AttemptNumber);
         }
 
-        private static ReadyShowCallbackFacts BuildReadyShowCallbackFacts(WorkbookTaskPaneReadyShowAttemptOutcome outcome)
-        {
-            return new ReadyShowCallbackFacts(
-                outcome.WorkbookWindow,
-                outcome.RefreshAttemptResult,
-                outcome.AttemptNumber,
-                outcome.WorkbookWindowEnsureFacts);
-        }
-
-        private readonly struct ReadyShowCallbackFacts
-        {
-            internal ReadyShowCallbackFacts(
-                Excel.Window workbookWindow,
-                TaskPaneRefreshAttemptResult refreshAttemptResult,
-                int attemptNumber,
-                WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
-            {
-                WorkbookWindow = workbookWindow;
-                RefreshAttemptResult = refreshAttemptResult;
-                AttemptNumber = attemptNumber;
-                WorkbookWindowEnsureFacts = workbookWindowEnsureFacts;
-            }
-
-            internal Excel.Window WorkbookWindow { get; }
-
-            internal TaskPaneRefreshAttemptResult RefreshAttemptResult { get; }
-
-            internal int AttemptNumber { get; }
-
-            internal WorkbookWindowVisibilityEnsureFacts WorkbookWindowEnsureFacts { get; }
-        }
-
         private void TryCompleteCreatedCaseDisplaySession(
             CreatedCaseDisplaySession session,
             string reason,
@@ -1516,6 +1484,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private static bool IsCreatedCaseDisplayReason(string reason)
         {
             return string.Equals(reason, NewCaseDefaultTimingLogHelper.PostReleaseReason, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static ReadyShowCallbackFacts BuildReadyShowCallbackFacts(WorkbookTaskPaneReadyShowAttemptOutcome outcome)
+        {
+            return new ReadyShowCallbackFacts(
+                outcome.WorkbookWindow,
+                outcome.RefreshAttemptResult,
+                outcome.AttemptNumber,
+                outcome.WorkbookWindowEnsureFacts);
+        }
+
+        private readonly struct ReadyShowCallbackFacts
+        {
+            internal ReadyShowCallbackFacts(
+                Excel.Window workbookWindow,
+                TaskPaneRefreshAttemptResult refreshAttemptResult,
+                int attemptNumber,
+                WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+            {
+                WorkbookWindow = workbookWindow;
+                RefreshAttemptResult = refreshAttemptResult;
+                AttemptNumber = attemptNumber;
+                WorkbookWindowEnsureFacts = workbookWindowEnsureFacts;
+            }
+
+            internal Excel.Window WorkbookWindow { get; }
+
+            internal TaskPaneRefreshAttemptResult RefreshAttemptResult { get; }
+
+            internal int AttemptNumber { get; }
+
+            internal WorkbookWindowVisibilityEnsureFacts WorkbookWindowEnsureFacts { get; }
         }
 
         private string FormatContextDescriptor(WorkbookContext context)

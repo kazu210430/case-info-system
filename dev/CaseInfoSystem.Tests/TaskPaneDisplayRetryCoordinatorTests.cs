@@ -449,6 +449,125 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void ReadyShowCallbackRawFacts_ArePassedToNormalizedForegroundAndCompletionGateInputs()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string callbackHandler = Slice(
+                orchestrationSource,
+                "private void HandleWorkbookTaskPaneShown",
+                "private void TryCompleteCreatedCaseDisplaySession");
+
+            AssertContainsInOrder(
+                callbackHandler,
+                "if (outcome == null)",
+                "return;",
+                "TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(",
+                "outcome.WorkbookWindow,",
+                "outcome.RefreshAttemptResult,",
+                "\"ready-show-attempt\",",
+                "outcome.AttemptNumber,",
+                "outcome.WorkbookWindowEnsureFacts);",
+                "attemptResult = CompleteForegroundGuaranteeOutcome(",
+                "outcome.WorkbookWindow,",
+                "attemptResult,",
+                "TryCompleteCreatedCaseDisplaySession(",
+                "outcome.WorkbookWindow,",
+                "attemptResult,",
+                "\"ready-show-attempt\",",
+                "outcome.AttemptNumber);");
+            Assert.DoesNotContain("TaskPaneNormalizedOutcomeMapper.", callbackHandler);
+            Assert.DoesNotContain("VisibilityRecoveryOutcome.", callbackHandler);
+            Assert.DoesNotContain("ForegroundGuaranteeOutcome.", callbackHandler);
+            Assert.DoesNotContain("EvaluateCreatedCaseDisplayCompletionDecision", callbackHandler);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", callbackHandler);
+            Assert.DoesNotContain("action=case-display-completed", callbackHandler);
+            Assert.DoesNotContain("\"case-display-completed\"", callbackHandler);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", callbackHandler);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", callbackHandler);
+            Assert.DoesNotContain("IsCompleted", callbackHandler);
+        }
+
+        [Fact]
+        public void ReadyShowCallbackOutcomeModel_RemainsRawFactsWithoutCompletionOwnership()
+        {
+            string displayAttemptResultSource = ReadAppSource("WorkbookTaskPaneDisplayAttemptResult.cs");
+            string readyShowOutcomeSource = Slice(
+                displayAttemptResultSource,
+                "internal sealed class WorkbookTaskPaneReadyShowAttemptOutcome",
+                "internal sealed class WorkbookWindowVisibilityEnsureFacts");
+
+            AssertContainsInOrder(
+                readyShowOutcomeSource,
+                "internal WorkbookTaskPaneReadyShowAttemptOutcome(",
+                "AttemptNumber = attemptNumber;",
+                "WorkbookWindow = workbookWindow;",
+                "RefreshAttemptResult = refreshAttemptResult ?? TaskPaneRefreshAttemptResult.Failed();",
+                "VisibleCasePaneAlreadyShown = visibleCasePaneAlreadyShown;",
+                "WorkbookWindowEnsureFacts = workbookWindowEnsureFacts;",
+                "internal TaskPaneRefreshAttemptResult RefreshAttemptResult { get; }",
+                "internal WorkbookWindowVisibilityEnsureFacts WorkbookWindowEnsureFacts { get; }",
+                "return RefreshAttemptResult.IsRefreshSucceeded && RefreshAttemptResult.IsPaneVisible;",
+                "internal WorkbookTaskPaneReadyShowAttemptOutcome WithWorkbookWindowEnsureFacts(",
+                "return new WorkbookTaskPaneReadyShowAttemptOutcome(",
+                "AttemptNumber,",
+                "WorkbookWindow,",
+                "RefreshAttemptResult,",
+                "VisibleCasePaneAlreadyShown,",
+                "workbookWindowEnsureFacts);");
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", readyShowOutcomeSource);
+            Assert.DoesNotContain("EvaluateCreatedCaseDisplayCompletionDecision", readyShowOutcomeSource);
+            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", readyShowOutcomeSource);
+            Assert.DoesNotContain("case-display-completed", readyShowOutcomeSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", readyShowOutcomeSource);
+            Assert.DoesNotContain("_createdCaseDisplaySessions", readyShowOutcomeSource);
+            Assert.DoesNotContain("IsCompleted", readyShowOutcomeSource);
+        }
+
+        [Fact]
+        public void ReadyShowCallback_NullOutcomeOrWorkbookMissingReturnsBeforeCompletionInputs()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string callbackHandler = Slice(
+                orchestrationSource,
+                "private void HandleWorkbookTaskPaneShown",
+                "private void TryCompleteCreatedCaseDisplaySession");
+            string nullOutcomeGate = Slice(
+                callbackHandler,
+                "if (outcome == null)",
+                "Stopwatch stopwatch = Stopwatch.StartNew();");
+            string workerSource = ReadAppSource("WorkbookTaskPaneReadyShowAttemptWorker.cs");
+            string workerShowWhenReady = ReadMethod(workerSource, "internal void ShowWhenReady");
+            string nullWorkbookGate = Slice(
+                workerShowWhenReady,
+                "if (workbook == null)",
+                "_logger?.Info(");
+
+            AssertContainsInOrder(
+                callbackHandler,
+                "StopPendingPaneRefreshTimer();",
+                "if (outcome == null)",
+                "return;",
+                "Stopwatch stopwatch = Stopwatch.StartNew();");
+            Assert.DoesNotContain("CompleteNormalizedOutcomeChain(", nullOutcomeGate);
+            Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", nullOutcomeGate);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", nullOutcomeGate);
+            Assert.DoesNotContain("case-display-completed", nullOutcomeGate);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", nullOutcomeGate);
+
+            AssertContainsInOrder(
+                workerShowWhenReady,
+                "if (workbook == null)",
+                "return;",
+                "_logger?.Info(");
+            Assert.DoesNotContain("_taskPaneDisplayRetryCoordinator.ShowWhenReady", nullWorkbookGate);
+            Assert.DoesNotContain("onShown?.Invoke", nullWorkbookGate);
+            Assert.DoesNotContain("TryShowWorkbookTaskPaneOnce", nullWorkbookGate);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", nullWorkbookGate);
+            Assert.DoesNotContain("case-display-completed", nullWorkbookGate);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", nullWorkbookGate);
+        }
+
+        [Fact]
         public void NormalizedOutcomeChainMethods_DoNotOwnCompletionSessionOrOneTimeEmit()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");

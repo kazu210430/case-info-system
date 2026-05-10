@@ -379,16 +379,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
         }
 
-        private readonly struct ActiveTaskPaneRefreshHandoff
-        {
-            internal ActiveTaskPaneRefreshHandoff(string reason)
-            {
-                Reason = reason;
-            }
-
-            internal string Reason { get; }
-        }
-
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
         {
             PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(workbook, reason);
@@ -537,6 +527,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attempts="
                 + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
             _logger?.Info("TaskPane timer fallback scheduled. reason=" + (retryHandoff.Reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(retryHandoff.Workbook) + ", attempts=" + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private readonly struct ActiveTaskPaneRefreshHandoff
+        {
+            internal ActiveTaskPaneRefreshHandoff(string reason)
+            {
+                Reason = reason;
+            }
+
+            internal string Reason { get; }
         }
 
         private readonly struct PendingFallbackRefreshHandoff

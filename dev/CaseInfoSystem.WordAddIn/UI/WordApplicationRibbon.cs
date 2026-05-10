@@ -12,6 +12,8 @@ namespace CaseInfoSystem.WordAddIn.UI
 
 		private RibbonButton _openBatchReplaceButton;
 
+		private RibbonButton _openFolderBatchReplaceButton;
+
 		public WordApplicationRibbon ()
 			: base (Globals.Factory.GetRibbonFactory ())
 		{
@@ -24,11 +26,13 @@ namespace CaseInfoSystem.WordAddIn.UI
 			_group = base.Factory.CreateRibbonGroup ();
 			_stylePaneToggleButton = base.Factory.CreateRibbonToggleButton ();
 			_openBatchReplaceButton = base.Factory.CreateRibbonButton ();
+			_openFolderBatchReplaceButton = base.Factory.CreateRibbonButton ();
 			_tab.Label = "案件情報System";
 			_tab.Groups.Add (_group);
 			_group.Label = "Word連携";
 			_group.Items.Add (_stylePaneToggleButton);
 			_group.Items.Add (_openBatchReplaceButton);
+			_group.Items.Add (_openFolderBatchReplaceButton);
 			_stylePaneToggleButton.Label = "Style右表示";
 			_stylePaneToggleButton.ScreenTip = "文書ごとに右側のスタイル作業ウィンドウ表示を切り替えます。";
 			_stylePaneToggleButton.SuperTip = "この設定は文書内に保存されるため、雛形をコピーして作った文書にも引き継がれます。";
@@ -36,6 +40,9 @@ namespace CaseInfoSystem.WordAddIn.UI
 			_openBatchReplaceButton.Label = "CCタイトル/タグ一括置換";
 			_openBatchReplaceButton.ScreenTip = "アクティブ文書のコンテンツコントロールのタイトルとTagを一括置換します。";
 			_openBatchReplaceButton.Click += OpenBatchReplaceButton_Click;
+			_openFolderBatchReplaceButton.Label = "雛形フォルダCC一括置換";
+			_openFolderBatchReplaceButton.ScreenTip = "雛形フォルダ直下の Word 文書を開かずに、コンテンツコントロールのタイトルとTagを一括置換します。";
+			_openFolderBatchReplaceButton.Click += OpenFolderBatchReplaceButton_Click;
 			base.Name = "WordApplicationRibbon";
 			base.RibbonType = "Microsoft.Word.Document";
 			base.Tabs.Add (_tab);
@@ -55,6 +62,11 @@ namespace CaseInfoSystem.WordAddIn.UI
 		private void OpenBatchReplaceButton_Click (object sender, RibbonControlEventArgs e)
 		{
 			Globals.ThisAddIn?.ShowContentControlBatchReplaceForm ();
+		}
+
+		private void OpenFolderBatchReplaceButton_Click (object sender, RibbonControlEventArgs e)
+		{
+			Globals.ThisAddIn?.ShowContentControlFolderBatchReplaceForm ();
 		}
 
 		internal void SyncStylePaneToggleState (bool enabled, bool hasDocument)

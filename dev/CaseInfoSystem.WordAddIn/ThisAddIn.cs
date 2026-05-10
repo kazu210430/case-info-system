@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Windows.Forms;
 using CaseInfoSystem.WordAddIn.Infrastructure;
 using CaseInfoSystem.WordAddIn.Services;
@@ -16,6 +17,7 @@ namespace CaseInfoSystem.WordAddIn
         private const int StylePaneActivationRetryMaxAttempts = 20;
 
         private ContentControlBatchReplaceService _contentControlBatchReplaceService;
+        private ContentControlFolderBatchReplaceService _contentControlFolderBatchReplaceService;
         private WordApplicationRibbon _wordApplicationRibbon;
         private Timer _stylePaneActivationRetryTimer;
         private int _stylePaneActivationRetryAttemptsRemaining;
@@ -30,6 +32,7 @@ namespace CaseInfoSystem.WordAddIn
                 ExecuteStartupStep("service composition", delegate
                 {
                     _contentControlBatchReplaceService = new ContentControlBatchReplaceService();
+                    _contentControlFolderBatchReplaceService = new ContentControlFolderBatchReplaceService();
                     _stylePaneActivationRetryTimer = new Timer
                     {
                         Interval = StylePaneActivationRetryIntervalMilliseconds
@@ -295,6 +298,50 @@ namespace CaseInfoSystem.WordAddIn
             }
         }
 
+        public void ShowContentControlFolderBatchReplaceForm()
+        {
+            if (_contentControlFolderBatchReplaceService == null)
+            {
+                MessageBox.Show("雛形フォルダ一括置換サービスを利用できません。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (var form = new ContentControlFolderBatchReplaceForm(ResolveInitialTemplateDirectory()))
+            {
+                var owner = new WordWindowOwner(ResolveWordWindowHandle());
+                if (form.ShowDialog(owner) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                DialogResult confirmation = MessageBox.Show(
+                    "雛形フォルダ直下の対象ファイルを直接更新します。実行しますか？",
+                    "案件情報System",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2);
+                if (confirmation != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                try
+                {
+                    ContentControlFolderBatchReplaceService.FolderReplaceResult result = _contentControlFolderBatchReplaceService.Execute(form.ReplaceRequest);
+                    MessageBox.Show(
+                        ContentControlFolderBatchReplaceService.BuildCompletionMessage(result),
+                        "案件情報System",
+                        MessageBoxButtons.OK,
+                        result.FailedFileCount == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                }
+                catch (Exception ex)
+                {
+                    WordAddInStartupLogWriter.WriteException("ShowContentControlFolderBatchReplaceForm failure", ex);
+                    MessageBox.Show("雛形フォルダ一括置換を実行できませんでした。ログを確認してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
         internal ContentControlBatchReplaceService.NextReplaceResult ReplaceNextContentControlFromSelection(ContentControlBatchReplaceService.ReplaceRequest request)
         {
             Word.Document activeDocument = Application == null ? null : Application.ActiveDocument;
@@ -350,6 +397,25 @@ namespace CaseInfoSystem.WordAddIn
             }
 
             return IntPtr.Zero;
+        }
+
+        private string ResolveInitialTemplateDirectory()
+        {
+            try
+            {
+                Word.Document activeDocument = Application == null ? null : Application.ActiveDocument;
+                string fullName = activeDocument == null ? string.Empty : activeDocument.FullName;
+                if (!string.IsNullOrWhiteSpace(fullName) && File.Exists(fullName))
+                {
+                    return Path.GetDirectoryName(fullName) ?? string.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                WordAddInStartupLogWriter.WriteException("ResolveInitialTemplateDirectory failure", ex);
+            }
+
+            return string.Empty;
         }
 
         private Word.Document TryGetActiveDocument(string diagnosticContext)

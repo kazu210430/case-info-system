@@ -934,20 +934,30 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string scheduleActive = ReadMethod(orchestrationSource, "internal void ScheduleActiveTaskPaneRefresh");
+            string handoffFlow = ReadMethod(orchestrationSource, "private void RunTaskPaneRefreshHandoffFlow");
+            string activeHandoffBranch = Slice(
+                handoffFlow,
+                "if (flowInput.IsActiveTarget)",
+                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff");
             string beginActiveHandoff = ReadMethod(orchestrationSource, "private ActiveTaskPaneRefreshHandoff BeginActiveTaskPaneRefreshHandoff");
             string immediateActiveRefresh = ReadMethod(orchestrationSource, "private bool TryRefreshActiveTaskPaneImmediately");
             string startActiveRetry = ReadMethod(orchestrationSource, "private void StartPendingRefreshRetryFromActiveHandoff");
             string activeRefreshHandoffFlow = scheduleActive
+                + activeHandoffBranch
                 + beginActiveHandoff
                 + immediateActiveRefresh
                 + startActiveRetry;
 
             AssertContainsInOrder(
                 scheduleActive,
-                "ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(reason);",
+                "RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForActiveTarget(reason));");
+            AssertContainsInOrder(
+                activeHandoffBranch,
+                "ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(flowInput.Reason);",
                 "TryRefreshActiveTaskPaneImmediately(activeHandoff)",
                 "return;",
-                "StartPendingRefreshRetryFromActiveHandoff(activeHandoff);");
+                "StartPendingRefreshRetryFromActiveHandoff(activeHandoff);",
+                "return;");
             AssertContainsInOrder(
                 activeRefreshHandoffFlow,
                 "_pendingPaneRefreshRetryService.TrackActiveTarget();",
@@ -975,12 +985,14 @@ namespace CaseInfoSystem.Tests
             string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
             string showWhenReady = ReadMethod(orchestrationSource, "internal void ShowWorkbookTaskPaneWhenReady");
             string scheduleFallback = ReadMethod(orchestrationSource, "internal void ScheduleWorkbookTaskPaneRefresh");
+            string handoffFlow = ReadMethod(orchestrationSource, "private void RunTaskPaneRefreshHandoffFlow");
             string beginFallbackHandoff = ReadMethod(orchestrationSource, "private PendingFallbackRefreshHandoff BeginPendingFallbackRefreshHandoff");
             string skipFallbackBoundary = ReadMethod(orchestrationSource, "private static bool ShouldSkipPendingFallbackForWorkbookOpenBoundary");
             string prepareRetryHandoff = ReadMethod(orchestrationSource, "private PendingRefreshRetryHandoff PreparePendingRefreshRetryHandoff");
             string immediateFallbackRefresh = ReadMethod(orchestrationSource, "private bool TryRefreshPendingFallbackImmediately");
             string startPendingRetry = ReadMethod(orchestrationSource, "private void StartPendingRefreshRetryFromFallback");
             string pendingFallbackHandoffFlow = scheduleFallback
+                + handoffFlow
                 + beginFallbackHandoff
                 + skipFallbackBoundary
                 + prepareRetryHandoff
@@ -1022,7 +1034,10 @@ namespace CaseInfoSystem.Tests
                 "retryAction();");
             AssertContainsInOrder(
                 scheduleFallback,
-                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(workbook, reason);",
+                "RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForWorkbookFallback(workbook, reason));");
+            AssertContainsInOrder(
+                handoffFlow,
+                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(flowInput.Workbook, flowInput.Reason);",
                 "ShouldSkipPendingFallbackForWorkbookOpenBoundary(fallbackHandoff)",
                 "LogPendingFallbackWorkbookOpenSkip(fallbackHandoff);",
                 "return;",

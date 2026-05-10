@@ -336,13 +336,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ScheduleActiveTaskPaneRefresh(string reason)
         {
-            ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(reason);
-            if (TryRefreshActiveTaskPaneImmediately(activeHandoff))
+            RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForActiveTarget(reason));
+        }
+
+        internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
+        {
+            RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForWorkbookFallback(workbook, reason));
+        }
+
+        private void RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput flowInput)
+        {
+            if (flowInput.IsActiveTarget)
+            {
+                ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(flowInput.Reason);
+                if (TryRefreshActiveTaskPaneImmediately(activeHandoff))
+                {
+                    return;
+                }
+
+                StartPendingRefreshRetryFromActiveHandoff(activeHandoff);
+                return;
+            }
+
+            PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(flowInput.Workbook, flowInput.Reason);
+            if (ShouldSkipPendingFallbackForWorkbookOpenBoundary(fallbackHandoff))
+            {
+                LogPendingFallbackWorkbookOpenSkip(fallbackHandoff);
+                return;
+            }
+
+            PendingRefreshRetryHandoff retryHandoff = PreparePendingRefreshRetryHandoff(fallbackHandoff);
+            if (TryRefreshPendingFallbackImmediately(retryHandoff))
             {
                 return;
             }
 
-            StartPendingRefreshRetryFromActiveHandoff(activeHandoff);
+            StartPendingRefreshRetryFromFallback(retryHandoff);
         }
 
         private ActiveTaskPaneRefreshHandoff BeginActiveTaskPaneRefreshHandoff(string reason)
@@ -377,24 +406,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", target=active"
                 + ", attempts="
                 + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
-        }
-
-        internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
-        {
-            PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(workbook, reason);
-            if (ShouldSkipPendingFallbackForWorkbookOpenBoundary(fallbackHandoff))
-            {
-                LogPendingFallbackWorkbookOpenSkip(fallbackHandoff);
-                return;
-            }
-
-            PendingRefreshRetryHandoff retryHandoff = PreparePendingRefreshRetryHandoff(fallbackHandoff);
-            if (TryRefreshPendingFallbackImmediately(retryHandoff))
-            {
-                return;
-            }
-
-            StartPendingRefreshRetryFromFallback(retryHandoff);
         }
 
         private PendingFallbackRefreshHandoff BeginPendingFallbackRefreshHandoff(Excel.Workbook workbook, string reason)
@@ -527,6 +538,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attempts="
                 + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
             _logger?.Info("TaskPane timer fallback scheduled. reason=" + (retryHandoff.Reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(retryHandoff.Workbook) + ", attempts=" + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private readonly struct TaskPaneRefreshHandoffFlowInput
+        {
+            private TaskPaneRefreshHandoffFlowInput(bool isActiveTarget, Excel.Workbook workbook, string reason)
+            {
+                IsActiveTarget = isActiveTarget;
+                Workbook = workbook;
+                Reason = reason;
+            }
+
+            internal bool IsActiveTarget { get; }
+
+            internal Excel.Workbook Workbook { get; }
+
+            internal string Reason { get; }
+
+            internal static TaskPaneRefreshHandoffFlowInput ForActiveTarget(string reason)
+            {
+                return new TaskPaneRefreshHandoffFlowInput(isActiveTarget: true, workbook: null, reason: reason);
+            }
+
+            internal static TaskPaneRefreshHandoffFlowInput ForWorkbookFallback(Excel.Workbook workbook, string reason)
+            {
+                return new TaskPaneRefreshHandoffFlowInput(isActiveTarget: false, workbook: workbook, reason: reason);
+            }
         }
 
         private readonly struct ActiveTaskPaneRefreshHandoff

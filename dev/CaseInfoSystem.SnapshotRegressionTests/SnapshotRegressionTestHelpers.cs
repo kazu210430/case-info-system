@@ -61,7 +61,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
 
         internal static SnapshotBuilderScenario Create(
             IReadOnlyList<InputRow> rows,
-            int masterVersion,
+            long masterVersion,
             bool caseListRegistered,
             Excel.Application application = null,
             string systemRoot = @"C:\SnapshotRegression\SystemRoot",
@@ -179,7 +179,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
 
         internal static string Serialize(
             Excel.Workbook caseWorkbook,
-            int masterVersion,
+            long masterVersion,
             Array values,
             IReadOnlyDictionary<int, long> fillColors,
             IReadOnlyDictionary<int, long> tabBackColors)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -59,10 +60,31 @@ namespace CaseInfoSystem.Tests
 
 				Assert.True (result.Success);
 				Assert.Equal (new[] { "master-write", "kernel-version", "kernel-save", "base-save", "invalidate" }, harness.Events);
-				Assert.Equal ("1", harness.KernelProperties["TASKPANE_MASTER_VERSION"]);
+				Assert.Equal (KernelTemplateSyncService.CreateNextTaskPaneMasterVersion (string.Empty, DateTime.Today).ToString (CultureInfo.InvariantCulture), harness.KernelProperties["TASKPANE_MASTER_VERSION"]);
 				Assert.True (string.IsNullOrEmpty (result.BaseSyncError));
 				Assert.Equal (1, harness.BaseWorkbook.CloseCallCount);
 			}
+		}
+
+		[Theory]
+		[InlineData ("12", 20260510001L)]
+		[InlineData ("", 20260510001L)]
+		[InlineData ("not-a-version", 20260510001L)]
+		[InlineData ("20260509007", 20260510001L)]
+		[InlineData ("20260510001", 20260510002L)]
+		[InlineData ("20260510998", 20260510999L)]
+		[InlineData ("20260511001", 20260511002L)]
+		public void CreateNextTaskPaneMasterVersion_UsesDateSequenceAndMonotonicGuard (string existingVersion, long expected)
+		{
+			long actual = KernelTemplateSyncService.CreateNextTaskPaneMasterVersion (existingVersion, new DateTime (2026, 5, 10));
+
+			Assert.Equal (expected, actual);
+		}
+
+		[Fact]
+		public void CreateNextTaskPaneMasterVersion_WhenTodaySequenceIsExhausted_FailsClosed ()
+		{
+			Assert.Throws<InvalidOperationException> (() => KernelTemplateSyncService.CreateNextTaskPaneMasterVersion ("20260510999", new DateTime (2026, 5, 10)));
 		}
 
 		[Fact]
@@ -347,7 +369,7 @@ namespace CaseInfoSystem.Tests
 			worksheet.Protection.AllowUsingPivotTables = false;
 		}
 
-		private static void InvokeSaveSnapshotToBaseWorkbook (TestHarness harness, string snapshotText, int masterVersion)
+		private static void InvokeSaveSnapshotToBaseWorkbook (TestHarness harness, string snapshotText, long masterVersion)
 		{
 			FieldInfo publicationExecutorField = typeof (KernelTemplateSyncService).GetField ("_publicationExecutor", BindingFlags.Instance | BindingFlags.NonPublic);
 			Assert.NotNull (publicationExecutorField);

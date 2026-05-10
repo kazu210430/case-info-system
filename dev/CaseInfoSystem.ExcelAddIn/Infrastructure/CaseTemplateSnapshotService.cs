@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
@@ -65,10 +66,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _excelInteropService.SetDocumentProperty(caseWorkbook, TaskPaneCachePartPropPrefix + partIndex.ToString("00"), string.Empty);
             }
 
-            int embeddedMasterVersion = ReadPositiveIntProperty(caseWorkbook, TaskPaneBaseMasterVersionProp);
+            long embeddedMasterVersion = ReadPositiveLongProperty(caseWorkbook, TaskPaneBaseMasterVersionProp);
             if (embeddedMasterVersion > 0)
             {
-                _excelInteropService.SetDocumentProperty(caseWorkbook, TaskPaneMasterVersionProp, embeddedMasterVersion.ToString());
+                _excelInteropService.SetDocumentProperty(caseWorkbook, TaskPaneMasterVersionProp, embeddedMasterVersion.ToString(CultureInfo.InvariantCulture));
             }
         }
 
@@ -76,6 +77,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             string text = _excelInteropService.TryGetDocumentProperty(workbook, propertyName);
             return int.TryParse(text, out int value) && value > 0 ? value : 0;
+        }
+
+        private long ReadPositiveLongProperty(Excel.Workbook workbook, string propertyName)
+        {
+            string text = _excelInteropService.TryGetDocumentProperty(workbook, propertyName);
+            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value) && value > 0L ? value : 0L;
         }
 
         /// <summary>

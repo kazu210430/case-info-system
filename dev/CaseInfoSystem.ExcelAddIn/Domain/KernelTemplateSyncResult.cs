@@ -16,7 +16,7 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
 
         internal int WarningCount { get; set; }
 
-        internal int MasterVersion { get; set; }
+        internal long MasterVersion { get; set; }
 
         internal string TemplateDirectory { get; set; } = string.Empty;
 

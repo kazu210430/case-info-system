@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.UI;
@@ -53,8 +54,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return false;
             }
 
-            int caseMasterVersion = ReadPositiveIntProperty(workbook, TaskPaneMasterVersionProp);
-            int embeddedMasterVersion = ReadPositiveIntProperty(workbook, TaskPaneBaseMasterVersionProp);
+            long caseMasterVersion = ReadPositiveLongProperty(workbook, TaskPaneMasterVersionProp);
+            long embeddedMasterVersion = ReadPositiveLongProperty(workbook, TaskPaneBaseMasterVersionProp);
 
             bool shouldPromote = currentSnapshot.Length == 0;
             if (!shouldPromote && embeddedMasterVersion > 0)
@@ -70,15 +71,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             SaveTaskPaneSnapshotCache(workbook, embeddedSnapshot);
             if (embeddedMasterVersion > 0)
             {
-                _excelInteropService.SetDocumentProperty(workbook, TaskPaneMasterVersionProp, embeddedMasterVersion.ToString());
+                _excelInteropService.SetDocumentProperty(workbook, TaskPaneMasterVersionProp, embeddedMasterVersion.ToString(CultureInfo.InvariantCulture));
             }
 
             _logger.Info(
                 "TaskPaneSnapshotCacheService promoted Base snapshot to CASE cache. "
                 + "caseMasterVersion="
-                + caseMasterVersion.ToString()
+                + caseMasterVersion.ToString(CultureInfo.InvariantCulture)
                 + ", embeddedMasterVersion="
-                + embeddedMasterVersion.ToString()
+                + embeddedMasterVersion.ToString(CultureInfo.InvariantCulture)
                 + ", hadExistingCaseCache="
                 + (currentSnapshot.Length > 0).ToString());
             return true;
@@ -280,10 +281,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return true;
         }
 
-        private int ReadPositiveIntProperty(Excel.Workbook workbook, string propertyName)
+        private long ReadPositiveLongProperty(Excel.Workbook workbook, string propertyName)
         {
             string text = _excelInteropService.TryGetDocumentProperty(workbook, propertyName);
-            return int.TryParse(text, out int value) && value > 0 ? value : 0;
+            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value) && value > 0L ? value : 0L;
         }
 
         /// <summary>

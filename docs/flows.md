@@ -155,7 +155,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 ### publication side effects の固定点
 
 - publication side effects は `PublicationExecutor` に集約されます。
-- 順序は `WriteToMasterList -> TASKPANE_MASTER_VERSION +1 -> Kernel save -> Base snapshot sync -> InvalidateCache` で固定します。
+- 順序は `WriteToMasterList -> TASKPANE_MASTER_VERSION 更新 -> Kernel save -> Base snapshot sync -> InvalidateCache` で固定します。
 - preflight failure では副作用を発生させません。
 - kernel save failure では Base sync / invalidate へ進めません。
 - base sync failure では invalidate は実行し、success + warning の扱いを維持します。
@@ -499,8 +499,8 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 雛形登録・更新成功時は、次の順で TaskPane 更新元を進めます。
 
 1. `KernelTemplateSyncService` が `shMasterList` / `雛形一覧` を更新します。
-2. `KernelTemplateSyncService` が `TASKPANE_MASTER_VERSION` を `+1` します。
-3. この version 更新では内容差分の有無を見ません。雛形登録・更新は利用者の明示操作なので、成功時に無条件で `+1` してよい仕様です。
+2. `KernelTemplateSyncService` が `TASKPANE_MASTER_VERSION` を `yyyyMMddNNN` 形式の `long` として更新します。
+3. この version 更新では内容差分の有無を見ません。雛形登録・更新は利用者の明示操作なので、成功時に無条件で同日連番を進めてよい仕様です。旧整数方式の値、過去日、不正値は次回更新時に当日 `yyyyMMdd001` へ移行し、候補 version が既存 version 以下になる場合は時計ずれ対策として単調増加を優先します。
 4. `KernelTemplateSyncService` が TaskPane 用 snapshot を組み立て、Base に `TASKPANE_BASE_SNAPSHOT_*` と `TASKPANE_BASE_MASTER_VERSION` を埋め込みます。
 5. Base にも `TASKPANE_MASTER_VERSION` を保存し、新規 CASE が version ごと引き継げる状態にします。
 6. `MasterTemplateCatalogService.InvalidateCache(openKernelWorkbook)` を実行して、選択された Kernel workbook から解決した `SYSTEM_ROOT` 文脈の master catalog cache を無効化します。
@@ -567,7 +567,7 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 
 - `WorkbookActivate` / `WindowActivate` の host 再利用経路を安易に問題扱いしないこと。
 - 開いている CASE の Pane / host / control を close まで維持する仕様を壊さないこと。
-- 雛形登録・更新成功時の `TASKPANE_MASTER_VERSION` 無条件 `+1` を差分チェック方式に変えないこと。
+- 雛形登録・更新成功時の `TASKPANE_MASTER_VERSION` 無条件更新を差分チェック方式に変えないこと。
 - `DocumentTemplateResolver` の CASE cache 優先を安易に変更しないこと。
 - Base snapshot 埋め込みを削らないこと。
 - `TASKPANE_SNAPSHOT_CACHE_COUNT` を削除対象に含めないこと。

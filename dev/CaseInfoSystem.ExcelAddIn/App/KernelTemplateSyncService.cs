@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -20,13 +21,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			{
 				internal int UpdatedCount { get; }
 
-				internal int MasterVersion { get; }
+				internal long MasterVersion { get; }
 
 				internal bool BaseSyncSucceeded { get; }
 
 				internal string BaseSyncError { get; }
 
-				internal PublicationSideEffectResult (int updatedCount, int masterVersion, bool baseSyncSucceeded, string baseSyncError)
+				internal PublicationSideEffectResult (int updatedCount, long masterVersion, bool baseSyncSucceeded, string baseSyncError)
 				{
 					UpdatedCount = updatedCount;
 					MasterVersion = masterVersion;
@@ -63,7 +64,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			internal PublicationSideEffectResult PublishValidatedTemplates (Workbook kernelWorkbook, Worksheet masterSheet, string systemRoot, IReadOnlyList<TemplateRegistrationValidationEntry> templates)
 			{
 				int updatedCount = WriteToMasterList (masterSheet, templates);
-				int masterVersion = IncrementTaskPaneMasterVersion (kernelWorkbook);
+				long masterVersion = IncrementTaskPaneMasterVersion (kernelWorkbook);
 				// Kernel Save is the publication commit boundary.
 				SaveKernelWorkbook (kernelWorkbook);
 				string snapshotText = BuildTaskPaneSnapshot (masterSheet, systemRoot, masterVersion);
@@ -125,18 +126,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 			}
 
-			internal int IncrementTaskPaneMasterVersion (Workbook kernelWorkbook)
+			internal long IncrementTaskPaneMasterVersion (Workbook kernelWorkbook)
 			{
-				string s = _excelInteropService.TryGetDocumentProperty (kernelWorkbook, "TASKPANE_MASTER_VERSION");
-				int num = 1;
-				if (int.TryParse (s, out var result)) {
-					num = result + 1;
-				}
-				if (num < 1) {
-					num = 1;
-				}
-				_excelInteropService.SetDocumentProperty (kernelWorkbook, "TASKPANE_MASTER_VERSION", num.ToString ());
-				return num;
+				string existingVersion = _excelInteropService.TryGetDocumentProperty (kernelWorkbook, TaskPaneMasterVersionProp);
+				long nextVersion = KernelTemplateSyncService.CreateNextTaskPaneMasterVersion (existingVersion, DateTime.Today);
+				_excelInteropService.SetDocumentProperty (kernelWorkbook, TaskPaneMasterVersionProp, nextVersion.ToString (CultureInfo.InvariantCulture));
+				return nextVersion;
 			}
 
 			internal void SaveKernelWorkbook (Workbook kernelWorkbook)
@@ -147,7 +142,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 			}
 
-			internal bool TrySyncTaskPaneSnapshotToBase (string systemRoot, string snapshotText, int masterVersion, out string errorMessage)
+			internal bool TrySyncTaskPaneSnapshotToBase (string systemRoot, string snapshotText, long masterVersion, out string errorMessage)
 			{
 				errorMessage = string.Empty;
 				string text = WorkbookFileNameResolver.ResolveExistingBaseWorkbookPath (systemRoot, _pathCompatibilityService);
@@ -183,7 +178,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 			}
 
-			internal string BuildTaskPaneSnapshot (Worksheet masterSheet, string systemRoot, int masterVersion)
+			internal string BuildTaskPaneSnapshot (Worksheet masterSheet, string systemRoot, long masterVersion)
 			{
 				List<string> list = new List<string> ();
 				string text = WorkbookFileNameResolver.ResolveExistingBaseWorkbookPath (systemRoot, _pathCompatibilityService);
@@ -191,7 +186,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (string.IsNullOrWhiteSpace (text2)) {
 					text2 = WorkbookFileNameResolver.BuildBaseWorkbookName (Path.GetExtension (text));
 				}
-				list.Add (KernelTemplateSyncService.JoinFields ("META", "2", text2, text, KernelTemplateSyncService.BuildPreferredPaneWidth (masterSheet).ToString (), masterVersion.ToString ()));
+				list.Add (KernelTemplateSyncService.JoinFields ("META", "2", text2, text, KernelTemplateSyncService.BuildPreferredPaneWidth (masterSheet).ToString (), masterVersion.ToString (CultureInfo.InvariantCulture)));
 				list.Add (KernelTemplateSyncService.JoinFields ("SPECIAL", "btnCaseList", "案件一覧登録（未了）", "caselist", string.Empty, "18", "16", "128", "32", KernelTemplateSyncService.ColorToString (248, 225, 193)));
 				list.Add (KernelTemplateSyncService.JoinFields ("SPECIAL", "btnAccounting", "会計書類セット", "accounting", string.Empty, "18", "64", "128", "32", KernelTemplateSyncService.ColorToString (226, 239, 218)));
 				Dictionary<string, int> dictionary = new Dictionary<string, int> (StringComparer.OrdinalIgnoreCase);
@@ -224,27 +219,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return string.Join (Environment.NewLine, list.ToArray ());
 			}
 
-			private void SaveSnapshotToBaseWorkbook (Workbook baseWorkbook, string snapshotText, int masterVersion)
+			private void SaveSnapshotToBaseWorkbook (Workbook baseWorkbook, string snapshotText, long masterVersion)
 			{
 				BaseSnapshotPropertyStorage.Save (_excelInteropService, baseWorkbook, snapshotText, masterVersion);
 			}
 
 			private static class BaseSnapshotPropertyStorage
 			{
-				internal static void Save (ExcelInteropService excelInteropService, Workbook baseWorkbook, string snapshotText, int masterVersion)
+				internal static void Save (ExcelInteropService excelInteropService, Workbook baseWorkbook, string snapshotText, long masterVersion)
 				{
 					string s = excelInteropService.TryGetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp);
 					int result;
 					int num = (int.TryParse (s, out result) ? result : 0);
 					if (string.IsNullOrEmpty (snapshotText)) {
 						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, "0");
-						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString ());
+						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString (CultureInfo.InvariantCulture));
 						return;
 					}
 					int num2 = CalculateChunkCount (snapshotText);
 					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, num2.ToString ());
-					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString ());
-					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneMasterVersionProp, masterVersion.ToString ());
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString (CultureInfo.InvariantCulture));
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneMasterVersionProp, masterVersion.ToString (CultureInfo.InvariantCulture));
 					WriteSnapshotChunks (excelInteropService, baseWorkbook, snapshotText, num2);
 					ClearStaleSnapshotChunks (excelInteropService, baseWorkbook, num2 + 1, num);
 				}
@@ -302,6 +297,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private const string TaskPaneBaseMasterVersionProp = "TASKPANE_BASE_MASTER_VERSION";
 
 		private const int TaskPaneCacheChunkSize = 240;
+
+		private const long TaskPaneVersionSequenceBase = 1000L;
+
+		private const long TaskPaneMaxDailySequence = 999L;
 
 		private const string AllTabCaption = "全て";
 
@@ -393,7 +392,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			};
 		}
 
-		private static string BuildCompletedMessage (string templateDirectory, int updatedCount, TemplateRegistrationValidationSummary validationSummary, TimeSpan elapsed, int masterVersion, bool baseSyncSucceeded, string baseSyncError)
+		internal static long CreateNextTaskPaneMasterVersion (string existingVersionText, DateTime today)
+		{
+			long existingVersion = ParsePositiveLong (existingVersionText);
+			long todayKey = BuildTaskPaneVersionDateKey (today);
+			long candidateVersion = todayKey * TaskPaneVersionSequenceBase + 1L;
+			long existingDateKey;
+			long existingSequence;
+			if (TryGetTaskPaneVersionParts (existingVersion, out existingDateKey, out existingSequence) && existingDateKey == todayKey) {
+				if (existingSequence >= TaskPaneMaxDailySequence) {
+					throw new InvalidOperationException ("TaskPane master version daily sequence exceeded 999.");
+				}
+				candidateVersion = todayKey * TaskPaneVersionSequenceBase + existingSequence + 1L;
+			}
+			if (existingVersion > 0L && candidateVersion <= existingVersion) {
+				if (existingVersion == long.MaxValue) {
+					throw new InvalidOperationException ("TaskPane master version cannot be incremented safely.");
+				}
+				candidateVersion = existingVersion + 1L;
+			}
+			return candidateVersion;
+		}
+
+		private static long ParsePositiveLong (string value)
+		{
+			long result;
+			return long.TryParse (value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result) && result > 0L ? result : 0L;
+		}
+
+		private static long BuildTaskPaneVersionDateKey (DateTime today)
+		{
+			DateTime date = today.Date;
+			return date.Year * 10000L + date.Month * 100L + date.Day;
+		}
+
+		private static bool TryGetTaskPaneVersionParts (long version, out long dateKey, out long sequence)
+		{
+			dateKey = 0L;
+			sequence = 0L;
+			if (version <= 0L) {
+				return false;
+			}
+			dateKey = version / TaskPaneVersionSequenceBase;
+			sequence = version % TaskPaneVersionSequenceBase;
+			return dateKey >= 10000101L && dateKey <= 99991231L && sequence >= 1L && sequence <= TaskPaneMaxDailySequence;
+		}
+
+		private static string BuildCompletedMessage (string templateDirectory, int updatedCount, TemplateRegistrationValidationSummary validationSummary, TimeSpan elapsed, long masterVersion, bool baseSyncSucceeded, string baseSyncError)
 		{
 			StringBuilder stringBuilder = new StringBuilder ();
 			List<TemplateRegistrationValidationEntry> list = ((validationSummary == null) ? new List<TemplateRegistrationValidationEntry> () : validationSummary.TemplateResults.Where (entry => entry != null && !entry.IsValid).OrderBy (entry => entry.FileName ?? string.Empty, StringComparer.OrdinalIgnoreCase).ToList ());
@@ -417,7 +462,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				.Append (elapsed.TotalSeconds.ToString ("0.00"))
 				.AppendLine ()
 				.Append ("Master版: ")
-				.Append (masterVersion.ToString ());
+				.Append (masterVersion.ToString (CultureInfo.InvariantCulture));
 			if (list.Count > 0) {
 				stringBuilder.AppendLine ().AppendLine ().Append ("登録除外:");
 				foreach (TemplateRegistrationValidationEntry item in list) {

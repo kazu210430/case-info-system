@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -314,7 +315,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					if (!string.IsNullOrWhiteSpace (text2)) {
 						string text3 = _excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_BASE_MASTER_VERSION") ?? string.Empty;
 						long result = 0L;
-						long.TryParse (text3, out result);
+						long.TryParse (text3, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
 						embeddedMasterVersion = result;
 						if (!TryReadLatestMasterVersion (workbook, out masterVersion)) {
 							AppendFallbackReason (ref rebuildFallback, "LatestMasterVersionUnavailable");
@@ -376,12 +377,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				}
 				num = 30L;
 				long documentPropertyLong2 = GetDocumentPropertyLong (readAccess.Workbook, "TASKPANE_MASTER_VERSION", 0L);
-				_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", documentPropertyLong2.ToString ());
+				_excelInteropService.SetDocumentProperty (workbook, "TASKPANE_MASTER_VERSION", documentPropertyLong2.ToString (CultureInfo.InvariantCulture));
 				List<string> list = new List<string> ();
 				Dictionary<string, int> tabOrder = new Dictionary<string, int> (StringComparer.OrdinalIgnoreCase);
 				Dictionary<string, int> rowMap = new Dictionary<string, int> (StringComparer.OrdinalIgnoreCase);
 				num = 40L;
-				list.Add (JoinFields ("META", "2", _excelInteropService.GetWorkbookName (workbook), _excelInteropService.GetWorkbookFullName (workbook), BuildPreferredPaneWidthFromMasterSheet (masterListWorksheet).ToString (), documentPropertyLong2.ToString ()));
+				list.Add (JoinFields ("META", "2", _excelInteropService.GetWorkbookName (workbook), _excelInteropService.GetWorkbookFullName (workbook), BuildPreferredPaneWidthFromMasterSheet (masterListWorksheet).ToString (), documentPropertyLong2.ToString (CultureInfo.InvariantCulture)));
 				num = 50L;
 				AppendSpecialButtons (list, workbook);
 				num = 60L;
@@ -476,7 +477,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 							if (xElement == null) {
 								return false;
 							}
-							return long.TryParse (xElement.Value ?? string.Empty, out propertyValue);
+							return long.TryParse (xElement.Value ?? string.Empty, NumberStyles.Integer, CultureInfo.InvariantCulture, out propertyValue);
 						}
 					}
 				} finally {
@@ -750,7 +751,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					return defaultValue;
 				}
 				long num = default(long);
-				return (long.TryParse (Convert.ToString ((dynamic)documentProperty.Value), out num)) ? num : defaultValue;
+				return (long.TryParse (Convert.ToString ((dynamic)documentProperty.Value), NumberStyles.Integer, CultureInfo.InvariantCulture, out num)) ? num : defaultValue;
 			} catch {
 				return defaultValue;
 			}

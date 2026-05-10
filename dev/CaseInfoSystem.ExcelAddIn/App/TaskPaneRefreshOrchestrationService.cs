@@ -334,6 +334,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TryRefreshTaskPane(reason, null, null);
         }
 
+        // Handoff flow: entries, shared branch routing, branch helpers, then data-only inputs.
         internal void ScheduleActiveTaskPaneRefresh(string reason)
         {
             RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForActiveRefresh(reason));

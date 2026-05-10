@@ -113,39 +113,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 attemptObservation.RefreshAttemptId);
             if (!preconditionDecision.CanRefresh)
             {
-                TaskPaneRefreshFailClosedResultHandoff failClosedHandoff = BuildFailClosedTaskPaneRefreshResultHandoff(preconditionDecision);
-                TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
+                return ReturnFailClosedTaskPaneRefreshResult(
                     reason,
                     workbook,
                     window,
-                    failClosedHandoff.AttemptResult,
-                    attemptObservation.Stopwatch,
-                    failClosedHandoff.SkipActionName,
-                    null,
-                    null);
-                _windowActivateDownstreamObservation.LogOutcome(
                     displayRequest,
-                    reason,
-                    skippedResult,
-                    attemptObservation.Stopwatch,
-                    attemptObservation.RefreshAttemptId,
-                    failClosedHandoff.SkipActionName);
-                return skippedResult;
+                    preconditionDecision,
+                    attemptObservation);
             }
 
-            RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute()
-            {
-                RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(
-                    _taskPaneRefreshCoordinator,
-                    reason,
-                    workbook,
-                    window,
-                    _getKernelHomeForm,
-                    _getTaskPaneRefreshSuppressionCount);
-                return dispatchExecutionResult;
-            }
-
-            RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();
+            RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(
+                reason,
+                workbook,
+                window);
             return ContinuePostDispatchRefreshConvergence(
                 reason,
                 workbook,
@@ -245,6 +225,49 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal TaskPaneRefreshAttemptResult AttemptResult { get; }
 
             internal string SkipActionName { get; }
+        }
+
+        private TaskPaneRefreshAttemptResult ReturnFailClosedTaskPaneRefreshResult(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window window,
+            TaskPaneDisplayRequest displayRequest,
+            TaskPaneRefreshPreconditionDecision preconditionDecision,
+            TaskPaneRefreshAttemptStartObservation attemptObservation)
+        {
+            TaskPaneRefreshFailClosedResultHandoff failClosedHandoff = BuildFailClosedTaskPaneRefreshResultHandoff(preconditionDecision);
+            TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
+                reason,
+                workbook,
+                window,
+                failClosedHandoff.AttemptResult,
+                attemptObservation.Stopwatch,
+                failClosedHandoff.SkipActionName,
+                null,
+                null);
+            _windowActivateDownstreamObservation.LogOutcome(
+                displayRequest,
+                reason,
+                skippedResult,
+                attemptObservation.Stopwatch,
+                attemptObservation.RefreshAttemptId,
+                failClosedHandoff.SkipActionName);
+            return skippedResult;
+        }
+
+        private RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute(
+            string reason,
+            Excel.Workbook workbook,
+            Excel.Window window)
+        {
+            RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(
+                _taskPaneRefreshCoordinator,
+                reason,
+                workbook,
+                window,
+                _getKernelHomeForm,
+                _getTaskPaneRefreshSuppressionCount);
+            return dispatchExecutionResult;
         }
 
         private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence(

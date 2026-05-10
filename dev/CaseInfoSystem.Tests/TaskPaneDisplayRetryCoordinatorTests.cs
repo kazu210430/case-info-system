@@ -387,7 +387,7 @@ namespace CaseInfoSystem.Tests
                 orchestrationSource);
             AssertContainsInOrder(
                 coreMethod,
-                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();",
+                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(",
                 "return ContinuePostDispatchRefreshConvergence(");
             AssertContainsInOrder(
                 postDispatchConvergence,
@@ -404,16 +404,19 @@ namespace CaseInfoSystem.Tests
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
             string preconditionBoundary = ReadMethod(orchestrationSource, "private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary");
+            string failClosedReturn = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult ReturnFailClosedTaskPaneRefreshResult");
             string preconditionSkipPath = Slice(
                 coreMethod,
                 "if (!preconditionDecision.CanRefresh)",
-                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(");
+                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(");
 
             AssertContainsInOrder(
                 coreMethod,
+                "TaskPaneRefreshAttemptStartObservation attemptObservation = StartTaskPaneRefreshAttemptObservation(",
                 "TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(",
                 "if (!preconditionDecision.CanRefresh)",
-                "return skippedResult;");
+                "return ReturnFailClosedTaskPaneRefreshResult(",
+                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(");
             AssertContainsInOrder(
                 preconditionBoundary,
                 "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
@@ -421,20 +424,32 @@ namespace CaseInfoSystem.Tests
                 "_logger?.Info(",
                 "return preconditionDecision;");
             AssertNormalizedOutcomeChainBefore(
-                preconditionSkipPath,
+                failClosedReturn,
                 "_windowActivateDownstreamObservation.LogOutcome(",
                 orchestrationSource);
             AssertContainsInOrder(
-                preconditionSkipPath,
+                failClosedReturn,
+                "TaskPaneRefreshFailClosedResultHandoff failClosedHandoff = BuildFailClosedTaskPaneRefreshResultHandoff(preconditionDecision);",
+                "TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(",
+                "failClosedHandoff.AttemptResult,",
+                "failClosedHandoff.SkipActionName,",
                 "_windowActivateDownstreamObservation.LogOutcome(",
+                "failClosedHandoff.SkipActionName);",
                 "return skippedResult;");
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionSkipPath);
+            Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", failClosedReturn);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", preconditionSkipPath);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", failClosedReturn);
             Assert.DoesNotContain("case-display-completed", preconditionSkipPath);
+            Assert.DoesNotContain("case-display-completed", failClosedReturn);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", preconditionSkipPath);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", failClosedReturn);
             Assert.DoesNotContain("RefreshDispatchShell.Dispatch(", preconditionSkipPath);
+            Assert.DoesNotContain("RefreshDispatchShell.Dispatch(", failClosedReturn);
             Assert.DoesNotContain("foreground-recovery-decision", preconditionSkipPath);
+            Assert.DoesNotContain("foreground-recovery-decision", failClosedReturn);
             Assert.DoesNotContain("final-foreground-guarantee", preconditionSkipPath);
+            Assert.DoesNotContain("final-foreground-guarantee", failClosedReturn);
             Assert.DoesNotContain("RefreshDispatchShell.Dispatch(", preconditionBoundary);
             Assert.DoesNotContain("CompleteNormalizedOutcomeChain(", preconditionBoundary);
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionBoundary);
@@ -449,21 +464,32 @@ namespace CaseInfoSystem.Tests
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
             string preconditionBoundary = ReadMethod(orchestrationSource, "private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary");
+            string routeDispatch = ReadMethod(orchestrationSource, "private RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute");
             string postDispatchConvergence = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence");
             string dispatchShell = ReadMethod(orchestrationSource, "internal static RefreshDispatchExecutionResult Dispatch");
 
             AssertContainsInOrder(
                 coreMethod,
+                "TaskPaneRefreshAttemptStartObservation attemptObservation = StartTaskPaneRefreshAttemptObservation(",
                 "TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(",
                 "if (!preconditionDecision.CanRefresh)",
-                "return skippedResult;",
-                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
-                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();",
+                "return ReturnFailClosedTaskPaneRefreshResult(",
+                "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(",
                 "return ContinuePostDispatchRefreshConvergence(");
             AssertContainsInOrder(
                 preconditionBoundary,
                 "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
                 "return preconditionDecision;");
+            AssertContainsInOrder(
+                routeDispatch,
+                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
+                "_taskPaneRefreshCoordinator,",
+                "reason,",
+                "workbook,",
+                "window,",
+                "_getKernelHomeForm,",
+                "_getTaskPaneRefreshSuppressionCount);",
+                "return dispatchExecutionResult;");
             AssertContainsInOrder(
                 postDispatchConvergence,
                 "TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(",
@@ -481,6 +507,11 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", dispatchShell);
             Assert.DoesNotContain("case-display-completed", dispatchShell);
             Assert.DoesNotContain("NewCaseVisibilityObservation", dispatchShell);
+            Assert.DoesNotContain("CompleteNormalizedOutcomeChain(", routeDispatch);
+            Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", routeDispatch);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", routeDispatch);
+            Assert.DoesNotContain("case-display-completed", routeDispatch);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", routeDispatch);
             Assert.DoesNotContain("RefreshDispatchShell.Dispatch(", preconditionBoundary);
             Assert.DoesNotContain("CompleteNormalizedOutcomeChain(", preconditionBoundary);
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionBoundary);

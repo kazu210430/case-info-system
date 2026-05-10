@@ -157,18 +157,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return skippedResult;
             }
 
-            RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(
-                _taskPaneRefreshCoordinator,
-                reason,
-                workbook,
-                window,
-                _getKernelHomeForm,
-                _getTaskPaneRefreshSuppressionCount);
+            RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute()
+            {
+                RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(
+                    _taskPaneRefreshCoordinator,
+                    reason,
+                    workbook,
+                    window,
+                    _getKernelHomeForm,
+                    _getTaskPaneRefreshSuppressionCount);
+                return dispatchExecutionResult;
+            }
+
+            RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute();
             TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,
                 window,
-                dispatchExecutionResult.AttemptResult,
+                routeDispatchExecutionResult.AttemptResult,
                 stopwatch,
                 "refresh",
                 null,

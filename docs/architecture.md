@@ -310,6 +310,9 @@ hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle 
 - Base `ホーム` シート A列をタグ定義の正本とします。
 - `CaseList_FieldInventory` は Base `ホーム` シート A列と一致させて管理します。
 - Base `ホーム` シート A列を変更した場合は `CaseList_FieldInventory` を更新します。
+- VSTO 側の同期入口はリボンの `Base定義更新` とし、Base `ホーム` シート A列から `CaseList_FieldInventory.ProposedFieldKey` へ反映する補助コマンドとして扱います。
+- 同期コマンドは `SourceCell` / `ProposedNamedRange` / `Label` / `DataType` / `NormalizeRule` などの既存メタ情報を正当化なく変更せず、行対応は `SourceCell=B{Base HOME row}` を基準に fail-closed で扱います。
+- 同期後も Word 雛形の CC Tag は利用者が同じキーへ修正し、雛形登録・更新で再検証する運用を維持します。
 
 ## TaskPane と HOME の位置づけ
 

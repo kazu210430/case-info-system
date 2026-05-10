@@ -87,6 +87,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal KernelCaseCreationCommandService KernelCaseCreationCommandService { get; private set; }
 
+        internal KernelCommandService KernelCommandService { get; private set; }
+
         internal KernelUserDataReflectionService KernelUserDataReflectionService { get; private set; }
 
         internal KernelCaseInteractionState KernelCaseInteractionState { get; private set; }
@@ -288,14 +290,23 @@ namespace CaseInfoSystem.ExcelAddIn
                 masterTemplateCatalogService,
                 caseWorkbookLifecycleService,
                 _logger);
+            var baseHomeFieldInventorySyncService = new BaseHomeFieldInventorySyncService(
+                _application,
+                KernelWorkbookService,
+                ExcelInteropService,
+                pathCompatibilityService,
+                caseWorkbookLifecycleService,
+                _logger);
             var kernelCommandService = new KernelCommandService(
                 KernelWorkbookService,
                 KernelUserDataReflectionService,
                 kernelUserDataRegistrationExecutionService,
                 kernelTemplateSyncService,
+                baseHomeFieldInventorySyncService,
                 kernelTemplateFolderOpenService,
                 _showKernelHomeFromKernelCommand,
                 _logger);
+            KernelCommandService = kernelCommandService;
             var kernelSheetCommandTriggerService = new KernelSheetCommandTriggerService(
                 kernelCommandService,
                 KernelWorkbookService,

@@ -7,7 +7,7 @@ namespace CaseInfoSystem.Tests
     public sealed class KernelNavigationModelsTests
     {
         [Fact]
-        public void CreateForSheet_WhenTemplateList_AddsOpenTemplateFolderBeforeReflectTemplate()
+        public void CreateForSheet_WhenTemplateList_AddsTemplateActionsWithoutBaseDefinitionUpdate()
         {
             var actions = KernelNavigationDefinitions.CreateForSheet("shMasterList");
             string[] actionIds = actions.Select(action => action.ActionId).ToArray();
@@ -18,14 +18,16 @@ namespace CaseInfoSystem.Tests
             Assert.True(openTemplateFolderIndex >= 0);
             Assert.True(reflectTemplateIndex >= 0);
             Assert.True(openTemplateFolderIndex < reflectTemplateIndex);
+            Assert.DoesNotContain(actions, action => action.ActionId == "sync-base-home-field-inventory");
         }
 
         [Fact]
-        public void CreateForSheet_WhenNotTemplateList_DoesNotAddOpenTemplateFolder()
+        public void CreateForSheet_WhenNotTemplateList_DoesNotAddTemplateActions()
         {
             var actions = KernelNavigationDefinitions.CreateForSheet("shUserData");
 
             Assert.DoesNotContain(actions, action => action.ActionId == "open-template-folder");
+            Assert.DoesNotContain(actions, action => action.ActionId == "sync-base-home-field-inventory");
         }
     }
 }

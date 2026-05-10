@@ -14,6 +14,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         private RibbonButton _setSystemRootButton;
         private RibbonButton _refreshCasePaneButton;
         private RibbonButton _copySampleColumnButton;
+        private RibbonButton _updateBaseDefinitionButton;
         private RibbonButton _resetForDistributionButton;
 
         /// <summary>
@@ -42,6 +43,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             _setSystemRootButton = Factory.CreateRibbonButton();
             _refreshCasePaneButton = Factory.CreateRibbonButton();
             _copySampleColumnButton = Factory.CreateRibbonButton();
+            _updateBaseDefinitionButton = Factory.CreateRibbonButton();
             _resetForDistributionButton = Factory.CreateRibbonButton();
 
             _tab.Label = "\u6848\u4EF6\u60C5\u5831System";
@@ -52,6 +54,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             _group.Items.Add(_setSystemRootButton);
             _group.Items.Add(_refreshCasePaneButton);
             _group.Items.Add(_copySampleColumnButton);
+            _group.Items.Add(_updateBaseDefinitionButton);
             _group.Items.Add(_resetForDistributionButton);
 
             _showCustomDocPropsButton.Label = "DocProp\u4E00\u89A7";
@@ -69,6 +72,10 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             _copySampleColumnButton.Label = "SampleB\u8EE2\u8A18";
             _copySampleColumnButton.ScreenTip = "BASE / CASE \u30D6\u30C3\u30AF\u306E shSample \u30B7\u30FC\u30C8 B\u5217\u3092 shHOME \u3078\u8EE2\u8A18\u3057\u307E\u3059\u3002";
             _copySampleColumnButton.Click += CopySampleColumnButton_Click;
+
+            _updateBaseDefinitionButton.Label = "Base定義更新";
+            _updateBaseDefinitionButton.ScreenTip = "Base HOME A列のフィールドキーを Kernel の CaseList_FieldInventory へ同期します。";
+            _updateBaseDefinitionButton.Click += UpdateBaseDefinitionButton_Click;
 
             _resetForDistributionButton.Label = "\u914D\u5E03\u524D\u30EA\u30BB\u30C3\u30C8";
             _resetForDistributionButton.ScreenTip = "Kernel / Base \u30D6\u30C3\u30AF\u306E DocProp \u3092\u914D\u5E03\u7528\u306E\u30AF\u30EA\u30FC\u30F3\u72B6\u614B\u306B\u623B\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002";
@@ -121,6 +128,17 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         private void CopySampleColumnButton_Click(object sender, RibbonControlEventArgs e)
         {
             Globals.ThisAddIn?.CopySampleColumnBToHome();
+        }
+
+        /// <summary>
+        /// Method: delegates the Base definition update button click to ThisAddIn.
+        /// Args: sender - click source, e - event args.
+        /// Returns: none.
+        /// Side effects: synchronizes Base HOME field keys to Kernel field inventory.
+        /// </summary>
+        private void UpdateBaseDefinitionButton_Click(object sender, RibbonControlEventArgs e)
+        {
+            Globals.ThisAddIn?.UpdateBaseDefinitionFromRibbon();
         }
 
         /// <summary>

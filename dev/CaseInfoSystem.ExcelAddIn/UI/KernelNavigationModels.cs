@@ -34,6 +34,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal const string RegisterUserInfo = "register-user-info";
         internal const string OpenTemplateFolder = "open-template-folder";
         internal const string ReflectTemplate = "reflect-template";
+        internal const string SyncBaseHomeFieldInventory = "sync-base-home-field-inventory";
     }
 
     internal static class KernelNavigationDefinitions

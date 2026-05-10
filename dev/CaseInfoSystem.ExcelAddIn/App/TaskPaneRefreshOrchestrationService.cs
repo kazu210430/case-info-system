@@ -1126,30 +1126,63 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            ReadyShowCallbackFacts callbackFacts = BuildReadyShowCallbackFacts(outcome);
             Stopwatch stopwatch = Stopwatch.StartNew();
             TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,
-                outcome.WorkbookWindow,
-                outcome.RefreshAttemptResult,
+                callbackFacts.WorkbookWindow,
+                callbackFacts.RefreshAttemptResult,
                 stopwatch,
                 "ready-show-attempt",
-                outcome.AttemptNumber,
-                outcome.WorkbookWindowEnsureFacts);
+                callbackFacts.AttemptNumber,
+                callbackFacts.WorkbookWindowEnsureFacts);
             attemptResult = CompleteForegroundGuaranteeOutcome(
                 reason,
                 workbook,
-                outcome.WorkbookWindow,
+                callbackFacts.WorkbookWindow,
                 attemptResult,
                 stopwatch);
             TryCompleteCreatedCaseDisplaySession(
                 session,
                 reason,
                 workbook,
-                outcome.WorkbookWindow,
+                callbackFacts.WorkbookWindow,
                 attemptResult,
                 "ready-show-attempt",
-                outcome.AttemptNumber);
+                callbackFacts.AttemptNumber);
+        }
+
+        private static ReadyShowCallbackFacts BuildReadyShowCallbackFacts(WorkbookTaskPaneReadyShowAttemptOutcome outcome)
+        {
+            return new ReadyShowCallbackFacts(
+                outcome.WorkbookWindow,
+                outcome.RefreshAttemptResult,
+                outcome.AttemptNumber,
+                outcome.WorkbookWindowEnsureFacts);
+        }
+
+        private readonly struct ReadyShowCallbackFacts
+        {
+            internal ReadyShowCallbackFacts(
+                Excel.Window workbookWindow,
+                TaskPaneRefreshAttemptResult refreshAttemptResult,
+                int attemptNumber,
+                WorkbookWindowVisibilityEnsureFacts workbookWindowEnsureFacts)
+            {
+                WorkbookWindow = workbookWindow;
+                RefreshAttemptResult = refreshAttemptResult;
+                AttemptNumber = attemptNumber;
+                WorkbookWindowEnsureFacts = workbookWindowEnsureFacts;
+            }
+
+            internal Excel.Window WorkbookWindow { get; }
+
+            internal TaskPaneRefreshAttemptResult RefreshAttemptResult { get; }
+
+            internal int AttemptNumber { get; }
+
+            internal WorkbookWindowVisibilityEnsureFacts WorkbookWindowEnsureFacts { get; }
         }
 
         private void TryCompleteCreatedCaseDisplaySession(

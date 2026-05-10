@@ -456,25 +456,37 @@ namespace CaseInfoSystem.Tests
                 orchestrationSource,
                 "private void HandleWorkbookTaskPaneShown",
                 "private void TryCompleteCreatedCaseDisplaySession");
+            string callbackFactsBuilder = Slice(
+                orchestrationSource,
+                "private static ReadyShowCallbackFacts BuildReadyShowCallbackFacts",
+                "private readonly struct ReadyShowCallbackFacts");
 
             AssertContainsInOrder(
                 callbackHandler,
                 "if (outcome == null)",
                 "return;",
+                "ReadyShowCallbackFacts callbackFacts = BuildReadyShowCallbackFacts(outcome);",
                 "TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(",
-                "outcome.WorkbookWindow,",
-                "outcome.RefreshAttemptResult,",
+                "callbackFacts.WorkbookWindow,",
+                "callbackFacts.RefreshAttemptResult,",
                 "\"ready-show-attempt\",",
-                "outcome.AttemptNumber,",
-                "outcome.WorkbookWindowEnsureFacts);",
+                "callbackFacts.AttemptNumber,",
+                "callbackFacts.WorkbookWindowEnsureFacts);",
                 "attemptResult = CompleteForegroundGuaranteeOutcome(",
-                "outcome.WorkbookWindow,",
+                "callbackFacts.WorkbookWindow,",
                 "attemptResult,",
                 "TryCompleteCreatedCaseDisplaySession(",
-                "outcome.WorkbookWindow,",
+                "callbackFacts.WorkbookWindow,",
                 "attemptResult,",
                 "\"ready-show-attempt\",",
-                "outcome.AttemptNumber);");
+                "callbackFacts.AttemptNumber);");
+            AssertContainsInOrder(
+                callbackFactsBuilder,
+                "return new ReadyShowCallbackFacts(",
+                "outcome.WorkbookWindow,",
+                "outcome.RefreshAttemptResult,",
+                "outcome.AttemptNumber,",
+                "outcome.WorkbookWindowEnsureFacts);");
             Assert.DoesNotContain("TaskPaneNormalizedOutcomeMapper.", callbackHandler);
             Assert.DoesNotContain("VisibilityRecoveryOutcome.", callbackHandler);
             Assert.DoesNotContain("ForegroundGuaranteeOutcome.", callbackHandler);
@@ -485,6 +497,9 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", callbackHandler);
             Assert.DoesNotContain("_createdCaseDisplaySessions", callbackHandler);
             Assert.DoesNotContain("IsCompleted", callbackHandler);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", callbackFactsBuilder);
+            Assert.DoesNotContain("case-display-completed", callbackFactsBuilder);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", callbackFactsBuilder);
         }
 
         [Fact]

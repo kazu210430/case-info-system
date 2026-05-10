@@ -935,10 +935,7 @@ namespace CaseInfoSystem.Tests
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string scheduleActive = ReadMethod(orchestrationSource, "internal void ScheduleActiveTaskPaneRefresh");
             string handoffFlow = ReadMethod(orchestrationSource, "private void RunTaskPaneRefreshHandoffFlow");
-            string activeHandoffBranch = Slice(
-                handoffFlow,
-                "if (flowInput.IsActiveTarget)",
-                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff");
+            string activeHandoffBranch = ReadMethod(orchestrationSource, "private void RunActiveTaskPaneRefreshHandoffBranch");
             string beginActiveHandoff = ReadMethod(orchestrationSource, "private ActiveTaskPaneRefreshHandoff BeginActiveTaskPaneRefreshHandoff");
             string immediateActiveRefresh = ReadMethod(orchestrationSource, "private bool TryRefreshActiveTaskPaneImmediately");
             string startActiveRetry = ReadMethod(orchestrationSource, "private void StartPendingRefreshRetryFromActiveHandoff");
@@ -950,14 +947,19 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 scheduleActive,
-                "RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForActiveTarget(reason));");
+                "RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForActiveRefresh(reason));");
+            AssertContainsInOrder(
+                handoffFlow,
+                "if (flowInput.IsActiveRefresh)",
+                "RunActiveTaskPaneRefreshHandoffBranch(flowInput);",
+                "return;",
+                "RunWorkbookFallbackTaskPaneRefreshHandoffBranch(flowInput);");
             AssertContainsInOrder(
                 activeHandoffBranch,
                 "ActiveTaskPaneRefreshHandoff activeHandoff = BeginActiveTaskPaneRefreshHandoff(flowInput.Reason);",
                 "TryRefreshActiveTaskPaneImmediately(activeHandoff)",
                 "return;",
-                "StartPendingRefreshRetryFromActiveHandoff(activeHandoff);",
-                "return;");
+                "StartPendingRefreshRetryFromActiveHandoff(activeHandoff);");
             AssertContainsInOrder(
                 activeRefreshHandoffFlow,
                 "_pendingPaneRefreshRetryService.TrackActiveTarget();",
@@ -986,6 +988,7 @@ namespace CaseInfoSystem.Tests
             string showWhenReady = ReadMethod(orchestrationSource, "internal void ShowWorkbookTaskPaneWhenReady");
             string scheduleFallback = ReadMethod(orchestrationSource, "internal void ScheduleWorkbookTaskPaneRefresh");
             string handoffFlow = ReadMethod(orchestrationSource, "private void RunTaskPaneRefreshHandoffFlow");
+            string workbookFallbackBranch = ReadMethod(orchestrationSource, "private void RunWorkbookFallbackTaskPaneRefreshHandoffBranch");
             string beginFallbackHandoff = ReadMethod(orchestrationSource, "private PendingFallbackRefreshHandoff BeginPendingFallbackRefreshHandoff");
             string skipFallbackBoundary = ReadMethod(orchestrationSource, "private static bool ShouldSkipPendingFallbackForWorkbookOpenBoundary");
             string prepareRetryHandoff = ReadMethod(orchestrationSource, "private PendingRefreshRetryHandoff PreparePendingRefreshRetryHandoff");
@@ -993,6 +996,7 @@ namespace CaseInfoSystem.Tests
             string startPendingRetry = ReadMethod(orchestrationSource, "private void StartPendingRefreshRetryFromFallback");
             string pendingFallbackHandoffFlow = scheduleFallback
                 + handoffFlow
+                + workbookFallbackBranch
                 + beginFallbackHandoff
                 + skipFallbackBoundary
                 + prepareRetryHandoff
@@ -1037,7 +1041,10 @@ namespace CaseInfoSystem.Tests
                 "RunTaskPaneRefreshHandoffFlow(TaskPaneRefreshHandoffFlowInput.ForWorkbookFallback(workbook, reason));");
             AssertContainsInOrder(
                 handoffFlow,
-                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(flowInput.Workbook, flowInput.Reason);",
+                "RunWorkbookFallbackTaskPaneRefreshHandoffBranch(flowInput);");
+            AssertContainsInOrder(
+                workbookFallbackBranch,
+                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(flowInput.WorkbookFallbackWorkbook, flowInput.Reason);",
                 "ShouldSkipPendingFallbackForWorkbookOpenBoundary(fallbackHandoff)",
                 "LogPendingFallbackWorkbookOpenSkip(fallbackHandoff);",
                 "return;",

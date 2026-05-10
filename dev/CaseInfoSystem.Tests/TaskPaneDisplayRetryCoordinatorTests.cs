@@ -389,6 +389,8 @@ namespace CaseInfoSystem.Tests
                 orchestrationSource);
             AssertContainsInOrder(
                 normalRefreshPath,
+                "RefreshDispatchShell.Dispatch(",
+                "CompleteNormalizedOutcomeChain(",
                 "CompleteForegroundGuaranteeOutcome(",
                 "_windowActivateDownstreamObservation.LogOutcome(",
                 "TryCompleteCreatedCaseDisplaySession(");
@@ -414,8 +416,47 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionSkipPath);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", preconditionSkipPath);
             Assert.DoesNotContain("case-display-completed", preconditionSkipPath);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", preconditionSkipPath);
+            Assert.DoesNotContain("RefreshDispatchShell.Dispatch(", preconditionSkipPath);
             Assert.DoesNotContain("foreground-recovery-decision", preconditionSkipPath);
             Assert.DoesNotContain("final-foreground-guarantee", preconditionSkipPath);
+        }
+
+        [Fact]
+        public void RouteDispatchShell_StaysBetweenPreconditionAndNormalizedOutcomeWithoutCompletionOwnership()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
+            string normalRefreshPath = Slice(
+                coreMethod,
+                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(",
+                "return attemptResult;");
+            string dispatchShell = ReadMethod(orchestrationSource, "internal static RefreshDispatchExecutionResult Dispatch");
+
+            AssertContainsInOrder(
+                coreMethod,
+                "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
+                "if (!preconditionDecision.CanRefresh)",
+                "return skippedResult;",
+                "RefreshDispatchExecutionResult dispatchExecutionResult = RefreshDispatchShell.Dispatch(");
+            AssertContainsInOrder(
+                normalRefreshPath,
+                "RefreshDispatchShell.Dispatch(",
+                "TaskPaneRefreshAttemptResult attemptResult = CompleteNormalizedOutcomeChain(",
+                "attemptResult = CompleteForegroundGuaranteeOutcome(",
+                "_windowActivateDownstreamObservation.LogOutcome(",
+                "TryCompleteCreatedCaseDisplaySession(",
+                "attemptResult,",
+                "\"refresh\",");
+            AssertContainsInOrder(
+                dispatchShell,
+                "taskPaneRefreshCoordinator.TryRefreshTaskPane(",
+                "return RefreshDispatchExecutionResult.FromAttemptResult(attemptResult);");
+            Assert.DoesNotContain("CompleteNormalizedOutcomeChain(", dispatchShell);
+            Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", dispatchShell);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", dispatchShell);
+            Assert.DoesNotContain("case-display-completed", dispatchShell);
+            Assert.DoesNotContain("NewCaseVisibilityObservation", dispatchShell);
         }
 
         [Fact]
@@ -818,6 +859,79 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("case-display-completed", pendingSource);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", pendingSource);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", pendingSource);
+        }
+
+        [Fact]
+        public void ReadyShowPendingFallbackAndRetrySequencing_PreservesAttemptsDelayAndActivationMatrix()
+        {
+            string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string workerSource = ReadAppSource("WorkbookTaskPaneReadyShowAttemptWorker.cs");
+            string schedulerSource = ReadAppSource("TaskPaneReadyShowRetryScheduler.cs");
+            string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
+            string showWhenReady = ReadMethod(orchestrationSource, "internal void ShowWorkbookTaskPaneWhenReady");
+            string scheduleFallback = ReadMethod(orchestrationSource, "internal void ScheduleWorkbookTaskPaneRefresh");
+            string workerShowWhenReady = ReadMethod(workerSource, "internal void ShowWhenReady");
+            string schedulerSchedule = ReadMethod(schedulerSource, "internal void Schedule");
+            string pendingBeginRetry = ReadMethod(pendingSource, "internal int BeginRetrySequence");
+            string pendingTick = ReadMethod(pendingSource, "private void PendingPaneRefreshTimer_Tick");
+
+            Assert.Contains("internal const int ReadyShowMaxAttempts = 2;", workerSource);
+            Assert.Contains("internal const int ReadyShowRetryDelayMs = 80;", workerSource);
+            Assert.Contains("internal const int PendingPaneRefreshIntervalMs = 400;", orchestrationSource);
+            Assert.Contains("internal const int PendingPaneRefreshMaxAttempts = 3;", orchestrationSource);
+            AssertContainsInOrder(
+                showWhenReady,
+                "BeginCreatedCaseDisplaySession(workbook, reason)",
+                "_workbookTaskPaneReadyShowAttemptWorker.ShowWhenReady(",
+                "_readyShowRetryScheduler.Schedule,",
+                "outcome => HandleWorkbookTaskPaneShown(createdCaseDisplaySession, workbook, reason, outcome)",
+                "ScheduleWorkbookTaskPaneRefresh");
+            AssertContainsInOrder(
+                workerShowWhenReady,
+                "_taskPaneDisplayRetryCoordinator.ShowWhenReady(",
+                "TryShowWorkbookTaskPaneOnce(targetWorkbook, targetReason, attemptNumber)",
+                "scheduleRetry,",
+                "() => onShown?.Invoke(shownOutcome)",
+                "scheduleFallback");
+            AssertContainsInOrder(
+                schedulerSchedule,
+                "_retryDelayMs.ToString(CultureInfo.InvariantCulture)",
+                "if (retryAction == null)",
+                "return;",
+                "_retryTimerLifecycle.ScheduleWaitReadyRetryTimer(",
+                "_retryDelayMs,",
+                "retryAction();");
+            AssertContainsInOrder(
+                scheduleFallback,
+                "TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null)",
+                "return;",
+                "_pendingPaneRefreshRetryService.TrackWorkbookTarget(",
+                "ResolveWorkbookPaneWindow(workbook, reason, activateWorkbook: false);",
+                "TryRefreshTaskPane(reason, workbook, workbookWindow)",
+                "BeginRetrySequence(reason);");
+            AssertContainsInOrder(
+                pendingBeginRetry,
+                "_retryState.BeginRetrySequence(reason, _pendingPaneRefreshMaxAttempts);",
+                "_retryTimerLifecycle.StartPendingPaneRefreshTimer(",
+                "_pendingPaneRefreshIntervalMs,",
+                "PendingPaneRefreshTimer_Tick);");
+            AssertContainsInOrder(
+                pendingTick,
+                "_resolveWorkbookPaneWindow(targetWorkbook, _retryState.Reason, true);",
+                "_tryRefreshTaskPane(_retryState.Reason, targetWorkbook, workbookWindow)",
+                "if (refreshed)",
+                "_stopPendingPaneRefreshTimer();",
+                "return;",
+                "WorkbookContext context =",
+                "bool fallbackRefreshed = _tryRefreshTaskPane(_retryState.Reason, null, null).IsRefreshSucceeded;",
+                "if (fallbackRefreshed)",
+                "_stopPendingPaneRefreshTimer();");
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", scheduleFallback);
+            Assert.DoesNotContain("case-display-completed", scheduleFallback);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", scheduleFallback);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", pendingSource);
+            Assert.DoesNotContain("case-display-completed", pendingSource);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", pendingSource);
         }
 
         [Fact]

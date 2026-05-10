@@ -360,6 +360,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void ScheduleWorkbookTaskPaneRefresh(Excel.Workbook workbook, string reason)
         {
+            PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(workbook, reason);
+            if (ShouldSkipPendingFallbackForWorkbookOpenBoundary(fallbackHandoff))
+            {
+                LogPendingFallbackWorkbookOpenSkip(fallbackHandoff);
+                return;
+            }
+
+            PendingRefreshRetryHandoff retryHandoff = PreparePendingRefreshRetryHandoff(fallbackHandoff);
+            if (TryRefreshPendingFallbackImmediately(retryHandoff))
+            {
+                return;
+            }
+
+            StartPendingRefreshRetryFromFallback(retryHandoff);
+        }
+
+        private PendingFallbackRefreshHandoff BeginPendingFallbackRefreshHandoff(Excel.Workbook workbook, string reason)
+        {
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshOrchestrationService action=wait-ready-fallback-handoff reason="
@@ -397,19 +415,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "TaskPaneRefreshOrchestrationService.ScheduleWorkbookTaskPaneRefresh",
                 SafeWorkbookFullName(workbook),
                 "reason=" + (reason ?? string.Empty) + ",fallbackCause=AttemptsExhausted");
-            if (TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null))
-            {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=skip-workbook-open-defer reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + FormatWorkbookDescriptor(workbook)
-                    + ", activeState="
-                    + FormatActiveState());
-                return;
-            }
 
+            return new PendingFallbackRefreshHandoff(workbook, reason);
+        }
+
+        private static bool ShouldSkipPendingFallbackForWorkbookOpenBoundary(PendingFallbackRefreshHandoff fallbackHandoff)
+        {
+            return TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(
+                fallbackHandoff.Reason,
+                fallbackHandoff.Workbook,
+                window: null);
+        }
+
+        private void LogPendingFallbackWorkbookOpenSkip(PendingFallbackRefreshHandoff fallbackHandoff)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=skip-workbook-open-defer reason="
+                + (fallbackHandoff.Reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(fallbackHandoff.Workbook)
+                + ", activeState="
+                + FormatActiveState());
+        }
+
+        private PendingRefreshRetryHandoff PreparePendingRefreshRetryHandoff(PendingFallbackRefreshHandoff fallbackHandoff)
+        {
+            Excel.Workbook workbook = fallbackHandoff.Workbook;
+            string reason = fallbackHandoff.Reason;
             _pendingPaneRefreshRetryService.TrackWorkbookTarget(_excelInteropService == null
                 ? string.Empty
                 : _excelInteropService.GetWorkbookFullName(workbook));
@@ -440,29 +473,68 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", fallbackCause=AttemptsExhausted"
                 + ", fallbackHandoff=true");
 
-            if (TryRefreshTaskPane(reason, workbook, workbookWindow).IsRefreshSucceeded)
+            return new PendingRefreshRetryHandoff(workbook, reason, workbookWindow);
+        }
+
+        private bool TryRefreshPendingFallbackImmediately(PendingRefreshRetryHandoff retryHandoff)
+        {
+            if (!TryRefreshTaskPane(retryHandoff.Reason, retryHandoff.Workbook, retryHandoff.WorkbookWindow).IsRefreshSucceeded)
             {
-                _logger?.Info(
-                    KernelFlickerTracePrefix
-                    + " source=TaskPaneRefreshOrchestrationService action=defer-immediate-success reason="
-                    + (reason ?? string.Empty)
-                    + ", workbook="
-                    + FormatWorkbookDescriptor(workbook));
-                _logger?.Info("TaskPane timer fallback immediate refresh succeeded. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook));
-                StopPendingPaneRefreshTimer();
-                return;
+                return false;
             }
 
-            int attemptsRemaining = _pendingPaneRefreshRetryService.BeginRetrySequence(reason);
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneRefreshOrchestrationService action=defer-immediate-success reason="
+                + (retryHandoff.Reason ?? string.Empty)
+                + ", workbook="
+                + FormatWorkbookDescriptor(retryHandoff.Workbook));
+            _logger?.Info("TaskPane timer fallback immediate refresh succeeded. reason=" + (retryHandoff.Reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(retryHandoff.Workbook));
+            StopPendingPaneRefreshTimer();
+            return true;
+        }
+
+        private void StartPendingRefreshRetryFromFallback(PendingRefreshRetryHandoff retryHandoff)
+        {
+            int attemptsRemaining = _pendingPaneRefreshRetryService.BeginRetrySequence(retryHandoff.Reason);
             _logger?.Info(
                 KernelFlickerTracePrefix
                 + " source=TaskPaneRefreshOrchestrationService action=defer-scheduled reason="
-                + (reason ?? string.Empty)
+                + (retryHandoff.Reason ?? string.Empty)
                 + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
+                + FormatWorkbookDescriptor(retryHandoff.Workbook)
                 + ", attempts="
                 + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
-            _logger?.Info("TaskPane timer fallback scheduled. reason=" + (reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(workbook) + ", attempts=" + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+            _logger?.Info("TaskPane timer fallback scheduled. reason=" + (retryHandoff.Reason ?? string.Empty) + ", workbook=" + SafeWorkbookFullName(retryHandoff.Workbook) + ", attempts=" + attemptsRemaining.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private readonly struct PendingFallbackRefreshHandoff
+        {
+            internal PendingFallbackRefreshHandoff(Excel.Workbook workbook, string reason)
+            {
+                Workbook = workbook;
+                Reason = reason;
+            }
+
+            internal Excel.Workbook Workbook { get; }
+
+            internal string Reason { get; }
+        }
+
+        private readonly struct PendingRefreshRetryHandoff
+        {
+            internal PendingRefreshRetryHandoff(Excel.Workbook workbook, string reason, Excel.Window workbookWindow)
+            {
+                Workbook = workbook;
+                Reason = reason;
+                WorkbookWindow = workbookWindow;
+            }
+
+            internal Excel.Workbook Workbook { get; }
+
+            internal string Reason { get; }
+
+            internal Excel.Window WorkbookWindow { get; }
         }
 
         internal void ShowWorkbookTaskPaneWhenReady(Excel.Workbook workbook, string reason)

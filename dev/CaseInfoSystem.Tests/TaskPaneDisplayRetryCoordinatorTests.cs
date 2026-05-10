@@ -931,6 +931,17 @@ namespace CaseInfoSystem.Tests
             string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
             string showWhenReady = ReadMethod(orchestrationSource, "internal void ShowWorkbookTaskPaneWhenReady");
             string scheduleFallback = ReadMethod(orchestrationSource, "internal void ScheduleWorkbookTaskPaneRefresh");
+            string beginFallbackHandoff = ReadMethod(orchestrationSource, "private PendingFallbackRefreshHandoff BeginPendingFallbackRefreshHandoff");
+            string skipFallbackBoundary = ReadMethod(orchestrationSource, "private static bool ShouldSkipPendingFallbackForWorkbookOpenBoundary");
+            string prepareRetryHandoff = ReadMethod(orchestrationSource, "private PendingRefreshRetryHandoff PreparePendingRefreshRetryHandoff");
+            string immediateFallbackRefresh = ReadMethod(orchestrationSource, "private bool TryRefreshPendingFallbackImmediately");
+            string startPendingRetry = ReadMethod(orchestrationSource, "private void StartPendingRefreshRetryFromFallback");
+            string pendingFallbackHandoffFlow = scheduleFallback
+                + beginFallbackHandoff
+                + skipFallbackBoundary
+                + prepareRetryHandoff
+                + immediateFallbackRefresh
+                + startPendingRetry;
             string workerShowWhenReady = ReadMethod(workerSource, "internal void ShowWhenReady");
             string schedulerSchedule = ReadMethod(schedulerSource, "internal void Schedule");
             string pendingBeginRetry = ReadMethod(pendingSource, "internal int BeginRetrySequence");
@@ -964,12 +975,25 @@ namespace CaseInfoSystem.Tests
                 "retryAction();");
             AssertContainsInOrder(
                 scheduleFallback,
-                "TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(reason, workbook, window: null)",
+                "PendingFallbackRefreshHandoff fallbackHandoff = BeginPendingFallbackRefreshHandoff(workbook, reason);",
+                "ShouldSkipPendingFallbackForWorkbookOpenBoundary(fallbackHandoff)",
+                "LogPendingFallbackWorkbookOpenSkip(fallbackHandoff);",
                 "return;",
+                "PendingRefreshRetryHandoff retryHandoff = PreparePendingRefreshRetryHandoff(fallbackHandoff);",
+                "TryRefreshPendingFallbackImmediately(retryHandoff)",
+                "return;",
+                "StartPendingRefreshRetryFromFallback(retryHandoff);");
+            AssertContainsInOrder(
+                pendingFallbackHandoffFlow,
+                "action=wait-ready-fallback-handoff",
+                "ready-show-fallback-handoff",
+                "TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(",
+                "window: null",
                 "_pendingPaneRefreshRetryService.TrackWorkbookTarget(",
                 "ResolveWorkbookPaneWindow(workbook, reason, activateWorkbook: false);",
-                "TryRefreshTaskPane(reason, workbook, workbookWindow)",
-                "BeginRetrySequence(reason);");
+                "TryRefreshTaskPane(retryHandoff.Reason, retryHandoff.Workbook, retryHandoff.WorkbookWindow)",
+                "StopPendingPaneRefreshTimer();",
+                "BeginRetrySequence(retryHandoff.Reason);");
             AssertContainsInOrder(
                 pendingBeginRetry,
                 "_retryState.BeginRetrySequence(reason, _pendingPaneRefreshMaxAttempts);",
@@ -987,9 +1011,9 @@ namespace CaseInfoSystem.Tests
                 "bool fallbackRefreshed = _tryRefreshTaskPane(_retryState.Reason, null, null).IsRefreshSucceeded;",
                 "if (fallbackRefreshed)",
                 "_stopPendingPaneRefreshTimer();");
-            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", scheduleFallback);
-            Assert.DoesNotContain("case-display-completed", scheduleFallback);
-            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", scheduleFallback);
+            Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", pendingFallbackHandoffFlow);
+            Assert.DoesNotContain("case-display-completed", pendingFallbackHandoffFlow);
+            Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", pendingFallbackHandoffFlow);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession", pendingSource);
             Assert.DoesNotContain("case-display-completed", pendingSource);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", pendingSource);

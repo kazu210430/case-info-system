@@ -14,6 +14,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string KernelFlickerTracePrefix = "[KernelFlickerTrace]";
         private const string DocumentActionKind = "doc";
         private const string AccountingActionKind = "accounting";
+        private const string CaseListActionKind = "caselist";
 
         private readonly ThisAddIn _addIn;
         private readonly ExcelInteropService _excelInteropService;
@@ -131,9 +132,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool hostWindowPresent = host != null && host.Window != null;
             if (decision == TaskPanePostActionRefreshDecision.SkipForForegroundPreservation)
             {
-                string reason = string.Equals(actionKind, "accounting", StringComparison.OrdinalIgnoreCase)
-                    ? "accounting set should keep the generated workbook in the foreground."
-                    : "document create should keep Word in the foreground.";
+                string reason;
+                if (string.Equals(actionKind, AccountingActionKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "accounting set should keep the generated workbook in the foreground.";
+                }
+                else if (string.Equals(actionKind, CaseListActionKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "case-list navigation should keep the existing CASE pane unchanged while Kernel navigation takes the foreground.";
+                }
+                else
+                {
+                    reason = "document create should keep Word in the foreground.";
+                }
+
                 _logger.Info("CASE pane refresh after action skipped because " + reason);
                 return;
             }

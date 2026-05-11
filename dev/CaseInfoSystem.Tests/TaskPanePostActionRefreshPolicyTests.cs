@@ -17,11 +17,11 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void Decide_ReturnsDeferAndInvalidateSignature_ForCaseListAction()
+        public void Decide_ReturnsSkipForForegroundPreservation_ForCaseListAction()
         {
             TaskPanePostActionRefreshDecision decision = TaskPanePostActionRefreshPolicy.Decide("caselist");
 
-            Assert.Equal(TaskPanePostActionRefreshDecision.DeferAndInvalidateSignature, decision);
+            Assert.Equal(TaskPanePostActionRefreshDecision.SkipForForegroundPreservation, decision);
         }
 
         [Theory]

@@ -143,7 +143,7 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(1, kernelWorkbook.SaveCallCount);
             Assert.True(kernelWorkbook.Saved);
-            Assert.Equal(1, refreshCalls);
+            Assert.Equal(0, refreshCalls);
             Assert.Equal(1, showKernelSheetCalls);
             Assert.Equal(1, showNoticeCalls);
             Assert.Equal(registrationResult.Message, shownMessage);

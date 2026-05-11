@@ -102,7 +102,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ExcelInteropService _excelInteropService;
         private readonly IScreenUpdatingExecutionBridge _screenUpdatingExecutionBridge;
         private readonly ITaskPaneRefreshSuppressionBridge _taskPaneRefreshSuppressionBridge;
-        private readonly IActiveTaskPaneRefreshBridge _activeTaskPaneRefreshBridge;
         private readonly IKernelSheetPaneRefreshBridge _kernelSheetPaneRefreshBridge;
         private readonly Logger _logger;
 
@@ -151,7 +150,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _screenUpdatingExecutionBridge = screenUpdatingExecutionBridge ?? throw new ArgumentNullException(nameof(screenUpdatingExecutionBridge));
             _taskPaneRefreshSuppressionBridge = taskPaneRefreshSuppressionBridge ?? throw new ArgumentNullException(nameof(taskPaneRefreshSuppressionBridge));
-            _activeTaskPaneRefreshBridge = activeTaskPaneRefreshBridge ?? throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
+            if (activeTaskPaneRefreshBridge == null)
+            {
+                throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
+            }
+
             _kernelSheetPaneRefreshBridge = kernelSheetPaneRefreshBridge ?? throw new ArgumentNullException(nameof(kernelSheetPaneRefreshBridge));
             _documentExecutionModeService = documentExecutionModeService ?? throw new ArgumentNullException(nameof(documentExecutionModeService));
             _documentExecutionEligibilityService = documentExecutionEligibilityService ?? throw new ArgumentNullException(nameof(documentExecutionEligibilityService));
@@ -232,7 +235,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 shouldShowKernelCaseList = true;
             });
 
-            _activeTaskPaneRefreshBridge.RequestRefresh("DocumentCommandService.CaseListStateUpdated");
+            // Keep the already-open CASE pane as-is; the Kernel sheet transition owns this route.
             if (shouldShowKernelCaseList)
             {
                 string kernelTransitionSheetCodeName = "shCaseList";

@@ -914,6 +914,8 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
         internal int RegisteredRow { get; set; }
 
         internal string Message { get; set; } = string.Empty;
+
+        internal Excel.Workbook KernelWorkbook { get; set; }
     }
 
     internal enum DocumentExecutionMode

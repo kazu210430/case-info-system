@@ -247,7 +247,11 @@ namespace CaseInfoSystem.Tests
                     {
                         Success = true,
                         RegisteredRow = 5,
-                        Message = "registered"
+                        Message = "registered",
+                        KernelWorkbook = new Excel.Workbook
+                        {
+                            FullName = @"C:\kernel.xlsx"
+                        }
                     },
                     caseListContextFactory: targetWorkbook => null),
                 new CaseTaskPaneViewStateBuilder(),

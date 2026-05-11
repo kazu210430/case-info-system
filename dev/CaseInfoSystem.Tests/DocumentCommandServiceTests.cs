@@ -29,6 +29,7 @@ namespace CaseInfoSystem.Tests
             {
                 Success = true,
                 RegisteredRow = 12,
+                KernelWorkbook = kernelWorkbook,
                 Message = "ok"
             };
 
@@ -93,6 +94,7 @@ namespace CaseInfoSystem.Tests
             {
                 Success = true,
                 RegisteredRow = 8,
+                KernelWorkbook = kernelWorkbook,
                 Message = "案件一覧登録が完了しました。"
             };
 
@@ -153,6 +155,144 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(@"C:\root", shownContext.SystemRoot);
             Assert.Equal(kernelWorkbook.FullName, shownContext.WorkbookFullName);
             Assert.Equal("shCaseList", shownContext.ActiveSheetCodeName);
+        }
+
+        [Fact]
+        public void Execute_WhenRegistrationResultHasKernelWorkbook_SavesRegisteredKernelWorkbook()
+        {
+            var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();
+            int refreshCalls = 0;
+            int showKernelSheetCalls = 0;
+            int showNoticeCalls = 0;
+            WorkbookContext shownContext = null;
+            var registeredKernelWorkbook = new Excel.Workbook
+            {
+                FullName = @"C:\registered-kernel.xlsx"
+            };
+            var contextKernelWorkbook = new Excel.Workbook
+            {
+                FullName = @"C:\context-kernel.xlsx"
+            };
+            var registrationResult = new CaseListRegistrationResult
+            {
+                Success = true,
+                RegisteredRow = 21,
+                KernelWorkbook = registeredKernelWorkbook,
+                Message = "registered"
+            };
+
+            CompletionNoticeForm.OnShowNotice = (owner, title, message) => showNoticeCalls++;
+            addIn.ShowKernelSheetAndRefreshPaneFromHomeHandler = (context, sheetCodeName, reason) =>
+            {
+                shownContext = context;
+                showKernelSheetCalls++;
+                return true;
+            };
+
+            var service = new DocumentCommandService(
+                addIn,
+                new InlineScreenUpdatingExecutionBridge(),
+                new NoOpTaskPaneRefreshSuppressionBridge(),
+                new CollectingActiveTaskPaneRefreshBridge(reason => refreshCalls++),
+                new DocumentExecutionModeService(OrchestrationTestSupport.CreateLogger(new List<string>()), new ExcelInteropService()),
+                new DocumentExecutionEligibilityService(),
+                new DocumentCreateService(),
+                new AccountingSetCommandService(),
+                new CaseListRegistrationService
+                {
+                    OnExecute = workbook => registrationResult
+                },
+                new CaseContextFactory
+                {
+                    OnCreateForCaseListRegistration = workbook => new CaseContext
+                    {
+                        KernelWorkbook = contextKernelWorkbook,
+                        CaseListWorksheet = new Excel.Worksheet
+                        {
+                            CodeName = "shCaseList"
+                        },
+                        SystemRoot = @"C:\root"
+                    }
+                },
+                new ExcelInteropService
+                {
+                    OnTryNormalizeCaseListRowHeight = context => true
+                },
+                OrchestrationTestSupport.CreateLogger(new List<string>()));
+
+            service.Execute(new Excel.Workbook(), "caselist", "ignored");
+
+            Assert.Equal(1, registeredKernelWorkbook.SaveCallCount);
+            Assert.True(registeredKernelWorkbook.Saved);
+            Assert.Equal(0, contextKernelWorkbook.SaveCallCount);
+            Assert.Equal(0, refreshCalls);
+            Assert.Equal(1, showKernelSheetCalls);
+            Assert.Equal(1, showNoticeCalls);
+            Assert.NotNull(shownContext);
+            Assert.Same(contextKernelWorkbook, shownContext.Workbook);
+        }
+
+        [Fact]
+        public void Execute_WhenCaseListContextCannotResolve_SavesRegisteredKernelWorkbookAndDoesNotSaveCaseWorkbook()
+        {
+            var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();
+            int refreshCalls = 0;
+            int showKernelSheetCalls = 0;
+            int showNoticeCalls = 0;
+            var caseWorkbook = new Excel.Workbook
+            {
+                FullName = @"C:\case.xlsx"
+            };
+            var registeredKernelWorkbook = new Excel.Workbook
+            {
+                FullName = @"C:\registered-kernel.xlsx"
+            };
+            var registrationResult = new CaseListRegistrationResult
+            {
+                Success = true,
+                RegisteredRow = 22,
+                KernelWorkbook = registeredKernelWorkbook,
+                Message = "registered"
+            };
+
+            CompletionNoticeForm.OnShowNotice = (owner, title, message) => showNoticeCalls++;
+            addIn.ShowKernelSheetAndRefreshPaneFromHomeHandler = (context, sheetCodeName, reason) =>
+            {
+                showKernelSheetCalls++;
+                return true;
+            };
+
+            var service = new DocumentCommandService(
+                addIn,
+                new InlineScreenUpdatingExecutionBridge(),
+                new NoOpTaskPaneRefreshSuppressionBridge(),
+                new CollectingActiveTaskPaneRefreshBridge(reason => refreshCalls++),
+                new DocumentExecutionModeService(OrchestrationTestSupport.CreateLogger(new List<string>()), new ExcelInteropService()),
+                new DocumentExecutionEligibilityService(),
+                new DocumentCreateService(),
+                new AccountingSetCommandService(),
+                new CaseListRegistrationService
+                {
+                    OnExecute = workbook => registrationResult
+                },
+                new CaseContextFactory
+                {
+                    OnCreateForCaseListRegistration = workbook => null
+                },
+                new ExcelInteropService
+                {
+                    OnTryNormalizeCaseListRowHeight = context => throw new InvalidOperationException("normalization should not run without context")
+                },
+                OrchestrationTestSupport.CreateLogger(new List<string>()));
+
+            service.Execute(caseWorkbook, "caselist", "ignored");
+
+            Assert.Equal(0, caseWorkbook.SaveCallCount);
+            Assert.Equal(1, registeredKernelWorkbook.SaveCallCount);
+            Assert.True(registeredKernelWorkbook.Saved);
+            Assert.Equal(0, refreshCalls);
+            Assert.Equal(0, showKernelSheetCalls);
+            Assert.Equal(0, showNoticeCalls);
         }
 
         private sealed class InlineScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge

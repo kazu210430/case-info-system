@@ -159,8 +159,10 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(0, openKernelCalls);
         }
 
-        [Fact]
-        public void CreateSavedCase_ForInteractiveModes_UsesHiddenSessionAndVisibleInitializer()
+        [Theory]
+        [InlineData(Excel.XlWindowState.xlMinimized)]
+        [InlineData(Excel.XlWindowState.xlNormal)]
+        public void CreateSavedCase_ForInteractiveModes_UsesHiddenSessionAndVisibleInitializer(Excel.XlWindowState initialWindowState)
         {
             List<string> logs = new List<string>();
             List<string> initializedPaths = new List<string>();
@@ -211,7 +213,7 @@ namespace CaseInfoSystem.Tests
             Excel.Window hiddenWindow = new Excel.Window
             {
                 Visible = false,
-                WindowState = Excel.XlWindowState.xlMinimized
+                WindowState = initialWindowState
             };
             hiddenWorkbook.Worksheets.Add(homeWorksheet);
             hiddenWorkbook.ActiveSheet = homeWorksheet;

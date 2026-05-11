@@ -205,14 +205,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     throw new InvalidOperationException(registrationResult.Message);
                 }
 
+                Excel.Workbook registrationKernelWorkbook = registrationResult.KernelWorkbook;
+                if (registrationKernelWorkbook == null)
+                {
+                    throw new InvalidOperationException("案件一覧登録後の保存対象 Kernel workbook を特定できませんでした。");
+                }
+
                 var context = _caseContextFactory.CreateForCaseListRegistration(workbook);
                 if (context == null)
                 {
                     _logger.Info("Case list row normalization skipped because context could not be resolved.");
-                    string saveFailureMessageForWorkbook;
-                    if (!TrySaveKernelWorkbook(workbook, registrationResult, out saveFailureMessageForWorkbook))
+                    string saveFailureMessageForRegistrationKernel;
+                    if (!TrySaveKernelWorkbook(registrationKernelWorkbook, registrationResult, out saveFailureMessageForRegistrationKernel))
                     {
-                        throw new InvalidOperationException(saveFailureMessageForWorkbook);
+                        throw new InvalidOperationException(saveFailureMessageForRegistrationKernel);
                     }
 
                     return;
@@ -225,7 +231,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
 
                 string saveFailureMessageForKernel;
-                if (!TrySaveKernelWorkbook(context.KernelWorkbook, registrationResult, out saveFailureMessageForKernel))
+                if (!TrySaveKernelWorkbook(registrationKernelWorkbook, registrationResult, out saveFailureMessageForKernel))
                 {
                     throw new InvalidOperationException(saveFailureMessageForKernel);
                 }
@@ -291,7 +297,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             failureMessage = string.Empty;
             if (kernelWorkbook == null)
             {
-                return true;
+                failureMessage = "案件一覧登録後の保存対象 Kernel workbook を特定できませんでした。";
+                return false;
             }
 
             try

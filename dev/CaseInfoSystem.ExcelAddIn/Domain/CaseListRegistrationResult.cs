@@ -1,4 +1,6 @@
-﻿namespace CaseInfoSystem.ExcelAddIn.Domain
+using Excel = Microsoft.Office.Interop.Excel;
+
+namespace CaseInfoSystem.ExcelAddIn.Domain
 {
     /// <summary>
     internal sealed class CaseListRegistrationResult
@@ -8,5 +10,7 @@
         internal int RegisteredRow { get; set; }
 
         internal string Message { get; set; } = string.Empty;
+
+        internal Excel.Workbook KernelWorkbook { get; set; }
     }
 }

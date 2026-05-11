@@ -109,7 +109,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return new CaseListRegistrationResult {
 				Success = true,
 				RegisteredRow = nextCaseListRow,
-				Message = "案件一覧登録が完了しました。（案件一覧 行: " + nextCaseListRow + "）"
+				Message = "案件一覧登録が完了しました。（案件一覧 行: " + nextCaseListRow + "）",
+				KernelWorkbook = workbook
 			};
 		}
 

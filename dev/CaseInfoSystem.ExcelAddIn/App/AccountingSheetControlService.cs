@@ -370,7 +370,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			string value = _accountingWorkbookService.ReadText (workbook, sheetName, "F33");
 			if (flag && string.IsNullOrWhiteSpace (value)) {
 				_accountingWorkbookService.SetInteriorColorIndex (workbook, sheetName, "F33", 36);
-				MessageBox.Show ("シート下部の「付記事項欄」の黄色エリアに\r\n経済的利益額を入力してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("シート下部の「付記事項欄」の黄色エリアに\r\n経済的利益額を入力してください。", "案件情報System", MessageBoxIcon.Asterisk);
 				_logger.Info ("Accounting checkbox highlight applied. sheet=" + sheetName + ", triggerCell=" + currentCheckboxCell + ", messageSource=VSTO");
 			} else if (!flag2 || !string.IsNullOrWhiteSpace (value)) {
 				_accountingWorkbookService.SetInteriorColorIndex (workbook, sheetName, "F33", 0);

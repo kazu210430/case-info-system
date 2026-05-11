@@ -53,7 +53,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (workbook == null)
             {
-                MessageBox.Show("\u5BFE\u8C61\u30D6\u30C3\u30AF\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UserErrorService.ShowOkNotification("\u5BFE\u8C61\u30D6\u30C3\u30AF\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002", ProductTitle, MessageBoxIcon.Information);
                 return;
             }
 
@@ -77,10 +77,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch (Exception ex)
             {
                 _logger.Error("ShowCustomDocumentProperties failed.", ex);
-                MessageBox.Show(
+                UserErrorService.ShowOkNotification(
                     "CustomDocumentProperties \u4E00\u89A7\u3092\u8868\u793A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30ED\u30B0\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
                     ProductTitle,
-                    MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
         }
@@ -95,7 +94,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (workbook == null)
             {
-                MessageBox.Show("\u5BFE\u8C61\u30D6\u30C3\u30AF\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UserErrorService.ShowOkNotification("\u5BFE\u8C61\u30D6\u30C3\u30AF\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002", ProductTitle, MessageBoxIcon.Information);
                 return;
             }
 
@@ -125,19 +124,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", systemRoot="
                     + selectedPath);
 
-                MessageBox.Show(
+                UserErrorService.ShowOkNotification(
                     "SYSTEM_ROOT \u3092\u66F4\u65B0\u3057\u307E\u3057\u305F\u3002\r\n" + selectedPath,
                     ProductTitle,
-                    MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 _logger.Error("SelectAndSaveSystemRoot failed.", ex);
-                MessageBox.Show(
+                UserErrorService.ShowOkNotification(
                     "SYSTEM_ROOT \u3092\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30ED\u30B0\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
                     ProductTitle,
-                    MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
         }
@@ -152,7 +149,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (workbook == null)
             {
-                MessageBox.Show("\u5BFE\u8C61\u30D6\u30C3\u30AF\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002", ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UserErrorService.ShowOkNotification("\u5BFE\u8C61\u30D6\u30C3\u30AF\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002", ProductTitle, MessageBoxIcon.Information);
                 return;
             }
 
@@ -168,10 +165,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 targetWorksheet = _excelInteropService.FindWorksheetByCodeName(workbook, TargetSheetCodeName);
                 if (sourceWorksheet == null || targetWorksheet == null)
                 {
-                    MessageBox.Show(
+                    UserErrorService.ShowOkNotification(
                         "shSample \u307E\u305F\u306F shHOME \u30B7\u30FC\u30C8\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002BASE / CASE \u30D6\u30C3\u30AF\u3067\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
                         ProductTitle,
-                        MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                     return;
                 }
@@ -186,10 +182,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         clearRange.ClearContents();
                     }
 
-                    MessageBox.Show(
+                    UserErrorService.ShowOkNotification(
                         "shSample \u306E B \u5217\u306B\u8EE2\u8A18\u5BFE\u8C61\u306E\u6587\u5B57\u304C\u3042\u308A\u307E\u305B\u3093\u3002shHOME \u306E B \u5217\u306F\u30AF\u30EA\u30A2\u3057\u307E\u3057\u305F\u3002",
                         ProductTitle,
-                        MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                     return;
                 }
@@ -210,19 +205,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", rowCount="
                     + sourceLastRow.ToString());
 
-                MessageBox.Show(
+                UserErrorService.ShowOkNotification(
                     "shSample \u306E B1:B" + sourceLastRow.ToString() + " \u3092 shHOME \u306E B \u5217\u3078\u8EE2\u8A18\u3057\u307E\u3057\u305F\u3002",
                     ProductTitle,
-                    MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 _logger.Error("CopySampleColumnBToHome failed.", ex);
-                MessageBox.Show(
+                UserErrorService.ShowOkNotification(
                     "shSample \u304B\u3089 shHOME \u3078\u306E\u8EE2\u8A18\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u30ED\u30B0\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
                     ProductTitle,
-                    MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
             finally

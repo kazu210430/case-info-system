@@ -237,19 +237,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			depositAmount = ParseAmount (request.DepositAmountText);
 			installmentAmount = ParseAmount (request.InstallmentAmountText);
 			if (billingAmount == 0.0) {
-				MessageBox.Show ("請求額が0円です。請求書を作成してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("請求額が0円です。請求書を作成してください。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			if (!DateTime.TryParse (request.FirstDueDateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out firstDueDate) && !DateTime.TryParse (request.FirstDueDateText, CultureInfo.CurrentCulture, DateTimeStyles.None, out firstDueDate)) {
-				MessageBox.Show ("期限（1回目）欄に日付が正しく入力されていません\r\n請求書で期限を入力してください", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("期限（1回目）欄に日付が正しく入力されていません\r\n請求書で期限を入力してください", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			if (string.IsNullOrWhiteSpace (request.InstallmentAmountText) || installmentAmount <= 0.0) {
-				MessageBox.Show ("分割払い額が未入力です", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("分割払い額が未入力です", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			if (billingAmount / installmentAmount > 60.0) {
-				MessageBox.Show ("分割回数が60回を超えてしまいます", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("分割回数が60回を超えてしまいます", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			return true;
@@ -264,19 +264,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			expenseAmount = ParseAmount (request.ExpenseAmountText);
 			double num = ParseAmount (request.ChangeRoundText);
 			if (billingAmount == 0.0) {
-				MessageBox.Show ("請求額が0円です。請求書を作成してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("請求額が0円です。請求書を作成してください。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			if (string.IsNullOrWhiteSpace (request.ChangeRoundText)) {
-				MessageBox.Show ("変更する回が未入力です。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("変更する回が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			if (num < 2.0 || num > 60.0) {
-				MessageBox.Show ("途中変更する回は2～60の数値を入力してください。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("途中変更する回は2～60の数値を入力してください。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			if (string.IsNullOrWhiteSpace (request.ChangedInstallmentAmountText) || changedInstallmentAmount <= 0.0) {
-				MessageBox.Show ("変更後の分割払い額が未入力です。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("変更後の分割払い額が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			int num2 = Convert.ToInt32 (num, CultureInfo.InvariantCulture) + 13;
@@ -285,12 +285,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			int num4 = ((scheduleStartFlag == 0) ? (num2 - 1) : (num3 - 1));
 			double num5 = ReadRequiredDouble (workbook, "I" + num4.ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.ApplyChange");
 			if (num5 <= 0.0) {
-				MessageBox.Show ("変更する回にはすでに完済しています。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("変更する回にはすでに完済しています。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			double num6 = ((scheduleStartFlag == 0) ? (60.0 - (double)(num2 - 13) + 1.0) : (60.0 - (double)(num3 - 12) + 1.0));
 			if (num5 / changedInstallmentAmount >= num6) {
-				MessageBox.Show ("分割回数が60回を超えてしまいます。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+				UserErrorService.ShowOkNotification ("分割回数が60回を超えてしまいます。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
 			return true;
@@ -522,7 +522,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			_logger.Warn ("AccountingInstallmentSchedule.LoadFormState numeric read warning. " + warningMessage.Replace (Environment.NewLine, " | "));
-			MessageBox.Show ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			UserErrorService.ShowOkNotification ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxIcon.Warning);
 		}
 
 		private static string GetInstallmentNumericItemName (string address)

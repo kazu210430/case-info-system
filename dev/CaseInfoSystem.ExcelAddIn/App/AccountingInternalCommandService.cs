@@ -78,7 +78,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static void ShowPendingMessage (string operationName)
 		{
-			MessageBox.Show (operationName + " の実行フローは今回の対象外として後回しにしています。", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+			UserErrorService.ShowOkNotification (operationName + " の実行フローは今回の対象外として後回しにしています。", "案件情報System", MessageBoxIcon.Asterisk);
 		}
 	}
 }

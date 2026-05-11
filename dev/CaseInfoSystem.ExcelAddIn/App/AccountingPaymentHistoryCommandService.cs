@@ -621,12 +621,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			_logger.Warn ("AccountingPaymentHistory.LoadFormState numeric read warning. " + warningMessage.Replace (Environment.NewLine, " | "));
-			MessageBox.Show ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			UserErrorService.ShowOkNotification ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxIcon.Warning);
 		}
 
 		private static void ShowInformationMessage (string message)
 		{
-			MessageBox.Show (message ?? string.Empty, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+			UserErrorService.ShowOkNotification (message ?? string.Empty, "案件情報System", MessageBoxIcon.Asterisk);
 		}
 	}
 }

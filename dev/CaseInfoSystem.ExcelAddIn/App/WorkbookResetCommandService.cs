@@ -76,7 +76,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			if (result != null && !string.IsNullOrWhiteSpace (result.Message)) {
 				MessageBoxIcon icon = (result.Success ? MessageBoxIcon.Asterisk : MessageBoxIcon.Exclamation);
-				MessageBox.Show (result.Message, "案件情報System", MessageBoxButtons.OK, icon);
+				UserErrorService.ShowOkNotification (result.Message, "案件情報System", icon);
 			}
 		}
 

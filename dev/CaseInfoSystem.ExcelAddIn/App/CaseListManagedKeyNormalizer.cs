@@ -4,9 +4,9 @@ using CaseInfoSystem.ExcelAddIn.Domain;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
-	internal static class CaseListMappingKeyNormalizer
+	internal static class CaseListManagedKeyNormalizer
 	{
-		internal static IReadOnlyList<CaseListMappingDefinition> NormalizeSourceFieldKeys(IReadOnlyList<CaseListMappingDefinition> mappings)
+		internal static IReadOnlyList<CaseListMappingDefinition> NormalizeMappingKeys(IReadOnlyList<CaseListMappingDefinition> mappings)
 		{
 			if (mappings == null || mappings.Count == 0)
 			{
@@ -24,14 +24,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				result.Add(new CaseListMappingDefinition
 				{
 					MappingType = mapping.MappingType,
-					SourceFieldKey = FieldKeyRenameMap.NormalizeToCurrent(mapping.SourceFieldKey),
-					TargetHeaderName = mapping.TargetHeaderName,
+					SourceFieldKey = NormalizeFieldKey(mapping.SourceFieldKey),
+					TargetHeaderName = NormalizeHeaderName(mapping.TargetHeaderName),
 					DataType = mapping.DataType,
 					NormalizeRule = mapping.NormalizeRule
 				});
 			}
 
 			return result;
+		}
+
+		internal static string NormalizeFieldKey(string fieldKey)
+		{
+			return FieldKeyRenameMap.NormalizeToCurrent(fieldKey);
+		}
+
+		internal static string NormalizeHeaderName(string headerName)
+		{
+			return FieldKeyRenameMap.NormalizeToCurrent(headerName);
 		}
 	}
 }

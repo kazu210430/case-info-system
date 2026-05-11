@@ -86,7 +86,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			IReadOnlyDictionary<string, CaseListFieldDefinition> fieldDefinitions = _fieldDefinitionRepository.LoadDefinitions (workbook);
 			IReadOnlyList<CaseListHeaderDefinition> headerDefinitions = _headerRepository.LoadDefinitions (workbook);
-			IReadOnlyList<CaseListMappingDefinition> mappingDefinitions = CaseListMappingKeyNormalizer.NormalizeSourceFieldKeys (_mappingRepository.LoadEnabledDefinitions (workbook));
+			IReadOnlyList<CaseListMappingDefinition> mappingDefinitions = CaseListManagedKeyNormalizer.NormalizeMappingKeys (_mappingRepository.LoadEnabledDefinitions (workbook));
 			string text = ValidateDefinitions (fieldDefinitions, headerDefinitions, mappingDefinitions);
 			if (!string.IsNullOrWhiteSpace (text)) {
 				return new CaseListRegistrationResult {
@@ -237,8 +237,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			HashSet<string> hashSet = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
 			foreach (CaseListHeaderDefinition headerDefinition in headerDefinitions) {
-				if (!string.IsNullOrWhiteSpace (headerDefinition.HeaderName)) {
-					hashSet.Add (headerDefinition.HeaderName);
+				string headerName = CaseListManagedKeyNormalizer.NormalizeHeaderName (headerDefinition.HeaderName);
+				if (!string.IsNullOrWhiteSpace (headerName)) {
+					hashSet.Add (headerName);
 				}
 			}
 			foreach (CaseListMappingDefinition mappingDefinition in mappingDefinitions) {
@@ -260,7 +261,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			foreach (CaseListHeaderDefinition headerDefinition in headerDefinitions) {
 				int num = ConvertColumnAddressToIndex ((headerDefinition == null) ? string.Empty : headerDefinition.CellAddress);
-				string text = ((headerDefinition == null) ? string.Empty : (headerDefinition.HeaderName ?? string.Empty).Trim ());
+				string text = CaseListManagedKeyNormalizer.NormalizeHeaderName ((headerDefinition == null) ? string.Empty : headerDefinition.HeaderName);
 				if (num > 0 && text.Length != 0 && !dictionary.ContainsKey (text)) {
 					dictionary.Add (text, num);
 				}

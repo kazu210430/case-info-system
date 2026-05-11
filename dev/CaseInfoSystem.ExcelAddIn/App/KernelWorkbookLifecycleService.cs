@@ -1124,7 +1124,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             IReadOnlyDictionary<string, CaseListFieldDefinition> fieldDefinitions = _caseListFieldDefinitionRepository.LoadDefinitions(workbook);
             IReadOnlyList<CaseListHeaderDefinition> headerDefinitions = _caseListHeaderRepository.LoadDefinitions(workbook);
-            IReadOnlyList<CaseListMappingDefinition> enabledMappings = CaseListMappingKeyNormalizer.NormalizeSourceFieldKeys(_caseListMappingRepository.LoadEnabledDefinitions(workbook));
+            IReadOnlyList<CaseListMappingDefinition> enabledMappings = CaseListManagedKeyNormalizer.NormalizeMappingKeys(_caseListMappingRepository.LoadEnabledDefinitions(workbook));
 
             if (fieldDefinitions == null || fieldDefinitions.Count == 0)
             {
@@ -1190,7 +1190,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             foreach (CaseListHeaderDefinition definition in headerDefinitions)
             {
-                string headerName = ((definition == null ? string.Empty : definition.HeaderName) ?? string.Empty).Trim();
+                string headerName = CaseListManagedKeyNormalizer.NormalizeHeaderName(definition == null ? string.Empty : definition.HeaderName);
                 int columnIndex = ConvertColumnAddressToIndex(definition == null ? string.Empty : definition.CellAddress);
                 if (headerName.Length == 0 || columnIndex <= 0 || result.ContainsKey(headerName))
                 {

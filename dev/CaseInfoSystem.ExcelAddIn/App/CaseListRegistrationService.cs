@@ -86,7 +86,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			IReadOnlyDictionary<string, CaseListFieldDefinition> fieldDefinitions = _fieldDefinitionRepository.LoadDefinitions (workbook);
 			IReadOnlyList<CaseListHeaderDefinition> headerDefinitions = _headerRepository.LoadDefinitions (workbook);
-			IReadOnlyList<CaseListMappingDefinition> mappingDefinitions = _mappingRepository.LoadEnabledDefinitions (workbook);
+			IReadOnlyList<CaseListMappingDefinition> mappingDefinitions = CaseListMappingKeyNormalizer.NormalizeSourceFieldKeys (_mappingRepository.LoadEnabledDefinitions (workbook));
 			string text = ValidateDefinitions (fieldDefinitions, headerDefinitions, mappingDefinitions);
 			if (!string.IsNullOrWhiteSpace (text)) {
 				return new CaseListRegistrationResult {

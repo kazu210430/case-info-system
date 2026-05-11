@@ -1124,7 +1124,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             IReadOnlyDictionary<string, CaseListFieldDefinition> fieldDefinitions = _caseListFieldDefinitionRepository.LoadDefinitions(workbook);
             IReadOnlyList<CaseListHeaderDefinition> headerDefinitions = _caseListHeaderRepository.LoadDefinitions(workbook);
-            IReadOnlyList<CaseListMappingDefinition> enabledMappings = _caseListMappingRepository.LoadEnabledDefinitions(workbook);
+            IReadOnlyList<CaseListMappingDefinition> enabledMappings = CaseListMappingKeyNormalizer.NormalizeSourceFieldKeys(_caseListMappingRepository.LoadEnabledDefinitions(workbook));
 
             if (fieldDefinitions == null || fieldDefinitions.Count == 0)
             {

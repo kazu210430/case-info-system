@@ -182,6 +182,7 @@
     <Compile Include="App\EventBoundaryGuard.cs" />
     <Compile Include="App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="App\CaseListRegistrationService.cs" />
+    <Compile Include="App\CaseListMappingKeyNormalizer.cs" />
     <Compile Include="App\CaseWorkbookBeforeClosePolicy.cs" />
     <Compile Include="App\CaseClosePromptService.cs" />
     <Compile Include="App\CaseFolderOpenService.cs" />

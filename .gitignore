@@ -33,6 +33,9 @@ build/hot-reload-backups/
 # Generated Release Add-in package staging
 /dev/Deploy/Package/
 
+# Generated Debug Add-in package staging
+dev/Deploy/DebugPackage/
+
 /build/
 /.github/build/*
 !/.github/build/packages/

@@ -12,6 +12,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 	{
 		private const string CaseListSheetName = "案件一覧";
 
+		private const int CustomDocumentPropertyStringType = 4;
+
 		private readonly Application _application;
 
 		private readonly Logger _logger;
@@ -103,15 +105,33 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				throw new ArgumentException ("Property name is required.", "propertyName");
 			}
 			object obj = null;
+			object obj2 = null;
+			string text = value ?? string.Empty;
 			try {
 				obj = workbook.CustomDocumentProperties;
 				dynamic val = obj;
 				try {
-					val [propertyName].Value = value ?? string.Empty;
+					obj2 = val [propertyName];
 				} catch {
-					val.Add (propertyName, false, 4, value ?? string.Empty);
+					val.Add (propertyName, false, CustomDocumentPropertyStringType, text);
+					return;
+				}
+				try {
+					dynamic val2 = obj2;
+					val2.Value = text;
+				} catch (Exception exception) {
+					_logger.Warn ("SetDocumentProperty assignment failed. Recreating as string property. propertyName=" + propertyName + ", error=" + exception.Message);
+					try {
+						dynamic val3 = obj2;
+						val3.Delete ();
+					} finally {
+						ComObjectReleaseService.FinalRelease (obj2);
+						obj2 = null;
+					}
+					val.Add (propertyName, false, CustomDocumentPropertyStringType, text);
 				}
 			} finally {
+				ComObjectReleaseService.FinalRelease (obj2);
 				ComObjectReleaseService.FinalRelease (obj);
 			}
 		}

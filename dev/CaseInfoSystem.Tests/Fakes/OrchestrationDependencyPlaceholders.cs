@@ -712,6 +712,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Func<Excel.Workbook, string, string, string> OnBuildOutputFileName { get; set; }
 
+        internal Func<Excel.Workbook, string> OnResolveWorkbookOutputExtension { get; set; }
+
         internal DocumentOutputService(CaseInfoSystem.ExcelAddIn.Infrastructure.ExcelInteropService excelInteropService, CaseInfoSystem.ExcelAddIn.Infrastructure.PathCompatibilityService pathCompatibilityService, CaseInfoSystem.ExcelAddIn.Infrastructure.Logger logger)
         {
         }
@@ -726,6 +728,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal string BuildOutputFileName(Excel.Workbook workbook, string documentName, string customerName)
         {
             return OnBuildOutputFileName == null ? string.Empty : OnBuildOutputFileName(workbook, documentName, customerName) ?? string.Empty;
+        }
+
+        internal string ResolveWorkbookOutputExtension(Excel.Workbook workbook)
+        {
+            return OnResolveWorkbookOutputExtension == null ? ".xlsx" : OnResolveWorkbookOutputExtension(workbook) ?? string.Empty;
         }
     }
 
@@ -759,6 +766,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Func<IDisposable> OnBeginInitializationScope { get; set; }
 
+        internal Func<string, Excel.Workbook> OnOpenReadOnlyHiddenInCurrentApplication { get; set; }
+
+        internal Action<Excel.Workbook> OnCloseWithoutSaving { get; set; }
+
+        internal Action<Excel.Workbook, string> OnSaveAsMacroEnabled { get; set; }
+
         internal Action<Excel.Workbook, IEnumerable<string>, string, string> OnWriteSameValueToSheets { get; set; }
 
         internal Action<Excel.Workbook, string, string, string> OnWriteCell { get; set; }
@@ -776,6 +789,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return OnOpenInCurrentApplication == null ? null : OnOpenInCurrentApplication(workbookPath);
         }
 
+        internal Excel.Workbook OpenReadOnlyHiddenInCurrentApplication(string workbookPath)
+        {
+            return OnOpenReadOnlyHiddenInCurrentApplication == null ? null : OnOpenReadOnlyHiddenInCurrentApplication(workbookPath);
+        }
+
+        internal void CloseWithoutSaving(Excel.Workbook workbook)
+        {
+            OnCloseWithoutSaving?.Invoke(workbook);
+        }
+
         internal void SetWorkbookWindowsVisible(Excel.Workbook workbook, bool visible)
         {
             OnSetWorkbookWindowsVisible?.Invoke(workbook, visible);
@@ -784,6 +807,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal IDisposable BeginInitializationScope()
         {
             return OnBeginInitializationScope == null ? new NoOpDisposable() : OnBeginInitializationScope() ?? new NoOpDisposable();
+        }
+
+        internal void SaveAsMacroEnabled(Excel.Workbook workbook, string savePath)
+        {
+            OnSaveAsMacroEnabled?.Invoke(workbook, savePath);
         }
 
         internal void WriteSameValueToSheets(Excel.Workbook workbook, IEnumerable<string> sheetNames, string address, string valueText)

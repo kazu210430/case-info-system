@@ -82,6 +82,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					}
 					_logger.Info ("Accounting save-as started. workbook=" + (_excelInteropService.GetWorkbookFullName (context.Workbook) ?? string.Empty) + ", caseWorkbook=" + (_excelInteropService.GetWorkbookFullName (workbook) ?? string.Empty) + ", savePath=" + text2);
 					_accountingWorkbookService.SaveAsMacroEnabled (context.Workbook, text2);
+					TryDisableAutoSave (context.Workbook, text2);
 					MessageBox.Show ("保存しました。" + Environment.NewLine + text2, "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
 				} catch (Exception exception) {
 					_userErrorService.ShowUserError ("AccountingSaveAs", exception);
@@ -94,6 +95,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						}
 					}
 				}
+			}
+		}
+
+		private void TryDisableAutoSave (Workbook workbook, string savePath)
+		{
+			if (workbook == null) {
+				return;
+			}
+			try {
+				((dynamic)workbook).AutoSaveOn = false;
+				_logger.Debug ("AccountingSaveAsService", "Accounting workbook AutoSave disabled after SaveAs. path=" + (savePath ?? string.Empty));
+			} catch (Exception exception) {
+				_logger.Warn ("Accounting workbook AutoSave disable after SaveAs skipped. path=" + (savePath ?? string.Empty) + ", message=" + exception.Message);
 			}
 		}
 

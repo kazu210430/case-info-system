@@ -112,6 +112,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Debug ("AccountingSetCreateService", "Template copied to output path.");
 				_transientPaneSuppressionService.SuppressPath (outputPath, "AccountingSetCreateService.Execute");
 				workbook = _accountingWorkbookService.OpenInCurrentApplication (outputPath);
+				TryDisableAutoSave (workbook, outputPath);
 				waitSession?.UpdateStage (AccountingSetPresentationWaitService.OpeningWorkbookStageTitle);
 				_accountingWorkbookService.SetWorkbookWindowsVisible (workbook, visible: true);
 				AccountingLawyerMappingResult accountingLawyerMappingResult;
@@ -169,6 +170,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw;
 			} finally {
 				waitSession?.Dispose ();
+			}
+		}
+
+		private void TryDisableAutoSave (Workbook workbook, string outputPath)
+		{
+			if (workbook == null) {
+				return;
+			}
+			try {
+				((dynamic)workbook).AutoSaveOn = false;
+				_logger.Debug ("AccountingSetCreateService", "Accounting set workbook AutoSave disabled. output=" + (outputPath ?? string.Empty));
+			} catch (Exception exception) {
+				_logger.Warn ("Accounting set workbook AutoSave disable skipped. output=" + (outputPath ?? string.Empty) + ", message=" + exception.Message);
 			}
 		}
 

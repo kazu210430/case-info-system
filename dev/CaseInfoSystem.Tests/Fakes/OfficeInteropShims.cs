@@ -223,6 +223,23 @@ namespace Microsoft.Office.Interop.Excel
 
         public bool Saved { get; set; }
 
+        private bool _autoSaveOn;
+
+        public bool AutoSaveOn
+        {
+            get
+            {
+                return _autoSaveOn;
+            }
+            set
+            {
+                AutoSaveOnSetBehavior?.Invoke(value);
+                _autoSaveOn = value;
+            }
+        }
+
+        public Action<bool> AutoSaveOnSetBehavior { get; set; }
+
         public XlFileFormat FileFormat { get; set; }
 
         public Windows Windows { get; } = new Windows();

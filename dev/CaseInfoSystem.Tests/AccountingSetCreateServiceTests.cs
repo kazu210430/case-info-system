@@ -38,6 +38,7 @@ namespace CaseInfoSystem.Tests
                         ["NAME_RULE_B"] = "ACC"
                     });
                 Excel.Workbook createdWorkbook = CreateWorkbook(outputPath);
+                createdWorkbook.AutoSaveOn = true;
 
                 var caseContextFactory = new CaseContextFactory
                 {
@@ -123,6 +124,7 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal("Alpha", capturedCustomerName);
                 Assert.Equal(templatePath, capturedTemplate);
                 Assert.Equal("弁護士A\r\n弁護士B", reflectedLawyers);
+                Assert.False(createdWorkbook.AutoSaveOn);
                 Assert.True(activatedInvoiceEntry);
                 Assert.Same(createdWorkbook, shownWorkbook);
                 Assert.False(transientPaneSuppressionService.IsSuppressedPath(outputPath));
@@ -254,6 +256,40 @@ namespace CaseInfoSystem.Tests
             }
         }
 
+        [Fact]
+        public void Execute_WhenAutoSaveDisableFails_ContinuesCreatingAccountingSetAndLogsWarning()
+        {
+            string tempDirectory = CreateTempDirectory();
+            try
+            {
+                string templatePath = Path.Combine(tempDirectory, "template.xlsx");
+                string outputPath = Path.Combine(tempDirectory, "accounting-set.xlsx");
+                File.WriteAllText(templatePath, "template");
+                Excel.Workbook createdWorkbook = CreateWorkbook(outputPath);
+                createdWorkbook.AutoSaveOnSetBehavior = _ => throw new InvalidOperationException("autosave unavailable");
+                var service = CreateService(
+                    caseValues: CreateCaseValues(),
+                    templatePath: templatePath,
+                    outputPath: outputPath,
+                    outputFolderPath: tempDirectory,
+                    openWorkbook: _ => createdWorkbook);
+
+                service.Service.Execute(service.CaseWorkbook);
+
+                Assert.True(File.Exists(outputPath));
+                Assert.False(service.TransientPaneSuppressionService.IsSuppressedPath(outputPath));
+                Assert.Contains(
+                    service.Logs,
+                    log => log.IndexOf("AutoSave disable skipped", StringComparison.Ordinal) >= 0
+                        && log.IndexOf("autosave unavailable", StringComparison.Ordinal) >= 0);
+            }
+            finally
+            {
+                TryDeleteDirectory(tempDirectory);
+                Globals.ThisAddIn = new ThisAddIn();
+            }
+        }
+
         private static IDictionary<string, string> CreateCaseValues()
         {
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -324,7 +360,8 @@ namespace CaseInfoSystem.Tests
                     transientPaneSuppressionService,
                     waitService,
                     OrchestrationTestSupport.CreateLogger(logs)),
-                TransientPaneSuppressionService = transientPaneSuppressionService
+                TransientPaneSuppressionService = transientPaneSuppressionService,
+                Logs = logs
             };
         }
 
@@ -376,6 +413,8 @@ namespace CaseInfoSystem.Tests
             internal AccountingSetCreateService Service { get; set; }
 
             internal TransientPaneSuppressionService TransientPaneSuppressionService { get; set; }
+
+            internal List<string> Logs { get; set; }
         }
     }
 }

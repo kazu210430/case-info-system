@@ -179,7 +179,7 @@ namespace Microsoft.Office.Interop.Excel
 
         public object CustomDocumentProperties { get; set; }
 
-        public void Close(bool saveChanges = false, object filename = null, object routeWorkbook = null)
+        public void Close(object saveChanges = null, object filename = null, object routeWorkbook = null)
         {
             Application?.Workbooks.Remove(this);
             if (Application?.ActiveWorkbook == this)

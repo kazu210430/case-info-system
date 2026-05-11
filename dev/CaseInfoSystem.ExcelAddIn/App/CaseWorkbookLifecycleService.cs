@@ -501,7 +501,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         previousDisplayAlerts = _application.DisplayAlerts;
                         hasDisplayAlertsSnapshot = true;
                         _application.DisplayAlerts = false;
-                        WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
+                        WorkbookCloseInteropHelper.CloseWithoutSave(
+                            workbook,
+                            _logger,
+                            "CaseWorkbookLifecycleService.ExecuteManagedClose");
                     }
                     finally
                     {

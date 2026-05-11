@@ -312,7 +312,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} finally {
 				if (openedNow && workbook != null) {
 					try {
-						workbook.Close (false, Type.Missing, Type.Missing);
+						WorkbookCloseInteropHelper.CloseReadOnlyWithoutSave (
+							workbook,
+							_logger,
+							"KernelCasePresentationService.ResolveInitialCursorRange");
 					} catch (Exception exception) {
 						_logger.Error ("ResolveInitialCursorRange temporary kernel close failed.", exception);
 					}

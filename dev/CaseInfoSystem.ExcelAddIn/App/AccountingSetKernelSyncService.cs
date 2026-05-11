@@ -210,13 +210,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private static void CloseWorkbookQuietly (Workbook workbook)
+		private void CloseWorkbookQuietly (Workbook workbook)
 		{
 			if (workbook == null) {
 				return;
 			}
 			try {
-				WorkbookCloseInteropHelper.CloseWithoutSave (workbook);
+				WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (
+					workbook,
+					_logger,
+					"AccountingSetKernelSyncService.CloseWorkbookQuietly");
 			} catch {
 			} finally {
 				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (workbook);

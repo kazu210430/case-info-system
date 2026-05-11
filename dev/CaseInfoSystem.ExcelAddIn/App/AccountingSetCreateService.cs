@@ -149,7 +149,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Error ("Accounting set CASE create failed. caseWorkbook=" + workbookFullName + ", template=" + templatePath + ", output=" + outputPath, exception);
 				if (workbook != null) {
 					try {
-						workbook.Close (false, Type.Missing, Type.Missing);
+						WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (
+							workbook,
+							_logger,
+							"AccountingSetCreateService.CleanupAfterFailure");
 					} catch (Exception ex) {
 						_logger.Warn ("Accounting set CASE create cleanup close failed: " + ex.Message);
 					}

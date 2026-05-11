@@ -44,7 +44,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 							enableEvents = application.EnableEvents;
 							application.EnableEvents = false;
 						}
-						workbook.Close (false, Type.Missing, Type.Missing);
+						WorkbookCloseInteropHelper.CloseReadOnlyWithoutSave (
+							workbook,
+							_logger,
+							"CaseDataSnapshotFactory.CloseOpenedKernelWorkbook");
 					} finally {
 						if (application != null) {
 							application.EnableEvents = enableEvents;

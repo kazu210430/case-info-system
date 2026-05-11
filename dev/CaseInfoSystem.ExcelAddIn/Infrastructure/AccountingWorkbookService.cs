@@ -51,7 +51,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal void CloseWithoutSaving (Workbook workbook)
 		{
-			workbook?.Close (false, Type.Missing, Type.Missing);
+			if (workbook == null) {
+				return;
+			}
+			WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (workbook, _logger, "AccountingWorkbookService.CloseWithoutSaving");
 		}
 
 		internal void SetWorkbookWindowsVisible (Workbook workbook, bool visible)

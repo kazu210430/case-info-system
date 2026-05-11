@@ -471,7 +471,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + managedCloseWorkbookKey
                             + ", saveChanges="
                             + saveChanges.ToString());
-                        WorkbookCloseInteropHelper.Close(workbook);
+                        WorkbookCloseInteropHelper.Close(
+                            workbook,
+                            _logger,
+                            "KernelWorkbookLifecycleService.ExecuteManagedClose");
                         closeCompleted = true;
                         _logger.Info(
                             "Kernel managed close completed Workbook.Close(Type.Missing, Type.Missing, Type.Missing). workbook="

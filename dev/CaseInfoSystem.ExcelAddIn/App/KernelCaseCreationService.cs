@@ -186,7 +186,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
 						WorkbookPromptSuppressionHelper.MarkWorkbookSavedForPromptlessClose (workbook);
 						application.DisplayAlerts = false;
-						workbook.Close (false, Type.Missing, Type.Missing);
+						WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (
+							workbook,
+							_logger,
+							"KernelCaseCreationService.CreateSavedCase.NonHiddenRoute");
 					}
 					workbook = null;
 				}
@@ -211,7 +214,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 							if (application != null) {
 								application.DisplayAlerts = false;
 							}
-							workbook.Close (false, Type.Missing, Type.Missing);
+							WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (
+								workbook,
+								_logger,
+								"KernelCaseCreationService.CreateSavedCase.CleanupAfterFailure");
 						}
 					}
 				} catch {

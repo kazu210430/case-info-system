@@ -675,7 +675,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                         caseWorkbookPath,
                         "scope=isolated,route=" + (routeName ?? string.Empty));
                     _logger.Info("Case workbook hidden session workbook close starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
-                    workbook.Close(false, Type.Missing, Type.Missing);
+                    WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave(
+                        workbook,
+                        _logger,
+                        "CaseWorkbookOpenStrategy.CleanupDedicatedHiddenSession route=" + (routeName ?? string.Empty));
                     workbookCloseCompleted = true;
                     NewCaseVisibilityObservation.Log(
                         _logger,
@@ -773,7 +776,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     else
                     {
                         _logger.Info("Case workbook hidden session workbook close starting. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
-                        workbook.Close(false, Type.Missing, Type.Missing);
+                        WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave(
+                            workbook,
+                            _logger,
+                            "CaseWorkbookOpenStrategy.CleanupCachedHiddenSession route=" + (routeName ?? string.Empty));
                         workbookCloseCompleted = true;
                         _logger.Info("Case workbook hidden session workbook close completed. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
                     }
@@ -941,7 +947,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             try
             {
-                workbook.Close(false, Type.Missing, Type.Missing);
+                WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave(
+                    workbook,
+                    _logger,
+                    "CaseWorkbookOpenStrategy.TryCloseWorkbookWithoutSaving");
                 return true;
             }
             catch (Exception ex)

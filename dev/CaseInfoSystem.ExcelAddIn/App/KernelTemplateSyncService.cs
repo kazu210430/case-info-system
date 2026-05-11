@@ -171,7 +171,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						using (var closeScope = new ExcelApplicationStateScope (_application, suppressRestoreExceptions: true)) {
 							closeScope.SetDisplayAlerts (false);
 							using (_caseWorkbookLifecycleService.BeginManagedCloseScope (workbook)) {
-								workbook.Close (false, Type.Missing, Type.Missing);
+								WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (
+									workbook,
+									_logger,
+									"KernelTemplateSyncService.CloseOpenedBaseWorkbook");
 							}
 						}
 					}

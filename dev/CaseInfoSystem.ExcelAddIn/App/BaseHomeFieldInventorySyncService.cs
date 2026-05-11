@@ -259,7 +259,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 							closeScope.SetDisplayAlerts(false);
 							using (_caseWorkbookLifecycleService.BeginManagedCloseScope(baseWorkbook))
 							{
-								baseWorkbook.Close(false, Type.Missing, Type.Missing);
+								WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave(
+									baseWorkbook,
+									_logger,
+									"BaseHomeFieldInventorySyncService.CloseOpenedBaseWorkbook");
 							}
 						}
 					}

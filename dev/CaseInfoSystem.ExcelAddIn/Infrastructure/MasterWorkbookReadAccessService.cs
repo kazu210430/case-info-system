@@ -17,11 +17,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
     internal sealed class MasterWorkbookReadAccessResult
     {
-        internal MasterWorkbookReadAccessResult(string resolvedMasterPath, Excel.Workbook workbook, bool workbookWasAlreadyOpen)
+        private readonly Logger _logger;
+
+        internal MasterWorkbookReadAccessResult(string resolvedMasterPath, Excel.Workbook workbook, bool workbookWasAlreadyOpen, Logger logger = null)
         {
             ResolvedMasterPath = resolvedMasterPath ?? string.Empty;
             Workbook = workbook;
             WorkbookWasAlreadyOpen = workbookWasAlreadyOpen;
+            _logger = logger;
         }
 
         internal string ResolvedMasterPath { get; }
@@ -37,7 +40,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return;
             }
 
-            Workbook.Close(false, Type.Missing, Type.Missing);
+            WorkbookCloseInteropHelper.CloseReadOnlyWithoutSave(
+                Workbook,
+                _logger,
+                nameof(MasterWorkbookReadAccessService) + "." + nameof(CloseIfOwned));
         }
     }
 
@@ -48,15 +54,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
         private readonly PathCompatibilityService _pathCompatibilityService;
+        private readonly Logger _logger;
 
         internal MasterWorkbookReadAccessService(
             Excel.Application application,
             ExcelInteropService excelInteropService,
-            PathCompatibilityService pathCompatibilityService)
+            PathCompatibilityService pathCompatibilityService,
+            Logger logger = null)
         {
             _application = application ?? throw new ArgumentNullException(nameof(application));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _pathCompatibilityService = pathCompatibilityService ?? throw new ArgumentNullException(nameof(pathCompatibilityService));
+            _logger = logger;
         }
 
         internal string ResolveMasterPath(Excel.Workbook workbook, MasterWorkbookPathResolutionMode resolutionMode)
@@ -115,7 +124,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             Excel.Workbook openWorkbook = FindOpenMasterWorkbook(resolvedMasterPath, searchMode);
             if (openWorkbook != null)
             {
-                return new MasterWorkbookReadAccessResult(resolvedMasterPath, openWorkbook, workbookWasAlreadyOpen: true);
+                return new MasterWorkbookReadAccessResult(resolvedMasterPath, openWorkbook, workbookWasAlreadyOpen: true, _logger);
             }
 
             if (!_pathCompatibilityService.FileExistsSafe(resolvedMasterPath))
@@ -134,7 +143,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     IgnoreReadOnlyRecommended: true,
                     AddToMru: false);
                 HideWorkbookWindows(workbook);
-                return new MasterWorkbookReadAccessResult(resolvedMasterPath, workbook, workbookWasAlreadyOpen: false);
+                return new MasterWorkbookReadAccessResult(resolvedMasterPath, workbook, workbookWasAlreadyOpen: false, _logger);
             }
             finally
             {

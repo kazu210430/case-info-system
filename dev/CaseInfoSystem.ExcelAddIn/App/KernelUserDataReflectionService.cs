@@ -445,7 +445,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             bool completed = false;
             try
             {
-                WorkbookCloseInteropHelper.CloseWithoutSave(workbook);
+                WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave(
+                    workbook,
+                    _logger,
+                    nameof(KernelUserDataReflectionService) + ".CloseWorkbookQuietly target=" + (workbookKind ?? string.Empty));
                 completed = true;
             }
             catch

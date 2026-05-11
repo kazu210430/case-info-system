@@ -160,6 +160,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseCreationService.cs" Link="Source\App\KernelCaseCreationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNameRuleReader.cs" Link="Source\App\KernelNameRuleReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ManagedCloseState.cs" Link="Source\App\ManagedCloseState.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ManagedWorkbookCloseMarkerKind.cs" Link="Source\App\ManagedWorkbookCloseMarkerKind.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ManagedWorkbookCloseMarkerStore.cs" Link="Source\App\ManagedWorkbookCloseMarkerStore.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\NavigationService.cs" Link="Source\App\NavigationService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\PostCloseFollowUpScheduler.cs" Link="Source\App\PostCloseFollowUpScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TransientPaneSuppressionService.cs" Link="Source\App\TransientPaneSuppressionService.cs" />

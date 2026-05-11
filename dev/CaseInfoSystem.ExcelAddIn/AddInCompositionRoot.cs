@@ -109,6 +109,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal WorkbookLifecycleCoordinator WorkbookLifecycleCoordinator { get; private set; }
 
+        internal ManagedWorkbookCloseMarkerStore ManagedWorkbookCloseMarkerStore { get; private set; }
+
         internal KernelHomeCoordinator KernelHomeCoordinator { get; private set; }
 
         internal KernelHomeCasePaneSuppressionCoordinator KernelHomeCasePaneSuppressionCoordinator { get; private set; }
@@ -164,7 +166,8 @@ namespace CaseInfoSystem.ExcelAddIn
             var caseFolderOpenService = new CaseFolderOpenService(ExcelInteropService, pathCompatibilityService, folderWindowService);
             var caseClosePromptService = new CaseClosePromptService(ExcelInteropService);
             var kernelNameRuleReader = new KernelNameRuleReader(ExcelInteropService, pathCompatibilityService, _logger);
-            var postCloseFollowUpScheduler = new PostCloseFollowUpScheduler(_application, ExcelInteropService, _logger);
+            ManagedWorkbookCloseMarkerStore = new ManagedWorkbookCloseMarkerStore();
+            var postCloseFollowUpScheduler = new PostCloseFollowUpScheduler(_application, ExcelInteropService, _logger, ManagedWorkbookCloseMarkerStore);
             var caseWorkbookLifecycleService = new CaseWorkbookLifecycleService(
                 WorkbookRoleResolver,
                 _application,
@@ -197,7 +200,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var accountingInstallmentScheduleCommandService = new AccountingInstallmentScheduleCommandService(accountingWorkbookService, userErrorService, _logger);
             var accountingPaymentHistoryCommandService = new AccountingPaymentHistoryCommandService(accountingWorkbookService, userErrorService, _logger);
             var accountingFormHelperService = new AccountingFormHelperService(accountingWorkbookService, accountingInstallmentScheduleCommandService, accountingPaymentHistoryCommandService, accountingSaveAsService, userErrorService, _logger);
-            var accountingWorkbookLifecycleService = new AccountingWorkbookLifecycleService(WorkbookRoleResolver, accountingWorkbookService, accountingFormHelperService, accountingPaymentHistoryImportService, _logger);
+            var accountingWorkbookLifecycleService = new AccountingWorkbookLifecycleService(WorkbookRoleResolver, accountingWorkbookService, accountingFormHelperService, accountingPaymentHistoryImportService, postCloseFollowUpScheduler, _logger);
             var accountingInternalCommandService = new AccountingInternalCommandService(navigationService, accountingPaymentHistoryImportService, accountingFormHelperService, accountingSaveAsService, _logger);
             var accountingSetPresentationWaitService = new AccountingSetPresentationWaitService(_logger);
             var accountingSetReadyShowBridge = new ThisAddInAccountingSetReadyShowBridge(_addIn);

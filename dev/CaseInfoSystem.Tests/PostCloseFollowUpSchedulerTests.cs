@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
@@ -216,7 +217,58 @@ namespace CaseInfoSystem.Tests
             Assert.False(loggerMessages.Exists(message => ContainsFragment(message, "WhiteExcelPreventionSkipped")));
         }
 
+        [Fact]
+        public void ScheduleManagedWorkbookClose_ForAccountingClose_WritesShortTtlMarkerAndLogsKind()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application();
+            string markerPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".marker");
+            var markerStore = new ManagedWorkbookCloseMarkerStore(markerPath, () => new DateTime(2026, 5, 12, 0, 0, 0, DateTimeKind.Utc));
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages), markerStore);
+
+            InvokeScheduleManagedWorkbookClose(
+                scheduler,
+                @"C:\cases\accounting.xlsx",
+                @"C:\cases",
+                ManagedWorkbookCloseMarkerKind.AccountingClose);
+
+            ManagedWorkbookCloseMarkerReadResult markerResult = markerStore.Consume();
+            Assert.True(markerResult.IsValid);
+            Assert.Equal(ManagedWorkbookCloseMarkerKind.AccountingClose, markerResult.Marker.Kind);
+            Assert.Equal(ManagedWorkbookCloseMarkerStore.DefaultTimeToLiveSeconds, markerResult.Marker.TimeToLiveSeconds);
+            Assert.Equal(@"C:\cases\accounting.xlsx", markerResult.Marker.WorkbookKey);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "action=managed-close-marker-written")
+                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
+                    && ContainsFragment(message, "ttlSeconds=15"));
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionQueued")
+                    && ContainsFragment(message, "managedCloseKind=AccountingClose"));
+        }
+
+        [Fact]
+        public void ManagedWorkbookCloseMarkerStore_Consume_WhenExpired_RemovesMarker()
+        {
+            string markerPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".marker");
+            DateTime now = new DateTime(2026, 5, 12, 0, 0, 0, DateTimeKind.Utc);
+            var markerStore = new ManagedWorkbookCloseMarkerStore(markerPath, () => now);
+            markerStore.Write(ManagedWorkbookCloseMarkerKind.CaseClose, @"C:\cases\case.xlsx");
+
+            now = now.AddSeconds(ManagedWorkbookCloseMarkerStore.DefaultTimeToLiveSeconds + 1);
+            ManagedWorkbookCloseMarkerReadResult result = markerStore.Consume();
+
+            Assert.Equal(ManagedWorkbookCloseMarkerReadStatus.Expired, result.Status);
+            Assert.False(File.Exists(markerPath));
+        }
+
         private static object CreateScheduler(Excel.Application application, Logger logger)
+        {
+            return CreateScheduler(application, logger, null);
+        }
+
+        private static object CreateScheduler(Excel.Application application, Logger logger, ManagedWorkbookCloseMarkerStore markerStore)
         {
             Assembly addInAssembly = typeof(PostCloseFollowUpScheduler).Assembly;
             Type pathCompatibilityServiceType = addInAssembly.GetType("CaseInfoSystem.ExcelAddIn.Infrastructure.PathCompatibilityService", throwOnError: true);
@@ -229,7 +281,7 @@ namespace CaseInfoSystem.Tests
                 typeof(PostCloseFollowUpScheduler),
                 BindingFlags.Instance | BindingFlags.NonPublic,
                 binder: null,
-                args: new[] { application, excelInteropService, logger },
+                args: new object[] { application, excelInteropService, logger, markerStore },
                 culture: null);
         }
 
@@ -256,6 +308,19 @@ namespace CaseInfoSystem.Tests
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             method.Invoke(scheduler, new object[] { workbookKey, folderPath });
+        }
+
+        private static void InvokeScheduleManagedWorkbookClose(
+            object scheduler,
+            string workbookKey,
+            string folderPath,
+            ManagedWorkbookCloseMarkerKind closeKind)
+        {
+            MethodInfo method = typeof(PostCloseFollowUpScheduler).GetMethod(
+                "ScheduleManagedWorkbookClose",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            method.Invoke(scheduler, new object[] { workbookKey, folderPath, closeKind });
         }
 
         private static void InvokeExecutePendingPostCloseQueue(object scheduler)

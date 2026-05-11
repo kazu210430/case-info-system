@@ -33,16 +33,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly AccountingPaymentHistoryImportService _accountingPaymentHistoryImportService;
 
+		private readonly PostCloseFollowUpScheduler _postCloseFollowUpScheduler;
+
 		private readonly Logger _logger;
 
 		private readonly HashSet<string> _initializedWorkbookKeys;
 
 		internal AccountingWorkbookLifecycleService (WorkbookRoleResolver workbookRoleResolver, AccountingWorkbookService accountingWorkbookService, AccountingFormHelperService accountingFormHelperService, AccountingPaymentHistoryImportService accountingPaymentHistoryImportService, Logger logger)
+			: this (workbookRoleResolver, accountingWorkbookService, accountingFormHelperService, accountingPaymentHistoryImportService, null, logger)
+		{
+		}
+
+		internal AccountingWorkbookLifecycleService (WorkbookRoleResolver workbookRoleResolver, AccountingWorkbookService accountingWorkbookService, AccountingFormHelperService accountingFormHelperService, AccountingPaymentHistoryImportService accountingPaymentHistoryImportService, PostCloseFollowUpScheduler postCloseFollowUpScheduler, Logger logger)
 		{
 			_workbookRoleResolver = workbookRoleResolver ?? throw new ArgumentNullException ("workbookRoleResolver");
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 			_accountingFormHelperService = accountingFormHelperService ?? throw new ArgumentNullException ("accountingFormHelperService");
 			_accountingPaymentHistoryImportService = accountingPaymentHistoryImportService ?? throw new ArgumentNullException ("accountingPaymentHistoryImportService");
+			_postCloseFollowUpScheduler = postCloseFollowUpScheduler;
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 			_initializedWorkbookKeys = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
 		}
@@ -101,12 +109,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (!_workbookRoleResolver.IsAccountingWorkbook (workbook)) {
 				return;
 			}
+			string workbookKey = GetWorkbookKey (workbook);
 			try {
 				_accountingPaymentHistoryImportService.HandleWorkbookBeforeClose (workbook);
 				_accountingFormHelperService.HandleWorkbookBeforeClose (workbook);
 			} catch (Exception exception) {
 				_logger.Error ("Accounting workbook before-close handling failed.", exception);
 			}
+			SchedulePostCloseFollowUp (workbookKey, GetWorkbookFolderPath (workbook));
+		}
+
+		private void SchedulePostCloseFollowUp (string workbookKey, string folderPath)
+		{
+			if (_postCloseFollowUpScheduler == null || string.IsNullOrWhiteSpace (workbookKey)) {
+				return;
+			}
+			_logger.Info ("Accounting workbook post-close follow-up scheduled. workbook=" + workbookKey);
+			_postCloseFollowUpScheduler.ScheduleManagedWorkbookClose (workbookKey, folderPath, ManagedWorkbookCloseMarkerKind.AccountingClose);
 		}
 
 		private void EnsureWorkbookInitialized (Workbook workbook)
@@ -171,6 +190,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			string text = workbook.FullName ?? string.Empty;
 			return string.IsNullOrWhiteSpace (text) ? (workbook.Name ?? string.Empty) : text;
+		}
+
+		private static string GetWorkbookFolderPath (Workbook workbook)
+		{
+			try {
+				return workbook == null ? string.Empty : workbook.Path ?? string.Empty;
+			} catch {
+				return string.Empty;
+			}
 		}
 	}
 }

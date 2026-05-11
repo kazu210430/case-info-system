@@ -21,6 +21,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly Excel.Application _application;
         private readonly ExcelInteropService _excelInteropService;
         private readonly Logger _logger;
+        private readonly ManagedWorkbookCloseMarkerStore _managedCloseMarkerStore;
         private readonly Queue<PostCloseFollowUpRequest> _pendingPostCloseQueue = new Queue<PostCloseFollowUpRequest>();
         private Control _dispatcher;
         private bool _postClosePosted;
@@ -29,20 +30,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Application application,
             ExcelInteropService excelInteropService,
             Logger logger)
+            : this(application, excelInteropService, logger, null)
+        {
+        }
+
+        internal PostCloseFollowUpScheduler(
+            Excel.Application application,
+            ExcelInteropService excelInteropService,
+            Logger logger,
+            ManagedWorkbookCloseMarkerStore managedCloseMarkerStore)
         {
             _application = application ?? throw new ArgumentNullException(nameof(application));
             _excelInteropService = excelInteropService ?? throw new ArgumentNullException(nameof(excelInteropService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _managedCloseMarkerStore = managedCloseMarkerStore;
         }
 
         internal void Schedule(string workbookKey, string folderPath)
+        {
+            ScheduleManagedWorkbookClose(workbookKey, folderPath, ManagedWorkbookCloseMarkerKind.CaseClose);
+        }
+
+        internal void ScheduleManagedWorkbookClose(string workbookKey, string folderPath, ManagedWorkbookCloseMarkerKind closeKind)
         {
             if (string.IsNullOrWhiteSpace(workbookKey))
             {
                 return;
             }
 
-            PostCloseFollowUpRequest queuedRequest = new PostCloseFollowUpRequest(workbookKey, folderPath, PostCloseRetryCount);
+            TryWriteManagedCloseMarker(closeKind, workbookKey);
+            PostCloseFollowUpRequest queuedRequest = new PostCloseFollowUpRequest(workbookKey, folderPath, PostCloseRetryCount, closeKind);
             _pendingPostCloseQueue.Enqueue(queuedRequest);
             LogWhiteExcelPreventionOutcome(
                 WhiteExcelPreventionQueued,
@@ -54,7 +71,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 pendingQueueCount: _pendingPostCloseQueue.Count,
                 attemptsRemaining: queuedRequest.AttemptsRemaining,
                 folderPathPresent: !string.IsNullOrWhiteSpace(queuedRequest.FolderPath),
-                targetWorkbookStillOpen: null);
+                targetWorkbookStillOpen: null,
+                closeKind: closeKind);
             if (_postClosePosted)
             {
                 return;
@@ -82,6 +100,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
                         + " action=post-close-follow-up-request-dequeued"
                         + " workbook=" + request.WorkbookKey
+                        + ", managedCloseKind=" + request.CloseKind.ToString()
                         + ", pendingQueueCount=" + _pendingPostCloseQueue.Count.ToString()
                         + ", attemptsRemaining=" + request.AttemptsRemaining.ToString()
                         + ", folderPathPresent=" + (!string.IsNullOrWhiteSpace(request.FolderPath)).ToString());
@@ -90,6 +109,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
                         + " action=post-close-follow-up-decision"
                         + " workbook=" + request.WorkbookKey
+                        + ", managedCloseKind=" + request.CloseKind.ToString()
                         + ", targetWorkbookStillOpen=" + targetWorkbookStillOpen.ToString()
                         + ", pendingQueueCount=" + _pendingPostCloseQueue.Count.ToString()
                         + ", attemptsRemaining=" + request.AttemptsRemaining.ToString()
@@ -106,12 +126,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             pendingQueueCount: _pendingPostCloseQueue.Count,
                             attemptsRemaining: request.AttemptsRemaining,
                             folderPathPresent: !string.IsNullOrWhiteSpace(request.FolderPath),
-                            targetWorkbookStillOpen: true);
+                            targetWorkbookStillOpen: true,
+                            closeKind: request.CloseKind);
                         _logger.Info("Case workbook post-close follow-up skipped because workbook is still open. workbook=" + request.WorkbookKey);
                         continue;
                     }
 
-                    QuitExcelIfNoVisibleWorkbook();
+                    QuitExcelIfNoVisibleWorkbook(request.CloseKind);
                 }
                 catch (COMException ex) when (ex.ErrorCode == ExcelBusyHResult && request.AttemptsRemaining > 0)
                 {
@@ -152,6 +173,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private void QuitExcelIfNoVisibleWorkbook()
         {
+            QuitExcelIfNoVisibleWorkbook(ManagedWorkbookCloseMarkerKind.CaseClose);
+        }
+
+        private void QuitExcelIfNoVisibleWorkbook(ManagedWorkbookCloseMarkerKind closeKind)
+        {
             bool hasVisibleWorkbook = false;
             foreach (Excel.Workbook openWorkbook in _application.Workbooks)
             {
@@ -183,7 +209,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     hasVisibleWorkbook: true,
                     quitAttempted: false,
                     quitCompleted: false,
-                    reason: "visibleWorkbookExists");
+                    reason: "visibleWorkbookExists",
+                    closeKind: closeKind);
                 return;
             }
 
@@ -202,7 +229,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     hasVisibleWorkbook: false,
                     quitAttempted: true,
                     quitCompleted: true,
-                    reason: "noVisibleWorkbookQuitCompleted");
+                    reason: "noVisibleWorkbookQuitCompleted",
+                    closeKind: closeKind);
             }
             catch
             {
@@ -212,7 +240,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     hasVisibleWorkbook: false,
                     quitAttempted: true,
                     quitCompleted: false,
-                    reason: "quitFailed");
+                    reason: "quitFailed",
+                    closeKind: closeKind);
                 if (hasDisplayAlertsSnapshot)
                 {
                     try
@@ -238,12 +267,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
             int? pendingQueueCount = null,
             int? attemptsRemaining = null,
             bool? folderPathPresent = null,
-            bool? targetWorkbookStillOpen = null)
+            bool? targetWorkbookStillOpen = null,
+            ManagedWorkbookCloseMarkerKind? closeKind = null)
         {
             _logger.Info(
                 "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
                 + " action=white-excel-prevention-outcome"
                 + " whiteExcelPreventionOutcome=" + (outcome ?? string.Empty)
+                + ", managedCloseKind=" + (closeKind.HasValue ? closeKind.Value.ToString() : "unknown")
                 + ", workbook=" + (workbookKey ?? string.Empty)
                 + ", hasVisibleWorkbook=" + (hasVisibleWorkbook.HasValue ? hasVisibleWorkbook.Value.ToString() : "unknown")
                 + ", quitAttempted=" + quitAttempted.ToString()
@@ -253,6 +284,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + ", attemptsRemaining=" + (attemptsRemaining.HasValue ? attemptsRemaining.Value.ToString() : "unknown")
                 + ", folderPathPresent=" + (folderPathPresent.HasValue ? folderPathPresent.Value.ToString() : "unknown")
                 + ", targetWorkbookStillOpen=" + (targetWorkbookStillOpen.HasValue ? targetWorkbookStillOpen.Value.ToString() : "unknown"));
+        }
+
+        private void TryWriteManagedCloseMarker(ManagedWorkbookCloseMarkerKind closeKind, string workbookKey)
+        {
+            if (_managedCloseMarkerStore == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _managedCloseMarkerStore.Write(closeKind, workbookKey);
+                _logger.Info(
+                    "[KernelFlickerTrace] source=PostCloseFollowUpScheduler"
+                    + " action=managed-close-marker-written"
+                    + " managedCloseKind=" + closeKind.ToString()
+                    + ", markerPath=" + _managedCloseMarkerStore.MarkerPath
+                    + ", ttlSeconds=" + ManagedWorkbookCloseMarkerStore.DefaultTimeToLiveSeconds.ToString()
+                    + ", workbook=" + (workbookKey ?? string.Empty));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    "Managed close marker write failed. managedCloseKind="
+                    + closeKind.ToString()
+                    + ", workbook="
+                    + (workbookKey ?? string.Empty),
+                    ex);
+            }
         }
 
         private Control EnsureDispatcher()
@@ -305,11 +365,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private sealed class PostCloseFollowUpRequest
         {
-            internal PostCloseFollowUpRequest(string workbookKey, string folderPath, int attemptsRemaining)
+            internal PostCloseFollowUpRequest(
+                string workbookKey,
+                string folderPath,
+                int attemptsRemaining,
+                ManagedWorkbookCloseMarkerKind closeKind)
             {
                 WorkbookKey = workbookKey ?? string.Empty;
                 FolderPath = folderPath ?? string.Empty;
                 AttemptsRemaining = attemptsRemaining;
+                CloseKind = closeKind;
             }
 
             internal string WorkbookKey { get; }
@@ -318,9 +383,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             internal int AttemptsRemaining { get; }
 
+            internal ManagedWorkbookCloseMarkerKind CloseKind { get; }
+
             internal PostCloseFollowUpRequest NextAttempt()
             {
-                return new PostCloseFollowUpRequest(WorkbookKey, FolderPath, AttemptsRemaining - 1);
+                return new PostCloseFollowUpRequest(WorkbookKey, FolderPath, AttemptsRemaining - 1, CloseKind);
             }
         }
     }

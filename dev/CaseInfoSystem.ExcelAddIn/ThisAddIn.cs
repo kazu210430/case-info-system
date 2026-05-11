@@ -36,6 +36,9 @@ namespace CaseInfoSystem.ExcelAddIn
         private ExcelInteropService _excelInteropService;
         private WorkbookRoleResolver _workbookRoleResolver;
         private CaseWorkbookOpenStrategy _caseWorkbookOpenStrategy;
+        private ManagedWorkbookCloseMarkerStore _managedWorkbookCloseMarkerStore;
+        private Timer _managedCloseStartupGuardTimer;
+        private bool _workbookOpenObservedSinceStartup;
 
         // 文書実行
         private DocumentExecutionModeService _documentExecutionModeService;
@@ -126,6 +129,7 @@ namespace CaseInfoSystem.ExcelAddIn
             HookApplicationEvents();
             TryShowKernelHomeFormOnStartup();
             RefreshTaskPane("Startup", null, null);
+            TraceAndScheduleManagedCloseStartupGuard();
         }
 
         private void InitializeStartupDiagnostics()
@@ -169,6 +173,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _excelInteropService = compositionRoot.ExcelInteropService;
             _workbookRoleResolver = compositionRoot.WorkbookRoleResolver;
             _caseWorkbookOpenStrategy = compositionRoot.CaseWorkbookOpenStrategy;
+            _managedWorkbookCloseMarkerStore = compositionRoot.ManagedWorkbookCloseMarkerStore;
 
             // 文書実行
             _documentExecutionModeService = compositionRoot.DocumentExecutionModeService;
@@ -235,6 +240,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 }
 
                 StopWordWarmupTimer();
+                StopManagedCloseStartupGuardTimer();
                 _caseWorkbookOpenStrategy?.ShutdownHiddenApplicationCache();
 
                 _logger.Info("ThisAddIn_Shutdown fired.");
@@ -273,6 +279,7 @@ namespace CaseInfoSystem.ExcelAddIn
         // Excel application event handler
         private void Application_WorkbookOpen(Excel.Workbook workbook)
         {
+            _workbookOpenObservedSinceStartup = true;
             EnsureKernelFlickerTraceForWorkbookOpen(workbook);
             EventBoundaryGuard.Execute(_logger, nameof(Application_WorkbookOpen), () => _workbookLifecycleCoordinator?.OnWorkbookOpen(workbook));
         }
@@ -1307,6 +1314,399 @@ namespace CaseInfoSystem.ExcelAddIn
 
             _kernelWorkbookService?.ClearHomeWorkbookBinding("ThisAddIn.TryShowKernelHomeFormOnStartup");
             ShowKernelHomePlaceholder();
+        }
+
+        private void TraceAndScheduleManagedCloseStartupGuard()
+        {
+            ManagedWorkbookCloseMarkerReadResult markerResult = null;
+            if (_managedWorkbookCloseMarkerStore != null)
+            {
+                try
+                {
+                    markerResult = _managedWorkbookCloseMarkerStore.Consume();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Error("Managed close startup marker consume failed.", ex);
+                }
+            }
+
+            LogManagedCloseStartupMarker(markerResult);
+            ManagedCloseStartupFacts startupFacts = CaptureManagedCloseStartupFacts("startup");
+            LogManagedCloseStartupFacts(startupFacts, markerResult);
+            if (markerResult == null || !markerResult.IsValid)
+            {
+                return;
+            }
+
+            if (!IsManagedCloseStartupGuardEligible(startupFacts))
+            {
+                _logger?.Info(
+                    "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
+                    + " phase=startup"
+                    + " reason=startupFactsNotEligible"
+                    + FormatManagedCloseMarkerFields(markerResult)
+                    + startupFacts.ToTraceFields());
+                return;
+            }
+
+            StopManagedCloseStartupGuardTimer();
+            _managedCloseStartupGuardTimer = new Timer();
+            _managedCloseStartupGuardTimer.Interval = 1000;
+            _managedCloseStartupGuardTimer.Tick += (sender, args) =>
+            {
+                StopManagedCloseStartupGuardTimer();
+                ExecuteManagedCloseStartupGuard(markerResult);
+            };
+            _managedCloseStartupGuardTimer.Start();
+            _logger?.Info(
+                "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-scheduled"
+                + " delayMs=1000"
+                + FormatManagedCloseMarkerFields(markerResult));
+        }
+
+        private void ExecuteManagedCloseStartupGuard(ManagedWorkbookCloseMarkerReadResult markerResult)
+        {
+            ManagedCloseStartupFacts delayedFacts = CaptureManagedCloseStartupFacts("delayed");
+            LogManagedCloseStartupFacts(delayedFacts, markerResult);
+            if (!IsManagedCloseStartupGuardEligible(delayedFacts))
+            {
+                _logger?.Info(
+                    "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
+                    + " phase=delayed"
+                    + " reason=delayedFactsNotEligible"
+                    + FormatManagedCloseMarkerFields(markerResult)
+                    + delayedFacts.ToTraceFields());
+                return;
+            }
+
+            ManagedCloseStartupFacts preQuitFacts = CaptureManagedCloseStartupFacts("preQuit");
+            LogManagedCloseStartupFacts(preQuitFacts, markerResult);
+            if (!IsManagedCloseStartupGuardEligible(preQuitFacts))
+            {
+                _logger?.Info(
+                    "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
+                    + " phase=preQuit"
+                    + " reason=preQuitFactsNotEligible"
+                    + FormatManagedCloseMarkerFields(markerResult)
+                    + preQuitFacts.ToTraceFields());
+                return;
+            }
+
+            QuitEmptyStartupExcelForManagedClose(markerResult, preQuitFacts);
+        }
+
+        private bool IsManagedCloseStartupGuardEligible(ManagedCloseStartupFacts facts)
+        {
+            return facts != null
+                && !facts.ReadFailed
+                && !facts.ApplicationVisible
+                && !facts.WorkbookOpenObserved
+                && !facts.ActiveWorkbookPresent
+                && facts.WorkbooksCount == 0
+                && !facts.VisibleNonKernelWorkbookExists
+                && !facts.HasOpenKernelWorkbook;
+        }
+
+        private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase)
+        {
+            var facts = new ManagedCloseStartupFacts
+            {
+                Phase = phase ?? string.Empty,
+                WorkbookOpenObserved = _workbookOpenObservedSinceStartup,
+                ProcessId = Process.GetCurrentProcess().Id,
+                ProcessStartTime = SafeGetProcessStartTime(),
+                CommandLine = SafeGetCommandLine()
+            };
+
+            try
+            {
+                facts.ApplicationVisible = Application != null && Application.Visible;
+            }
+            catch
+            {
+                facts.ReadFailed = true;
+                facts.ApplicationVisibleReadFailed = true;
+            }
+
+            try
+            {
+                Excel.Workbook activeWorkbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
+                facts.ActiveWorkbookPresent = activeWorkbook != null;
+                facts.ActiveWorkbookName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookName(activeWorkbook);
+            }
+            catch
+            {
+                facts.ReadFailed = true;
+                facts.ActiveWorkbookReadFailed = true;
+            }
+
+            try
+            {
+                facts.WorkbooksCount = Application == null || Application.Workbooks == null ? -1 : Application.Workbooks.Count;
+            }
+            catch
+            {
+                facts.ReadFailed = true;
+                facts.WorkbooksCount = -1;
+                facts.WorkbooksCountReadFailed = true;
+            }
+
+            try
+            {
+                CaptureOpenWorkbookFacts(facts);
+            }
+            catch
+            {
+                facts.ReadFailed = true;
+                facts.OpenWorkbookScanFailed = true;
+            }
+
+            facts.CommandLineHasEmbeddingSwitch = ContainsCommandLineSwitch(facts.CommandLine, "embedding")
+                || ContainsCommandLineSwitch(facts.CommandLine, "automation");
+            return facts;
+        }
+
+        private void CaptureOpenWorkbookFacts(ManagedCloseStartupFacts facts)
+        {
+            if (Application == null || Application.Workbooks == null)
+            {
+                return;
+            }
+
+            foreach (Excel.Workbook workbook in Application.Workbooks)
+            {
+                if (workbook == null)
+                {
+                    continue;
+                }
+
+                bool isKernel = false;
+                try
+                {
+                    isKernel = _kernelWorkbookService != null && _kernelWorkbookService.IsKernelWorkbook(workbook);
+                }
+                catch
+                {
+                    facts.ReadFailed = true;
+                    facts.OpenWorkbookScanFailed = true;
+                }
+
+                if (isKernel)
+                {
+                    facts.HasOpenKernelWorkbook = true;
+                    continue;
+                }
+
+                if (WorkbookHasVisibleWindow(workbook, facts))
+                {
+                    facts.VisibleNonKernelWorkbookExists = true;
+                }
+            }
+        }
+
+        private static bool WorkbookHasVisibleWindow(Excel.Workbook workbook, ManagedCloseStartupFacts facts)
+        {
+            if (workbook == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                foreach (Excel.Window window in workbook.Windows)
+                {
+                    if (window != null && window.Visible)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                if (facts != null)
+                {
+                    facts.ReadFailed = true;
+                    facts.OpenWorkbookScanFailed = true;
+                }
+
+                return false;
+            }
+
+            return false;
+        }
+
+        private void QuitEmptyStartupExcelForManagedClose(ManagedWorkbookCloseMarkerReadResult markerResult, ManagedCloseStartupFacts facts)
+        {
+            _logger?.Info(
+                "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-quit-attempt"
+                + FormatManagedCloseMarkerFields(markerResult)
+                + facts.ToTraceFields());
+            bool previousDisplayAlerts = true;
+            bool hasDisplayAlertsSnapshot = false;
+            try
+            {
+                previousDisplayAlerts = Application.DisplayAlerts;
+                hasDisplayAlertsSnapshot = true;
+                Application.DisplayAlerts = false;
+                Application.Quit();
+                _logger?.Info(
+                    "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-quit-completed"
+                    + FormatManagedCloseMarkerFields(markerResult)
+                    + facts.ToTraceFields());
+            }
+            catch (Exception ex)
+            {
+                if (hasDisplayAlertsSnapshot)
+                {
+                    try
+                    {
+                        Application.DisplayAlerts = previousDisplayAlerts;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                _logger?.Error(
+                    "Managed close startup guard quit failed."
+                    + FormatManagedCloseMarkerFields(markerResult)
+                    + facts.ToTraceFields(),
+                    ex);
+            }
+        }
+
+        private void LogManagedCloseStartupMarker(ManagedWorkbookCloseMarkerReadResult markerResult)
+        {
+            _logger?.Info(
+                "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-marker"
+                + FormatManagedCloseMarkerFields(markerResult));
+        }
+
+        private void LogManagedCloseStartupFacts(ManagedCloseStartupFacts facts, ManagedWorkbookCloseMarkerReadResult markerResult)
+        {
+            _logger?.Info(
+                "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-facts"
+                + FormatManagedCloseMarkerFields(markerResult)
+                + (facts == null ? string.Empty : facts.ToTraceFields()));
+        }
+
+        private static string FormatManagedCloseMarkerFields(ManagedWorkbookCloseMarkerReadResult markerResult)
+        {
+            if (markerResult == null)
+            {
+                return ", markerPresent=False, markerStatus=notConfigured";
+            }
+
+            ManagedWorkbookCloseMarker marker = markerResult.Marker;
+            return ", markerPresent=" + (markerResult.Status != ManagedWorkbookCloseMarkerReadStatus.NoMarker).ToString()
+                + ", markerStatus=" + markerResult.Status.ToString()
+                + ", markerKind=" + (marker == null ? string.Empty : marker.Kind.ToString())
+                + ", markerCreatedUtc=" + (marker == null ? string.Empty : marker.CreatedUtc.ToString("O", CultureInfo.InvariantCulture))
+                + ", markerTtlSeconds=" + (marker == null ? string.Empty : marker.TimeToLiveSeconds.ToString(CultureInfo.InvariantCulture))
+                + ", markerAgeMs=" + (markerResult.Age.HasValue ? ((long)markerResult.Age.Value.TotalMilliseconds).ToString(CultureInfo.InvariantCulture) : string.Empty)
+                + ", markerPath=" + markerResult.MarkerPath;
+        }
+
+        private static DateTime SafeGetProcessStartTime()
+        {
+            try
+            {
+                return Process.GetCurrentProcess().StartTime;
+            }
+            catch
+            {
+                return DateTime.MinValue;
+            }
+        }
+
+        private static string SafeGetCommandLine()
+        {
+            try
+            {
+                return (Environment.CommandLine ?? string.Empty).Replace("\r", " ").Replace("\n", " ");
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool ContainsCommandLineSwitch(string commandLine, string switchName)
+        {
+            return !string.IsNullOrWhiteSpace(commandLine)
+                && !string.IsNullOrWhiteSpace(switchName)
+                && commandLine.IndexOf(switchName, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void StopManagedCloseStartupGuardTimer()
+        {
+            if (_managedCloseStartupGuardTimer == null)
+            {
+                return;
+            }
+
+            _managedCloseStartupGuardTimer.Stop();
+            _managedCloseStartupGuardTimer.Dispose();
+            _managedCloseStartupGuardTimer = null;
+        }
+
+        private sealed class ManagedCloseStartupFacts
+        {
+            internal string Phase { get; set; }
+
+            internal int ProcessId { get; set; }
+
+            internal DateTime ProcessStartTime { get; set; }
+
+            internal string CommandLine { get; set; }
+
+            internal bool CommandLineHasEmbeddingSwitch { get; set; }
+
+            internal bool ApplicationVisible { get; set; }
+
+            internal bool ActiveWorkbookPresent { get; set; }
+
+            internal string ActiveWorkbookName { get; set; }
+
+            internal int WorkbooksCount { get; set; }
+
+            internal bool VisibleNonKernelWorkbookExists { get; set; }
+
+            internal bool HasOpenKernelWorkbook { get; set; }
+
+            internal bool WorkbookOpenObserved { get; set; }
+
+            internal bool ReadFailed { get; set; }
+
+            internal bool ApplicationVisibleReadFailed { get; set; }
+
+            internal bool ActiveWorkbookReadFailed { get; set; }
+
+            internal bool WorkbooksCountReadFailed { get; set; }
+
+            internal bool OpenWorkbookScanFailed { get; set; }
+
+            internal string ToTraceFields()
+            {
+                return ", phase=" + (Phase ?? string.Empty)
+                    + ", pid=" + ProcessId.ToString(CultureInfo.InvariantCulture)
+                    + ", processStartTime=" + (ProcessStartTime == DateTime.MinValue ? string.Empty : ProcessStartTime.ToString("O", CultureInfo.InvariantCulture))
+                    + ", activeWorkbookPresent=" + ActiveWorkbookPresent.ToString()
+                    + ", activeWorkbookName=" + (ActiveWorkbookName ?? string.Empty)
+                    + ", workbooksCount=" + WorkbooksCount.ToString(CultureInfo.InvariantCulture)
+                    + ", visibleNonKernelWorkbookExists=" + VisibleNonKernelWorkbookExists.ToString()
+                    + ", hasOpenKernelWorkbook=" + HasOpenKernelWorkbook.ToString()
+                    + ", workbookOpenObserved=" + WorkbookOpenObserved.ToString()
+                    + ", applicationVisible=" + ApplicationVisible.ToString()
+                    + ", commandLineHasEmbeddingSwitch=" + CommandLineHasEmbeddingSwitch.ToString()
+                    + ", commandLine=\"" + (CommandLine ?? string.Empty).Replace("\"", "'") + "\""
+                    + ", readFailed=" + ReadFailed.ToString()
+                    + ", applicationVisibleReadFailed=" + ApplicationVisibleReadFailed.ToString()
+                    + ", activeWorkbookReadFailed=" + ActiveWorkbookReadFailed.ToString()
+                    + ", workbooksCountReadFailed=" + WorkbooksCountReadFailed.ToString()
+                    + ", openWorkbookScanFailed=" + OpenWorkbookScanFailed.ToString();
+            }
         }
 
         // Kernel workbook 到達後の UI 反映責務は ThisAddIn に残し、判定自体は coordinator へ委譲する。

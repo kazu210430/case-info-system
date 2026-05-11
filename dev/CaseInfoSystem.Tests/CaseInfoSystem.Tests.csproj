@@ -79,6 +79,7 @@
     <Compile Include="TransientPaneSuppressionServiceTests.cs" />
     <Compile Include="WorkbookSessionServiceTests.cs" />
     <Compile Include="AccountingNumericCellReaderTests.cs" />
+    <Compile Include="AccountingSetSpecTests.cs" />
     <Compile Include="AccountingSetCreateServiceTests.cs" />
     <Compile Include="AccountingSaveAsServiceTests.cs" />
     <Compile Include="AccountingSetKernelSyncServiceTests.cs" />

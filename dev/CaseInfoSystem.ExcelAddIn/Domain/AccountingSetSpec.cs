@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace CaseInfoSystem.ExcelAddIn.Domain
 {
 	internal static class AccountingSetSpec
@@ -40,6 +42,8 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
 
 		internal const string LawyerWriteStartCellAddress = "A41";
 
+		internal const string PaymentHistoryLawyerWriteStartCellAddress = "A6";
+
 		internal const string AccountingAddressCellAddress = "A40";
 
 		internal const string InstallmentAddressCellAddress = "A5";
@@ -79,5 +83,27 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
 		internal const int UserDataAccountingNameRow1Offset = 6;
 
 		internal const int UserDataAccountingNameRow2Offset = 7;
+
+		internal static IReadOnlyList<AccountingLawyerReflectionTarget> LawyerReflectionTargets { get; } = new[]
+		{
+			new AccountingLawyerReflectionTarget (EstimateSheetName, LawyerWriteStartCellAddress),
+			new AccountingLawyerReflectionTarget (InvoiceSheetName, LawyerWriteStartCellAddress),
+			new AccountingLawyerReflectionTarget (ReceiptSheetName, LawyerWriteStartCellAddress),
+			new AccountingLawyerReflectionTarget (AccountingRequestSheetName, LawyerWriteStartCellAddress),
+			new AccountingLawyerReflectionTarget (PaymentHistorySheetName, PaymentHistoryLawyerWriteStartCellAddress)
+		};
+	}
+
+	internal sealed class AccountingLawyerReflectionTarget
+	{
+		internal AccountingLawyerReflectionTarget (string sheetName, string startCellAddress)
+		{
+			SheetName = sheetName;
+			StartCellAddress = startCellAddress;
+		}
+
+		internal string SheetName { get; private set; }
+
+		internal string StartCellAddress { get; private set; }
 	}
 }

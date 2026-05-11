@@ -670,26 +670,26 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			List<string> list = ExtractLawyerLines (lawyerLinesText);
 			AccountingLawyerMappingResult accountingLawyerMappingResult = new AccountingLawyerMappingResult ();
-			int num = Math.Min (list.Count, 4);
-			string[] array = new string[4] { "見積書", "請求書", "領収書", "会計依頼書" };
-			for (int i = 0; i < array.Length; i++) {
+			int num = Math.Min (list.Count, AccountingSetSpec.MaximumLawyerCount);
+			for (int i = 0; i < AccountingSetSpec.LawyerReflectionTargets.Count; i++) {
 				Worksheet worksheet = null;
+				AccountingLawyerReflectionTarget target = AccountingSetSpec.LawyerReflectionTargets [i];
 				try {
-					worksheet = GetWorksheet (workbook, array [i]);
-					for (int j = 0; j < 4; j++) {
+					worksheet = GetWorksheet (workbook, target.SheetName);
+					for (int j = 0; j < AccountingSetSpec.MaximumLawyerCount; j++) {
 						Range range = null;
 						try {
-							range = ((_Worksheet)worksheet).get_Range ((object)"A41", Type.Missing).get_Offset ((object)j, (object)0);
+							range = ((_Worksheet)worksheet).get_Range ((object)target.StartCellAddress, Type.Missing).get_Offset ((object)j, (object)0);
 							range.Value2 = string.Empty;
 							if (j < num) {
 								string text = FindFirstValidationMatch (range, list [j]);
 								if (text.Length > 0) {
 									range.Value2 = text;
 									accountingLawyerMappingResult.AssignedCount++;
-									_logger.Debug ("AccountingWorkbookService", "Lawyer matched. sheet=" + array [i] + ", rowOffset=" + j + ", source=" + list [j] + ", matched=" + text);
+									_logger.Debug ("AccountingWorkbookService", "Lawyer matched. sheet=" + target.SheetName + ", startCell=" + target.StartCellAddress + ", rowOffset=" + j + ", source=" + list [j] + ", matched=" + text);
 								} else {
 									accountingLawyerMappingResult.MissingMatchCount++;
-									_logger.Warn ("Accounting lawyer match was not found. sheet=" + array [i] + ", rowOffset=" + j + ", source=" + list [j]);
+									_logger.Warn ("Accounting lawyer match was not found. sheet=" + target.SheetName + ", startCell=" + target.StartCellAddress + ", rowOffset=" + j + ", source=" + list [j]);
 								}
 							}
 						} finally {
@@ -700,8 +700,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					ComObjectReleaseService.Release (worksheet);
 				}
 			}
-			if (list.Count > 4) {
-				accountingLawyerMappingResult.OverflowCount = list.Count - 4;
+			if (list.Count > AccountingSetSpec.MaximumLawyerCount) {
+				accountingLawyerMappingResult.OverflowCount = list.Count - AccountingSetSpec.MaximumLawyerCount;
 			}
 			_logger.Info ("Accounting lawyers reflected. assigned=" + accountingLawyerMappingResult.AssignedCount + ", missingMatch=" + accountingLawyerMappingResult.MissingMatchCount + ", overflow=" + accountingLawyerMappingResult.OverflowCount);
 			return accountingLawyerMappingResult;

@@ -208,6 +208,7 @@ hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle 
 - 現コードでは `ShouldUseHiddenCreateSession()` が `true` 固定のため、`NewCaseDefault` / `CreateCaseSingle` / `CreateCaseBatch` の全モードが hidden create 分岐を通ります。
 - session owner は `KernelCaseCreationService` です。hidden workbook open / close mechanics は `CaseWorkbookOpenStrategy` が担当し、retained hidden app-cache を使う場合だけ cached `Application` 自体の owner は `CaseWorkbookOpenStrategy` に残ります。
 - interactive route (`NewCaseDefault` / `CreateCaseSingle`) は hidden session 内の save 前に workbook window を `Visible=true` へ戻さず、必要なら `WindowState=xlNormal` だけを整えて save / close します。その後に shared app の `OpenHiddenForCaseDisplay(...)` と `KernelCasePresentationService` / `WorkbookWindowVisibilityService` が表示責務を引き継ぎます。
+- 実機確認済みの禁止契約として、interactive route の hidden create session 中に保存前正規化を理由に `Visible=true` を実行してはなりません。これは白フラッシュ再発と終了時 Excel / Book1 発生の再露出を招いたためであり、final visible / normal presentation は `KernelCasePresentationService` 側の責務として遅延します。
 - batch route (`CreateCaseBatch`) も save 前に workbook window を `visible + normal` へ正規化してから save / close しますが、表示経路へは昇格させず CASE workbook の reopen も行いません。
 
 | route 名 | 実装上の `Application` | retained app | owner / cleanup | 事実ベースのメモ |

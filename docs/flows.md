@@ -47,6 +47,7 @@
 補足:
 
 - hidden create session の owner は `KernelCaseCreationService` です。hidden workbook open / close mechanics は `CaseWorkbookOpenStrategy` が担い、retained hidden app-cache を使う場合だけ cached `Application` 自体の owner は `CaseWorkbookOpenStrategy` に残ります。
+- interactive route では、保存前正規化を理由に hidden create session 中の workbook window を visible 化しません。実機確認で `Visible=true` の前倒しは白フラッシュと終了時 Excel / Book1 発生を再露出させたため、作成側は hidden のまま初期化・保存・handoff までを完了し、visible / normal の最終表示は `KernelCasePresentationService` が担います。
 - `experimental-isolated-inner-save` は route 名どおり、current/shared app ではなく dedicated hidden `Application` を生成し、close 時の inner save を含む経路です。
 - 互換のため旧環境変数 `CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL` でも同 route に到達しますが、契約上の正本は `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` です。
 - `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外です。

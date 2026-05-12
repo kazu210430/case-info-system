@@ -428,6 +428,8 @@ current-state の visibility recovery は、lightweight workbook visibility ensu
 | Kernel HOME foreground | `ThisAddIn.ShowKernelHomePlaceholder(...)` / `KernelHomeForm.ForceBringToFront(...)` | `Show()`、`Activate()`、`BringToFront()`、`ShowWindow(...)`、`SetForegroundWindow(...)`、foreground retry timer を使う。 | Kernel HOME 表示 owner。CASE display foreground guarantee とは別 protocol。 |
 | Kernel workbook restore / release | `KernelWorkbookDisplayService.ShowKernelWorkbookWindows(...)` / `EnsureWorkbookVisible(...)` / `ReleaseHomeDisplay(...)` | Kernel workbook window visible / normal 化、`ExcelWindowRecoveryService.TryRecoverWorkbookWindow(..., bringToFront: true|false)`、application foreground を使う。 | Kernel HOME / Kernel workbook 表示制御。CASE display foreground guarantee と混同しない。 |
 
+interactive save-before-close normalization で `Visible=true` を前倒しすると、実機で白フラッシュと終了時 Excel / Book1 発生が再露出した。したがって、hidden create session 中は workbook window を見せないことを優先し、再オープン時の表示安定性は `KernelCasePresentationService` / recovery protocol / close lifecycle 側で担保する。
+
 ### owner 分裂 / 混在ポイント
 
 現行の owner 分裂は次のとおりです。
@@ -1345,6 +1347,7 @@ current-state で未定義または暗黙になっている `WindowActivate` 論
 - hidden-for-display open は `CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay(...)` の owner であり、shared/current app 上の CASE reopen を一時 hidden にし、必要なら previous active window を戻す。これは `WindowActivate` ではなく display handoff 前の flicker / foreground preservation である。
 - CASE新規作成専用 managed hidden create session は `KernelCaseCreationService` が session owner、hidden workbook open / close mechanics は `CaseWorkbookOpenStrategy`、retained hidden app-cache の cached `Application` owner は `CaseWorkbookOpenStrategy` に残る。`WindowActivate` owner へ昇格させない。
 - hidden create save normalization では、interactive は保存前に workbook window を visible 化せず、必要なら `WindowState=xlNormal` のみ整える。batch は保存前に `visible + normal` へ正規化するため `workbook.Activate()` や `workbook.NewWindow()` が使われる場合がある。これは保存状態正規化であり、WindowActivate / foreground guarantee / CASE display completed ではない。
+- interactive の hidden create save normalization に `Visible=true` を戻すことは禁止する。保存前に hidden window 状態が残るリスクより、hidden session 中に visible 化して実機 UI を乱すリスクの方を高く扱う。
 - white Excel 防止は close / quit 側の設計目標であり、`PostCloseFollowUpScheduler` が no visible workbook 時の `Quit` 判定を持つ。`WindowActivate` / visibility recovery / foreground guarantee を post-close quit の代替にしない。
 - `ThisAddIn_Shutdown` は retained hidden app-cache cleanup として `CaseWorkbookOpenStrategy.ShutdownHiddenApplicationCache()` を呼ぶ。event unhook と cache cleanup は隣接するが、`WindowActivate` handler の責務ではない。
 

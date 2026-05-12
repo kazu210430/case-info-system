@@ -25,6 +25,7 @@
 - interactive な CASE 表示は、hidden create session close 後に shared app の `OpenHiddenForCaseDisplay(...)`、`KernelCasePresentationService`、`WorkbookWindowVisibilityService` が引き継ぎます。
 - `KernelHomeForm` / `KernelWorkbookCloseService` は CASE 作成フロー中の Kernel HOME close で display restore を skip し、表示済み CASE より前に Kernel を戻さない契約で動作します。
 - interactive route は hidden create session 中に owned workbook window を `Visible=true` へ戻しません。save 前正規化では必要に応じて `WindowState=xlNormal` だけを整え、最終表示責務は shared/current app への handoff 後にだけ成立します。
+- この制約は実機確認に基づく安定化契約です。future reviewer は「保存前 visible + normal」だけを根拠に interactive hidden create session へ `Visible=true` を戻してはなりません。
 - `CreateCaseBatch` は save 前に owned workbook window を `normal + visible` へ正規化しますが、表示経路へは昇格させません。
 - `app-cache` は `CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外であり、裏Excel一般化の根拠にしません。
 - hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、owner / protocol の target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md`、white Excel prevention / recovery の current-state と target boundary は `docs/white-excel-prevention-boundary-current-state.md` を参照します。

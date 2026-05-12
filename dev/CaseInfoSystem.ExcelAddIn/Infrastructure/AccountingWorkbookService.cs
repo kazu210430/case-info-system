@@ -356,6 +356,29 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		internal void ClearValidation (Workbook workbook, string sheetName, string address)
+		{
+			Worksheet worksheet = null;
+			Range range = null;
+			Range targetRange = null;
+			Validation validation = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
+				targetRange = range.MergeArea;
+				validation = targetRange.Validation;
+				validation.Delete ();
+				_logger.Debug ("AccountingWorkbookService", "ClearValidation sheet=" + sheetName + ", address=" + address);
+			} catch (Exception innerException) {
+				throw new InvalidOperationException ("シート「" + sheetName + "」のセル「" + address + "」の入力規則解除に失敗しました。", innerException);
+			} finally {
+				ComObjectReleaseService.Release (validation);
+				ComObjectReleaseService.Release (targetRange);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
 		internal void WriteNamedRangeValue (Workbook workbook, string sheetName, string rangeName, object value)
 		{
 			Worksheet worksheet = null;

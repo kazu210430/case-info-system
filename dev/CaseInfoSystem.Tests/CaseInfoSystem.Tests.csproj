@@ -79,6 +79,7 @@
     <Compile Include="TransientPaneSuppressionServiceTests.cs" />
     <Compile Include="WorkbookSessionServiceTests.cs" />
     <Compile Include="AccountingNumericCellReaderTests.cs" />
+    <Compile Include="AccountingIssueDateDueDatePolicyTests.cs" />
     <Compile Include="AccountingSetSpecTests.cs" />
     <Compile Include="AccountingSetCreateServiceTests.cs" />
     <Compile Include="AccountingSaveAsServiceTests.cs" />
@@ -104,6 +105,7 @@
     <Compile Include="WindowActivatePaneHandlingServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingIssueDateDueDatePolicy.cs" Link="Source\App\AccountingIssueDateDueDatePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSaveAsService.cs" Link="Source\App\AccountingSaveAsService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetKernelSyncService.cs" Link="Source\App\AccountingSetKernelSyncService.cs" />

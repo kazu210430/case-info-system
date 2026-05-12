@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -119,9 +120,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private void ApplyIssueDateAndDueDate (Workbook workbook, string activeSheetCodeName)
 		{
 			DateTime dateTime = _accountingWorkbookService.ReadDateCell (workbook, activeSheetCodeName, "Y1");
+			double invoicePaymentAmount = ReadRequiredDouble (workbook, activeSheetCodeName, "F31", "お支払い頂く金額", "AccountingFormHelper.ApplyIssueDateAndDueDate");
 			_accountingWorkbookService.WriteCellValue (workbook, activeSheetCodeName, "A1", dateTime);
+			if (AccountingIssueDateDueDatePolicy.ShouldWriteNoPaymentNotice (invoicePaymentAmount)) {
+				_accountingWorkbookService.ClearValidation (workbook, activeSheetCodeName, "G10");
+				_accountingWorkbookService.WriteCellValue (workbook, activeSheetCodeName, "G10", AccountingIssueDateDueDatePolicy.NoPaymentNoticeText);
+				_logger.Info ("Accounting issue date applied with no payment notice. sheet=" + activeSheetCodeName + ", issueDate=" + dateTime.ToString ("yyyy-MM-dd"));
+				return;
+			}
 			_accountingWorkbookService.WriteCellValue (workbook, activeSheetCodeName, "G10", dateTime.AddDays (14.0));
 			_logger.Info ("Accounting issue date and due date applied. sheet=" + activeSheetCodeName + ", issueDate=" + dateTime.ToString ("yyyy-MM-dd"));
+		}
+
+		private double ReadRequiredDouble (Workbook workbook, string sheetName, string address, string itemName, string procedureName)
+		{
+			object cellValue = _accountingWorkbookService.ReadCellValue (workbook, sheetName, address);
+			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, sheetName, address);
+			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out var value, out var isBlank)) {
+				return value;
+			}
+			InvalidOperationException ex = AccountingNumericCellReader.CreateReadFailureException (sheetName, address, itemName, procedureName, displayText, allowBlankAsZero: false);
+			string text = Convert.ToString (cellValue, CultureInfo.InvariantCulture) ?? string.Empty;
+			_logger.Error ("Accounting numeric cell read failed. sheet=" + sheetName + ", address=" + address + ", item=" + itemName + ", procedure=" + procedureName + ", displayText=" + (string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ()) + ", cellValue=" + text, ex);
+			throw ex;
 		}
 
 		private void ShowReverseTool (WorkbookContext context, string activeSheetCodeName)

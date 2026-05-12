@@ -67,7 +67,7 @@ namespace CaseInfoSystem.ExcelAddIn
         private WindowActivatePaneHandlingService _windowActivatePaneHandlingService;
         private TaskPaneRefreshOrchestrationService _taskPaneRefreshOrchestrationService;
         private TaskPaneManager _taskPaneManager;
-        private KernelHomeForm _kernelHomeForm;
+        private KernelHomeFormHost _kernelHomeFormHost;
         private KernelCaseInteractionState _kernelCaseInteractionState;
         private int _taskPaneRefreshSuppressionCount;
         private int _kernelFlickerTraceRefreshCallSequence;
@@ -150,7 +150,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 ResolveWorkbookPaneWindow,
                 TryRefreshTaskPane,
                 IsTaskPaneRefreshSucceeded,
-                () => _kernelHomeForm,
+                GetKernelHomeForm,
                 () => _taskPaneRefreshSuppressionCount,
                 // Kernel HOME / sheet command
                 ShowKernelHomeFromKernelCommand,
@@ -192,6 +192,7 @@ namespace CaseInfoSystem.ExcelAddIn
             _workbookRibbonCommandService = compositionRoot.WorkbookRibbonCommandService;
             _workbookCaseTaskPaneRefreshCommandService = compositionRoot.WorkbookCaseTaskPaneRefreshCommandService;
             _workbookResetCommandService = compositionRoot.WorkbookResetCommandService;
+            _kernelHomeFormHost = new KernelHomeFormHost(_kernelWorkbookService, _kernelCaseCreationCommandService, _logger);
             // UI / Pane 調停
             _workbookEventCoordinator = compositionRoot.WorkbookEventCoordinator;
             _kernelWorkbookAvailabilityService = compositionRoot.KernelWorkbookAvailabilityService;
@@ -228,11 +229,7 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 UnhookApplicationEvents();
                 _taskPaneRefreshOrchestrationService?.StopPendingPaneRefreshTimer();
-                if (_kernelHomeForm != null && !_kernelHomeForm.IsDisposed)
-                {
-                    _kernelHomeForm.Close();
-                    _kernelHomeForm = null;
-                }
+                _kernelHomeFormHost?.CloseOnShutdown();
 
                 if (_taskPaneManager != null)
                 {
@@ -274,6 +271,11 @@ namespace CaseInfoSystem.ExcelAddIn
         private void UnhookApplicationEvents()
         {
             _applicationEventSubscriptionService?.Unsubscribe();
+        }
+
+        private KernelHomeForm GetKernelHomeForm()
+        {
+            return _kernelHomeFormHost == null ? null : _kernelHomeFormHost.Current;
         }
 
         // Excel application event handler
@@ -687,49 +689,15 @@ namespace CaseInfoSystem.ExcelAddIn
         {
             _kernelHomeCasePaneSuppressionCoordinator?.ResetKernelHomeExternalCloseRequested();
 
-            if (_kernelHomeForm != null && !_kernelHomeForm.IsDisposed && !_kernelHomeForm.Visible)
-            {
-                try
-                {
-                    _kernelHomeForm.PrepareForSilentDispose();
-                    _kernelHomeForm.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger?.Error("KernelHomeForm dispose before recreation failed.", ex);
-                }
-                finally
-                {
-                    _kernelHomeForm = null;
-                }
-            }
-
-            if (_kernelHomeForm == null || _kernelHomeForm.IsDisposed)
-            {
-                if (clearBindingOnNewSession)
-                {
-                    _kernelWorkbookService?.ClearHomeWorkbookBinding("ThisAddIn.ShowKernelHomePlaceholder.NewSession");
-                }
-
-                _kernelHomeForm = new KernelHomeForm(_kernelWorkbookService, _kernelCaseCreationCommandService, _logger);
-            }
-
+            _kernelHomeFormHost.GetOrCreate(clearBindingOnNewSession);
             _taskPaneManager?.HideKernelPanes();
-            _kernelHomeForm.ReloadSettings();
-            _kernelHomeForm.Invalidate(true);
-            _kernelHomeForm.Update();
+            _kernelHomeFormHost.ReloadCurrent();
 
             TraceRuntimeExecutionObservation("ShowKernelHomePlaceholder");
             _kernelWorkbookService.PrepareForHomeDisplayFromSheet();
             _kernelWorkbookService.EnsureHomeDisplayHidden("ThisAddIn.ShowKernelHomePlaceholder.BeforeShow");
 
-            if (!_kernelHomeForm.Visible)
-            {
-                _kernelHomeForm.Show();
-            }
-
-            _kernelHomeForm.Activate();
-            _kernelHomeForm.BringToFront();
+            _kernelHomeFormHost.ShowAndActivateCurrent();
         }
 
         private void TraceRuntimeExecutionObservation(string reason)
@@ -1288,19 +1256,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private void HideKernelHomePlaceholder()
         {
-            if (_kernelHomeForm == null || _kernelHomeForm.IsDisposed || !_kernelHomeForm.Visible)
-            {
-                return;
-            }
-
-            try
-            {
-                _kernelHomeForm.Hide();
-            }
-            catch (Exception ex)
-            {
-                _logger?.Error("HideKernelHomePlaceholder failed.", ex);
-            }
+            _kernelHomeFormHost?.HideCurrent();
         }
 
         private void TryShowKernelHomeFormOnStartup()
@@ -1712,7 +1668,7 @@ namespace CaseInfoSystem.ExcelAddIn
         // Kernel workbook 到達後の UI 反映責務は ThisAddIn に残し、判定自体は coordinator へ委譲する。
         internal void HandleKernelWorkbookBecameAvailable(string eventName, Excel.Workbook workbook)
         {
-            _kernelWorkbookAvailabilityService?.Handle(eventName, workbook, _kernelHomeForm);
+            _kernelWorkbookAvailabilityService?.Handle(eventName, workbook, GetKernelHomeForm());
         }
 
         private bool ShouldAutoShowKernelHomeForEvent(string eventName, Excel.Workbook workbook)
@@ -1726,7 +1682,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 _externalWorkbookDetectionService,
                 workbook,
                 eventName,
-                _kernelHomeForm);
+                GetKernelHomeForm());
         }
 
         internal void SuppressUpcomingKernelHomeDisplay(string reason, bool suppressOnOpen, bool suppressOnActivate)

@@ -237,6 +237,7 @@
     <Compile Include="App\KernelHomeAutoDisplayEventPolicy.cs" />
     <Compile Include="App\KernelHomeCoordinator.cs" />
     <Compile Include="App\KernelHomeExternalClosePolicy.cs" />
+    <Compile Include="App\KernelHomeFormHost.cs" />
     <Compile Include="App\KernelNamingService.cs" />
     <Compile Include="App\KernelWorkbookAvailabilityService.cs" />
     <Compile Include="App\KernelOpenWorkbookLocator.cs" />

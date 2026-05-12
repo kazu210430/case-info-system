@@ -162,7 +162,7 @@ namespace CaseInfoSystem.Tests
         [Theory]
         [InlineData(Excel.XlWindowState.xlMinimized)]
         [InlineData(Excel.XlWindowState.xlNormal)]
-        public void CreateSavedCase_ForInteractiveModes_UsesHiddenSessionAndVisibleInitializer(Excel.XlWindowState initialWindowState)
+        public void CreateSavedCase_ForInteractiveModes_DoesNotMakeHiddenSessionWindowVisibleBeforeSave(Excel.XlWindowState initialWindowState)
         {
             List<string> logs = new List<string>();
             List<string> initializedPaths = new List<string>();
@@ -264,7 +264,7 @@ namespace CaseInfoSystem.Tests
                 Assert.Empty(kernelWorkbook.Application.Workbooks);
                 Assert.Equal(1, hiddenWorkbook.SaveCallCount);
                 Assert.Equal(1, hiddenWorkbook.CloseCallCount);
-                Assert.True(hiddenWindow.Visible);
+                Assert.False(hiddenWindow.Visible);
                 Assert.Equal(Excel.XlWindowState.xlNormal, hiddenWindow.WindowState);
                 Assert.False(hiddenWindow.Activated);
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
@@ -273,6 +273,7 @@ namespace CaseInfoSystem.Tests
                 Assert.True(File.Exists(finalCaseWorkbookPath));
                 Assert.Contains(logs, message => message.IndexOf("hidden session opened", StringComparison.OrdinalIgnoreCase) >= 0);
                 Assert.Contains(logs, message => message.IndexOf("deferred visible presentation", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("save-window-visible-deferred", StringComparison.OrdinalIgnoreCase) >= 0);
                 Assert.Contains(logs, message => message.IndexOf("interactive CASE workbook window normalized before save", StringComparison.OrdinalIgnoreCase) >= 0);
             }
             finally

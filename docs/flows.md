@@ -39,7 +39,7 @@
 
 1. `KernelCaseCreationService.CreateSavedCase(...)` は現コードで `ShouldUseHiddenCreateSession() == true` のため、全モードで `CreateSavedCaseWithoutShowing(...)` を通します。
 2. `CaseWorkbookOpenStrategy.OpenHiddenWorkbook(...)` が hidden create route を選びます。優先順は `app-cache`、未使用時は `legacy-isolated`、環境変数 `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` 指定時だけ `experimental-isolated-inner-save` です。
-3. `NewCaseDefault` / `CreateCaseSingle` は hidden create session で `InitializeForVisibleCreate(...)` を実行し、`NormalizeInteractiveWorkbookWindowStateBeforeSave(...)` で save 前に workbook window を `visible + normal` へ正規化してから save / hidden session close を完了します。
+3. `NewCaseDefault` / `CreateCaseSingle` は hidden create session で `InitializeForVisibleCreate(...)` を実行し、`NormalizeInteractiveWorkbookWindowStateBeforeSave(...)` では save 前に workbook window を `Visible=true` へ戻さず、必要なら `WindowState=xlNormal` だけを整えて save / hidden session close を完了します。
 4. interactive 表示開始後は `KernelHomeForm.CloseKernelAfterCaseCreation()` と `KernelWorkbookCloseService` が Kernel HOME close を完了します。CASE 作成フロー中は `KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(...)` により Kernel を前景へ戻しません。
 5. interactive route の hidden session close 後は、`KernelCasePresentationService` が shared app の `OpenHiddenForCaseDisplay(...)` で CASE を reopen し、表示責務を shared/current app 側へ渡します。
 6. `CreateCaseBatch` は hidden create session で `InitializeForHiddenCreate(...)` を使い、`NormalizeBatchWorkbookWindowStateBeforeSave(...)` で save 前に workbook window を `visible + normal` へ正規化したあとに save / close して完了します。CASE workbook の reopen は行わず、フォルダ表示と HOME 継続へ分岐します。

@@ -1295,7 +1295,8 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
-            if (!IsManagedCloseStartupGuardEligible(startupFacts))
+            ManagedCloseStartupGuardDelayDecision startupGuardDecision = ManagedCloseStartupGuardPolicy.Decide(ToManagedCloseStartupGuardFacts(startupFacts));
+            if (!startupGuardDecision.IsEligible)
             {
                 _logger?.Info(
                     "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
@@ -1308,7 +1309,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             StopManagedCloseStartupGuardTimer();
             _managedCloseStartupGuardTimer = new Timer();
-            _managedCloseStartupGuardTimer.Interval = 1000;
+            _managedCloseStartupGuardTimer.Interval = startupGuardDecision.DelayMs;
             _managedCloseStartupGuardTimer.Tick += (sender, args) =>
             {
                 StopManagedCloseStartupGuardTimer();
@@ -1317,8 +1318,11 @@ namespace CaseInfoSystem.ExcelAddIn
             _managedCloseStartupGuardTimer.Start();
             _logger?.Info(
                 "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-scheduled"
-                + " delayMs=1000"
-                + FormatManagedCloseMarkerFields(markerResult));
+                + " delayMs=" + startupGuardDecision.DelayMs.ToString(CultureInfo.InvariantCulture)
+                + ", delayReason=" + startupGuardDecision.DelayReason
+                + ", guardedRestoreEmptyStartupDelay=" + startupGuardDecision.UsesGuardedRestoreEmptyStartupDelay.ToString()
+                + FormatManagedCloseMarkerFields(markerResult)
+                + startupFacts.ToTraceFields());
         }
 
         private void ExecuteManagedCloseStartupGuard(ManagedWorkbookCloseMarkerReadResult markerResult)
@@ -1354,24 +1358,28 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private bool IsManagedCloseStartupGuardEligible(ManagedCloseStartupFacts facts)
         {
-            if (facts == null
-                || facts.ReadFailed
-                || facts.WorkbookOpenObserved
-                || facts.ActiveWorkbookPresent
-                || facts.WorkbooksCount != 0
-                || facts.VisibleNonKernelWorkbookExists
-                || facts.HasOpenKernelWorkbook)
+            return ManagedCloseStartupGuardPolicy.IsEligible(ToManagedCloseStartupGuardFacts(facts));
+        }
+
+        private static ManagedCloseStartupGuardFacts ToManagedCloseStartupGuardFacts(ManagedCloseStartupFacts facts)
+        {
+            if (facts == null)
             {
-                return false;
+                return null;
             }
 
-            if (!facts.ApplicationVisible)
+            return new ManagedCloseStartupGuardFacts
             {
-                return true;
-            }
-
-            return facts.CommandLineHasRestoreSwitch
-                && !facts.CommandLineHasEmbeddingSwitch;
+                ReadFailed = facts.ReadFailed,
+                WorkbookOpenObserved = facts.WorkbookOpenObserved,
+                ActiveWorkbookPresent = facts.ActiveWorkbookPresent,
+                WorkbooksCount = facts.WorkbooksCount,
+                VisibleNonKernelWorkbookExists = facts.VisibleNonKernelWorkbookExists,
+                HasOpenKernelWorkbook = facts.HasOpenKernelWorkbook,
+                ApplicationVisible = facts.ApplicationVisible,
+                CommandLineHasRestoreSwitch = facts.CommandLineHasRestoreSwitch,
+                CommandLineHasEmbeddingSwitch = facts.CommandLineHasEmbeddingSwitch
+            };
         }
 
         private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase)

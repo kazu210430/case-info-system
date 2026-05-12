@@ -254,6 +254,7 @@
     <Compile Include="App\KernelWorkbookService.cs" />
     <Compile Include="App\MergeDataBuilder.cs" />
     <Compile Include="App\ManagedCloseState.cs" />
+    <Compile Include="App\ManagedCloseStartupGuardPolicy.cs" />
     <Compile Include="App\ManagedWorkbookCloseMarkerKind.cs" />
     <Compile Include="App\ManagedWorkbookCloseMarkerStore.cs" />
     <Compile Include="App\NavigationService.cs" />

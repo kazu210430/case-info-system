@@ -217,29 +217,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
-		internal void ClearFormControlOnAction (Workbook workbook, string sheetName, string controlName)
-		{
-			Worksheet worksheet = null;
-			Shapes shapes = null;
-			Shape shape = null;
-			try {
-				worksheet = GetWorksheet (workbook, sheetName);
-				shapes = worksheet.Shapes;
-				shape = shapes.Item (controlName);
-				if (shape == null) {
-					throw new InvalidOperationException ("フォームコントロールが見つかりません: " + controlName);
-				}
-				shape.OnAction = string.Empty;
-				_logger.Info ("Accounting form control OnAction cleared. sheet=" + sheetName + ", control=" + controlName);
-			} catch (Exception innerException) {
-				throw new InvalidOperationException ("フォームコントロール OnAction の解除に失敗しました。", innerException);
-			} finally {
-				ComObjectReleaseService.Release (shape);
-				ComObjectReleaseService.Release (shapes);
-				ComObjectReleaseService.Release (worksheet);
-			}
-		}
-
 		internal void UnprotectSheet (Workbook workbook, string sheetName)
 		{
 			Worksheet worksheet = null;

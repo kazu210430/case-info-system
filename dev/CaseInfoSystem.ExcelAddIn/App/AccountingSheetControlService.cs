@@ -36,10 +36,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string CheckedStateFalse = "0";
 
-		private const string Checkbox2ControlName = "Check Box 2";
-
-		private const string Checkbox3ControlName = "Check Box 3";
-
 		private const string LinkedCellCheck2 = "Y15";
 
 		private const string LinkedCellCheck3 = "Y16";
@@ -113,18 +109,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "ignored. reason=suppressedProgrammaticCheckboxUpdate, sheet=" + text2 + ", target=" + text3);
 				} else if (!IsMainAccountingFormSheet (text2)) {
 					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "ignored. reason=notMainFormSheet, sheet=" + text2);
-				} else if (string.Equals (text3, "Y15", StringComparison.OrdinalIgnoreCase)) {
-					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "matched. sheet=" + text2 + ", triggerCell=Y15");
+				} else if (string.Equals (text3, LinkedCellCheck2, StringComparison.OrdinalIgnoreCase)) {
+					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "matched. sheet=" + text2 + ", triggerCell=" + LinkedCellCheck2);
 					UpdateTrackedCheckboxState (workbook, text2);
 					SyncCheckboxVisuals (workbook, text2);
-					ApplyBaseAmountHighlight (workbook, text2, "Y15", "Y16");
-				} else if (string.Equals (text3, "Y16", StringComparison.OrdinalIgnoreCase)) {
-					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "matched. sheet=" + text2 + ", triggerCell=Y16");
+					ApplyBaseAmountHighlight (workbook, text2, LinkedCellCheck2, LinkedCellCheck3);
+				} else if (string.Equals (text3, LinkedCellCheck3, StringComparison.OrdinalIgnoreCase)) {
+					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "matched. sheet=" + text2 + ", triggerCell=" + LinkedCellCheck3);
 					UpdateTrackedCheckboxState (workbook, text2);
 					SyncCheckboxVisuals (workbook, text2);
-					ApplyBaseAmountHighlight (workbook, text2, "Y16", "Y15");
-				} else if (string.Equals (text3, "Y24", StringComparison.OrdinalIgnoreCase)) {
-					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "matched. sheet=" + text2 + ", triggerCell=Y24");
+					ApplyBaseAmountHighlight (workbook, text2, LinkedCellCheck3, LinkedCellCheck2);
+				} else if (string.Equals (text3, LinkedCellWithholding, StringComparison.OrdinalIgnoreCase)) {
+					_logger.Debug ("AccountingSheetControlService.HandleSheetChange", "matched. sheet=" + text2 + ", triggerCell=" + LinkedCellWithholding);
 					UpdateTrackedCheckboxState (workbook, text2);
 					SyncCheckboxVisuals (workbook, text2);
 				} else if (IntersectsRange (worksheet, target, "A41:A44")) {
@@ -235,14 +231,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					string text = SafeAddress (target);
 					if (!IsVisualCheckboxCell (text)) {
 						RememberNonCheckboxSelection (workbook, sheetName, text);
-					} else if (string.Equals (text, "Z15", StringComparison.OrdinalIgnoreCase)) {
-						ToggleLinkedCheckbox (workbook, sheetName, "Y15", "Z15");
+					} else if (string.Equals (text, VisualCellCheck2, StringComparison.OrdinalIgnoreCase)) {
+						ToggleLinkedCheckbox (workbook, sheetName, LinkedCellCheck2, VisualCellCheck2);
 						RestoreSelectionAfterCheckboxToggle (workbook, sheetName);
-					} else if (string.Equals (text, "Z16", StringComparison.OrdinalIgnoreCase)) {
-						ToggleLinkedCheckbox (workbook, sheetName, "Y16", "Z16");
+					} else if (string.Equals (text, VisualCellCheck3, StringComparison.OrdinalIgnoreCase)) {
+						ToggleLinkedCheckbox (workbook, sheetName, LinkedCellCheck3, VisualCellCheck3);
 						RestoreSelectionAfterCheckboxToggle (workbook, sheetName);
-					} else if (string.Equals (text, "Z24", StringComparison.OrdinalIgnoreCase)) {
-						ToggleLinkedCheckbox (workbook, sheetName, "Y24", "Z24");
+					} else if (string.Equals (text, VisualCellWithholding, StringComparison.OrdinalIgnoreCase)) {
+						ToggleLinkedCheckbox (workbook, sheetName, LinkedCellWithholding, VisualCellWithholding);
 						RestoreSelectionAfterCheckboxToggle (workbook, sheetName);
 					}
 				}
@@ -292,12 +288,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_configuringWorkbookKeys.Add (workbookKey);
 			try {
 				foreach (string mainFormSheet in GetMainFormSheets ()) {
-					_accountingWorkbookService.ClearFormControlOnAction (workbook, mainFormSheet, "Check Box 2");
-					_accountingWorkbookService.ClearFormControlOnAction (workbook, mainFormSheet, "Check Box 3");
 					SyncCheckboxVisuals (workbook, mainFormSheet);
 				}
 				_configuredWorkbookKeys.Add (workbookKey);
-				_logger.Info ("Accounting checkbox controls switched to VSTO management. workbook=" + workbookKey);
+				_logger.Info ("Accounting cell checkbox controls synchronized for VSTO management. workbook=" + workbookKey);
 			} finally {
 				_configuringWorkbookKeys.Remove (workbookKey);
 			}
@@ -345,7 +339,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private void TrackSheetCheckboxChanges (Workbook workbook, string sheetName)
 		{
 			string key = BuildStateKey (workbook, sheetName);
-			CheckboxState checkboxState = new CheckboxState (ReadLinkedBoolean (workbook, sheetName, "Y15"), ReadLinkedBoolean (workbook, sheetName, "Y16"));
+			CheckboxState checkboxState = new CheckboxState (ReadLinkedBoolean (workbook, sheetName, LinkedCellCheck2), ReadLinkedBoolean (workbook, sheetName, LinkedCellCheck3));
 			if (!_checkboxStates.TryGetValue (key, out var value)) {
 				_checkboxStates [key] = checkboxState;
 				_logger.Debug ("AccountingSheetControlService", "TrackSheetCheckboxChanges initialized. sheet=" + sheetName + ", y15=" + checkboxState.Y15State + ", y16=" + checkboxState.Y16State);
@@ -354,11 +348,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_checkboxStates [key] = checkboxState;
 				if (!string.Equals (value.Y15State, checkboxState.Y15State, StringComparison.Ordinal)) {
 					SyncCheckboxVisuals (workbook, sheetName);
-					ApplyBaseAmountHighlight (workbook, sheetName, "Y15", "Y16");
+					ApplyBaseAmountHighlight (workbook, sheetName, LinkedCellCheck2, LinkedCellCheck3);
 				}
 				if (!string.Equals (value.Y16State, checkboxState.Y16State, StringComparison.Ordinal)) {
 					SyncCheckboxVisuals (workbook, sheetName);
-					ApplyBaseAmountHighlight (workbook, sheetName, "Y16", "Y15");
+					ApplyBaseAmountHighlight (workbook, sheetName, LinkedCellCheck3, LinkedCellCheck2);
 				}
 			}
 		}
@@ -401,10 +395,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} finally {
 				_suppressCheckboxEventHandling = false;
 			}
-			if (string.Equals (linkedCellAddress, "Y15", StringComparison.OrdinalIgnoreCase)) {
-				ApplyBaseAmountHighlight (workbook, sheetName, "Y15", "Y16");
-			} else if (string.Equals (linkedCellAddress, "Y16", StringComparison.OrdinalIgnoreCase)) {
-				ApplyBaseAmountHighlight (workbook, sheetName, "Y16", "Y15");
+			if (string.Equals (linkedCellAddress, LinkedCellCheck2, StringComparison.OrdinalIgnoreCase)) {
+				ApplyBaseAmountHighlight (workbook, sheetName, LinkedCellCheck2, LinkedCellCheck3);
+			} else if (string.Equals (linkedCellAddress, LinkedCellCheck3, StringComparison.OrdinalIgnoreCase)) {
+				ApplyBaseAmountHighlight (workbook, sheetName, LinkedCellCheck3, LinkedCellCheck2);
 			}
 			_logger.Info ("Accounting cell checkbox toggled. sheet=" + sheetName + ", visualCell=" + visualCellAddress + ", linkedCell=" + linkedCellAddress + ", nextState=" + flag2);
 		}
@@ -413,9 +407,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			try {
 				_suppressCheckboxEventHandling = true;
-				_accountingWorkbookService.WriteCellValue (workbook, sheetName, "Z15", ReadLinkedBoolean (workbook, sheetName, "Y15") ? "☑" : "□");
-				_accountingWorkbookService.WriteCellValue (workbook, sheetName, "Z16", ReadLinkedBoolean (workbook, sheetName, "Y16") ? "☑" : "□");
-				_accountingWorkbookService.WriteCellValue (workbook, sheetName, "Z24", ReadLinkedBoolean (workbook, sheetName, "Y24") ? "☑" : "□");
+				_accountingWorkbookService.WriteCellValue (workbook, sheetName, VisualCellCheck2, ReadLinkedBoolean (workbook, sheetName, LinkedCellCheck2) ? CheckedMark : UncheckedMark);
+				_accountingWorkbookService.WriteCellValue (workbook, sheetName, VisualCellCheck3, ReadLinkedBoolean (workbook, sheetName, LinkedCellCheck3) ? CheckedMark : UncheckedMark);
+				_accountingWorkbookService.WriteCellValue (workbook, sheetName, VisualCellWithholding, ReadLinkedBoolean (workbook, sheetName, LinkedCellWithholding) ? CheckedMark : UncheckedMark);
 			} finally {
 				_suppressCheckboxEventHandling = false;
 			}
@@ -423,7 +417,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void UpdateTrackedCheckboxState (Workbook workbook, string sheetName)
 		{
-			_checkboxStates [BuildStateKey (workbook, sheetName)] = new CheckboxState (ReadLinkedBoolean (workbook, sheetName, "Y15"), ReadLinkedBoolean (workbook, sheetName, "Y16"));
+			_checkboxStates [BuildStateKey (workbook, sheetName)] = new CheckboxState (ReadLinkedBoolean (workbook, sheetName, LinkedCellCheck2), ReadLinkedBoolean (workbook, sheetName, LinkedCellCheck3));
 		}
 
 		private void RememberNonCheckboxSelection (Workbook workbook, string sheetName, string address)
@@ -448,7 +442,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static bool IsVisualCheckboxCell (string address)
 		{
-			return string.Equals (address, "Z15", StringComparison.OrdinalIgnoreCase) || string.Equals (address, "Z16", StringComparison.OrdinalIgnoreCase) || string.Equals (address, "Z24", StringComparison.OrdinalIgnoreCase);
+			return string.Equals (address, VisualCellCheck2, StringComparison.OrdinalIgnoreCase) || string.Equals (address, VisualCellCheck3, StringComparison.OrdinalIgnoreCase) || string.Equals (address, VisualCellWithholding, StringComparison.OrdinalIgnoreCase);
 		}
 
 		private static bool IsCutCopyInProgress (Microsoft.Office.Interop.Excel.Application application)

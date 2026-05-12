@@ -27,7 +27,7 @@ namespace CaseInfoSystem.Tests
                 Path = @"C:\cases"
             };
 
-            hiddenWorkbook.Windows[1].Visible = false;
+            AddWorkbookWindow(hiddenWorkbook, visible: false);
             application.Workbooks.Add(hiddenWorkbook);
 
             object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
@@ -62,7 +62,7 @@ namespace CaseInfoSystem.Tests
                 Path = @"C:\cases"
             };
 
-            hiddenWorkbook.Windows[1].Visible = false;
+            AddWorkbookWindow(hiddenWorkbook, visible: false);
             application.Workbooks.Add(hiddenWorkbook);
 
             object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
@@ -97,7 +97,7 @@ namespace CaseInfoSystem.Tests
                 Path = @"C:\cases"
             };
 
-            visibleWorkbook.Windows[1].Visible = true;
+            AddWorkbookWindow(visibleWorkbook, visible: true);
             application.Workbooks.Add(visibleWorkbook);
 
             object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
@@ -136,12 +136,15 @@ namespace CaseInfoSystem.Tests
                     && ContainsFragment(message, "outcomeReason=postCloseFollowUpQueued")
                     && ContainsFragment(message, "pendingQueueCount=1")
                     && ContainsFragment(message, "attemptsRemaining=20")
+                    && ContainsFragment(message, "attemptNumber=1")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=5")
+                    && ContainsFragment(message, "excelBusyRetriesRemaining=20")
                     && ContainsFragment(message, "folderPathPresent=True")
                     && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
         }
 
         [Fact]
-        public void ExecutePendingPostCloseQueue_WhenTargetWorkbookStillOpen_LogsDecisionAndDoesNotQuit()
+        public void ExecutePendingPostCloseQueue_WhenTargetWorkbookStillOpen_RetriesInsteadOfTerminalNotRequired()
         {
             var loggerMessages = new List<string>();
             var application = new Excel.Application();
@@ -164,20 +167,122 @@ namespace CaseInfoSystem.Tests
                 message => ContainsFragment(message, "action=post-close-follow-up-request-dequeued")
                     && ContainsFragment(message, @"workbook=C:\cases\case.xlsx")
                     && ContainsFragment(message, "pendingQueueCount=0")
-                    && ContainsFragment(message, "attemptsRemaining=20"));
+                    && ContainsFragment(message, "attemptsRemaining=20")
+                    && ContainsFragment(message, "attemptNumber=1")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=5")
+                    && ContainsFragment(message, "workbooksCount=1")
+                    && ContainsFragment(message, "activeWorkbookPresent=False"));
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "action=post-close-follow-up-decision")
                     && ContainsFragment(message, "targetWorkbookStillOpen=True")
-                    && ContainsFragment(message, "decision=skip-still-open"));
+                    && ContainsFragment(message, "decision=retry-target-still-open")
+                    && ContainsFragment(message, "attemptNumber=1"));
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "action=post-close-follow-up-retry-scheduled")
+                    && ContainsFragment(message, "retryReason=targetWorkbookStillOpen")
+                    && ContainsFragment(message, "retryDelayMs=250")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=True")
+                    && ContainsFragment(message, "attemptNumber=1")
+                    && ContainsFragment(message, "nextAttemptNumber=2")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=4"));
+            Assert.DoesNotContain(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionNotRequired")
+                    && ContainsFragment(message, "outcomeReason=targetWorkbookStillOpen"));
+        }
+
+        [Fact]
+        public void ExecutePendingPostCloseQueue_WhenTargetClosesAfterRetryAndNoVisibleWorkbook_Remains_QuitsExcel()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application
+            {
+                DisplayAlerts = true
+            };
+            var workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\case.xlsx",
+                Name = "case.xlsx",
+                Path = @"C:\cases"
+            };
+
+            AddWorkbookWindow(workbook, visible: false);
+            application.Workbooks.Add(workbook);
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
+
+            InvokeSchedule(scheduler, @"C:\cases\case.xlsx", @"C:\cases");
+            InvokeExecutePendingPostCloseQueue(scheduler);
+
+            application.Workbooks.Remove(workbook);
+            InvokeExecutePendingPostCloseQueue(scheduler);
+
+            Assert.Equal(1, application.QuitCallCount);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "action=post-close-follow-up-decision")
+                    && ContainsFragment(message, @"workbook=C:\cases\case.xlsx")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=False")
+                    && ContainsFragment(message, "decision=scan-visible-workbooks")
+                    && ContainsFragment(message, "attemptNumber=2")
+                    && ContainsFragment(message, "workbooksCount=0")
+                    && ContainsFragment(message, "activeWorkbookPresent=False"));
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "WhiteExcelPreventionCompleted")
+                    && ContainsFragment(message, @"workbook=C:\cases\case.xlsx")
+                    && ContainsFragment(message, "hasVisibleWorkbook=False")
+                    && ContainsFragment(message, "quitAttempted=True")
+                    && ContainsFragment(message, "quitCompleted=True")
+                    && ContainsFragment(message, "outcomeReason=noVisibleWorkbookQuitCompleted")
+                    && ContainsFragment(message, "attemptNumber=2")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=4"));
+        }
+
+        [Fact]
+        public void ExecutePendingPostCloseQueue_WhenTargetStillOpenAfterRetryLimit_DoesNotQuitExcel()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application();
+            var workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\case.xlsx",
+                Name = "case.xlsx",
+                Path = @"C:\cases"
+            };
+
+            application.Workbooks.Add(workbook);
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
+
+            InvokeSchedule(scheduler, @"C:\cases\case.xlsx", @"C:\cases");
+            for (int i = 0; i < 6; i++)
+            {
+                InvokeExecutePendingPostCloseQueue(scheduler);
+            }
+
+            Assert.Equal(0, application.QuitCallCount);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "action=post-close-follow-up-decision")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=True")
+                    && ContainsFragment(message, "decision=skip-still-open-retry-exhausted")
+                    && ContainsFragment(message, "attemptNumber=6")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=0"));
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "WhiteExcelPreventionNotRequired")
                     && ContainsFragment(message, "hasVisibleWorkbook=unknown")
                     && ContainsFragment(message, "quitAttempted=False")
                     && ContainsFragment(message, "quitCompleted=False")
-                    && ContainsFragment(message, "outcomeReason=targetWorkbookStillOpen")
-                    && ContainsFragment(message, "targetWorkbookStillOpen=True"));
+                    && ContainsFragment(message, "outcomeReason=targetWorkbookStillOpenRetryExhausted")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=True")
+                    && ContainsFragment(message, "attemptNumber=6")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=0"));
+            Assert.Equal(
+                5,
+                loggerMessages.FindAll(message => ContainsFragment(message, "action=post-close-follow-up-retry-scheduled")
+                    && ContainsFragment(message, "retryReason=targetWorkbookStillOpen")).Count);
         }
 
         [Fact]
@@ -192,8 +297,9 @@ namespace CaseInfoSystem.Tests
                 Path = @"C:\cases"
             };
 
-            visibleWorkbook.Windows[1].Visible = true;
+            AddWorkbookWindow(visibleWorkbook, visible: true);
             application.Workbooks.Add(visibleWorkbook);
+            application.ActiveWorkbook = visibleWorkbook;
             object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
 
             InvokeSchedule(scheduler, @"C:\cases\closed.xlsx", @"C:\cases");
@@ -205,7 +311,9 @@ namespace CaseInfoSystem.Tests
                 message => ContainsFragment(message, "action=post-close-follow-up-decision")
                     && ContainsFragment(message, @"workbook=C:\cases\closed.xlsx")
                     && ContainsFragment(message, "targetWorkbookStillOpen=False")
-                    && ContainsFragment(message, "decision=scan-visible-workbooks"));
+                    && ContainsFragment(message, "decision=scan-visible-workbooks")
+                    && ContainsFragment(message, "workbooksCount=1")
+                    && ContainsFragment(message, "activeWorkbookPresent=True"));
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "WhiteExcelPreventionNotRequired")
@@ -213,6 +321,8 @@ namespace CaseInfoSystem.Tests
                     && ContainsFragment(message, "quitAttempted=False")
                     && ContainsFragment(message, "quitCompleted=False")
                     && ContainsFragment(message, "outcomeReason=visibleWorkbookExists")
+                    && ContainsFragment(message, "workbooksCount=1")
+                    && ContainsFragment(message, "activeWorkbookPresent=True")
                     && ContainsFragment(message, "targetWorkbookStillOpen=unknown"));
             Assert.False(loggerMessages.Exists(message => ContainsFragment(message, "WhiteExcelPreventionSkipped")));
         }
@@ -344,6 +454,11 @@ namespace CaseInfoSystem.Tests
             return message != null
                 && fragment != null
                 && message.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void AddWorkbookWindow(Excel.Workbook workbook, bool visible)
+        {
+            workbook.Windows.Add(new Excel.Window { Visible = visible });
         }
     }
 }

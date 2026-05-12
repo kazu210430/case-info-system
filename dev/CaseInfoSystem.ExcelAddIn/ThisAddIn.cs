@@ -1354,14 +1354,24 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private bool IsManagedCloseStartupGuardEligible(ManagedCloseStartupFacts facts)
         {
-            return facts != null
-                && !facts.ReadFailed
-                && !facts.ApplicationVisible
-                && !facts.WorkbookOpenObserved
-                && !facts.ActiveWorkbookPresent
-                && facts.WorkbooksCount == 0
-                && !facts.VisibleNonKernelWorkbookExists
-                && !facts.HasOpenKernelWorkbook;
+            if (facts == null
+                || facts.ReadFailed
+                || facts.WorkbookOpenObserved
+                || facts.ActiveWorkbookPresent
+                || facts.WorkbooksCount != 0
+                || facts.VisibleNonKernelWorkbookExists
+                || facts.HasOpenKernelWorkbook)
+            {
+                return false;
+            }
+
+            if (!facts.ApplicationVisible)
+            {
+                return true;
+            }
+
+            return facts.CommandLineHasRestoreSwitch
+                && !facts.CommandLineHasEmbeddingSwitch;
         }
 
         private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase)
@@ -1420,6 +1430,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             facts.CommandLineHasEmbeddingSwitch = ContainsCommandLineSwitch(facts.CommandLine, "embedding")
                 || ContainsCommandLineSwitch(facts.CommandLine, "automation");
+            facts.CommandLineHasRestoreSwitch = ContainsCommandLineSwitch(facts.CommandLine, "restore");
             return facts;
         }
 
@@ -1619,6 +1630,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
             internal bool CommandLineHasEmbeddingSwitch { get; set; }
 
+            internal bool CommandLineHasRestoreSwitch { get; set; }
+
             internal bool ApplicationVisible { get; set; }
 
             internal bool ActiveWorkbookPresent { get; set; }
@@ -1656,6 +1669,7 @@ namespace CaseInfoSystem.ExcelAddIn
                     + ", workbookOpenObserved=" + WorkbookOpenObserved.ToString()
                     + ", applicationVisible=" + ApplicationVisible.ToString()
                     + ", commandLineHasEmbeddingSwitch=" + CommandLineHasEmbeddingSwitch.ToString()
+                    + ", commandLineHasRestoreSwitch=" + CommandLineHasRestoreSwitch.ToString()
                     + ", commandLine=\"" + (CommandLine ?? string.Empty).Replace("\"", "'") + "\""
                     + ", readFailed=" + ReadFailed.ToString()
                     + ", applicationVisibleReadFailed=" + ApplicationVisibleReadFailed.ToString()

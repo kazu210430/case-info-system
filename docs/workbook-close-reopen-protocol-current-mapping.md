@@ -29,8 +29,8 @@
 
 - WorkbookClose は close 前 immutable facts を採取し、close 後 workbook COM object を再参照しない protocol として扱います。
 - reopen は close 済み workbook の延長ではなく、fresh workbook / window / context facts を取得する protocol として扱います。
-- post-close follow-up は close 前に予約された queued key と current `Application.Workbooks` の fresh facts で still-open / visible workbook / quit を判断します。
-- immediate reopen 近接時は follow-up cancel / reopen gating として読まず、current-state では dequeue 時の still-open skip または visible workbook skip として扱います。
+- post-close follow-up は close 前に予約された queued key と current `Application.Workbooks` の fresh facts で still-open / visible workbook / quit を判断します。still-open は初回 terminal skip ではなく短時間 retry 後の terminal skip として扱います。
+- immediate reopen 近接時は follow-up cancel / reopen gating として読まず、current-state では dequeue 時の still-open retry / retry-exhausted skip または visible workbook skip として扱います。
 - white Excel prevention の outcome reason は `docs/white-excel-prevention-boundary-current-state.md` を detail 正本にし、この文書では close / reopen から見た接続点だけを扱います。
 
 ## current mapping summary
@@ -90,7 +90,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | CASE close policy | `CaseWorkbookLifecycleService` | `WorkbookBeforeClose` | out-of-scope / managed / dirty / clean の分岐 | prompt cancel / prompt exception は close cancel 状態を戻す | lifecycle logs | dirty prompt、folder offer |
 | managed close execution | `CaseWorkbookLifecycleService` | dispatcher scheduled action | close 前情報を使って close を試行する。close 成功後の workbook 再参照はしない | close failure は log と message | close error / lifecycle logs | failure dialog title は close 失敗時のみ |
-| post-close white Excel prevention | `PostCloseFollowUpScheduler` | queued follow-up / retry | workbook が閉じており visible workbook が無い場合だけ quit を試行 | Excel busy retry、quit failure log、failure 時 DisplayAlerts restore | `WhiteExcelPreventionQueued` / `NotRequired` / `Completed` / `Failed` | failure 時の追加 UX は current-state では未定義 |
+| post-close white Excel prevention | `PostCloseFollowUpScheduler` | queued follow-up / retry | target still-open は短時間 retry。workbook が閉じており visible workbook が無い場合だけ quit を試行 | target still-open retry、Excel busy retry、quit failure log、failure 時 DisplayAlerts restore | `WhiteExcelPreventionQueued` / `NotRequired` / `Completed` / `Failed` | failure 時の追加 UX は current-state では未定義 |
 | reopen for display | `KernelCasePresentationService` / `CaseWorkbookOpenStrategy` | created CASE success | fresh workbook object を shared/current app から取得し、shared app state を復元する | open failure は opened workbook cleanup と previous window restore | open / display trace | wait UI stage、ready-show |
 | visibility / foreground | `WorkbookWindowVisibilityService` / `ExcelWindowRecoveryService` / `TaskPaneRefreshOrchestrationService` | display handoff / ready-show / refresh | close protocol ではなく display protocol の outcome として記録 | recovery primitive と retry 側 | display / refresh trace | visible pane / foreground |
 | WindowActivate dispatch | `WindowActivatePaneHandlingService` | Excel `WindowActivate` | display refresh request を dispatch / defer / ignore する | recovery owner ではない | `WindowActivateDispatchOutcome` | direct UX owner ではない |
@@ -140,8 +140,9 @@ reopen は close 前 workbook object の継続利用ではなく、新しい wor
 G-0 の詳細な current meaning は `docs/white-excel-prevention-boundary-current-state.md` を参照します。この節は WorkbookClose / reopen protocol から見た接続点を扱います。
 
 - `PostCloseFollowUpScheduler.Schedule(workbookKey, folderPath)` は close 前に予約され、UI queue で遅延実行されます。
-- follow-up はまず workbook key で still-open check を行います。対象 workbook がまだ open の場合、quit しません。
+- follow-up はまず workbook key で still-open check を行います。対象 workbook がまだ open の場合、250ms 間隔で最大 5 回 retry します。
 - 対象 workbook が closed と判定された後、open workbooks の visible window を scan します。
+- retry 上限後も対象 workbook が open の場合、`WhiteExcelPreventionNotRequired` / `targetWorkbookStillOpenRetryExhausted` として quit しません。
 - visible workbook がある場合は `WhiteExcelPreventionNotRequired` として quit しません。
 - visible workbook が無い場合だけ `DisplayAlerts=false` にして `Application.Quit()` を試行し、成功時は `WhiteExcelPreventionCompleted` を記録します。
 - quit 成功時に DisplayAlerts restore は行いません。quit failure 時は snapshot がある場合に DisplayAlerts を restore します。
@@ -156,7 +157,7 @@ E-2 では runtime 条件を変えず、post-close follow-up と immediate reope
 - close 前に `CaseWorkbookLifecycleService` が確定するのは queued key です。`workbook-close-immutable-facts-captured` と `workbook-close-follow-up-facts-captured` は close 前 workbook object から既存フローで得ていた facts を記録します。
 - reopen は別 owner です。interactive created CASE の reopen では `KernelCasePresentationService` / `CaseWorkbookOpenStrategy` が shared/current app 上で fresh workbook object を取得し、以後の workbook / window / DocProperty / TaskPane facts は reopen 後に再取得する facts です。
 - `PostCloseFollowUpScheduler` の still-open 判定は、queued key と current `Application.Workbooks` 列挙から得た fresh open workbook key を比較する判定です。closed workbook object の再参照ではありません。
-- immediate reopen 後の fresh workbook が queued key と一致する場合、current behavior では `targetWorkbookStillOpen=True` / `decision=skip-still-open` として quit せず、`WhiteExcelPreventionNotRequired` の `outcomeReason=targetWorkbookStillOpen` を記録します。これは follow-up cancel ではなく、dequeue 時の still-open skip です。
+- immediate reopen 後の fresh workbook が queued key と一致する場合、current behavior では `targetWorkbookStillOpen=True` / `decision=retry-target-still-open` として短時間 retry します。retry 上限後も一致する場合だけ `WhiteExcelPreventionNotRequired` の `outcomeReason=targetWorkbookStillOpenRetryExhausted` を記録します。これは follow-up cancel ではなく、dequeue 時の still-open retry です。
 - immediate reopen 後の fresh workbook が queued key と一致しない場合でも、visible workbook scan で visible workbook が見つかれば `WhiteExcelPreventionNotRequired` の `outcomeReason=visibleWorkbookExists` として quit しません。この場合、queued key の target は closed と読まれ、fresh visible workbook の存在だけが quit 抑止理由です。
 - still-open が false で、visible workbook も無い場合だけ `Application.Quit()` を試行し、成功時に `WhiteExcelPreventionCompleted` を記録します。quit 成功後に終了中 `Application` を restore しない境界は変えません。
 - `WhiteExcelPreventionFailed` は no visible workbook quit が試行され、例外等で完了しなかった場合の failure trace です。foreground recovery、visibility recovery、WindowActivate dispatch で補完しません。
@@ -166,7 +167,7 @@ E-2 では runtime 条件を変えず、post-close follow-up と immediate reope
 | classification | current decision |
 | --- | --- |
 | E-2a docs 追記のみ | 採用。queued key / fresh reopen facts / still-open / WhiteExcelPrevention outcome の意味を docs で固定します。 |
-| E-2b tests 追加のみ | 今回は未採用。既存 `PostCloseFollowUpSchedulerTests` が visible workbook skip、quit success/failure、still-open skip diagnostic を持つため、まず docs で current behavior を固定します。 |
+| E-2b tests 追加のみ | 2026-05-12 の post-close retry 実装で、still-open retry、retry 後 quit、retry exhaustion の tests を追加しました。 |
 | E-2c diagnostic trace / outcome vocabulary の軽微整合 | 今回は docs vocabulary の意味補足に限定します。runtime trace field や emitted condition は変更しません。 |
 | E-2d private helper 化が必要なもの | 未採用。still-open / visible scan の実装分解は行いません。 |
 | E-2e follow-up cancel / reopen gating / visible 判定 / Quit 条件 | 禁止。今回の整理では実装しません。 |
@@ -232,13 +233,13 @@ current-state 上、`WindowActivate` は次の owner ではありません。
 
 ## tests / trace current mapping
 
-この E-0 では tests を実行しません。読取ベースで current mapping に関係する test coverage は次の通りです。
+E-0 docs-only 時点では tests を実行しませんでした。2026-05-12 の post-close retry 実装では `PostCloseFollowUpSchedulerTests` を追加・更新しています。current mapping に関係する test coverage は次の通りです。
 
 - `WorkbookCloseInteropHelperTests`: optional close arguments の固定
 - `ManagedCloseStateTests`: nested managed close scope と workbook key 判定
 - `CaseWorkbookLifecycleServicePolicyTests`: before-close policy outcome
 - `CaseWorkbookLifecycleServiceThinOrchestrationTests`: dirty prompt、managed close scheduling、clean post-close scheduling、folder offer
-- `PostCloseFollowUpSchedulerTests`: visible workbook check、quit success/failure、DisplayAlerts restore、busy retry
+- `PostCloseFollowUpSchedulerTests`: visible workbook check、quit success/failure、DisplayAlerts restore、target still-open retry、retry 後 quit、retry exhaustion、busy retry
 - `CaseWorkbookOpenStrategyTests`: hidden/session cleanup、retained cleanup、shared app state restore、open failure cleanup
 - `TaskPaneHostLifecycleServiceTests`: close 前 workbook key による host removal
 - `WindowActivatePaneHandlingServiceTests`: WindowActivate dispatch outcome と non-owner 境界

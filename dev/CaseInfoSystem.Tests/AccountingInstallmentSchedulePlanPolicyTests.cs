@@ -55,7 +55,7 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
-		public void ResolveChangeStart_SelectsFirstRoundAtOrAfterChangeRound ()
+		public void ResolveChangeStart_SelectsMatchingChangeRound ()
 		{
 			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> {
 				new AccountingInstallmentScheduleExistingRow (14, 0, 90000, 30000),
@@ -88,7 +88,43 @@ namespace CaseInfoSystem.Tests
 				new AccountingInstallmentScheduleExistingRow (15, 1, 60000, 10000)
 			};
 
-			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 5));
+			InvalidOperationException exception = Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 5));
+
+			Assert.Contains ("変更回 5", exception.Message);
+			Assert.Contains ("既存予定表", exception.Message);
+		}
+
+		[Fact]
+		public void ResolveChangeStart_RejectsSkippedChangeRound ()
+		{
+			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> {
+				new AccountingInstallmentScheduleExistingRow (14, 1, 90000, 30000),
+				new AccountingInstallmentScheduleExistingRow (15, 2, 60000, 10000),
+				new AccountingInstallmentScheduleExistingRow (16, 4, 30000, 0)
+			};
+
+			InvalidOperationException exception = Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 3));
+
+			Assert.Contains ("変更回 3", exception.Message);
+			Assert.Contains ("見つかりません", exception.Message);
+		}
+
+		[Fact]
+		public void EnsureNoExistingScheduleContentAfterTerminator_AllowsBlankUnusedRows ()
+		{
+			AccountingInstallmentSchedulePlanPolicy.EnsureNoExistingScheduleContentAfterTerminator (23, null);
+			AccountingInstallmentSchedulePlanPolicy.EnsureNoExistingScheduleContentAfterTerminator (23, string.Empty);
+		}
+
+		[Fact]
+		public void EnsureNoExistingScheduleContentAfterTerminator_RejectsResidualCellsAfterBlankRound ()
+		{
+			InvalidOperationException exception = Assert.Throws<InvalidOperationException> (
+				() => AccountingInstallmentSchedulePlanPolicy.EnsureNoExistingScheduleContentAfterTerminator (23, "A24"));
+
+			Assert.Contains ("空欄行", exception.Message);
+			Assert.Contains ("A23", exception.Message);
+			Assert.Contains ("A24", exception.Message);
 		}
 
 		[Fact]

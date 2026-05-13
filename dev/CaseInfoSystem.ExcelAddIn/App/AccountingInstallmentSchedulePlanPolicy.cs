@@ -64,14 +64,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 			AccountingInstallmentScheduleExistingRow target = null;
 			foreach (AccountingInstallmentScheduleExistingRow row in rows) {
-				if (row.Round >= changeRound) {
+				if (row.Round == changeRound) {
 					target = row;
 					break;
 				}
 			}
 
 			if (target == null) {
-				throw new InvalidOperationException ("変更回 " + changeRound.ToString (System.Globalization.CultureInfo.InvariantCulture) + " 以降の行が分割払い予定表に存在しません。");
+				throw new InvalidOperationException ("変更回 " + changeRound.ToString (System.Globalization.CultureInfo.InvariantCulture) + " が既存予定表に見つかりません。通常作成後に再度実行してください。");
 			}
 
 			if (target.RowNumber <= FirstScheduleRow) {
@@ -97,6 +97,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 
 			return new AccountingInstallmentScheduleChangeStart (target.RowNumber, previousRowNumber);
+		}
+
+		internal static void EnsureNoExistingScheduleContentAfterTerminator (
+			int terminatorRow,
+			string firstResidualCellAddress)
+		{
+			if (!string.IsNullOrWhiteSpace (firstResidualCellAddress)) {
+				throw new InvalidOperationException (
+					"分割払い予定表の途中に空欄行があります。空欄行: A" +
+					terminatorRow.ToString (System.Globalization.CultureInfo.InvariantCulture) +
+					"、後続または同じ行の残存セル: " + firstResidualCellAddress +
+					"。通常作成で予定表を作り直してください。");
+			}
 		}
 
 		private static bool IsUsableBalance (double value)

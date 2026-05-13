@@ -534,7 +534,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> ();
 			for (int row = AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow; row <= AccountingInstallmentSchedulePlanPolicy.LastScheduleRow; row++) {
-				if (!TryReadScheduleRound (workbook, row, out int round)) {
+				if (!TryReadScheduleRound (workbook, row, out int round, out bool isBlank)) {
+					if (isBlank) {
+						string residualCellAddress = FindFirstResidualScheduleCellAfterTerminator (workbook, row);
+						AccountingInstallmentSchedulePlanPolicy.EnsureNoExistingScheduleContentAfterTerminator (row, residualCellAddress);
+						break;
+					}
+
 					continue;
 				}
 				double billingBalance = TryReadDouble (workbook, "I" + row.ToString (CultureInfo.InvariantCulture), out double billing) ? billing : double.NaN;
@@ -545,23 +551,72 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return rows;
 		}
 
-		private bool TryReadScheduleRound (Workbook workbook, int row, out int round)
+		private bool TryReadScheduleRound (Workbook workbook, int row, out int round, out bool isBlank)
 		{
 			round = 0;
+			isBlank = false;
 			string address = "A" + row.ToString (CultureInfo.InvariantCulture);
 			object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, address);
 			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, SheetName, address);
-			if (AccountingNumericCellReader.TryParseNumericCell (value, displayText, out double parsed, out bool isBlank)) {
+			if (!AccountingNumericCellReader.TryParseNumericCell (value, displayText, out double parsed, out isBlank)) {
 				if (isBlank) {
 					return false;
 				}
-				if (Math.Abs (parsed - Math.Round (parsed)) > 0.0001) {
-					throw new InvalidOperationException (address + " の回数が整数ではありません。");
+
+				throw AccountingNumericCellReader.CreateReadFailureException (SheetName, address, "回数", "AccountingInstallmentSchedule.ReadExistingScheduleRows", displayText, allowBlankAsZero: false);
+			}
+			if (Math.Abs (parsed - Math.Round (parsed)) > 0.0001) {
+				throw new InvalidOperationException (address + " の回数が整数ではありません。");
+			}
+			round = Convert.ToInt32 (Math.Round (parsed), CultureInfo.InvariantCulture);
+			return true;
+		}
+
+		private string FindFirstResidualScheduleCellAfterTerminator (Workbook workbook, int terminatorRow)
+		{
+			string sameRowResidual = FindFirstNonBlankScheduleCell (workbook, terminatorRow, 2);
+			if (!string.IsNullOrWhiteSpace (sameRowResidual)) {
+				return sameRowResidual;
+			}
+
+			return FindFirstNonBlankScheduleCell (workbook, terminatorRow + 1, 1);
+		}
+
+		private string FindFirstNonBlankScheduleCell (Workbook workbook, int startRow, int startColumn)
+		{
+			if (startRow > AccountingInstallmentSchedulePlanPolicy.LastScheduleRow) {
+				return null;
+			}
+
+			int firstColumn = Math.Max (1, startColumn);
+			for (int row = startRow; row <= AccountingInstallmentSchedulePlanPolicy.LastScheduleRow; row++) {
+				for (int column = firstColumn; column <= AccountingInstallmentSchedulePlanPolicy.LastScheduleColumn; column++) {
+					string address = GetScheduleCellAddress (row, column);
+					object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, address);
+					if (!IsBlankCellValue (value)) {
+						return address;
+					}
 				}
-				round = Convert.ToInt32 (Math.Round (parsed), CultureInfo.InvariantCulture);
+				firstColumn = 1;
+			}
+
+			return null;
+		}
+
+		private static string GetScheduleCellAddress (int row, int column)
+		{
+			char columnName = (char)('A' + column - 1);
+			return columnName.ToString () + row.ToString (CultureInfo.InvariantCulture);
+		}
+
+		private static bool IsBlankCellValue (object value)
+		{
+			if (value == null) {
 				return true;
 			}
-			throw AccountingNumericCellReader.CreateReadFailureException (SheetName, address, "回数", "AccountingInstallmentSchedule.ReadExistingScheduleRows", displayText, allowBlankAsZero: false);
+
+			string text = value as string;
+			return text != null && string.IsNullOrWhiteSpace (text);
 		}
 
 		private ScheduleSnapshot TakeScheduleSnapshot (Workbook workbook, int startRow)

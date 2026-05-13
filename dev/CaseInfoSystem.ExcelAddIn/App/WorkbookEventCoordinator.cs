@@ -15,20 +15,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void OnWindowActivate(Excel.Workbook workbook, Excel.Window window)
         {
+            _addin.HandleWindowActivateEvent(workbook, window);
             _accountingWorkbookLifecycleService?.HandleWindowActivated(
                 workbook,
                 window,
                 AccountingInitialSheetSyncPolicy.WindowActivateEventName);
-            _addin.HandleWindowActivateEvent(workbook, window);
         }
 
         internal void OnWindowActivate(WindowActivateTaskPaneTriggerFacts triggerFacts)
         {
+            _addin.HandleWindowActivateEvent(triggerFacts);
             _accountingWorkbookLifecycleService?.HandleWindowActivated(
                 triggerFacts == null ? null : triggerFacts.Workbook,
                 triggerFacts == null ? null : triggerFacts.Window,
                 AccountingInitialSheetSyncPolicy.WindowActivateEventName);
-            _addin.HandleWindowActivateEvent(triggerFacts);
         }
     }
 }

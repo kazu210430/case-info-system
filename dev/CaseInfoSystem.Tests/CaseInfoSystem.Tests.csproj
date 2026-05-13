@@ -45,6 +45,7 @@
     <Compile Include="PathCompatibilityServiceTests.cs" />
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
+    <Compile Include="PostCloseFollowUpSchedulerTests.cs" />
     <Compile Include="CaseWorkbookLifecycleServiceThinOrchestrationTests.cs" />
     <Compile Include="ManagedCloseStateTests.cs" />
     <Compile Include="ManagedCloseStartupGuardPolicyTests.cs" />

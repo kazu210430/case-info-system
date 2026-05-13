@@ -355,7 +355,49 @@ namespace CaseInfoSystem.Tests
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "WhiteExcelPreventionQueued")
-                    && ContainsFragment(message, "managedCloseKind=AccountingClose"));
+                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=20"));
+        }
+
+        [Fact]
+        public void ExecutePendingPostCloseQueue_ForAccountingClose_UsesExtendedTargetStillOpenRetries()
+        {
+            var loggerMessages = new List<string>();
+            var application = new Excel.Application();
+            var workbook = new Excel.Workbook
+            {
+                FullName = @"C:\cases\accounting.xlsx",
+                Name = "accounting.xlsx",
+                Path = @"C:\cases"
+            };
+
+            application.Workbooks.Add(workbook);
+            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
+
+            InvokeScheduleManagedWorkbookClose(
+                scheduler,
+                @"C:\cases\accounting.xlsx",
+                @"C:\cases",
+                ManagedWorkbookCloseMarkerKind.AccountingClose);
+            for (int i = 0; i < 6; i++)
+            {
+                InvokeExecutePendingPostCloseQueue(scheduler);
+            }
+
+            Assert.Equal(0, application.QuitCallCount);
+            Assert.Contains(
+                loggerMessages,
+                message => ContainsFragment(message, "action=post-close-follow-up-decision")
+                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
+                    && ContainsFragment(message, "targetWorkbookStillOpen=True")
+                    && ContainsFragment(message, "decision=retry-target-still-open")
+                    && ContainsFragment(message, "attemptNumber=6")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=15"));
+            Assert.DoesNotContain(
+                loggerMessages,
+                message => ContainsFragment(message, "decision=skip-still-open-retry-exhausted")
+                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
+                    && ContainsFragment(message, "attemptNumber=6"));
         }
 
         [Fact]
@@ -380,26 +422,19 @@ namespace CaseInfoSystem.Tests
 
         private static object CreateScheduler(Excel.Application application, Logger logger, ManagedWorkbookCloseMarkerStore markerStore)
         {
-            Assembly addInAssembly = typeof(PostCloseFollowUpScheduler).Assembly;
-            Type pathCompatibilityServiceType = addInAssembly.GetType("CaseInfoSystem.ExcelAddIn.Infrastructure.PathCompatibilityService", throwOnError: true);
-            Type excelInteropServiceType = addInAssembly.GetType("CaseInfoSystem.ExcelAddIn.Infrastructure.ExcelInteropService", throwOnError: true);
-
-            object pathCompatibilityService = Activator.CreateInstance(pathCompatibilityServiceType, new object[] { null });
-            object excelInteropService = Activator.CreateInstance(excelInteropServiceType, new[] { application, logger, pathCompatibilityService });
-
-            return Activator.CreateInstance(
-                typeof(PostCloseFollowUpScheduler),
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null,
-                args: new object[] { application, excelInteropService, logger, markerStore },
-                culture: null);
+            var pathCompatibilityService = new PathCompatibilityService(logger);
+            var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
+            return new PostCloseFollowUpScheduler(application, excelInteropService, logger, markerStore);
         }
 
         private static void InvokeQuitExcelIfNoVisibleWorkbook(object scheduler)
         {
             MethodInfo method = typeof(PostCloseFollowUpScheduler).GetMethod(
                 "QuitExcelIfNoVisibleWorkbook",
-                BindingFlags.Instance | BindingFlags.NonPublic);
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: Type.EmptyTypes,
+                modifiers: null);
 
             try
             {

@@ -34,6 +34,26 @@ namespace CaseInfoSystem.Tests
         {
             ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
             facts.ParentProcessId = 1234;
+            facts.ApplicationUserControl = true;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.AccountingClose, writerProcessId: 1234));
+
+            Assert.True(decision.IsEligible);
+            Assert.Equal(ManagedCloseStartupGuardPolicy.AccountingCloseOwnedEmptyStartupDelayMs, decision.DelayMs);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+            Assert.Equal(ManagedCloseStartupGuardPolicy.AccountingCloseOwnedEmptyStartupDelayReason, decision.DelayReason);
+        }
+
+        [Fact]
+        public void Decide_UsesShortDelay_ForAccountingCloseAutomationEmptyStartup()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 5678;
+            facts.ApplicationUserControl = false;
+            facts.ApplicationUserControlReadFailed = false;
+            facts.CommandLineHasWorkbookFileArgument = false;
 
             ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
                 facts,
@@ -60,8 +80,10 @@ namespace CaseInfoSystem.Tests
         [Fact]
         public void Decide_ReturnsIneligible_ForVisibleStartupWithoutRestoreSwitch()
         {
-            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
-                CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false));
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ApplicationUserControl = false;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(facts);
 
             Assert.False(decision.IsEligible);
             Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
@@ -72,6 +94,39 @@ namespace CaseInfoSystem.Tests
         {
             ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
             facts.ParentProcessId = 5678;
+            facts.ApplicationUserControl = true;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.AccountingClose, writerProcessId: 1234));
+
+            Assert.False(decision.IsEligible);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+        }
+
+        [Fact]
+        public void Decide_ReturnsIneligible_ForAccountingCloseAutomationStartupWithWorkbookFileArgument()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 5678;
+            facts.ApplicationUserControl = false;
+            facts.CommandLineHasWorkbookFileArgument = true;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.AccountingClose, writerProcessId: 1234));
+
+            Assert.False(decision.IsEligible);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+        }
+
+        [Fact]
+        public void Decide_ReturnsIneligible_ForAccountingCloseAutomationStartupWhenUserControlReadFailed()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 5678;
+            facts.ApplicationUserControl = false;
+            facts.ApplicationUserControlReadFailed = true;
 
             ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
                 facts,
@@ -86,6 +141,7 @@ namespace CaseInfoSystem.Tests
         {
             ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
             facts.ParentProcessId = 1234;
+            facts.ApplicationUserControl = false;
 
             ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
                 facts,
@@ -129,6 +185,7 @@ namespace CaseInfoSystem.Tests
         {
             ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
             facts.ParentProcessId = 1234;
+            facts.ApplicationUserControl = false;
             facts.WorkbooksCount = 1;
 
             ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
@@ -165,7 +222,10 @@ namespace CaseInfoSystem.Tests
                 HasOpenKernelWorkbook = false,
                 WorkbookOpenObserved = false,
                 ReadFailed = false,
-                ParentProcessId = 0
+                ParentProcessId = 0,
+                ApplicationUserControl = true,
+                ApplicationUserControlReadFailed = false,
+                CommandLineHasWorkbookFileArgument = false
             };
         }
 

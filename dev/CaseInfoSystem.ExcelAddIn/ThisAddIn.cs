@@ -1388,7 +1388,10 @@ namespace CaseInfoSystem.ExcelAddIn
                 ApplicationVisible = facts.ApplicationVisible,
                 CommandLineHasRestoreSwitch = facts.CommandLineHasRestoreSwitch,
                 CommandLineHasEmbeddingSwitch = facts.CommandLineHasEmbeddingSwitch,
-                ParentProcessId = facts.ParentProcessId
+                CommandLineHasWorkbookFileArgument = facts.CommandLineHasWorkbookFileArgument,
+                ParentProcessId = facts.ParentProcessId,
+                ApplicationUserControl = facts.ApplicationUserControl,
+                ApplicationUserControlReadFailed = facts.ApplicationUserControlReadFailed
             };
         }
 
@@ -1431,6 +1434,15 @@ namespace CaseInfoSystem.ExcelAddIn
 
             try
             {
+                facts.ApplicationUserControl = Application != null && Application.UserControl;
+            }
+            catch
+            {
+                facts.ApplicationUserControlReadFailed = true;
+            }
+
+            try
+            {
                 Excel.Workbook activeWorkbook = _excelInteropService == null ? null : _excelInteropService.GetActiveWorkbook();
                 facts.ActiveWorkbookPresent = activeWorkbook != null;
                 facts.ActiveWorkbookName = _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookName(activeWorkbook);
@@ -1465,6 +1477,7 @@ namespace CaseInfoSystem.ExcelAddIn
             facts.CommandLineHasEmbeddingSwitch = ContainsCommandLineSwitch(facts.CommandLine, "embedding")
                 || ContainsCommandLineSwitch(facts.CommandLine, "automation");
             facts.CommandLineHasRestoreSwitch = ContainsCommandLineSwitch(facts.CommandLine, "restore");
+            facts.CommandLineHasWorkbookFileArgument = ContainsWorkbookFileArgument(facts.CommandLine);
             return facts;
         }
 
@@ -1690,6 +1703,13 @@ namespace CaseInfoSystem.ExcelAddIn
                 && commandLine.IndexOf(switchName, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static bool ContainsWorkbookFileArgument(string commandLine)
+        {
+            return !string.IsNullOrWhiteSpace(commandLine)
+                && (commandLine.IndexOf(".xls", StringComparison.OrdinalIgnoreCase) >= 0
+                    || commandLine.IndexOf(".xlt", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private void StopManagedCloseStartupGuardTimer()
         {
             if (_managedCloseStartupGuardTimer == null)
@@ -1718,7 +1738,11 @@ namespace CaseInfoSystem.ExcelAddIn
 
             internal bool CommandLineHasRestoreSwitch { get; set; }
 
+            internal bool CommandLineHasWorkbookFileArgument { get; set; }
+
             internal bool ApplicationVisible { get; set; }
+
+            internal bool ApplicationUserControl { get; set; }
 
             internal bool ActiveWorkbookPresent { get; set; }
 
@@ -1735,6 +1759,8 @@ namespace CaseInfoSystem.ExcelAddIn
             internal bool ReadFailed { get; set; }
 
             internal bool ApplicationVisibleReadFailed { get; set; }
+
+            internal bool ApplicationUserControlReadFailed { get; set; }
 
             internal bool ActiveWorkbookReadFailed { get; set; }
 
@@ -1755,11 +1781,14 @@ namespace CaseInfoSystem.ExcelAddIn
                     + ", hasOpenKernelWorkbook=" + HasOpenKernelWorkbook.ToString()
                     + ", workbookOpenObserved=" + WorkbookOpenObserved.ToString()
                     + ", applicationVisible=" + ApplicationVisible.ToString()
+                    + ", applicationUserControl=" + ApplicationUserControl.ToString()
                     + ", commandLineHasEmbeddingSwitch=" + CommandLineHasEmbeddingSwitch.ToString()
                     + ", commandLineHasRestoreSwitch=" + CommandLineHasRestoreSwitch.ToString()
+                    + ", commandLineHasWorkbookFileArgument=" + CommandLineHasWorkbookFileArgument.ToString()
                     + ", commandLine=\"" + (CommandLine ?? string.Empty).Replace("\"", "'") + "\""
                     + ", readFailed=" + ReadFailed.ToString()
                     + ", applicationVisibleReadFailed=" + ApplicationVisibleReadFailed.ToString()
+                    + ", applicationUserControlReadFailed=" + ApplicationUserControlReadFailed.ToString()
                     + ", activeWorkbookReadFailed=" + ActiveWorkbookReadFailed.ToString()
                     + ", workbooksCountReadFailed=" + WorkbooksCountReadFailed.ToString()
                     + ", openWorkbookScanFailed=" + OpenWorkbookScanFailed.ToString();

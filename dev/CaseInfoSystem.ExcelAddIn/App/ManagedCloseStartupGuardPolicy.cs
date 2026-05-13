@@ -20,7 +20,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool CommandLineHasEmbeddingSwitch { get; set; }
 
+        internal bool CommandLineHasWorkbookFileArgument { get; set; }
+
         internal int ParentProcessId { get; set; }
+
+        internal bool ApplicationUserControl { get; set; }
+
+        internal bool ApplicationUserControlReadFailed { get; set; }
     }
 
     internal sealed class ManagedCloseStartupGuardMarkerFacts
@@ -57,7 +63,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
     {
         internal const int DefaultDelayMs = 1000;
         internal const int GuardedRestoreEmptyStartupDelayMs = 250;
-        internal const int AccountingCloseOwnedEmptyStartupDelayMs = 250;
+        internal const int AccountingCloseOwnedEmptyStartupDelayMs = 50;
         internal const string DefaultDelayReason = "defaultEligibleStartupGuard";
         internal const string GuardedRestoreEmptyStartupDelayReason = "guardedRestoreEmptyStartup";
         internal const string AccountingCloseOwnedEmptyStartupDelayReason = "accountingCloseOwnedEmptyStartup";
@@ -153,7 +159,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 && !facts.CommandLineHasEmbeddingSwitch
                 && markerFacts.Kind == ManagedWorkbookCloseMarkerKind.AccountingClose
                 && markerFacts.WriterProcessId > 0
-                && facts.ParentProcessId == markerFacts.WriterProcessId;
+                && (facts.ParentProcessId == markerFacts.WriterProcessId
+                    || IsAccountingCloseAutomationEmptyStartup(facts));
+        }
+
+        private static bool IsAccountingCloseAutomationEmptyStartup(ManagedCloseStartupGuardFacts facts)
+        {
+            return facts != null
+                && !facts.ApplicationUserControlReadFailed
+                && !facts.ApplicationUserControl
+                && !facts.CommandLineHasWorkbookFileArgument;
         }
     }
 }

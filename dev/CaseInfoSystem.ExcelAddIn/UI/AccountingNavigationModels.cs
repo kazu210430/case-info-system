@@ -163,11 +163,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 SectionAction,
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
-                AccountingNavigationActionIds.OpenReverseTool,
-                "逆算ツール",
-                SectionAction,
-                true));
-            definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ShowSaveAsPrompt,
                 "別名保存",
                 SectionAction,
@@ -209,6 +204,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                     true));
             }
 
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.OpenReverseTool,
+                "逆算ツール",
+                SectionAction,
+                true));
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ResetCurrentSheet,
                 "リセット",

@@ -69,7 +69,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             var kernelControl = new KernelNavigationControl();
             kernelControl.ActionInvoked += (sender, e) => _handleKernelActionInvoked(windowKey, e);
-            return new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey);
+            return new TaskPaneHost(_addIn, window, kernelControl, kernelControl, windowKey, _logger);
         }
 
         // Current-state timing fixed point: Accounting also binds before TaskPaneHost construction.
@@ -77,7 +77,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             var accountingControl = new AccountingNavigationControl();
             accountingControl.ActionInvoked += (sender, e) => _handleAccountingActionInvoked(windowKey, e);
-            return new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey);
+            return new TaskPaneHost(_addIn, window, accountingControl, accountingControl, windowKey, _logger);
         }
 
         // Current-state timing fixed point: Case constructs TaskPaneHost first, then binds ActionInvoked.
@@ -85,7 +85,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private TaskPaneHost CreateCaseHost(string windowKey, Excel.Window window)
         {
             var caseControl = new DocumentButtonsControl();
-            var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey);
+            var caseHost = new TaskPaneHost(_addIn, window, caseControl, caseControl, windowKey, _logger);
             caseControl.ActionInvoked += (sender, e) => _handleCaseActionInvoked(windowKey, caseControl, e);
             return caseHost;
         }

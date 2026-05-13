@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.ExcelAddIn.UI;
@@ -42,7 +43,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (TryGetDifferentRegisteredHost(host, out TaskPaneHost existingHost))
             {
-                DisposeHostWithoutRegistryMutation(existingHost);
+                DisposeHostWithoutRegistryMutation(existingHost, "replace-different-registered-host");
             }
 
             StoreRegisteredHost(host);
@@ -74,12 +75,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             // Shutdown cleanup fixed point:
             // snapshot registered hosts -> dispose each host -> clear the shared map.
-            foreach (TaskPaneHost host in SnapshotHosts())
+            List<TaskPaneHost> hosts = SnapshotHosts();
+            _logger.Info(KernelFlickerTracePrefix + " source=TaskPaneManager action=dispose-all-start hostCount=" + hosts.Count.ToString(CultureInfo.InvariantCulture));
+            foreach (TaskPaneHost host in hosts)
             {
-                DisposeHostWithoutRegistryMutation(host);
+                DisposeHostWithoutRegistryMutation(host, "dispose-all");
             }
 
             _hostsByWindowKey.Clear();
+            _logger.Info(KernelFlickerTracePrefix + " source=TaskPaneManager action=dispose-all-complete disposedCount=" + hosts.Count.ToString(CultureInfo.InvariantCulture));
         }
 
         internal void RemoveHost(string windowKey)
@@ -98,7 +102,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // log while the host is still registered -> remove the shared-map entry -> dispose the now-unregistered host.
             LogHostRemoval(host);
             _hostsByWindowKey.Remove(windowKey);
-            DisposeHostAfterRegistryRemoval(windowKey, host);
+            bool disposeSucceeded = DisposeHostAfterRegistryRemoval(windowKey, host);
+            LogHostRemovalComplete(windowKey, host, disposeSucceeded);
         }
 
         private bool TryGetDifferentRegisteredHost(TaskPaneHost host, out TaskPaneHost existingHost)
@@ -142,7 +147,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             // Replacement remove ordering is intentionally fixed in current-state:
             // dispose first, then drop the shared-map entry.
-            DisposeHostWithoutRegistryMutation(existingHost);
+            DisposeHostWithoutRegistryMutation(existingHost, "replace-registered-host");
             _hostsByWindowKey.Remove(windowKey);
         }
 
@@ -177,20 +182,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return new List<TaskPaneHost>(_hostsByWindowKey.Values);
         }
 
-        private static void DisposeHostWithoutRegistryMutation(TaskPaneHost host)
+        private void DisposeHostWithoutRegistryMutation(TaskPaneHost host, string context)
         {
-            host.Dispose();
-        }
-
-        private void DisposeHostAfterRegistryRemoval(string windowKey, TaskPaneHost host)
-        {
+            string windowKey = host?.WindowKey ?? string.Empty;
+            LogHostDisposeStart(context, windowKey, host);
             try
             {
                 host.Dispose();
+                LogHostDisposeComplete(context, windowKey, host);
             }
             catch (Exception ex)
             {
+                LogHostDisposeFailure(context, windowKey, host, ex);
+                throw;
+            }
+        }
+
+        private bool DisposeHostAfterRegistryRemoval(string windowKey, TaskPaneHost host)
+        {
+            LogHostDisposeStart("remove-host", windowKey, host);
+            try
+            {
+                host.Dispose();
+                LogHostDisposeComplete("remove-host", windowKey, host);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogHostDisposeFailure("remove-host", windowKey, host, ex);
                 _logger.Error("TaskPane host dispose failed. windowKey=" + windowKey, ex);
+                return false;
             }
         }
 
@@ -200,6 +221,99 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 KernelFlickerTracePrefix
                 + " source=TaskPaneManager action=remove-host host="
                 + _formatHostDescriptorForDiagnostics(host));
+        }
+
+        private void LogHostRemovalComplete(string windowKey, TaskPaneHost host, bool disposeSucceeded)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=remove-host-complete disposeSucceeded="
+                + disposeSucceeded.ToString()
+                + ", windowKey="
+                + (windowKey ?? string.Empty)
+                + ", host="
+                + FormatSafeHostDescriptor(host));
+        }
+
+        private void LogHostDisposeStart(string context, string windowKey, TaskPaneHost host)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=host-dispose-start context="
+                + (context ?? string.Empty)
+                + ", windowKey="
+                + (windowKey ?? string.Empty)
+                + ", host="
+                + FormatSafeHostDescriptor(host));
+        }
+
+        private void LogHostDisposeComplete(string context, string windowKey, TaskPaneHost host)
+        {
+            _logger?.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=host-dispose-complete context="
+                + (context ?? string.Empty)
+                + ", windowKey="
+                + (windowKey ?? string.Empty)
+                + ", host="
+                + FormatSafeHostDescriptor(host));
+        }
+
+        private void LogHostDisposeFailure(string context, string windowKey, TaskPaneHost host, Exception exception)
+        {
+            _logger?.Error(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=host-dispose-failure context="
+                + (context ?? string.Empty)
+                + ", windowKey="
+                + (windowKey ?? string.Empty)
+                + ", host="
+                + FormatSafeHostDescriptor(host)
+                + ", exceptionType="
+                + exception.GetType().Name
+                + ", hResult=0x"
+                + exception.HResult.ToString("X8", CultureInfo.InvariantCulture)
+                + ", message="
+                + exception.Message,
+                exception);
+        }
+
+        private static string FormatSafeHostDescriptor(TaskPaneHost host)
+        {
+            if (host == null)
+            {
+                return "paneRole=Unknown, windowKey=, workbookFullName=, controlType=";
+            }
+
+            string controlType = host.Control?.GetType().Name ?? string.Empty;
+            return "paneRole="
+                + GetSafePaneRoleName(host)
+                + ", windowKey="
+                + (host.WindowKey ?? string.Empty)
+                + ", workbookFullName="
+                + (host.WorkbookFullName ?? string.Empty)
+                + ", controlType="
+                + controlType;
+        }
+
+        private static string GetSafePaneRoleName(TaskPaneHost host)
+        {
+            if (host?.Control is KernelNavigationControl)
+            {
+                return "Kernel";
+            }
+
+            if (host?.Control is DocumentButtonsControl)
+            {
+                return "Case";
+            }
+
+            if (host?.Control is AccountingNavigationControl)
+            {
+                return "Accounting";
+            }
+
+            return "Unknown";
         }
     }
 }

@@ -250,9 +250,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal void RemoveWorkbookState (Workbook workbook)
 		{
 			if (workbook == null) {
+				_logger.Debug ("AccountingSheetControlService", "RemoveWorkbookState start. workbook=null");
+				_logger.Debug ("AccountingSheetControlService", "RemoveWorkbookState complete. workbook=null, skipped=True");
 				return;
 			}
 			string workbookKey = GetWorkbookKey (workbook);
+			_logger.Debug (
+				"AccountingSheetControlService",
+				"RemoveWorkbookState start. workbook="
+					+ workbookKey
+					+ ", workbookKeyCaptured=True, noWorkbookComAccessAfterKeyCapture=True");
 			List<string> list = new List<string> ();
 			foreach (KeyValuePair<string, CheckboxState> checkboxState in _checkboxStates) {
 				if (checkboxState.Key.StartsWith (workbookKey + "|", StringComparison.OrdinalIgnoreCase)) {
@@ -274,6 +281,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_configuredWorkbookKeys.Remove (workbookKey);
 			_configuringWorkbookKeys.Remove (workbookKey);
 			_logger.Debug ("AccountingSheetControlService", "RemoveWorkbookState workbook=" + workbookKey + ", removedKeys=" + list.Count);
+			_logger.Debug (
+				"AccountingSheetControlService",
+				"RemoveWorkbookState complete. workbook="
+					+ workbookKey
+					+ ", removedKeys="
+					+ list.Count
+					+ ", removedSelectionKeys="
+					+ list2.Count
+					+ ", noWorkbookComAccessAfterKeyCapture=True");
 		}
 
 		internal void EnsureVstoManagedControls (Workbook workbook)

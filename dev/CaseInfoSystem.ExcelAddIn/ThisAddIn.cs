@@ -223,29 +223,61 @@ namespace CaseInfoSystem.ExcelAddIn
                 !DisableSheetChangeForFreezeIsolation);
         }
 
-        private void ThisAddIn_Shutdown(object sender, EventArgs e)
-        {
-            if (_logger != null)
-            {
-                UnhookApplicationEvents();
-                _taskPaneRefreshOrchestrationService?.StopPendingPaneRefreshTimer();
-                _kernelHomeFormHost?.CloseOnShutdown();
+		private void ThisAddIn_Shutdown(object sender, EventArgs e)
+		{
+			if (_logger != null)
+			{
+				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-entry");
+				RunShutdownStep("UnhookApplicationEvents", UnhookApplicationEvents);
+				RunShutdownStep(
+					"StopPendingPaneRefreshTimer",
+					() => _taskPaneRefreshOrchestrationService?.StopPendingPaneRefreshTimer());
+				RunShutdownStep("KernelHomeFormHost.CloseOnShutdown", () => _kernelHomeFormHost?.CloseOnShutdown());
+				RunShutdownStep("TaskPaneManager.DisposeAll", () => _taskPaneManager?.DisposeAll());
+				RunShutdownStep("StopWordWarmupTimer", StopWordWarmupTimer);
+				RunShutdownStep("StopManagedCloseStartupGuardTimer", StopManagedCloseStartupGuardTimer);
+				RunShutdownStep(
+					"ShutdownHiddenApplicationCache",
+					() => _caseWorkbookOpenStrategy?.ShutdownHiddenApplicationCache());
 
-                if (_taskPaneManager != null)
-                {
-                    _taskPaneManager.DisposeAll();
-                }
+				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-before-generated-base-boundary");
+				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-exit");
+				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-complete");
+				_logger.Info("ThisAddIn_Shutdown fired.");
+				return;
+			}
 
-                StopWordWarmupTimer();
-                StopManagedCloseStartupGuardTimer();
-                _caseWorkbookOpenStrategy?.ShutdownHiddenApplicationCache();
+			ExcelAddInTraceLogWriter.Write("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-entry logger=null");
+			ExcelAddInTraceLogWriter.Write("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-before-generated-base-boundary logger=null");
+			ExcelAddInTraceLogWriter.Write("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-exit logger=null");
+			ExcelAddInTraceLogWriter.Write("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-complete logger=null");
+			ExcelAddInTraceLogWriter.Write("ThisAddIn_Shutdown fired.");
+		}
 
-                _logger.Info("ThisAddIn_Shutdown fired.");
-                return;
-            }
+		private void RunShutdownStep(string stepName, Action action)
+		{
+			_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-step-start step=" + stepName);
 
-            ExcelAddInTraceLogWriter.Write("ThisAddIn_Shutdown fired.");
-        }
+			try
+			{
+				action?.Invoke();
+				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-step-complete step=" + stepName);
+			}
+			catch (Exception exception)
+			{
+				_logger.Error(
+					"[KernelFlickerTrace] source=ThisAddIn action=shutdown-step-failure step="
+						+ stepName
+						+ ", exceptionType="
+						+ exception.GetType().Name
+						+ ", hResult=0x"
+						+ exception.HResult.ToString("X8", CultureInfo.InvariantCulture)
+						+ ", message="
+						+ exception.Message,
+					exception);
+				throw;
+			}
+		}
 
         private void InternalStartup()
         {

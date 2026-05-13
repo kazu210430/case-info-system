@@ -8,10 +8,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		internal const string WorkbookActivateEventName = "WorkbookActivate";
 
+		internal const string WindowActivateEventName = "WindowActivate";
+
 		internal static bool ShouldSynchronizeActiveSheet (string eventName, bool isAccountingWorkbook)
 		{
 			return isAccountingWorkbook
-				&& string.Equals (eventName, WorkbookActivateEventName, StringComparison.OrdinalIgnoreCase);
+				&& string.Equals (eventName, WindowActivateEventName, StringComparison.OrdinalIgnoreCase);
 		}
 	}
 }

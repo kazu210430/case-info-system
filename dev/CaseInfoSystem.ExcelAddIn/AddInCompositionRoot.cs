@@ -328,7 +328,7 @@ namespace CaseInfoSystem.ExcelAddIn
                 transientPaneSuppressionService,
                 ExcelInteropService,
                 _logger);
-            WorkbookEventCoordinator = new WorkbookEventCoordinator(_addIn);
+            WorkbookEventCoordinator = new WorkbookEventCoordinator(_addIn, accountingWorkbookLifecycleService);
             KernelHomeCasePaneSuppressionCoordinator = new KernelHomeCasePaneSuppressionCoordinator(
                 WorkbookRoleResolver,
                 ExcelInteropService,

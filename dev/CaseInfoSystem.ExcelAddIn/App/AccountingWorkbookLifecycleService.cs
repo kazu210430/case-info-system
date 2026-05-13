@@ -58,8 +58,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			EnsureWorkbookInitialized (workbook);
 			if (AccountingInitialSheetSyncPolicy.ShouldSynchronizeActiveSheet (eventName, isAccountingWorkbook)) {
-				SynchronizeActiveSheetFromWorkbookActivation (workbook, eventName);
+				SynchronizeActiveSheetFromWindowActivation (workbook, ResolveActiveSheetWindow (workbook), eventName);
 			}
+		}
+
+		internal void HandleWindowActivated (Workbook workbook, Window window, string eventName)
+		{
+			bool isAccountingWorkbook = _workbookRoleResolver.IsAccountingWorkbook (workbook);
+			if (!AccountingInitialSheetSyncPolicy.ShouldSynchronizeActiveSheet (eventName, isAccountingWorkbook)) {
+				return;
+			}
+			if (window == null) {
+				_logger.Info ("Accounting workbook active sheet sync skipped. reason=" + (eventName ?? string.Empty) + ", eventWindowMissing=True, workbook=" + GetWorkbookKey (workbook));
+				return;
+			}
+			EnsureWorkbookInitialized (workbook);
+			SynchronizeActiveSheetFromWindowActivation (workbook, window, eventName);
 		}
 
 		internal void HandleSheetActivated (object sheetObject)
@@ -67,13 +81,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (!(sheetObject is Worksheet worksheet)) {
 				return;
 			}
-			HandleActivatedWorksheet (worksheet, "SheetActivate");
+			HandleActivatedWorksheet (worksheet, "SheetActivate", null);
 		}
 
-		private void SynchronizeActiveSheetFromWorkbookActivation (Workbook workbook, string eventName)
+		private void SynchronizeActiveSheetFromWindowActivation (Workbook workbook, Window window, string eventName)
 		{
 			string workbookKey = GetWorkbookKey (workbook);
 			if (string.IsNullOrWhiteSpace (workbookKey) || _activeSheetSynchronizedWorkbookKeys.Contains (workbookKey)) {
+				return;
+			}
+			if (window == null) {
+				_logger.Info ("Accounting workbook active sheet sync skipped. reason=" + (eventName ?? string.Empty) + ", windowMissing=True, workbook=" + workbookKey);
 				return;
 			}
 			Worksheet worksheet = null;
@@ -83,7 +101,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_logger.Info ("Accounting workbook active sheet sync skipped. reason=" + (eventName ?? string.Empty) + ", activeSheetMissing=True, workbook=" + workbookKey);
 					return;
 				}
-				if (HandleActivatedWorksheet (worksheet, eventName)) {
+				if (HandleActivatedWorksheet (worksheet, eventName, window)) {
 					_activeSheetSynchronizedWorkbookKeys.Add (workbookKey);
 				}
 			} catch (Exception exception) {
@@ -93,7 +111,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private bool HandleActivatedWorksheet (Worksheet worksheet, string eventName)
+		private bool HandleActivatedWorksheet (Worksheet worksheet, string eventName, Window activatedWindow)
 		{
 			Workbook workbook = null;
 			try {
@@ -117,7 +135,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_accountingWorkbookService.ClearAccountingImportTargetHighlight (workbook);
 				}
 				_accountingPaymentHistoryImportService.HandleSheetActivated (workbook, text);
-				_accountingFormHelperService.HandleSheetActivated (workbook, ResolveActiveSheetWindow (workbook), text);
+				_accountingFormHelperService.HandleSheetActivated (workbook, activatedWindow ?? ResolveActiveSheetWindow (workbook), text);
 				return true;
 			} catch (Exception exception) {
 				_logger.Error ("Accounting workbook sheet activation handling failed.", exception);

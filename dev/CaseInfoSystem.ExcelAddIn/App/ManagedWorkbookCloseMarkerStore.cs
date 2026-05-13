@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -41,14 +40,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             DateTime createdUtc = _utcNow();
-            int writerProcessId = SafeGetCurrentProcessId();
             string[] lines =
             {
                 "version=" + VersionValue,
                 "kind=" + kind.ToString(),
                 "createdUtc=" + createdUtc.ToString("O", CultureInfo.InvariantCulture),
                 "ttlSeconds=" + DefaultTimeToLiveSeconds.ToString(CultureInfo.InvariantCulture),
-                "writerProcessId=" + writerProcessId.ToString(CultureInfo.InvariantCulture),
                 "workbookKeyBase64=" + Encode(workbookKey)
             };
 
@@ -147,16 +144,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             string workbookKeyBase64;
             values.TryGetValue("workbookKeyBase64", out workbookKeyBase64);
 
-            int writerProcessId = 0;
-            string writerProcessIdText;
-            if (values.TryGetValue("writerProcessId", out writerProcessIdText)
-                && (!int.TryParse(writerProcessIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out writerProcessId)
-                    || writerProcessId < 0))
-            {
-                writerProcessId = 0;
-            }
-
-            return new ManagedWorkbookCloseMarker(kind, createdUtc.ToUniversalTime(), ttlSeconds, Decode(workbookKeyBase64), writerProcessId);
+            return new ManagedWorkbookCloseMarker(kind, createdUtc.ToUniversalTime(), ttlSeconds, Decode(workbookKeyBase64));
         }
 
         private void TryDelete()
@@ -195,17 +183,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
         }
 
-        private static int SafeGetCurrentProcessId()
-        {
-            try
-            {
-                return Process.GetCurrentProcess().Id;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
     }
 
     internal sealed class ManagedWorkbookCloseMarker
@@ -214,14 +191,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             ManagedWorkbookCloseMarkerKind kind,
             DateTime createdUtc,
             int timeToLiveSeconds,
-            string workbookKey,
-            int writerProcessId)
+            string workbookKey)
         {
             Kind = kind;
             CreatedUtc = createdUtc;
             TimeToLiveSeconds = timeToLiveSeconds;
             WorkbookKey = workbookKey ?? string.Empty;
-            WriterProcessId = writerProcessId;
         }
 
         internal ManagedWorkbookCloseMarkerKind Kind { get; }
@@ -231,8 +206,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal int TimeToLiveSeconds { get; }
 
         internal string WorkbookKey { get; }
-
-        internal int WriterProcessId { get; }
     }
 
     internal enum ManagedWorkbookCloseMarkerReadStatus

@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -1290,16 +1289,14 @@ namespace CaseInfoSystem.ExcelAddIn
 
             LogManagedCloseStartupMarker(markerResult);
             bool hasValidStartupMarker = markerResult != null && markerResult.IsValid;
-            ManagedCloseStartupFacts startupFacts = CaptureManagedCloseStartupFacts("startup", hasValidStartupMarker);
+            ManagedCloseStartupFacts startupFacts = CaptureManagedCloseStartupFacts("startup");
             LogManagedCloseStartupFacts(startupFacts, markerResult);
             if (!hasValidStartupMarker)
             {
                 return;
             }
 
-            ManagedCloseStartupGuardDelayDecision startupGuardDecision = ManagedCloseStartupGuardPolicy.Decide(
-                ToManagedCloseStartupGuardFacts(startupFacts),
-                ToManagedCloseStartupGuardMarkerFacts(markerResult));
+            ManagedCloseStartupGuardDelayDecision startupGuardDecision = ManagedCloseStartupGuardPolicy.Decide(ToManagedCloseStartupGuardFacts(startupFacts));
             if (!startupGuardDecision.IsEligible)
             {
                 _logger?.Info(
@@ -1332,9 +1329,9 @@ namespace CaseInfoSystem.ExcelAddIn
         private void ExecuteManagedCloseStartupGuard(ManagedWorkbookCloseMarkerReadResult markerResult)
         {
             bool hasValidStartupMarker = markerResult != null && markerResult.IsValid;
-            ManagedCloseStartupFacts delayedFacts = CaptureManagedCloseStartupFacts("delayed", hasValidStartupMarker);
+            ManagedCloseStartupFacts delayedFacts = CaptureManagedCloseStartupFacts("delayed");
             LogManagedCloseStartupFacts(delayedFacts, markerResult);
-            if (!IsManagedCloseStartupGuardEligible(delayedFacts, markerResult))
+            if (!IsManagedCloseStartupGuardEligible(delayedFacts))
             {
                 _logger?.Info(
                     "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
@@ -1345,9 +1342,9 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
-            ManagedCloseStartupFacts preQuitFacts = CaptureManagedCloseStartupFacts("preQuit", hasValidStartupMarker);
+            ManagedCloseStartupFacts preQuitFacts = CaptureManagedCloseStartupFacts("preQuit");
             LogManagedCloseStartupFacts(preQuitFacts, markerResult);
-            if (!IsManagedCloseStartupGuardEligible(preQuitFacts, markerResult))
+            if (!IsManagedCloseStartupGuardEligible(preQuitFacts))
             {
                 _logger?.Info(
                     "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
@@ -1361,13 +1358,10 @@ namespace CaseInfoSystem.ExcelAddIn
             QuitEmptyStartupExcelForManagedClose(markerResult, preQuitFacts);
         }
 
-        private bool IsManagedCloseStartupGuardEligible(
-            ManagedCloseStartupFacts facts,
-            ManagedWorkbookCloseMarkerReadResult markerResult)
+        private bool IsManagedCloseStartupGuardEligible(ManagedCloseStartupFacts facts)
         {
             return ManagedCloseStartupGuardPolicy.IsEligible(
-                ToManagedCloseStartupGuardFacts(facts),
-                ToManagedCloseStartupGuardMarkerFacts(markerResult));
+                ToManagedCloseStartupGuardFacts(facts));
         }
 
         private static ManagedCloseStartupGuardFacts ToManagedCloseStartupGuardFacts(ManagedCloseStartupFacts facts)
@@ -1387,29 +1381,11 @@ namespace CaseInfoSystem.ExcelAddIn
                 HasOpenKernelWorkbook = facts.HasOpenKernelWorkbook,
                 ApplicationVisible = facts.ApplicationVisible,
                 CommandLineHasRestoreSwitch = facts.CommandLineHasRestoreSwitch,
-                CommandLineHasEmbeddingSwitch = facts.CommandLineHasEmbeddingSwitch,
-                CommandLineHasWorkbookFileArgument = facts.CommandLineHasWorkbookFileArgument,
-                ParentProcessId = facts.ParentProcessId,
-                ApplicationUserControl = facts.ApplicationUserControl,
-                ApplicationUserControlReadFailed = facts.ApplicationUserControlReadFailed
+                CommandLineHasEmbeddingSwitch = facts.CommandLineHasEmbeddingSwitch
             };
         }
 
-        private static ManagedCloseStartupGuardMarkerFacts ToManagedCloseStartupGuardMarkerFacts(ManagedWorkbookCloseMarkerReadResult markerResult)
-        {
-            if (markerResult == null || !markerResult.IsValid || markerResult.Marker == null)
-            {
-                return null;
-            }
-
-            return new ManagedCloseStartupGuardMarkerFacts
-            {
-                Kind = markerResult.Marker.Kind,
-                WriterProcessId = markerResult.Marker.WriterProcessId
-            };
-        }
-
-        private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase, bool captureParentProcessId)
+        private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase)
         {
             int currentProcessId = SafeGetCurrentProcessId();
             var facts = new ManagedCloseStartupFacts
@@ -1417,7 +1393,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 Phase = phase ?? string.Empty,
                 WorkbookOpenObserved = _workbookOpenObservedSinceStartup,
                 ProcessId = currentProcessId,
-                ParentProcessId = captureParentProcessId ? SafeGetParentProcessId(currentProcessId) : 0,
                 ProcessStartTime = SafeGetProcessStartTime(),
                 CommandLine = SafeGetCommandLine()
             };
@@ -1430,15 +1405,6 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 facts.ReadFailed = true;
                 facts.ApplicationVisibleReadFailed = true;
-            }
-
-            try
-            {
-                facts.ApplicationUserControl = Application != null && Application.UserControl;
-            }
-            catch
-            {
-                facts.ApplicationUserControlReadFailed = true;
             }
 
             try
@@ -1477,7 +1443,6 @@ namespace CaseInfoSystem.ExcelAddIn
             facts.CommandLineHasEmbeddingSwitch = ContainsCommandLineSwitch(facts.CommandLine, "embedding")
                 || ContainsCommandLineSwitch(facts.CommandLine, "automation");
             facts.CommandLineHasRestoreSwitch = ContainsCommandLineSwitch(facts.CommandLine, "restore");
-            facts.CommandLineHasWorkbookFileArgument = ContainsWorkbookFileArgument(facts.CommandLine);
             return facts;
         }
 
@@ -1618,7 +1583,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 + ", markerKind=" + (marker == null ? string.Empty : marker.Kind.ToString())
                 + ", markerCreatedUtc=" + (marker == null ? string.Empty : marker.CreatedUtc.ToString("O", CultureInfo.InvariantCulture))
                 + ", markerTtlSeconds=" + (marker == null ? string.Empty : marker.TimeToLiveSeconds.ToString(CultureInfo.InvariantCulture))
-                + ", markerWriterPid=" + (marker == null ? string.Empty : marker.WriterProcessId.ToString(CultureInfo.InvariantCulture))
                 + ", markerAgeMs=" + (markerResult.Age.HasValue ? ((long)markerResult.Age.Value.TotalMilliseconds).ToString(CultureInfo.InvariantCulture) : string.Empty)
                 + ", markerPath=" + markerResult.MarkerPath;
         }
@@ -1633,43 +1597,6 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 return 0;
             }
-        }
-
-        private static int SafeGetParentProcessId(int processId)
-        {
-            if (processId <= 0)
-            {
-                return 0;
-            }
-
-            try
-            {
-                string query = "SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=" + processId.ToString(CultureInfo.InvariantCulture);
-                using (var searcher = new ManagementObjectSearcher(query))
-                using (ManagementObjectCollection results = searcher.Get())
-                {
-                    foreach (ManagementBaseObject result in results)
-                    {
-                        object parentProcessId = result["ParentProcessId"];
-                        int parsedParentProcessId;
-                        if (parentProcessId != null
-                            && int.TryParse(
-                                Convert.ToString(parentProcessId, CultureInfo.InvariantCulture),
-                                NumberStyles.Integer,
-                                CultureInfo.InvariantCulture,
-                                out parsedParentProcessId)
-                            && parsedParentProcessId > 0)
-                        {
-                            return parsedParentProcessId;
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return 0;
         }
 
         private static DateTime SafeGetProcessStartTime()
@@ -1703,13 +1630,6 @@ namespace CaseInfoSystem.ExcelAddIn
                 && commandLine.IndexOf(switchName, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static bool ContainsWorkbookFileArgument(string commandLine)
-        {
-            return !string.IsNullOrWhiteSpace(commandLine)
-                && (commandLine.IndexOf(".xls", StringComparison.OrdinalIgnoreCase) >= 0
-                    || commandLine.IndexOf(".xlt", StringComparison.OrdinalIgnoreCase) >= 0);
-        }
-
         private void StopManagedCloseStartupGuardTimer()
         {
             if (_managedCloseStartupGuardTimer == null)
@@ -1728,8 +1648,6 @@ namespace CaseInfoSystem.ExcelAddIn
 
             internal int ProcessId { get; set; }
 
-            internal int ParentProcessId { get; set; }
-
             internal DateTime ProcessStartTime { get; set; }
 
             internal string CommandLine { get; set; }
@@ -1738,11 +1656,7 @@ namespace CaseInfoSystem.ExcelAddIn
 
             internal bool CommandLineHasRestoreSwitch { get; set; }
 
-            internal bool CommandLineHasWorkbookFileArgument { get; set; }
-
             internal bool ApplicationVisible { get; set; }
-
-            internal bool ApplicationUserControl { get; set; }
 
             internal bool ActiveWorkbookPresent { get; set; }
 
@@ -1760,8 +1674,6 @@ namespace CaseInfoSystem.ExcelAddIn
 
             internal bool ApplicationVisibleReadFailed { get; set; }
 
-            internal bool ApplicationUserControlReadFailed { get; set; }
-
             internal bool ActiveWorkbookReadFailed { get; set; }
 
             internal bool WorkbooksCountReadFailed { get; set; }
@@ -1772,7 +1684,6 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 return ", phase=" + (Phase ?? string.Empty)
                     + ", pid=" + ProcessId.ToString(CultureInfo.InvariantCulture)
-                    + ", parentPid=" + ParentProcessId.ToString(CultureInfo.InvariantCulture)
                     + ", processStartTime=" + (ProcessStartTime == DateTime.MinValue ? string.Empty : ProcessStartTime.ToString("O", CultureInfo.InvariantCulture))
                     + ", activeWorkbookPresent=" + ActiveWorkbookPresent.ToString()
                     + ", activeWorkbookName=" + (ActiveWorkbookName ?? string.Empty)
@@ -1781,14 +1692,11 @@ namespace CaseInfoSystem.ExcelAddIn
                     + ", hasOpenKernelWorkbook=" + HasOpenKernelWorkbook.ToString()
                     + ", workbookOpenObserved=" + WorkbookOpenObserved.ToString()
                     + ", applicationVisible=" + ApplicationVisible.ToString()
-                    + ", applicationUserControl=" + ApplicationUserControl.ToString()
                     + ", commandLineHasEmbeddingSwitch=" + CommandLineHasEmbeddingSwitch.ToString()
                     + ", commandLineHasRestoreSwitch=" + CommandLineHasRestoreSwitch.ToString()
-                    + ", commandLineHasWorkbookFileArgument=" + CommandLineHasWorkbookFileArgument.ToString()
                     + ", commandLine=\"" + (CommandLine ?? string.Empty).Replace("\"", "'") + "\""
                     + ", readFailed=" + ReadFailed.ToString()
                     + ", applicationVisibleReadFailed=" + ApplicationVisibleReadFailed.ToString()
-                    + ", applicationUserControlReadFailed=" + ApplicationUserControlReadFailed.ToString()
                     + ", activeWorkbookReadFailed=" + ActiveWorkbookReadFailed.ToString()
                     + ", workbooksCountReadFailed=" + WorkbooksCountReadFailed.ToString()
                     + ", openWorkbookScanFailed=" + OpenWorkbookScanFailed.ToString();

@@ -328,7 +328,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ScheduleManagedWorkbookClose_ForAccountingClose_WritesShortTtlMarkerAndLogsKind()
+        public void Schedule_WritesCaseCloseMarkerAndLogsKind()
         {
             var loggerMessages = new List<string>();
             var application = new Excel.Application();
@@ -336,69 +336,25 @@ namespace CaseInfoSystem.Tests
             var markerStore = new ManagedWorkbookCloseMarkerStore(markerPath, () => new DateTime(2026, 5, 12, 0, 0, 0, DateTimeKind.Utc));
             object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages), markerStore);
 
-            InvokeScheduleManagedWorkbookClose(
-                scheduler,
-                @"C:\cases\accounting.xlsx",
-                @"C:\cases",
-                ManagedWorkbookCloseMarkerKind.AccountingClose);
+            InvokeSchedule(scheduler, @"C:\cases\case.xlsx", @"C:\cases");
 
+            string markerText = File.ReadAllText(markerPath);
+            Assert.DoesNotContain("writerProcessId=", markerText);
             ManagedWorkbookCloseMarkerReadResult markerResult = markerStore.Consume();
             Assert.True(markerResult.IsValid);
-            Assert.Equal(ManagedWorkbookCloseMarkerKind.AccountingClose, markerResult.Marker.Kind);
+            Assert.Equal(ManagedWorkbookCloseMarkerKind.CaseClose, markerResult.Marker.Kind);
             Assert.Equal(ManagedWorkbookCloseMarkerStore.DefaultTimeToLiveSeconds, markerResult.Marker.TimeToLiveSeconds);
-            Assert.Equal(@"C:\cases\accounting.xlsx", markerResult.Marker.WorkbookKey);
-            Assert.True(markerResult.Marker.WriterProcessId > 0);
+            Assert.Equal(@"C:\cases\case.xlsx", markerResult.Marker.WorkbookKey);
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "action=managed-close-marker-written")
-                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
+                    && ContainsFragment(message, "managedCloseKind=CaseClose")
                     && ContainsFragment(message, "ttlSeconds=15"));
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "WhiteExcelPreventionQueued")
-                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
-                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=20"));
-        }
-
-        [Fact]
-        public void ExecutePendingPostCloseQueue_ForAccountingClose_UsesExtendedTargetStillOpenRetries()
-        {
-            var loggerMessages = new List<string>();
-            var application = new Excel.Application();
-            var workbook = new Excel.Workbook
-            {
-                FullName = @"C:\cases\accounting.xlsx",
-                Name = "accounting.xlsx",
-                Path = @"C:\cases"
-            };
-
-            application.Workbooks.Add(workbook);
-            object scheduler = CreateScheduler(application, OrchestrationTestSupport.CreateLogger(loggerMessages));
-
-            InvokeScheduleManagedWorkbookClose(
-                scheduler,
-                @"C:\cases\accounting.xlsx",
-                @"C:\cases",
-                ManagedWorkbookCloseMarkerKind.AccountingClose);
-            for (int i = 0; i < 6; i++)
-            {
-                InvokeExecutePendingPostCloseQueue(scheduler);
-            }
-
-            Assert.Equal(0, application.QuitCallCount);
-            Assert.Contains(
-                loggerMessages,
-                message => ContainsFragment(message, "action=post-close-follow-up-decision")
-                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
-                    && ContainsFragment(message, "targetWorkbookStillOpen=True")
-                    && ContainsFragment(message, "decision=retry-target-still-open")
-                    && ContainsFragment(message, "attemptNumber=6")
-                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=15"));
-            Assert.DoesNotContain(
-                loggerMessages,
-                message => ContainsFragment(message, "decision=skip-still-open-retry-exhausted")
-                    && ContainsFragment(message, "managedCloseKind=AccountingClose")
-                    && ContainsFragment(message, "attemptNumber=6"));
+                    && ContainsFragment(message, "managedCloseKind=CaseClose")
+                    && ContainsFragment(message, "targetStillOpenRetriesRemaining=5"));
         }
 
         [Fact]
@@ -454,19 +410,6 @@ namespace CaseInfoSystem.Tests
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             method.Invoke(scheduler, new object[] { workbookKey, folderPath });
-        }
-
-        private static void InvokeScheduleManagedWorkbookClose(
-            object scheduler,
-            string workbookKey,
-            string folderPath,
-            ManagedWorkbookCloseMarkerKind closeKind)
-        {
-            MethodInfo method = typeof(PostCloseFollowUpScheduler).GetMethod(
-                "ScheduleManagedWorkbookClose",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-
-            method.Invoke(scheduler, new object[] { workbookKey, folderPath, closeKind });
         }
 
         private static void InvokeExecutePendingPostCloseQueue(object scheduler)

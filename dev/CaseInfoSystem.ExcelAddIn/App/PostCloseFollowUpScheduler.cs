@@ -14,7 +14,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const int ExcelBusyRetryCount = 20;
         private const int ExcelBusyRetryIntervalMs = 500;
         private const int TargetStillOpenRetryCount = 5;
-        private const int AccountingTargetStillOpenRetryCount = 20;
         private const int TargetStillOpenRetryIntervalMs = 250;
         private const string WhiteExcelPreventionQueued = "WhiteExcelPreventionQueued";
         private const string WhiteExcelPreventionNotRequired = "WhiteExcelPreventionNotRequired";
@@ -51,22 +50,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal void Schedule(string workbookKey, string folderPath)
         {
-            ScheduleManagedWorkbookClose(workbookKey, folderPath, ManagedWorkbookCloseMarkerKind.CaseClose);
-        }
-
-        internal void ScheduleManagedWorkbookClose(string workbookKey, string folderPath, ManagedWorkbookCloseMarkerKind closeKind)
-        {
             if (string.IsNullOrWhiteSpace(workbookKey))
             {
                 return;
             }
 
+            ManagedWorkbookCloseMarkerKind closeKind = ManagedWorkbookCloseMarkerKind.CaseClose;
             TryWriteManagedCloseMarker(closeKind, workbookKey);
             PostCloseFollowUpRequest queuedRequest = new PostCloseFollowUpRequest(
                 workbookKey,
                 folderPath,
                 attemptNumber: 1,
-                targetStillOpenRetriesRemaining: GetTargetStillOpenRetryCount(closeKind),
+                targetStillOpenRetriesRemaining: TargetStillOpenRetryCount,
                 excelBusyRetriesRemaining: ExcelBusyRetryCount,
                 closeKind: closeKind);
             _pendingPostCloseQueue.Enqueue(queuedRequest);
@@ -394,13 +389,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return request != null && request.TargetStillOpenRetriesRemaining > 0
                 ? "retry-target-still-open"
                 : "skip-still-open-retry-exhausted";
-        }
-
-        private static int GetTargetStillOpenRetryCount(ManagedWorkbookCloseMarkerKind closeKind)
-        {
-            return closeKind == ManagedWorkbookCloseMarkerKind.AccountingClose
-                ? AccountingTargetStillOpenRetryCount
-                : TargetStillOpenRetryCount;
         }
 
         private void LogPostCloseRetryScheduled(

@@ -19,6 +19,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal bool CommandLineHasRestoreSwitch { get; set; }
 
         internal bool CommandLineHasEmbeddingSwitch { get; set; }
+
+        internal int ParentProcessId { get; set; }
+    }
+
+    internal sealed class ManagedCloseStartupGuardMarkerFacts
+    {
+        internal ManagedWorkbookCloseMarkerKind Kind { get; set; }
+
+        internal int WriterProcessId { get; set; }
     }
 
     internal sealed class ManagedCloseStartupGuardDelayDecision
@@ -48,13 +57,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
     {
         internal const int DefaultDelayMs = 1000;
         internal const int GuardedRestoreEmptyStartupDelayMs = 250;
+        internal const int AccountingCloseOwnedEmptyStartupDelayMs = 250;
         internal const string DefaultDelayReason = "defaultEligibleStartupGuard";
         internal const string GuardedRestoreEmptyStartupDelayReason = "guardedRestoreEmptyStartup";
+        internal const string AccountingCloseOwnedEmptyStartupDelayReason = "accountingCloseOwnedEmptyStartup";
         internal const string NotEligibleDelayReason = "notEligible";
 
         internal static ManagedCloseStartupGuardDelayDecision Decide(ManagedCloseStartupGuardFacts facts)
         {
-            if (!IsEligible(facts))
+            return Decide(facts, null);
+        }
+
+        internal static ManagedCloseStartupGuardDelayDecision Decide(
+            ManagedCloseStartupGuardFacts facts,
+            ManagedCloseStartupGuardMarkerFacts markerFacts)
+        {
+            if (!IsEligible(facts, markerFacts))
             {
                 return new ManagedCloseStartupGuardDelayDecision(
                     isEligible: false,
@@ -72,6 +90,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     usesGuardedRestoreEmptyStartupDelay: true);
             }
 
+            if (IsAccountingCloseOwnedEmptyStartup(facts, markerFacts))
+            {
+                return new ManagedCloseStartupGuardDelayDecision(
+                    isEligible: true,
+                    delayMs: AccountingCloseOwnedEmptyStartupDelayMs,
+                    delayReason: AccountingCloseOwnedEmptyStartupDelayReason,
+                    usesGuardedRestoreEmptyStartupDelay: false);
+            }
+
             return new ManagedCloseStartupGuardDelayDecision(
                 isEligible: true,
                 delayMs: DefaultDelayMs,
@@ -80,6 +107,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         }
 
         internal static bool IsEligible(ManagedCloseStartupGuardFacts facts)
+        {
+            return IsEligible(facts, null);
+        }
+
+        internal static bool IsEligible(ManagedCloseStartupGuardFacts facts, ManagedCloseStartupGuardMarkerFacts markerFacts)
         {
             if (facts == null
                 || facts.ReadFailed
@@ -97,8 +129,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return true;
             }
 
-            return facts.CommandLineHasRestoreSwitch
-                && !facts.CommandLineHasEmbeddingSwitch;
+            return (facts.CommandLineHasRestoreSwitch
+                && !facts.CommandLineHasEmbeddingSwitch)
+                || IsAccountingCloseOwnedEmptyStartup(facts, markerFacts);
         }
 
         private static bool IsGuardedRestoreEmptyStartup(ManagedCloseStartupGuardFacts facts)
@@ -107,6 +140,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 && facts.ApplicationVisible
                 && facts.CommandLineHasRestoreSwitch
                 && !facts.CommandLineHasEmbeddingSwitch;
+        }
+
+        private static bool IsAccountingCloseOwnedEmptyStartup(
+            ManagedCloseStartupGuardFacts facts,
+            ManagedCloseStartupGuardMarkerFacts markerFacts)
+        {
+            return facts != null
+                && markerFacts != null
+                && facts.ApplicationVisible
+                && !facts.CommandLineHasRestoreSwitch
+                && !facts.CommandLineHasEmbeddingSwitch
+                && markerFacts.Kind == ManagedWorkbookCloseMarkerKind.AccountingClose
+                && markerFacts.WriterProcessId > 0
+                && facts.ParentProcessId == markerFacts.WriterProcessId;
         }
     }
 }

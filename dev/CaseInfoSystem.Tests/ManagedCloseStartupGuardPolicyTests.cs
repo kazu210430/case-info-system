@@ -30,6 +30,22 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void Decide_UsesShortDelay_ForAccountingCloseOwnedEmptyStartup()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 1234;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.AccountingClose, writerProcessId: 1234));
+
+            Assert.True(decision.IsEligible);
+            Assert.Equal(ManagedCloseStartupGuardPolicy.AccountingCloseOwnedEmptyStartupDelayMs, decision.DelayMs);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+            Assert.Equal(ManagedCloseStartupGuardPolicy.AccountingCloseOwnedEmptyStartupDelayReason, decision.DelayReason);
+        }
+
+        [Fact]
         public void Decide_ReturnsIneligible_WhenReadFailed()
         {
             ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: true);
@@ -46,6 +62,34 @@ namespace CaseInfoSystem.Tests
         {
             ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
                 CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false));
+
+            Assert.False(decision.IsEligible);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+        }
+
+        [Fact]
+        public void Decide_ReturnsIneligible_ForAccountingCloseVisibleStartupWithoutWriterParentMatch()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 5678;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.AccountingClose, writerProcessId: 1234));
+
+            Assert.False(decision.IsEligible);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+        }
+
+        [Fact]
+        public void Decide_ReturnsIneligible_ForCaseCloseVisibleStartupWithoutRestoreSwitch()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 1234;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.CaseClose, writerProcessId: 1234));
 
             Assert.False(decision.IsEligible);
             Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
@@ -81,6 +125,21 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void Decide_ReturnsIneligible_ForAccountingCloseOwnedStartupWhenWorkbookAppears()
+        {
+            ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: false);
+            facts.ParentProcessId = 1234;
+            facts.WorkbooksCount = 1;
+
+            ManagedCloseStartupGuardDelayDecision decision = ManagedCloseStartupGuardPolicy.Decide(
+                facts,
+                CreateMarkerFacts(ManagedWorkbookCloseMarkerKind.AccountingClose, writerProcessId: 1234));
+
+            Assert.False(decision.IsEligible);
+            Assert.False(decision.UsesGuardedRestoreEmptyStartupDelay);
+        }
+
+        [Fact]
         public void Decide_ReturnsIneligible_WhenDelayedFactsDiscoverWorkbook()
         {
             ManagedCloseStartupGuardFacts facts = CreateEligibleFacts(applicationVisible: true, commandLineHasRestoreSwitch: true);
@@ -105,7 +164,19 @@ namespace CaseInfoSystem.Tests
                 VisibleNonKernelWorkbookExists = false,
                 HasOpenKernelWorkbook = false,
                 WorkbookOpenObserved = false,
-                ReadFailed = false
+                ReadFailed = false,
+                ParentProcessId = 0
+            };
+        }
+
+        private static ManagedCloseStartupGuardMarkerFacts CreateMarkerFacts(
+            ManagedWorkbookCloseMarkerKind kind,
+            int writerProcessId)
+        {
+            return new ManagedCloseStartupGuardMarkerFacts
+            {
+                Kind = kind,
+                WriterProcessId = writerProcessId
             };
         }
     }

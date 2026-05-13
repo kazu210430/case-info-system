@@ -347,6 +347,7 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(ManagedWorkbookCloseMarkerKind.AccountingClose, markerResult.Marker.Kind);
             Assert.Equal(ManagedWorkbookCloseMarkerStore.DefaultTimeToLiveSeconds, markerResult.Marker.TimeToLiveSeconds);
             Assert.Equal(@"C:\cases\accounting.xlsx", markerResult.Marker.WorkbookKey);
+            Assert.True(markerResult.Marker.WriterProcessId > 0);
             Assert.Contains(
                 loggerMessages,
                 message => ContainsFragment(message, "action=managed-close-marker-written")

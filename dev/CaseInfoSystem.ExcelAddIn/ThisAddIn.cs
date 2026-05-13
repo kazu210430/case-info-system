@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -1288,14 +1289,17 @@ namespace CaseInfoSystem.ExcelAddIn
             }
 
             LogManagedCloseStartupMarker(markerResult);
-            ManagedCloseStartupFacts startupFacts = CaptureManagedCloseStartupFacts("startup");
+            bool hasValidStartupMarker = markerResult != null && markerResult.IsValid;
+            ManagedCloseStartupFacts startupFacts = CaptureManagedCloseStartupFacts("startup", hasValidStartupMarker);
             LogManagedCloseStartupFacts(startupFacts, markerResult);
-            if (markerResult == null || !markerResult.IsValid)
+            if (!hasValidStartupMarker)
             {
                 return;
             }
 
-            ManagedCloseStartupGuardDelayDecision startupGuardDecision = ManagedCloseStartupGuardPolicy.Decide(ToManagedCloseStartupGuardFacts(startupFacts));
+            ManagedCloseStartupGuardDelayDecision startupGuardDecision = ManagedCloseStartupGuardPolicy.Decide(
+                ToManagedCloseStartupGuardFacts(startupFacts),
+                ToManagedCloseStartupGuardMarkerFacts(markerResult));
             if (!startupGuardDecision.IsEligible)
             {
                 _logger?.Info(
@@ -1327,9 +1331,10 @@ namespace CaseInfoSystem.ExcelAddIn
 
         private void ExecuteManagedCloseStartupGuard(ManagedWorkbookCloseMarkerReadResult markerResult)
         {
-            ManagedCloseStartupFacts delayedFacts = CaptureManagedCloseStartupFacts("delayed");
+            bool hasValidStartupMarker = markerResult != null && markerResult.IsValid;
+            ManagedCloseStartupFacts delayedFacts = CaptureManagedCloseStartupFacts("delayed", hasValidStartupMarker);
             LogManagedCloseStartupFacts(delayedFacts, markerResult);
-            if (!IsManagedCloseStartupGuardEligible(delayedFacts))
+            if (!IsManagedCloseStartupGuardEligible(delayedFacts, markerResult))
             {
                 _logger?.Info(
                     "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
@@ -1340,9 +1345,9 @@ namespace CaseInfoSystem.ExcelAddIn
                 return;
             }
 
-            ManagedCloseStartupFacts preQuitFacts = CaptureManagedCloseStartupFacts("preQuit");
+            ManagedCloseStartupFacts preQuitFacts = CaptureManagedCloseStartupFacts("preQuit", hasValidStartupMarker);
             LogManagedCloseStartupFacts(preQuitFacts, markerResult);
-            if (!IsManagedCloseStartupGuardEligible(preQuitFacts))
+            if (!IsManagedCloseStartupGuardEligible(preQuitFacts, markerResult))
             {
                 _logger?.Info(
                     "[KernelFlickerTrace] source=ThisAddIn action=managed-close-startup-guard-skip"
@@ -1356,9 +1361,13 @@ namespace CaseInfoSystem.ExcelAddIn
             QuitEmptyStartupExcelForManagedClose(markerResult, preQuitFacts);
         }
 
-        private bool IsManagedCloseStartupGuardEligible(ManagedCloseStartupFacts facts)
+        private bool IsManagedCloseStartupGuardEligible(
+            ManagedCloseStartupFacts facts,
+            ManagedWorkbookCloseMarkerReadResult markerResult)
         {
-            return ManagedCloseStartupGuardPolicy.IsEligible(ToManagedCloseStartupGuardFacts(facts));
+            return ManagedCloseStartupGuardPolicy.IsEligible(
+                ToManagedCloseStartupGuardFacts(facts),
+                ToManagedCloseStartupGuardMarkerFacts(markerResult));
         }
 
         private static ManagedCloseStartupGuardFacts ToManagedCloseStartupGuardFacts(ManagedCloseStartupFacts facts)
@@ -1378,17 +1387,34 @@ namespace CaseInfoSystem.ExcelAddIn
                 HasOpenKernelWorkbook = facts.HasOpenKernelWorkbook,
                 ApplicationVisible = facts.ApplicationVisible,
                 CommandLineHasRestoreSwitch = facts.CommandLineHasRestoreSwitch,
-                CommandLineHasEmbeddingSwitch = facts.CommandLineHasEmbeddingSwitch
+                CommandLineHasEmbeddingSwitch = facts.CommandLineHasEmbeddingSwitch,
+                ParentProcessId = facts.ParentProcessId
             };
         }
 
-        private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase)
+        private static ManagedCloseStartupGuardMarkerFacts ToManagedCloseStartupGuardMarkerFacts(ManagedWorkbookCloseMarkerReadResult markerResult)
         {
+            if (markerResult == null || !markerResult.IsValid || markerResult.Marker == null)
+            {
+                return null;
+            }
+
+            return new ManagedCloseStartupGuardMarkerFacts
+            {
+                Kind = markerResult.Marker.Kind,
+                WriterProcessId = markerResult.Marker.WriterProcessId
+            };
+        }
+
+        private ManagedCloseStartupFacts CaptureManagedCloseStartupFacts(string phase, bool captureParentProcessId)
+        {
+            int currentProcessId = SafeGetCurrentProcessId();
             var facts = new ManagedCloseStartupFacts
             {
                 Phase = phase ?? string.Empty,
                 WorkbookOpenObserved = _workbookOpenObservedSinceStartup,
-                ProcessId = Process.GetCurrentProcess().Id,
+                ProcessId = currentProcessId,
+                ParentProcessId = captureParentProcessId ? SafeGetParentProcessId(currentProcessId) : 0,
                 ProcessStartTime = SafeGetProcessStartTime(),
                 CommandLine = SafeGetCommandLine()
             };
@@ -1579,8 +1605,58 @@ namespace CaseInfoSystem.ExcelAddIn
                 + ", markerKind=" + (marker == null ? string.Empty : marker.Kind.ToString())
                 + ", markerCreatedUtc=" + (marker == null ? string.Empty : marker.CreatedUtc.ToString("O", CultureInfo.InvariantCulture))
                 + ", markerTtlSeconds=" + (marker == null ? string.Empty : marker.TimeToLiveSeconds.ToString(CultureInfo.InvariantCulture))
+                + ", markerWriterPid=" + (marker == null ? string.Empty : marker.WriterProcessId.ToString(CultureInfo.InvariantCulture))
                 + ", markerAgeMs=" + (markerResult.Age.HasValue ? ((long)markerResult.Age.Value.TotalMilliseconds).ToString(CultureInfo.InvariantCulture) : string.Empty)
                 + ", markerPath=" + markerResult.MarkerPath;
+        }
+
+        private static int SafeGetCurrentProcessId()
+        {
+            try
+            {
+                return Process.GetCurrentProcess().Id;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static int SafeGetParentProcessId(int processId)
+        {
+            if (processId <= 0)
+            {
+                return 0;
+            }
+
+            try
+            {
+                string query = "SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=" + processId.ToString(CultureInfo.InvariantCulture);
+                using (var searcher = new ManagementObjectSearcher(query))
+                using (ManagementObjectCollection results = searcher.Get())
+                {
+                    foreach (ManagementBaseObject result in results)
+                    {
+                        object parentProcessId = result["ParentProcessId"];
+                        int parsedParentProcessId;
+                        if (parentProcessId != null
+                            && int.TryParse(
+                                Convert.ToString(parentProcessId, CultureInfo.InvariantCulture),
+                                NumberStyles.Integer,
+                                CultureInfo.InvariantCulture,
+                                out parsedParentProcessId)
+                            && parsedParentProcessId > 0)
+                        {
+                            return parsedParentProcessId;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return 0;
         }
 
         private static DateTime SafeGetProcessStartTime()
@@ -1632,6 +1708,8 @@ namespace CaseInfoSystem.ExcelAddIn
 
             internal int ProcessId { get; set; }
 
+            internal int ParentProcessId { get; set; }
+
             internal DateTime ProcessStartTime { get; set; }
 
             internal string CommandLine { get; set; }
@@ -1668,6 +1746,7 @@ namespace CaseInfoSystem.ExcelAddIn
             {
                 return ", phase=" + (Phase ?? string.Empty)
                     + ", pid=" + ProcessId.ToString(CultureInfo.InvariantCulture)
+                    + ", parentPid=" + ParentProcessId.ToString(CultureInfo.InvariantCulture)
                     + ", processStartTime=" + (ProcessStartTime == DateTime.MinValue ? string.Empty : ProcessStartTime.ToString("O", CultureInfo.InvariantCulture))
                     + ", activeWorkbookPresent=" + ActiveWorkbookPresent.ToString()
                     + ", activeWorkbookName=" + (ActiveWorkbookName ?? string.Empty)

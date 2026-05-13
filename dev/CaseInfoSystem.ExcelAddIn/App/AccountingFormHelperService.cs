@@ -228,14 +228,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activeInstallmentScheduleForm = form;
 			_activeInstallmentScheduleWorkbook = workbook;
 			_activeInstallmentScheduleOwner = owner;
-			form.IssueDateRequested += delegate {
-				try {
-					ApplyInstallmentScheduleIssueDate (workbook, form);
-				} catch (Exception exception) {
-					_logger.Error ("Installment schedule issue date handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.IssueDateRequested", exception);
-				}
-			};
 			form.CreateScheduleRequested += delegate(object sender, AccountingInstallmentScheduleCreateRequestEventArgs e) {
 				try {
 					AccountingInstallmentScheduleFormState state2 = _accountingInstallmentScheduleCommandService.CreateSchedule (workbook, e.Request);
@@ -254,27 +246,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				} catch (Exception exception) {
 					_logger.Error ("Installment schedule apply change handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.ApplyChangeRequested", exception);
-				}
-			};
-			form.ResetRequested += delegate {
-				try {
-					ResetInstallmentSchedule (workbook, form);
-				} catch (Exception exception) {
-					_logger.Error ("Installment schedule reset handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.ResetRequested", exception);
-				}
-			};
-			form.SaveAsRequested += delegate {
-				Worksheet worksheet = null;
-				try {
-					worksheet = workbook.ActiveSheet as Worksheet;
-					WorkbookContext context = new WorkbookContext (workbook, window, WorkbookRole.Accounting, string.Empty, workbook.FullName ?? string.Empty, (worksheet == null) ? string.Empty : (worksheet.CodeName ?? string.Empty));
-					_accountingSaveAsService.Execute (context);
-				} catch (Exception exception) {
-					_logger.Error ("Installment schedule save-as handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.SaveAsRequested", exception);
-				} finally {
-					CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 				}
 			};
 			form.FormClosed += delegate {

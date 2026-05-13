@@ -38,6 +38,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal const string ImportInvoiceToCurrent = "import-invoice-to-current";
         internal const string ImportReceiptToCurrent = "import-receipt-to-current";
         internal const string OpenPaymentHistoryInput = "open-payment-history-input";
+        internal const string SetPaymentHistoryIssueDate = "set-payment-history-issue-date";
+        internal const string ResetPaymentHistory = "reset-payment-history";
         internal const string OpenInstallmentScheduleInput = "open-installment-schedule-input";
         internal const string ResetCurrentSheet = "reset-current-sheet";
         internal const string SetIssueDate = "set-issue-date";
@@ -102,6 +104,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
             if (string.Equals(activeSheetCodeName, Domain.AccountingSetSpec.PaymentHistorySheetName, StringComparison.OrdinalIgnoreCase))
             {
+                AddPaymentHistoryExecutionActions(definitions);
                 AddSheetSwitchActions(definitions, Domain.AccountingSetSpec.PaymentHistorySheetName);
                 return definitions;
             }
@@ -211,6 +214,29 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ResetCurrentSheet,
+                "リセット",
+                SectionAction,
+                true));
+        }
+
+        // メソッド: お支払い履歴シート向けの実行アクションを追加する。
+        // 引数: definitions - 追加先。
+        // 戻り値: なし。
+        // 副作用: definitions を更新する。
+        private static void AddPaymentHistoryExecutionActions(ICollection<AccountingNavigationActionDefinition> definitions)
+        {
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.SetPaymentHistoryIssueDate,
+                "発行日を入力",
+                SectionAction,
+                true));
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.ShowSaveAsPrompt,
+                "別名保存",
+                SectionAction,
+                true));
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.ResetPaymentHistory,
                 "リセット",
                 SectionAction,
                 true));

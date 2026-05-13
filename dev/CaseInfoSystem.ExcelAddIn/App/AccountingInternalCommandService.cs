@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
+using CaseInfoSystem.ExcelAddIn.UI;
 
 namespace CaseInfoSystem.ExcelAddIn.App
 {
@@ -37,6 +38,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				case "import-payment-history-to-request":
 					_accountingPaymentHistoryImportService.Execute (context);
 					break;
+				case AccountingNavigationActionIds.SetPaymentHistoryIssueDate:
+				case AccountingNavigationActionIds.ResetPaymentHistory:
 				case "set-issue-date":
 				case "set-issue-date-and-due-date":
 				case "open-payment-history-input":

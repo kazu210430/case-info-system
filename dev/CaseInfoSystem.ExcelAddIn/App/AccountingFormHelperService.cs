@@ -82,6 +82,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			case "open-payment-history-input":
 				ShowPaymentHistoryInput (context, text);
 				break;
+			case AccountingNavigationActionIds.SetPaymentHistoryIssueDate:
+				EnsurePaymentHistoryActionSheet (text);
+				ApplyPaymentHistoryIssueDate (context.Workbook, GetActivePaymentHistoryFormForWorkbook (context.Workbook));
+				break;
+			case AccountingNavigationActionIds.ResetPaymentHistory:
+				EnsurePaymentHistoryActionSheet (text);
+				ResetPaymentHistory (context.Workbook, GetActivePaymentHistoryFormForWorkbook (context.Workbook));
+				break;
 			}
 		}
 
@@ -312,6 +320,58 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			EnsurePaymentHistoryInputVisible (context.Workbook, context.Window, activeSheetCodeName, activateExisting: true);
 		}
 
+		private static void EnsurePaymentHistoryActionSheet (string activeSheetCodeName)
+		{
+			if (!string.Equals (activeSheetCodeName, AccountingSetSpec.PaymentHistorySheetName, StringComparison.OrdinalIgnoreCase)) {
+				throw new InvalidOperationException ("お支払い履歴シートでのみ利用できます。");
+			}
+		}
+
+		private void ApplyPaymentHistoryIssueDate (Workbook workbook, AccountingPaymentHistoryInputForm form)
+		{
+			AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.ApplyIssueDate (workbook);
+			BindPaymentHistoryFormState (form, state, focusReceiptDate: true);
+		}
+
+		private void ResetPaymentHistory (Workbook workbook, AccountingPaymentHistoryInputForm form)
+		{
+			DialogResult dialogResult = ShowPaymentHistoryResetConfirmation (form);
+			if (dialogResult != DialogResult.OK) {
+				return;
+			}
+			AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.Reset (workbook);
+			BindPaymentHistoryFormState (form, state, focusReceiptDate: true);
+		}
+
+		private AccountingPaymentHistoryInputForm GetActivePaymentHistoryFormForWorkbook (Workbook workbook)
+		{
+			if (_activePaymentHistoryForm == null || _activePaymentHistoryForm.IsDisposed || !IsSameWorkbook (_activePaymentHistoryWorkbook, workbook)) {
+				return null;
+			}
+			return _activePaymentHistoryForm;
+		}
+
+		private static void BindPaymentHistoryFormState (AccountingPaymentHistoryInputForm form, AccountingPaymentHistoryFormState state, bool focusReceiptDate)
+		{
+			if (form == null || form.IsDisposed) {
+				return;
+			}
+			form.BindState (state);
+			if (focusReceiptDate) {
+				form.FocusReceiptDate ();
+			}
+		}
+
+		private static DialogResult ShowPaymentHistoryResetConfirmation (IWin32Window owner)
+		{
+			const string message = "お支払い履歴は全てクリアされます。よろしいですか？";
+			const string caption = "案件情報System";
+			if (owner == null) {
+				return MessageBox.Show (message, caption, MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+			}
+			return MessageBox.Show (owner, message, caption, MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+		}
+
 		private void EnsurePaymentHistoryInputVisible (Workbook workbook, Window window, string activeSheetCodeName, bool activateExisting)
 		{
 			if (!string.Equals (activeSheetCodeName, "お支払い履歴", StringComparison.OrdinalIgnoreCase)) {
@@ -342,9 +402,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activePaymentHistoryOwner = owner;
 			form.IssueDateRequested += delegate {
 				try {
-					AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.ApplyIssueDate (workbook);
-					form.BindState (state2);
-					form.FocusReceiptDate ();
+					ApplyPaymentHistoryIssueDate (workbook, form);
 				} catch (Exception exception) {
 					_logger.Error ("Payment history issue date handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingPaymentHistory.IssueDateRequested", exception);
@@ -392,12 +450,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			};
 			form.ResetRequested += delegate {
 				try {
-					DialogResult dialogResult = MessageBox.Show (form, "お支払い履歴は全てクリアされます。よろしいですか？", "案件情報System", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
-					if (dialogResult == DialogResult.OK) {
-						AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.Reset (workbook);
-						form.BindState (state2);
-						form.FocusReceiptDate ();
-					}
+					ResetPaymentHistory (workbook, form);
 				} catch (Exception exception) {
 					_logger.Error ("Payment history reset handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingPaymentHistory.ResetRequested", exception);

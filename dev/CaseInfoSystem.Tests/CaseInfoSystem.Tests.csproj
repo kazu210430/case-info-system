@@ -93,6 +93,7 @@
     <Compile Include="ContentControlFolderBatchReplaceServiceTests.cs" />
     <Compile Include="KernelTemplateSyncPreflightServiceTests.cs" />
     <Compile Include="KernelNavigationModelsTests.cs" />
+    <Compile Include="AccountingNavigationModelsTests.cs" />
     <Compile Include="KernelTemplateFolderOpenServiceTests.cs" />
     <Compile Include="WordTemplateRegistrationValidationServiceTests.cs" />
     <Compile Include="TaskPaneDisplayRetryCoordinatorTests.cs" />

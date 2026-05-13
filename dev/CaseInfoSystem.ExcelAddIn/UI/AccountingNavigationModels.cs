@@ -68,21 +68,21 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
             if (string.Equals(activeSheetCodeName, Domain.AccountingSetSpec.EstimateSheetName, StringComparison.OrdinalIgnoreCase))
             {
-                AddMainFormExecutionActions(definitions, AccountingNavigationActionIds.SetIssueDate, false, true, true, false);
+                AddAccountingDocumentExecutionActions(definitions, AccountingNavigationActionIds.SetIssueDate, Domain.AccountingSetSpec.EstimateSheetName);
                 AddSheetSwitchActions(definitions, Domain.AccountingSetSpec.EstimateSheetName);
                 return definitions;
             }
 
             if (string.Equals(activeSheetCodeName, Domain.AccountingSetSpec.InvoiceSheetName, StringComparison.OrdinalIgnoreCase))
             {
-                AddMainFormExecutionActions(definitions, AccountingNavigationActionIds.SetIssueDateAndDueDate, true, false, true, false);
+                AddAccountingDocumentExecutionActions(definitions, AccountingNavigationActionIds.SetIssueDateAndDueDate, Domain.AccountingSetSpec.InvoiceSheetName);
                 AddSheetSwitchActions(definitions, Domain.AccountingSetSpec.InvoiceSheetName);
                 return definitions;
             }
 
             if (string.Equals(activeSheetCodeName, Domain.AccountingSetSpec.ReceiptSheetName, StringComparison.OrdinalIgnoreCase))
             {
-                AddMainFormExecutionActions(definitions, AccountingNavigationActionIds.SetIssueDate, true, true, false, false);
+                AddAccountingDocumentExecutionActions(definitions, AccountingNavigationActionIds.SetIssueDate, Domain.AccountingSetSpec.ReceiptSheetName);
                 AddSheetSwitchActions(definitions, Domain.AccountingSetSpec.ReceiptSheetName);
                 return definitions;
             }
@@ -107,6 +107,42 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             }
 
             return definitions;
+        }
+
+        // メソッド: 見積書・請求書・領収書向けの実行アクションを追加する。
+        // 引数: definitions - 追加先, issueDateActionId - 発行日系動作ID, activeSheetCodeName - 現在シートの CodeName。
+        // 戻り値: なし。
+        // 副作用: definitions を更新する。
+        private static void AddAccountingDocumentExecutionActions(
+            ICollection<AccountingNavigationActionDefinition> definitions,
+            string issueDateActionId,
+            string activeSheetCodeName)
+        {
+            definitions.Add(new AccountingNavigationActionDefinition(
+                string.IsNullOrWhiteSpace(issueDateActionId) ? AccountingNavigationActionIds.SetIssueDate : issueDateActionId,
+                "発行日を入力",
+                SectionAction,
+                true));
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.ShowSaveAsPrompt,
+                "別名保存",
+                SectionAction,
+                true));
+
+            AddImportAction(definitions, AccountingNavigationActionIds.ImportEstimateToCurrent, "見積書を取り込む", Domain.AccountingSetSpec.EstimateSheetName, activeSheetCodeName);
+            AddImportAction(definitions, AccountingNavigationActionIds.ImportInvoiceToCurrent, "請求書を取り込む", Domain.AccountingSetSpec.InvoiceSheetName, activeSheetCodeName);
+            AddImportAction(definitions, AccountingNavigationActionIds.ImportReceiptToCurrent, "領収書を取り込む", Domain.AccountingSetSpec.ReceiptSheetName, activeSheetCodeName);
+
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.OpenReverseTool,
+                "逆算ツール",
+                SectionAction,
+                true));
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.ResetCurrentSheet,
+                "リセット",
+                SectionAction,
+                true));
         }
 
         // メソッド: メイン帳票系シート向けの実行アクションを追加する。
@@ -178,6 +214,21 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 "リセット",
                 SectionAction,
                 true));
+        }
+
+        private static void AddImportAction(
+            ICollection<AccountingNavigationActionDefinition> definitions,
+            string actionId,
+            string caption,
+            string targetSheetCodeName,
+            string activeSheetCodeName)
+        {
+            bool isCurrent = string.Equals(targetSheetCodeName, activeSheetCodeName, StringComparison.OrdinalIgnoreCase);
+            definitions.Add(new AccountingNavigationActionDefinition(
+                actionId,
+                isCurrent ? caption + "（表示中）" : caption,
+                SectionAction,
+                !isCurrent));
         }
 
         // メソッド: シート切替アクション群を追加する。

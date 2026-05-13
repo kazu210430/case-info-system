@@ -163,6 +163,7 @@
     <Compile Include="App\ICaseCacheDocumentTemplateReader.cs" />
     <Compile Include="App\IDocumentTemplateLookupReader.cs" />
     <Compile Include="App\AccountingFormHelperService.cs" />
+    <Compile Include="App\AccountingInitialSheetSyncPolicy.cs" />
     <Compile Include="App\AccountingIssueDateDueDatePolicy.cs" />
     <Compile Include="App\AccountingInstallmentScheduleCommandService.cs" />
     <Compile Include="App\AccountingInstallmentSchedulePlanPolicy.cs" />

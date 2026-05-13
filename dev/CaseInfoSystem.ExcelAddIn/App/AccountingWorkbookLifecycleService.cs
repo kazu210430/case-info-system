@@ -37,6 +37,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private readonly HashSet<string> _initializedWorkbookKeys;
 
+		private readonly HashSet<string> _activeSheetSynchronizedWorkbookKeys;
+
 		internal AccountingWorkbookLifecycleService (WorkbookRoleResolver workbookRoleResolver, AccountingWorkbookService accountingWorkbookService, AccountingFormHelperService accountingFormHelperService, AccountingPaymentHistoryImportService accountingPaymentHistoryImportService, Logger logger)
 		{
 			_workbookRoleResolver = workbookRoleResolver ?? throw new ArgumentNullException ("workbookRoleResolver");
@@ -45,12 +47,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingPaymentHistoryImportService = accountingPaymentHistoryImportService ?? throw new ArgumentNullException ("accountingPaymentHistoryImportService");
 			_logger = logger ?? throw new ArgumentNullException ("logger");
 			_initializedWorkbookKeys = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
+			_activeSheetSynchronizedWorkbookKeys = new HashSet<string> (StringComparer.OrdinalIgnoreCase);
 		}
 
-		internal void HandleWorkbookOpenedOrActivated (Workbook workbook)
+		internal void HandleWorkbookOpenedOrActivated (Workbook workbook, string eventName)
 		{
-			if (_workbookRoleResolver.IsAccountingWorkbook (workbook)) {
-				EnsureWorkbookInitialized (workbook);
+			bool isAccountingWorkbook = _workbookRoleResolver.IsAccountingWorkbook (workbook);
+			if (!isAccountingWorkbook) {
+				return;
+			}
+			EnsureWorkbookInitialized (workbook);
+			if (AccountingInitialSheetSyncPolicy.ShouldSynchronizeActiveSheet (eventName, isAccountingWorkbook)) {
+				SynchronizeActiveSheetFromWorkbookActivation (workbook, eventName);
 			}
 		}
 
@@ -59,15 +67,43 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (!(sheetObject is Worksheet worksheet)) {
 				return;
 			}
+			HandleActivatedWorksheet (worksheet, "SheetActivate");
+		}
+
+		private void SynchronizeActiveSheetFromWorkbookActivation (Workbook workbook, string eventName)
+		{
+			string workbookKey = GetWorkbookKey (workbook);
+			if (string.IsNullOrWhiteSpace (workbookKey) || _activeSheetSynchronizedWorkbookKeys.Contains (workbookKey)) {
+				return;
+			}
+			Worksheet worksheet = null;
+			try {
+				worksheet = workbook?.ActiveSheet as Worksheet;
+				if (worksheet == null) {
+					_logger.Info ("Accounting workbook active sheet sync skipped. reason=" + (eventName ?? string.Empty) + ", activeSheetMissing=True, workbook=" + workbookKey);
+					return;
+				}
+				if (HandleActivatedWorksheet (worksheet, eventName)) {
+					_activeSheetSynchronizedWorkbookKeys.Add (workbookKey);
+				}
+			} catch (Exception exception) {
+				_logger.Error ("Accounting workbook active sheet sync failed.", exception);
+			} finally {
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		private bool HandleActivatedWorksheet (Worksheet worksheet, string eventName)
+		{
 			Workbook workbook = null;
 			try {
 				workbook = worksheet.Parent as Workbook;
 				if (!_workbookRoleResolver.IsAccountingWorkbook (workbook)) {
-					return;
+					return false;
 				}
 				if (IsCutCopyInProgress (workbook)) {
-					_logger.Info ("Accounting workbook sheet activation UI sync skipped because cut/copy mode is active. workbook=" + GetWorkbookKey (workbook));
-					return;
+					_logger.Info ("Accounting workbook sheet activation UI sync skipped because cut/copy mode is active. reason=" + (eventName ?? string.Empty) + ", workbook=" + GetWorkbookKey (workbook));
+					return false;
 				}
 				EnsureWorkbookInitialized (workbook);
 				string text = worksheet.CodeName ?? string.Empty;
@@ -81,10 +117,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_accountingWorkbookService.ClearAccountingImportTargetHighlight (workbook);
 				}
 				_accountingPaymentHistoryImportService.HandleSheetActivated (workbook, text);
-				Application application = workbook.Application;
-				_accountingFormHelperService.HandleSheetActivated (workbook, (application == null) ? null : application.ActiveWindow, text);
+				_accountingFormHelperService.HandleSheetActivated (workbook, ResolveActiveSheetWindow (workbook), text);
+				return true;
 			} catch (Exception exception) {
 				_logger.Error ("Accounting workbook sheet activation handling failed.", exception);
+				return false;
 			}
 		}
 
@@ -93,6 +130,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			string workbookKey = GetWorkbookKey (workbook);
 			if (!string.IsNullOrWhiteSpace (workbookKey)) {
 				_initializedWorkbookKeys.Remove (workbookKey);
+				_activeSheetSynchronizedWorkbookKeys.Remove (workbookKey);
 			}
 		}
 
@@ -162,6 +200,49 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			XlCutCopyMode cutCopyMode = workbook.Application.CutCopyMode;
 			return cutCopyMode == XlCutCopyMode.xlCopy || cutCopyMode == XlCutCopyMode.xlCut;
+		}
+
+		private static Window ResolveActiveSheetWindow (Workbook workbook)
+		{
+			if (workbook == null) {
+				return null;
+			}
+			try {
+				Application application = workbook.Application;
+				Window activeWindow = (application == null) ? null : application.ActiveWindow;
+				if (activeWindow != null) {
+					return activeWindow;
+				}
+			} catch {
+			}
+			return GetFirstVisibleWindow (workbook);
+		}
+
+		private static Window GetFirstVisibleWindow (Workbook workbook)
+		{
+			Windows windows = null;
+			try {
+				windows = workbook?.Windows;
+				int windowCount = windows == null ? 0 : windows.Count;
+				for (int index = 1; index <= windowCount; index++) {
+					Window window = null;
+					try {
+						window = windows [index];
+						if (window != null && window.Visible) {
+							return window;
+						}
+					} finally {
+						if (window != null && !window.Visible) {
+							CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (window);
+						}
+					}
+				}
+			} catch {
+				return null;
+			} finally {
+				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (windows);
+			}
+			return null;
 		}
 
 		private static string GetWorkbookKey (Workbook workbook)

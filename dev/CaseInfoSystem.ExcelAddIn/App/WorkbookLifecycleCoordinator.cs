@@ -82,7 +82,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             _handleExternalWorkbookDetected?.Invoke(workbook, "WorkbookOpen");
             _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
+            _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook, AccountingInitialSheetSyncPolicy.WorkbookOpenEventName);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable("WorkbookOpen", workbook);
@@ -128,7 +128,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             _handleExternalWorkbookDetected?.Invoke(workbook, "WorkbookActivate");
             _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
+            _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook, AccountingInitialSheetSyncPolicy.WorkbookActivateEventName);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable("WorkbookActivate", workbook);

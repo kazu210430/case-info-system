@@ -1,0 +1,83 @@
+using System;
+using System.Collections.Generic;
+using CaseInfoSystem.ExcelAddIn.App;
+using Xunit;
+
+namespace CaseInfoSystem.Tests
+{
+	public sealed class AccountingInstallmentSchedulePlanPolicyTests
+	{
+		[Fact]
+		public void AddOnePaymentMonth_UsesDateTimeMonthClamp ()
+		{
+			DateTime result = AccountingInstallmentSchedulePlanPolicy.AddOnePaymentMonth (new DateTime (2026, 1, 31));
+
+			Assert.Equal (new DateTime (2026, 2, 28), result);
+		}
+
+		[Fact]
+		public void ResolveExpenseCharge_UsesActivePaymentBasisAndRemainingExpense ()
+		{
+			Assert.Equal (50000, AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (50000, 120000));
+			Assert.Equal (12000, AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (50000, 12000));
+			Assert.Equal (0, AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (0, 12000));
+		}
+
+		[Fact]
+		public void EnsureWritableRow_AllowsRowsInsideA12J73TableDataArea ()
+		{
+			AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (14);
+			AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (73);
+
+			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (74));
+		}
+
+		[Fact]
+		public void ResolveChangeStart_SelectsFirstRoundAtOrAfterChangeRound ()
+		{
+			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> {
+				new AccountingInstallmentScheduleExistingRow (14, 0, 90000, 30000),
+				new AccountingInstallmentScheduleExistingRow (15, 1, 60000, 10000),
+				new AccountingInstallmentScheduleExistingRow (16, 2, 30000, 0)
+			};
+
+			AccountingInstallmentScheduleChangeStart result = AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 2);
+
+			Assert.Equal (16, result.StartRow);
+			Assert.Equal (15, result.PreviousRow);
+		}
+
+		[Fact]
+		public void ResolveChangeStart_RejectsStartRowChange ()
+		{
+			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> {
+				new AccountingInstallmentScheduleExistingRow (14, 1, 90000, 30000),
+				new AccountingInstallmentScheduleExistingRow (15, 2, 60000, 10000)
+			};
+
+			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 1));
+		}
+
+		[Fact]
+		public void ResolveChangeStart_RejectsMissingChangeRound ()
+		{
+			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> {
+				new AccountingInstallmentScheduleExistingRow (14, 0, 90000, 30000),
+				new AccountingInstallmentScheduleExistingRow (15, 1, 60000, 10000)
+			};
+
+			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 5));
+		}
+
+		[Fact]
+		public void ResolveChangeStart_RejectsBrokenPreviousBalance ()
+		{
+			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> {
+				new AccountingInstallmentScheduleExistingRow (14, 0, double.NaN, 30000),
+				new AccountingInstallmentScheduleExistingRow (15, 1, 60000, 10000)
+			};
+
+			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (rows, 1));
+		}
+	}
+}

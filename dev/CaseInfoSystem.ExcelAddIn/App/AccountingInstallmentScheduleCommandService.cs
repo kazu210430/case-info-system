@@ -11,72 +11,55 @@ namespace CaseInfoSystem.ExcelAddIn.App
 	internal sealed class AccountingInstallmentScheduleCommandService
 	{
 		private const string SheetName = "分割払い予定表";
+		private const string InvoiceSheetName = "請求書";
+		private const string TableRangeAddress = "A12:J73";
 
 		private const string InstallmentIssueDateRangeName = "発行日";
-
 		private const string InstallmentBillingAmountRangeName = "請求額";
-
 		private const string InstallmentExpenseAmountRangeName = "実費等総額";
-
 		private const string InstallmentWithholdingRangeName = "源泉処理";
-
-		private const string InstallmentFirstDueDateRangeName = "第1回期限";
-
+		private const string InstallmentFirstDueDateRangeName = "第１回期限";
 		private const string InstallmentAmountRangeName = "分割金";
-
 		private const string InstallmentChangeRoundRangeName = "変更回";
-
 		private const string InstallmentChangedAmountRangeName = "変更後分割金";
-
 		private const string InstallmentDepositAmountRangeName = "お預かり金額";
 
 		private const string InstallmentPaymentTotalCellAddress = "I9";
-
 		private const string InstallmentMarkerCellAddress = "B12";
-
-		private const string InstallmentRoundStartCellAddress = "A13";
-
-		private const string InvoiceBillingSubtotalCellAddress = "F23";
-
-		private const string InvoiceExpenseCellAddress = "F25";
-
-		private const string InvoiceWithholdingFlagCellAddress = "Y24";
-
-		private const string InvoiceFirstDueDateCellAddress = "G10";
-
-		private const string InvoiceDepositAmountCellAddress = "F29";
-
 		private const string InstallmentIssueDateSourceCellAddress = "J1";
-
 		private const string InstallmentResetMarkerText = "※";
-
 		private const string InstallmentIssueDatePlaceholderText = "発行日";
-
+		private const string DepositAppliedText = "(充当済み)";
 		private const string DateDisplayFormat = "yyyy/MM/dd";
 
-		private const int InstallmentResetStartRow = 13;
+		private const string InvoiceBillingSubtotalCellAddress = "F23";
+		private const string InvoiceExpenseCellAddress = "F25";
+		private const string InvoiceWithholdingFlagCellAddress = "Y24";
+		private const string InvoiceFirstDueDateCellAddress = "G10";
+		private const string InvoiceDepositAmountCellAddress = "F29";
 
-		private const int InstallmentResetEndRow = 73;
+		private const double BalanceTolerance = 0.5;
 
-		private const int InstallmentDefaultPrintLastRow = 13;
-
-		private const int InstallmentDefaultPrintLastColumn = 9;
-
-		private const int InstallmentMaximumRounds = 60;
-
-		private const int InstallmentFirstRow = 13;
-
-		private const int InstallmentLastColumn = 9;
-
-		private const string DepositAppliedText = "(充当済み)";
+		private static readonly string[] RequiredNamedRanges = {
+			InstallmentBillingAmountRangeName,
+			"お支払い額計",
+			InstallmentAmountRangeName,
+			InstallmentFirstDueDateRangeName,
+			InstallmentExpenseAmountRangeName,
+			InstallmentWithholdingRangeName,
+			InstallmentDepositAmountRangeName,
+			InstallmentChangedAmountRangeName,
+			InstallmentChangeRoundRangeName
+		};
 
 		private readonly AccountingWorkbookService _accountingWorkbookService;
-
 		private readonly UserErrorService _userErrorService;
-
 		private readonly Logger _logger;
 
-		internal AccountingInstallmentScheduleCommandService (AccountingWorkbookService accountingWorkbookService, UserErrorService userErrorService, Logger logger)
+		internal AccountingInstallmentScheduleCommandService (
+			AccountingWorkbookService accountingWorkbookService,
+			UserErrorService userErrorService,
+			Logger logger)
 		{
 			_accountingWorkbookService = accountingWorkbookService ?? throw new ArgumentNullException ("accountingWorkbookService");
 			_userErrorService = userErrorService ?? throw new ArgumentNullException ("userErrorService");
@@ -88,29 +71,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (workbook == null) {
 				throw new ArgumentNullException ("workbook");
 			}
+
 			SyncInstallmentHeaderFromInvoice (workbook);
-			const string text = "AccountingInstallmentSchedule.LoadFormState";
-			List<string> list = new List<string> ();
-			double num = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F23", "請求額小計", text, list);
-			double num2 = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F25", "実費等総額", text, list);
-			double num3 = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F29", "お預かり金額", text, list);
-			bool flag = ReadBooleanSafe (workbook, "請求書", "Y24");
-			AccountingInstallmentScheduleFormState accountingInstallmentScheduleFormState = new AccountingInstallmentScheduleFormState {
-				BillingAmountText = FormatAmount (num + num2),
-				ExpenseAmountText = FormatAmount (num2),
-				WithholdingText = (flag ? "する" : "しない"),
-				FirstDueDateText = ReadFormattedDateSafe (workbook, "請求書", "G10"),
-				DepositAmountText = FormatAmount (num3),
-				InstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, "分割払い予定表", "分割金"),
-				ChangeRoundText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, "分割払い予定表", "変更回"),
-				ChangedInstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, "分割払い予定表", "変更後分割金"),
-				HasNumericReadError = list.Count > 0,
-				NumericReadErrorMessage = string.Join (Environment.NewLine, list)
+
+			const string procedureName = "AccountingInstallmentSchedule.LoadFormState";
+			List<string> warnings = new List<string> ();
+			double billingSubtotal = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, InvoiceSheetName, InvoiceBillingSubtotalCellAddress, "請求額小計", procedureName, warnings);
+			double expenseAmount = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, InvoiceSheetName, InvoiceExpenseCellAddress, "実費等総額", procedureName, warnings);
+			double depositAmount = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, InvoiceSheetName, InvoiceDepositAmountCellAddress, "お預かり金額", procedureName, warnings);
+			bool withholding = ReadBooleanSafe (workbook, InvoiceSheetName, InvoiceWithholdingFlagCellAddress);
+
+			AccountingInstallmentScheduleFormState state = new AccountingInstallmentScheduleFormState {
+				BillingAmountText = FormatAmount (billingSubtotal + expenseAmount),
+				ExpenseAmountText = FormatAmount (expenseAmount),
+				WithholdingText = withholding ? "する" : "しない",
+				FirstDueDateText = ReadFormattedDateSafe (workbook, InvoiceSheetName, InvoiceFirstDueDateCellAddress),
+				DepositAmountText = FormatAmount (depositAmount),
+				InstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentAmountRangeName),
+				ChangeRoundText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentChangeRoundRangeName),
+				ChangedInstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentChangedAmountRangeName),
+				HasNumericReadError = warnings.Count > 0,
+				NumericReadErrorMessage = string.Join (Environment.NewLine, warnings)
 			};
-			if (list.Count > 0) {
-				ShowLoadFormStateNumericReadWarning (accountingInstallmentScheduleFormState.NumericReadErrorMessage);
+
+			if (warnings.Count > 0) {
+				ShowLoadFormStateNumericReadWarning (state.NumericReadErrorMessage);
 			}
-			return accountingInstallmentScheduleFormState;
+
+			return state;
 		}
 
 		internal AccountingInstallmentScheduleFormState CreateSchedule (Workbook workbook, AccountingInstallmentScheduleCreateRequest request)
@@ -121,26 +109,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (request == null) {
 				throw new ArgumentNullException ("request");
 			}
-			if (!TryValidateCreateRequest (request, out var firstDueDate, out var billingAmount, out var expenseAmount, out var depositAmount, out var installmentAmount)) {
+
+			if (!TryValidateCreateRequest (request, out DateTime firstDueDate, out double billingAmount, out double expenseAmount, out double depositAmount, out double installmentAmount)) {
 				return LoadFormState (workbook);
 			}
+
+			ScheduleSnapshot snapshot = null;
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "分割払い予定表");
-				SyncInstallmentHeaderFromInvoice (workbook);
-				WriteCreateBaseValues (workbook, request, firstDueDate, billingAmount, expenseAmount, depositAmount, installmentAmount);
-				int num = ((depositAmount != 0.0) ? BuildScheduleWithDeposit (workbook, firstDueDate, depositAmount, installmentAmount) : BuildScheduleWithoutDeposit (workbook, firstDueDate, installmentAmount));
-				RefreshPrintArea (workbook);
-				WritePaymentTotal (workbook);
-				_logger.Info ("Installment schedule created. lastInputRow=" + num.ToString (CultureInfo.InvariantCulture));
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				using (_accountingWorkbookService.BeginInitializationScope ()) {
+					SyncInstallmentHeaderFromInvoice (workbook);
+					EnsureWorkbookStructure (workbook);
+					WriteCreateBaseValues (workbook, request, firstDueDate, billingAmount, expenseAmount, depositAmount, installmentAmount);
+
+					InstallmentScheduleInputs inputs = LoadInputsFromNamedRanges (workbook, requireChange: false);
+					snapshot = TakeScheduleSnapshot (workbook, AccountingInstallmentSchedulePlanPolicy.StartValueRow);
+					ClearScheduleRows (workbook, AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow);
+					WriteStartValues (workbook, inputs);
+
+					int lastRow = GenerateSchedule (workbook, inputs, AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow, isCreateFromFirstRow: true);
+					FinishSchedule (workbook, lastRow);
+					_logger.Info ("Installment schedule created. lastRow=" + lastRow.ToString (CultureInfo.InvariantCulture));
+				}
 			} catch (Exception exception) {
+				RestoreSnapshotQuietly (workbook, snapshot);
 				_userErrorService.ShowUserError ("AccountingInstallmentSchedule.CreateSchedule", exception);
 			} finally {
-				try {
-					_accountingWorkbookService.ProtectSheetUiOnly (workbook, "分割払い予定表");
-				} catch (Exception exception2) {
-					_logger.Error ("Installment schedule reprotect failed after create.", exception2);
-				}
+				ProtectSheetQuietly (workbook, "Installment schedule reprotect failed after create.");
 			}
+
 			return LoadFormState (workbook);
 		}
 
@@ -152,37 +149,44 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (request == null) {
 				throw new ArgumentNullException ("request");
 			}
-			if (!TryValidateChangeRequest (workbook, request, out var scheduleStartFlag, out var startRow, out var changedInstallmentAmount, out var billingAmount, out var expenseAmount)) {
+
+			if (!TryValidateChangeRequest (request, out int changeRound, out double changedInstallmentAmount)) {
 				return LoadFormState (workbook);
 			}
+
+			ScheduleSnapshot snapshot = null;
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "分割払い予定表");
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "変更回", ParseAmount (request.ChangeRoundText));
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "請求額", billingAmount);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "実費等総額", expenseAmount);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "源泉処理", request.WithholdingText ?? string.Empty);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "変更後分割金", changedInstallmentAmount);
-				int num = BuildChangedSchedule (workbook, scheduleStartFlag, startRow, changedInstallmentAmount);
-				RefreshPrintArea (workbook);
-				WritePaymentTotal (workbook);
-				_logger.Info ("Installment schedule change applied. lastInputRow=" + num.ToString (CultureInfo.InvariantCulture));
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				using (_accountingWorkbookService.BeginInitializationScope ()) {
+					EnsureWorkbookStructure (workbook);
+					WriteChangeBaseValues (workbook, changeRound, changedInstallmentAmount);
+
+					InstallmentScheduleInputs inputs = LoadInputsFromNamedRanges (workbook, requireChange: true);
+					List<AccountingInstallmentScheduleExistingRow> existingRows = ReadExistingScheduleRows (workbook);
+					AccountingInstallmentScheduleChangeStart changeStart = AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (existingRows, inputs.ChangeRound);
+
+					snapshot = TakeScheduleSnapshot (workbook, changeStart.StartRow);
+					ClearScheduleRows (workbook, changeStart.StartRow);
+
+					int lastRow = GenerateSchedule (workbook, inputs, changeStart.StartRow, isCreateFromFirstRow: false);
+					FinishSchedule (workbook, lastRow);
+					_logger.Info ("Installment schedule change applied. startRow=" + changeStart.StartRow.ToString (CultureInfo.InvariantCulture) + ", lastRow=" + lastRow.ToString (CultureInfo.InvariantCulture));
+				}
 			} catch (Exception exception) {
+				RestoreSnapshotQuietly (workbook, snapshot);
 				_userErrorService.ShowUserError ("AccountingInstallmentSchedule.ApplyChange", exception);
 			} finally {
-				try {
-					_accountingWorkbookService.ProtectSheetUiOnly (workbook, "分割払い予定表");
-				} catch (Exception exception2) {
-					_logger.Error ("Installment schedule reprotect failed after change.", exception2);
-				}
+				ProtectSheetQuietly (workbook, "Installment schedule reprotect failed after change.");
 			}
+
 			return LoadFormState (workbook);
 		}
 
 		internal AccountingInstallmentScheduleFormState ApplyIssueDate (Workbook workbook)
 		{
 			try {
-				object value = _accountingWorkbookService.ReadCellValue (workbook, "分割払い予定表", "J1");
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "発行日", value);
+				object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, InstallmentIssueDateSourceCellAddress);
+				_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentIssueDateRangeName, value);
 				_logger.Info ("Installment schedule issue date applied.");
 				return LoadFormState (workbook);
 			} catch (Exception exception) {
@@ -196,286 +200,462 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (workbook == null) {
 				throw new ArgumentNullException ("workbook");
 			}
+
 			DialogResult dialogResult = MessageBox.Show ("分割払い予定表は全てクリアされます。よろしいですか？", "案件情報System", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
 			if (dialogResult != DialogResult.OK) {
 				return LoadFormState (workbook);
 			}
+
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "分割払い予定表");
-				SyncInstallmentHeaderFromInvoice (workbook);
-				_accountingWorkbookService.WriteCell (workbook, "分割払い予定表", "B12", "※");
-				_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "A13", 1);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "発行日", "発行日");
-				_accountingWorkbookService.ClearNamedRangeMergeAreaContents (workbook, "分割払い予定表", "請求額");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "分割金");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "第1回期限");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "実費等総額");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "源泉処理");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "変更回");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "変更後分割金");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "分割払い予定表", "お預かり金額");
-				ClearRowsFrom (13, workbook);
-				_accountingWorkbookService.ClearRangeContents (workbook, "分割払い予定表", "I9");
-				_accountingWorkbookService.SetPrintAreaByBounds (workbook, "分割払い予定表", 13, 9);
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				using (_accountingWorkbookService.BeginInitializationScope ()) {
+					SyncInstallmentHeaderFromInvoice (workbook);
+					_accountingWorkbookService.WriteCell (workbook, SheetName, InstallmentMarkerCellAddress, InstallmentResetMarkerText);
+					_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentIssueDateRangeName, InstallmentIssueDatePlaceholderText);
+					_accountingWorkbookService.ClearNamedRangeMergeAreaContents (workbook, SheetName, InstallmentBillingAmountRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentAmountRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentFirstDueDateRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentExpenseAmountRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentWithholdingRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentChangeRoundRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentChangedAmountRangeName);
+					_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, InstallmentDepositAmountRangeName);
+					ClearScheduleRows (workbook, AccountingInstallmentSchedulePlanPolicy.StartValueRow);
+					_accountingWorkbookService.ClearRangeContents (workbook, SheetName, InstallmentPaymentTotalCellAddress);
+					_accountingWorkbookService.SetPrintAreaByBounds (workbook, SheetName, AccountingInstallmentSchedulePlanPolicy.StartValueRow, AccountingInstallmentSchedulePlanPolicy.PrintLastColumn);
+					EnsureHiddenLayout (workbook);
+				}
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingInstallmentSchedule.Reset", exception);
 			} finally {
-				try {
-					_accountingWorkbookService.ProtectSheetUiOnly (workbook, "分割払い予定表");
-				} catch (Exception exception2) {
-					_logger.Error ("Installment schedule reprotect failed.", exception2);
-				}
+				ProtectSheetQuietly (workbook, "Installment schedule reprotect failed.");
 			}
+
 			return LoadFormState (workbook);
 		}
 
-		private bool TryValidateCreateRequest (AccountingInstallmentScheduleCreateRequest request, out DateTime firstDueDate, out double billingAmount, out double expenseAmount, out double depositAmount, out double installmentAmount)
+		private bool TryValidateCreateRequest (
+			AccountingInstallmentScheduleCreateRequest request,
+			out DateTime firstDueDate,
+			out double billingAmount,
+			out double expenseAmount,
+			out double depositAmount,
+			out double installmentAmount)
 		{
 			firstDueDate = DateTime.MinValue;
-			billingAmount = ParseAmount (request.BillingAmountText);
-			expenseAmount = ParseAmount (request.ExpenseAmountText);
-			depositAmount = ParseAmount (request.DepositAmountText);
-			installmentAmount = ParseAmount (request.InstallmentAmountText);
-			if (billingAmount == 0.0) {
+			billingAmount = 0;
+			expenseAmount = 0;
+			depositAmount = 0;
+			installmentAmount = 0;
+
+			if (!TryParseAmountInput (request.BillingAmountText, "請求額", allowBlankAsZero: false, out billingAmount) ||
+				!TryParseAmountInput (request.ExpenseAmountText, "実費等総額", allowBlankAsZero: true, out expenseAmount) ||
+				!TryParseAmountInput (request.DepositAmountText, "お預かり金額", allowBlankAsZero: true, out depositAmount) ||
+				!TryParseAmountInput (request.InstallmentAmountText, "分割金", allowBlankAsZero: false, out installmentAmount)) {
+				return false;
+			}
+
+			if (billingAmount <= 0) {
 				UserErrorService.ShowOkNotification ("請求額が0円です。請求書を作成してください。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
-			if (!DateTime.TryParse (request.FirstDueDateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out firstDueDate) && !DateTime.TryParse (request.FirstDueDateText, CultureInfo.CurrentCulture, DateTimeStyles.None, out firstDueDate)) {
+			if (expenseAmount < 0 || depositAmount < 0) {
+				UserErrorService.ShowOkNotification ("実費等総額・お預かり金額に負数は指定できません。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			if (depositAmount > billingAmount) {
+				UserErrorService.ShowOkNotification ("お預かり金額が請求額を超えています。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			if (installmentAmount <= 0) {
+				UserErrorService.ShowOkNotification ("分割払い額が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			if (!TryParseDateInput (request.FirstDueDateText, out firstDueDate)) {
 				UserErrorService.ShowOkNotification ("期限（1回目）欄に日付が正しく入力されていません\r\n請求書で期限を入力してください", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
-			if (string.IsNullOrWhiteSpace (request.InstallmentAmountText) || installmentAmount <= 0.0) {
-				UserErrorService.ShowOkNotification ("分割払い額が未入力です", "案件情報System", MessageBoxIcon.Asterisk);
-				return false;
-			}
-			if (billingAmount / installmentAmount > 60.0) {
-				UserErrorService.ShowOkNotification ("分割回数が60回を超えてしまいます", "案件情報System", MessageBoxIcon.Asterisk);
-				return false;
-			}
+
 			return true;
 		}
 
-		private bool TryValidateChangeRequest (Workbook workbook, AccountingInstallmentScheduleChangeRequest request, out int scheduleStartFlag, out int startRow, out double changedInstallmentAmount, out double billingAmount, out double expenseAmount)
+		private bool TryValidateChangeRequest (
+			AccountingInstallmentScheduleChangeRequest request,
+			out int changeRound,
+			out double changedInstallmentAmount)
 		{
-			scheduleStartFlag = Convert.ToInt32 (ReadRequiredDouble (workbook, "A13", "開始フラグ", "AccountingInstallmentSchedule.ApplyChange"), CultureInfo.InvariantCulture);
-			startRow = 0;
-			changedInstallmentAmount = ParseAmount (request.ChangedInstallmentAmountText);
-			billingAmount = ParseAmount (request.BillingAmountText);
-			expenseAmount = ParseAmount (request.ExpenseAmountText);
-			double num = ParseAmount (request.ChangeRoundText);
-			if (billingAmount == 0.0) {
-				UserErrorService.ShowOkNotification ("請求額が0円です。請求書を作成してください。", "案件情報System", MessageBoxIcon.Asterisk);
+			changeRound = 0;
+			changedInstallmentAmount = 0;
+
+			if (!TryParseAmountInput (request.ChangedInstallmentAmountText, "変更後分割金", allowBlankAsZero: false, out changedInstallmentAmount)) {
 				return false;
 			}
-			if (string.IsNullOrWhiteSpace (request.ChangeRoundText)) {
-				UserErrorService.ShowOkNotification ("変更する回が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
-				return false;
-			}
-			if (num < 2.0 || num > 60.0) {
-				UserErrorService.ShowOkNotification ("途中変更する回は2～60の数値を入力してください。", "案件情報System", MessageBoxIcon.Asterisk);
-				return false;
-			}
-			if (string.IsNullOrWhiteSpace (request.ChangedInstallmentAmountText) || changedInstallmentAmount <= 0.0) {
+
+			if (changedInstallmentAmount <= 0) {
 				UserErrorService.ShowOkNotification ("変更後の分割払い額が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
-			int num2 = Convert.ToInt32 (num, CultureInfo.InvariantCulture) + 13;
-			int num3 = Convert.ToInt32 (num, CultureInfo.InvariantCulture) + 12;
-			startRow = ((scheduleStartFlag == 0) ? num2 : num3);
-			int num4 = ((scheduleStartFlag == 0) ? (num2 - 1) : (num3 - 1));
-			double num5 = ReadRequiredDouble (workbook, "I" + num4.ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.ApplyChange");
-			if (num5 <= 0.0) {
-				UserErrorService.ShowOkNotification ("変更する回にはすでに完済しています。", "案件情報System", MessageBoxIcon.Asterisk);
+			if (!TryParseIntegerInput (request.ChangeRoundText, "変更回", out changeRound) || changeRound < 1) {
+				UserErrorService.ShowOkNotification ("変更回は 1 以上の整数で入力してください。", "案件情報System", MessageBoxIcon.Asterisk);
 				return false;
 			}
-			double num6 = ((scheduleStartFlag == 0) ? (60.0 - (double)(num2 - 13) + 1.0) : (60.0 - (double)(num3 - 12) + 1.0));
-			if (num5 / changedInstallmentAmount >= num6) {
-				UserErrorService.ShowOkNotification ("分割回数が60回を超えてしまいます。", "案件情報System", MessageBoxIcon.Asterisk);
-				return false;
-			}
+
 			return true;
 		}
 
-		private void WriteCreateBaseValues (Workbook workbook, AccountingInstallmentScheduleCreateRequest request, DateTime firstDueDate, double billingAmount, double expenseAmount, double depositAmount, double installmentAmount)
+		private void WriteCreateBaseValues (
+			Workbook workbook,
+			AccountingInstallmentScheduleCreateRequest request,
+			DateTime firstDueDate,
+			double billingAmount,
+			double expenseAmount,
+			double depositAmount,
+			double installmentAmount)
 		{
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "請求額", billingAmount);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "実費等総額", expenseAmount);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "源泉処理", request.WithholdingText ?? string.Empty);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "第1回期限", firstDueDate);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "分割金", installmentAmount);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "分割払い予定表", "お預かり金額", depositAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentBillingAmountRangeName, billingAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentExpenseAmountRangeName, expenseAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentWithholdingRangeName, request.WithholdingText ?? string.Empty);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentFirstDueDateRangeName, firstDueDate);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentAmountRangeName, installmentAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentDepositAmountRangeName, depositAmount);
 		}
 
-		private int BuildScheduleWithDeposit (Workbook workbook, DateTime firstDueDate, double depositAmount, double installmentAmount)
+		private void WriteChangeBaseValues (Workbook workbook, int changeRound, double changedInstallmentAmount)
 		{
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "A13", 0);
-			_accountingWorkbookService.WriteCell (workbook, "分割払い予定表", "B13", "(充当済み)");
-			_accountingWorkbookService.SetHorizontalAlignmentCenter (workbook, "分割払い予定表", "B13");
-			double val = ReadRequiredDouble (workbook, "J12", "実費残高", "AccountingInstallmentSchedule.CreateSchedule");
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "H13", Math.Min (depositAmount, val));
-			ExecuteGoalSeekAndRound (workbook, 13, "C", "D", depositAmount);
-			int num = 14;
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "B14", firstDueDate);
-			ApplyExpenseForRow (workbook, num, installmentAmount);
-			ExecuteGoalSeekAndRound (workbook, num, "C", "D", installmentAmount);
-			return CompleteTrailingRowsAfterLoop (workbook, num, installmentAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentChangeRoundRangeName, changeRound);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentChangedAmountRangeName, changedInstallmentAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentAmountRangeName, changedInstallmentAmount);
 		}
 
-		private int BuildScheduleWithoutDeposit (Workbook workbook, DateTime firstDueDate, double installmentAmount)
+		private InstallmentScheduleInputs LoadInputsFromNamedRanges (Workbook workbook, bool requireChange)
 		{
-			int num = 13;
-			WriteDueDate (workbook, num, firstDueDate);
-			ApplyExpenseForRow (workbook, num, installmentAmount);
-			ExecuteGoalSeekAndRound (workbook, num, "C", "D", installmentAmount);
-			return CompleteTrailingRowsAfterLoop (workbook, num, installmentAmount);
-		}
+			EnsureRequiredNamedRanges (workbook);
 
-		private int BuildChangedSchedule (Workbook workbook, int scheduleStartFlag, int startRow, double changedInstallmentAmount)
-		{
-			WriteDueDate (workbook, startRow, DateTime.MinValue);
-			ApplyExpenseForChangedRow (workbook, startRow, changedInstallmentAmount);
-			ExecuteGoalSeekAndRound (workbook, startRow, "C", "D", changedInstallmentAmount);
-			int num = startRow;
-			double num2 = ReadRequiredDouble (workbook, "I" + num.ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.ApplyChange");
-			while (num2 > changedInstallmentAmount) {
-				int num3 = num + 1;
-				WriteDueDate (workbook, num3, DateTime.MinValue);
-				ApplyExpenseForChangedRow (workbook, num3, changedInstallmentAmount);
-				ExecuteGoalSeekAndRound (workbook, num3, "C", "D", changedInstallmentAmount);
-				num = num3;
-				num2 = ReadRequiredDouble (workbook, "I" + num.ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.ApplyChange");
+			double billingAmount = ReadRequiredNamedDouble (workbook, InstallmentBillingAmountRangeName, "請求額");
+			double expenseAmount = ReadRequiredNamedDouble (workbook, InstallmentExpenseAmountRangeName, "実費等総額");
+			double depositAmount = ReadRequiredNamedDouble (workbook, InstallmentDepositAmountRangeName, "お預かり金額");
+			double installmentAmount = ReadRequiredNamedDouble (workbook, InstallmentAmountRangeName, "分割金");
+			DateTime firstDueDate = ReadRequiredNamedDate (workbook, InstallmentFirstDueDateRangeName, "第１回期限");
+			string withholdingText = ReadRequiredNamedText (workbook, InstallmentWithholdingRangeName, "源泉処理");
+
+			if (billingAmount <= 0) {
+				throw new InvalidOperationException ("請求額は 1 円以上で入力してください。");
 			}
-			if (num2 < 0.0) {
-				AdjustRow (workbook, num);
-				ClearRowsFrom (num + 1, workbook);
-				return num;
+			if (expenseAmount < 0 || depositAmount < 0) {
+				throw new InvalidOperationException ("実費等総額・お預かり金額に負数は指定できません。");
 			}
-			int num4 = num + 1;
-			WriteDueDate (workbook, num4, DateTime.MinValue);
-			ApplyExpenseForChangedRow (workbook, num4, changedInstallmentAmount);
-			AdjustRow (workbook, num4);
-			ClearRowsFrom (num4 + 1, workbook);
-			return num4;
+			if (depositAmount > billingAmount) {
+				throw new InvalidOperationException ("お預かり金額が請求額を超えています。");
+			}
+			if (installmentAmount <= 0) {
+				throw new InvalidOperationException ("分割金は 1 円以上で入力してください。");
+			}
+			if (!IsSupportedWithholdingText (withholdingText)) {
+				throw new InvalidOperationException ("源泉処理は「する」または「しない」を指定してください。");
+			}
+
+			int changeRound = 0;
+			double changedInstallmentAmount = 0;
+			if (requireChange) {
+				changeRound = Convert.ToInt32 (ReadRequiredNamedDouble (workbook, InstallmentChangeRoundRangeName, "変更回"), CultureInfo.InvariantCulture);
+				changedInstallmentAmount = ReadRequiredNamedDouble (workbook, InstallmentChangedAmountRangeName, "変更後分割金");
+				if (changeRound < 1) {
+					throw new InvalidOperationException ("変更回は 1 以上を入力してください。");
+				}
+				if (changedInstallmentAmount <= 0) {
+					throw new InvalidOperationException ("変更後分割金は 1 円以上で入力してください。");
+				}
+			}
+
+			return new InstallmentScheduleInputs (
+				billingAmount,
+				expenseAmount,
+				depositAmount,
+				installmentAmount,
+				firstDueDate,
+				withholdingText,
+				changeRound,
+				changedInstallmentAmount);
 		}
 
-		private int CompleteTrailingRowsAfterLoop (Workbook workbook, int currentRow, double installmentAmount)
+		private int GenerateSchedule (Workbook workbook, InstallmentScheduleInputs inputs, int startRow, bool isCreateFromFirstRow)
 		{
-			double num = ReadRequiredDouble (workbook, "I" + currentRow.ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.CreateSchedule");
-			while (num > installmentAmount) {
-				int num2 = currentRow + 1;
-				WriteDueDate (workbook, num2, DateTime.MinValue);
-				ApplyExpenseForRow (workbook, num2, installmentAmount);
-				ExecuteGoalSeekAndRound (workbook, num2, "C", "D", installmentAmount);
-				currentRow = num2;
-				num = ReadRequiredDouble (workbook, "I" + currentRow.ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.CreateSchedule");
+			int row = startRow;
+			while (true) {
+				AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (row);
+				ScheduleRowGoal rowGoal = WriteScheduleRow (workbook, inputs, row, isCreateFromFirstRow && row == AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow);
+				GoalSeekAndVerify (workbook, row, rowGoal.FormulaColumn, rowGoal.TargetValue, rowGoal.Kind);
+
+				double billingBalance = ReadRequiredDouble (workbook, "I" + row.ToString (CultureInfo.InvariantCulture), "請求残高", "AccountingInstallmentSchedule.GenerateSchedule");
+				if (billingBalance < -BalanceTolerance) {
+					GoalSeekAndVerify (workbook, row, "I", 0, "最終回請求残高");
+					return row;
+				}
+				if (Math.Abs (billingBalance) <= BalanceTolerance) {
+					if (Math.Abs (billingBalance) > 0.0001) {
+						GoalSeekAndVerify (workbook, row, "I", 0, "最終回請求残高");
+					}
+					return row;
+				}
+
+				row++;
+				if (row > AccountingInstallmentSchedulePlanPolicy.LastScheduleRow) {
+					throw new InvalidOperationException ("分割払い予定表が A12:J73 のテーブル範囲を超えます。分割金を増額してください。");
+				}
 			}
-			if (num < 0.0) {
-				AdjustRow (workbook, currentRow);
-				ClearRowsFrom (currentRow + 1, workbook);
-				return currentRow;
-			}
-			int num3 = currentRow + 1;
-			WriteDueDate (workbook, num3, DateTime.MinValue);
-			ApplyExpenseForRow (workbook, num3, installmentAmount);
-			AdjustRow (workbook, num3);
-			ClearRowsFrom (num3 + 1, workbook);
-			return num3;
 		}
 
-		private void WriteDueDate (Workbook workbook, int row, DateTime firstDueDate)
+		private ScheduleRowGoal WriteScheduleRow (Workbook workbook, InstallmentScheduleInputs inputs, int row, bool isCreateFirstRow)
 		{
-			if (row == 13) {
-				_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "B13", firstDueDate);
+			int previousRow = row - 1;
+			double previousExpenseBalance = ReadRequiredDouble (workbook, "J" + previousRow.ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingInstallmentSchedule.WriteScheduleRow");
+
+			if (isCreateFirstRow) {
+				bool hasDeposit = inputs.DepositAmount != 0;
+				_accountingWorkbookService.WriteCellValue (workbook, SheetName, "A" + row.ToString (CultureInfo.InvariantCulture), hasDeposit ? 0 : 1);
+				if (hasDeposit) {
+					_accountingWorkbookService.WriteCell (workbook, SheetName, "B" + row.ToString (CultureInfo.InvariantCulture), DepositAppliedText);
+					_accountingWorkbookService.SetHorizontalAlignmentCenter (workbook, SheetName, "B" + row.ToString (CultureInfo.InvariantCulture));
+				} else {
+					_accountingWorkbookService.WriteCellValue (workbook, SheetName, "B" + row.ToString (CultureInfo.InvariantCulture), inputs.FirstDueDate);
+				}
+
+				double firstExpenseCharge = Math.Min (inputs.DepositAmount, inputs.ExpenseAmount);
+				WriteScheduleRowFormulas (workbook, row, previousRow, firstExpenseCharge);
+				double target = hasDeposit ? inputs.DepositAmount : inputs.InstallmentAmount;
+				return new ScheduleRowGoal ("C", target, hasDeposit ? "14行目お預かり金額" : "14行目分割金");
+			}
+
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "A" + row.ToString (CultureInfo.InvariantCulture), "=A" + previousRow.ToString (CultureInfo.InvariantCulture) + "+1");
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, "B" + row.ToString (CultureInfo.InvariantCulture), ResolveDueDate (workbook, inputs, previousRow));
+			double expenseCharge = AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (inputs.InstallmentAmount, previousExpenseBalance);
+			WriteScheduleRowFormulas (workbook, row, previousRow, expenseCharge);
+			return new ScheduleRowGoal ("C", inputs.InstallmentAmount, "通常分割金");
+		}
+
+		private void WriteScheduleRowFormulas (Workbook workbook, int row, int previousRow, double expenseCharge)
+		{
+			string rowText = row.ToString (CultureInfo.InvariantCulture);
+			string previousRowText = previousRow.ToString (CultureInfo.InvariantCulture);
+
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, "D" + rowText, 0);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, "H" + rowText, expenseCharge);
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "C" + rowText, "=F" + rowText + "-G" + rowText + "+H" + rowText);
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "E" + rowText, "=ROUNDDOWN(D" + rowText + "*引数!$C$4,0)");
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "F" + rowText, "=D" + rowText + "+E" + rowText);
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "G" + rowText, "=IF($J$9,ROUNDDOWN(IF(D" + rowText + "<=1000000,D" + rowText + "*10.21%,(D" + rowText + "-1000000)*20.42%+102100),0),0)");
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "I" + rowText, "=I" + previousRowText + "-(C" + rowText + "+G" + rowText + ")");
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "J" + rowText, "=J" + previousRowText + "-H" + rowText);
+		}
+
+		private DateTime ResolveDueDate (Workbook workbook, InstallmentScheduleInputs inputs, int previousRow)
+		{
+			string previousDueDateAddress = "B" + previousRow.ToString (CultureInfo.InvariantCulture);
+			if (TryReadCellDate (workbook, previousDueDateAddress, out DateTime previousDueDate)) {
+				return AccountingInstallmentSchedulePlanPolicy.AddOnePaymentMonth (previousDueDate);
+			}
+
+			return inputs.FirstDueDate;
+		}
+
+		private void GoalSeekAndVerify (Workbook workbook, int row, string formulaColumn, double targetValue, string kind)
+		{
+			string rowText = row.ToString (CultureInfo.InvariantCulture);
+			string formulaCellAddress = formulaColumn + rowText;
+			string changingCellAddress = "D" + rowText;
+
+			_accountingWorkbookService.ExecuteGoalSeekOrThrow (workbook, SheetName, formulaCellAddress, changingCellAddress, targetValue);
+
+			double current = ReadRequiredDouble (workbook, formulaCellAddress, kind, "AccountingInstallmentSchedule.GoalSeekAndVerify");
+			double changingValue = ReadRequiredDouble (workbook, changingCellAddress, "10％対象計", "AccountingInstallmentSchedule.GoalSeekAndVerify");
+			if (Math.Abs (current - targetValue) > BalanceTolerance) {
+				throw new InvalidOperationException (
+					"GoalSeek 後の値が目標値と一致しません。row=" + rowText +
+					", formulaCell=" + formulaCellAddress +
+					", changingCell=" + changingCellAddress +
+					", target=" + targetValue.ToString (CultureInfo.InvariantCulture) +
+					", current=" + current.ToString (CultureInfo.InvariantCulture));
+			}
+			if (changingValue < -BalanceTolerance) {
+				throw new InvalidOperationException (
+					"GoalSeek 後の10％対象計が負数です。row=" + rowText +
+					", formulaCell=" + formulaCellAddress +
+					", changingCell=" + changingCellAddress +
+					", target=" + targetValue.ToString (CultureInfo.InvariantCulture) +
+					", changingValue=" + changingValue.ToString (CultureInfo.InvariantCulture));
+			}
+		}
+
+		private void WriteStartValues (Workbook workbook, InstallmentScheduleInputs inputs)
+		{
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, "I13", inputs.BillingAmount);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, "J13", inputs.ExpenseAmount);
+			RestoreWithholdingHelperFormula (workbook);
+			EnsureHiddenLayout (workbook);
+		}
+
+		private void FinishSchedule (Workbook workbook, int lastRow)
+		{
+			ClearScheduleRows (workbook, lastRow + 1);
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, InstallmentPaymentTotalCellAddress, "=SUM(C14:C" + lastRow.ToString (CultureInfo.InvariantCulture) + ")");
+			_accountingWorkbookService.SetPrintAreaByBounds (workbook, SheetName, lastRow, AccountingInstallmentSchedulePlanPolicy.PrintLastColumn);
+			EnsureHiddenLayout (workbook);
+		}
+
+		private void EnsureWorkbookStructure (Workbook workbook)
+		{
+			EnsureRequiredNamedRanges (workbook);
+			if (!_accountingWorkbookService.HasListObjectRange (workbook, SheetName, TableRangeAddress)) {
+				throw new InvalidOperationException ("分割払い予定表シートのテーブル範囲が A12:J73 ではありません。実ブック構造を確認してください。");
+			}
+			RestoreWithholdingHelperFormula (workbook);
+			EnsureHiddenLayout (workbook);
+		}
+
+		private void EnsureRequiredNamedRanges (Workbook workbook)
+		{
+			for (int index = 0; index < RequiredNamedRanges.Length; index++) {
+				_accountingWorkbookService.GetNamedRangeAddress (workbook, SheetName, RequiredNamedRanges [index]);
+			}
+		}
+
+		private void RestoreWithholdingHelperFormula (Workbook workbook)
+		{
+			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "J9", "=IF(K9=\"する\",TRUE,FALSE)");
+		}
+
+		private void EnsureHiddenLayout (Workbook workbook)
+		{
+			_accountingWorkbookService.SetRowHidden (workbook, SheetName, AccountingInstallmentSchedulePlanPolicy.StartValueRow, true);
+			_accountingWorkbookService.SetColumnHidden (workbook, SheetName, "J", true);
+		}
+
+		private List<AccountingInstallmentScheduleExistingRow> ReadExistingScheduleRows (Workbook workbook)
+		{
+			List<AccountingInstallmentScheduleExistingRow> rows = new List<AccountingInstallmentScheduleExistingRow> ();
+			for (int row = AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow; row <= AccountingInstallmentSchedulePlanPolicy.LastScheduleRow; row++) {
+				if (!TryReadScheduleRound (workbook, row, out int round)) {
+					continue;
+				}
+				double billingBalance = TryReadDouble (workbook, "I" + row.ToString (CultureInfo.InvariantCulture), out double billing) ? billing : double.NaN;
+				double expenseBalance = TryReadDouble (workbook, "J" + row.ToString (CultureInfo.InvariantCulture), out double expense) ? expense : double.NaN;
+				rows.Add (new AccountingInstallmentScheduleExistingRow (row, round, billingBalance, expenseBalance));
+			}
+
+			return rows;
+		}
+
+		private bool TryReadScheduleRound (Workbook workbook, int row, out int round)
+		{
+			round = 0;
+			string address = "A" + row.ToString (CultureInfo.InvariantCulture);
+			object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, address);
+			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, SheetName, address);
+			if (AccountingNumericCellReader.TryParseNumericCell (value, displayText, out double parsed, out bool isBlank)) {
+				if (isBlank) {
+					return false;
+				}
+				if (Math.Abs (parsed - Math.Round (parsed)) > 0.0001) {
+					throw new InvalidOperationException (address + " の回数が整数ではありません。");
+				}
+				round = Convert.ToInt32 (Math.Round (parsed), CultureInfo.InvariantCulture);
+				return true;
+			}
+			throw AccountingNumericCellReader.CreateReadFailureException (SheetName, address, "回数", "AccountingInstallmentSchedule.ReadExistingScheduleRows", displayText, allowBlankAsZero: false);
+		}
+
+		private ScheduleSnapshot TakeScheduleSnapshot (Workbook workbook, int startRow)
+		{
+			if (startRow > AccountingInstallmentSchedulePlanPolicy.LastScheduleRow) {
+				return null;
+			}
+
+			string address = "A" + startRow.ToString (CultureInfo.InvariantCulture) + ":J" + AccountingInstallmentSchedulePlanPolicy.LastScheduleRow.ToString (CultureInfo.InvariantCulture);
+			object rangeSnapshot = _accountingWorkbookService.ReadRangeFormulaSnapshot (workbook, SheetName, address);
+			object totalSnapshot = _accountingWorkbookService.ReadRangeFormulaSnapshot (workbook, SheetName, InstallmentPaymentTotalCellAddress);
+			return new ScheduleSnapshot (address, rangeSnapshot, totalSnapshot);
+		}
+
+		private void RestoreSnapshotQuietly (Workbook workbook, ScheduleSnapshot snapshot)
+		{
+			if (workbook == null || snapshot == null) {
 				return;
 			}
-			DateTime dateTime = ReadCellDate (workbook, "B" + (row - 1).ToString (CultureInfo.InvariantCulture));
-			DateTime dateTime2 = new DateTime (dateTime.Year, dateTime.Month, 1).AddMonths (2).AddDays (-1.0);
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "B" + row.ToString (CultureInfo.InvariantCulture), dateTime2);
-		}
 
-		private void ApplyExpenseForRow (Workbook workbook, int row, double installmentAmount)
-		{
-			double num = ReadRequiredDouble (workbook, "J" + (row - 1).ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingInstallmentSchedule.CreateSchedule");
-			double num2 = ((installmentAmount >= num) ? num : installmentAmount);
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "H" + row.ToString (CultureInfo.InvariantCulture), num2);
-		}
-
-		private void ApplyExpenseForChangedRow (Workbook workbook, int row, double changedInstallmentAmount)
-		{
-			double num = ReadRequiredDouble (workbook, "J" + (row - 1).ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingInstallmentSchedule.ApplyChange");
-			double num2 = ((changedInstallmentAmount >= num) ? num : changedInstallmentAmount);
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "H" + row.ToString (CultureInfo.InvariantCulture), num2);
-		}
-
-		private void ExecuteGoalSeekAndRound (Workbook workbook, int row, string formulaColumn, string changingColumn, double goalValue)
-		{
-			string text = row.ToString (CultureInfo.InvariantCulture);
-			string formulaCellAddress = formulaColumn + text;
-			string text2 = changingColumn + text;
-			_accountingWorkbookService.ExecuteGoalSeek (workbook, "分割払い予定表", formulaCellAddress, text2, goalValue);
-			double value = ReadRequiredDouble (workbook, text2, GetInstallmentNumericItemName (text2), "AccountingInstallmentSchedule.ExecuteGoalSeekAndRound");
-			double num = Math.Round (value, 0, MidpointRounding.AwayFromZero);
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", text2, num);
-		}
-
-		private void AdjustRow (Workbook workbook, int row)
-		{
-			double goalValue = ReadRequiredDouble (workbook, "I" + (row - 1).ToString (CultureInfo.InvariantCulture), "残高", "AccountingInstallmentSchedule.AdjustRow") - ReadRequiredDouble (workbook, "H" + row.ToString (CultureInfo.InvariantCulture), "実費等", "AccountingInstallmentSchedule.AdjustRow");
-			ExecuteGoalSeekAndRound (workbook, row, "F", "D", goalValue);
-		}
-
-		private void ClearRowsFrom (int startRow, Workbook workbook)
-		{
-			if (startRow <= 73) {
-				string text = startRow.ToString (CultureInfo.InvariantCulture);
-				string text2 = 73.ToString (CultureInfo.InvariantCulture);
-				_accountingWorkbookService.ClearRangeContents (workbook, "分割払い予定表", "B" + text + ":B" + text2);
-				_accountingWorkbookService.ClearRangeContents (workbook, "分割払い予定表", "D" + text + ":D" + text2);
-				_accountingWorkbookService.ClearRangeContents (workbook, "分割払い予定表", "H" + text + ":H" + text2);
+			try {
+				_accountingWorkbookService.WriteRangeFormulaSnapshot (workbook, SheetName, snapshot.Address, snapshot.RangeFormulaSnapshot);
+				_accountingWorkbookService.WriteRangeFormulaSnapshot (workbook, SheetName, InstallmentPaymentTotalCellAddress, snapshot.PaymentTotalFormulaSnapshot);
+			} catch (Exception exception) {
+				_logger.Error ("Installment schedule snapshot restore failed.", exception);
 			}
 		}
 
-		private void RefreshPrintArea (Workbook workbook)
+		private void ClearScheduleRows (Workbook workbook, int startRow)
 		{
-			int lastUsedRowInColumn = _accountingWorkbookService.GetLastUsedRowInColumn (workbook, "分割払い予定表", "D");
-			if (lastUsedRowInColumn >= 1) {
-				_accountingWorkbookService.SetPrintAreaByBounds (workbook, "分割払い予定表", lastUsedRowInColumn, 9);
+			if (startRow > AccountingInstallmentSchedulePlanPolicy.LastScheduleRow) {
+				return;
 			}
-		}
 
-		private void WritePaymentTotal (Workbook workbook)
-		{
-			int lastUsedRowInColumn = _accountingWorkbookService.GetLastUsedRowInColumn (workbook, "分割払い予定表", "C");
-			double num = 0.0;
-			for (int i = 13; i <= lastUsedRowInColumn; i++) {
-				num += ReadRequiredDouble (workbook, "C" + i.ToString (CultureInfo.InvariantCulture), "目標値", "AccountingInstallmentSchedule.WritePaymentTotal");
+			if (startRow < AccountingInstallmentSchedulePlanPolicy.StartValueRow) {
+				startRow = AccountingInstallmentSchedulePlanPolicy.StartValueRow;
 			}
-			_accountingWorkbookService.WriteCellValue (workbook, "分割払い予定表", "I9", num);
+
+			string range = "A" + startRow.ToString (CultureInfo.InvariantCulture) + ":J" + AccountingInstallmentSchedulePlanPolicy.LastScheduleRow.ToString (CultureInfo.InvariantCulture);
+			_accountingWorkbookService.ClearRangeContents (workbook, SheetName, range);
 		}
 
-		private static double ParseAmount (string text)
+		private double ReadRequiredNamedDouble (Workbook workbook, string rangeName, string itemName)
 		{
-			string text2 = (text ?? string.Empty).Replace (",", string.Empty).Trim ();
-			if (text2.Length == 0) {
-				return 0.0;
+			object cellValue = _accountingWorkbookService.ReadNamedRangeValue (workbook, SheetName, rangeName);
+			string displayText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, rangeName);
+			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out double value, out bool isBlank) && !isBlank) {
+				return value;
 			}
-			double result;
-			return double.TryParse (text2, NumberStyles.Number, CultureInfo.InvariantCulture, out result) ? result : 0.0;
+
+			throw AccountingNumericCellReader.CreateReadFailureException (SheetName, rangeName, itemName, "AccountingInstallmentSchedule.LoadInputs", displayText, allowBlankAsZero: false);
 		}
 
-		private DateTime ReadCellDate (Workbook workbook, string address)
+		private DateTime ReadRequiredNamedDate (Workbook workbook, string rangeName, string itemName)
 		{
-			return _accountingWorkbookService.ReadDateCell (workbook, "分割払い予定表", address);
+			object value = _accountingWorkbookService.ReadNamedRangeValue (workbook, SheetName, rangeName);
+			if (value is double) {
+				return DateTime.FromOADate ((double)value);
+			}
+			if (value is DateTime) {
+				return (DateTime)value;
+			}
+
+			string displayText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, rangeName);
+			if (TryParseDateInput (displayText, out DateTime parsed)) {
+				return parsed;
+			}
+
+			throw new InvalidOperationException (itemName + " に日付が入力されていません。");
 		}
 
-		private void SyncInstallmentHeaderFromInvoice (Workbook workbook)
+		private string ReadRequiredNamedText (Workbook workbook, string rangeName, string itemName)
 		{
-			_accountingWorkbookService.CopyValueRange (workbook, "請求書", "A3:A4", "分割払い予定表", "A3:A4");
+			string text = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, rangeName);
+			if (string.IsNullOrWhiteSpace (text)) {
+				text = Convert.ToString (_accountingWorkbookService.ReadNamedRangeValue (workbook, SheetName, rangeName), CultureInfo.InvariantCulture) ?? string.Empty;
+			}
+			if (string.IsNullOrWhiteSpace (text)) {
+				throw new InvalidOperationException (itemName + " が未入力です。");
+			}
+			return text.Trim ();
+		}
+
+		private bool TryReadDouble (Workbook workbook, string address, out double value)
+		{
+			value = 0;
+			object cellValue = _accountingWorkbookService.ReadCellValue (workbook, SheetName, address);
+			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, SheetName, address);
+			return AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out value, out bool isBlank) && !isBlank;
 		}
 
 		private double ReadRequiredDouble (Workbook workbook, string address, string itemName, string procedureName)
 		{
-			return ReadRequiredDouble (workbook, "分割払い予定表", address, itemName, procedureName);
+			return ReadRequiredDouble (workbook, SheetName, address, itemName, procedureName);
 		}
 
 		private double ReadRequiredDouble (Workbook workbook, string sheetName, string address, string itemName, string procedureName)
@@ -496,7 +676,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (warnings != null) {
 					warnings.Add (exception.Message);
 				}
-				return 0.0;
+				return 0;
 			}
 		}
 
@@ -504,16 +684,42 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			object cellValue = _accountingWorkbookService.ReadCellValue (workbook, sheetName, address);
 			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, sheetName, address);
-			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out var value, out var isBlank)) {
+			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out double value, out bool isBlank)) {
 				return value;
 			}
 			if (allowBlankAsZero && isBlank) {
-				return 0.0;
+				return 0;
 			}
+
 			InvalidOperationException ex = AccountingNumericCellReader.CreateReadFailureException (sheetName, address, itemName, procedureName, displayText, allowBlankAsZero);
-			string text = Convert.ToString (cellValue, CultureInfo.InvariantCulture) ?? string.Empty;
-			_logger.Error ("Accounting numeric cell read failed. sheet=" + sheetName + ", address=" + address + ", item=" + itemName + ", procedure=" + procedureName + ", displayText=" + (string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ()) + ", cellValue=" + text, ex);
+			string valueText = Convert.ToString (cellValue, CultureInfo.InvariantCulture) ?? string.Empty;
+			_logger.Error ("Accounting numeric cell read failed. sheet=" + sheetName + ", address=" + address + ", item=" + itemName + ", procedure=" + procedureName + ", displayText=" + (string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ()) + ", cellValue=" + valueText, ex);
 			throw ex;
+		}
+
+		private bool TryReadCellDate (Workbook workbook, string address, out DateTime value)
+		{
+			try {
+				value = _accountingWorkbookService.ReadDateCell (workbook, SheetName, address);
+				return true;
+			} catch {
+				value = DateTime.MinValue;
+				return false;
+			}
+		}
+
+		private void SyncInstallmentHeaderFromInvoice (Workbook workbook)
+		{
+			_accountingWorkbookService.CopyValueRange (workbook, InvoiceSheetName, "A3:A4", SheetName, "A3:A4");
+		}
+
+		private void ProtectSheetQuietly (Workbook workbook, string logMessage)
+		{
+			try {
+				_accountingWorkbookService.ProtectSheetUiOnly (workbook, SheetName);
+			} catch (Exception exception) {
+				_logger.Error (logMessage, exception);
+			}
 		}
 
 		private void ShowLoadFormStateNumericReadWarning (string warningMessage)
@@ -521,32 +727,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (string.IsNullOrWhiteSpace (warningMessage)) {
 				return;
 			}
+
 			_logger.Warn ("AccountingInstallmentSchedule.LoadFormState numeric read warning. " + warningMessage.Replace (Environment.NewLine, " | "));
 			UserErrorService.ShowOkNotification ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxIcon.Warning);
-		}
-
-		private static string GetInstallmentNumericItemName (string address)
-		{
-			string text = (address ?? string.Empty).Trim ();
-			if (text.StartsWith ("A", StringComparison.OrdinalIgnoreCase)) {
-				return "開始フラグ";
-			}
-			if (text.StartsWith ("C", StringComparison.OrdinalIgnoreCase)) {
-				return "目標値";
-			}
-			if (text.StartsWith ("D", StringComparison.OrdinalIgnoreCase)) {
-				return "調整額";
-			}
-			if (text.StartsWith ("H", StringComparison.OrdinalIgnoreCase)) {
-				return "実費等";
-			}
-			if (text.StartsWith ("I", StringComparison.OrdinalIgnoreCase)) {
-				return "残高";
-			}
-			if (text.StartsWith ("J", StringComparison.OrdinalIgnoreCase)) {
-				return "実費残高";
-			}
-			return "数値項目";
 		}
 
 		private bool ReadBooleanSafe (Workbook workbook, string sheetName, string address)
@@ -559,6 +742,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
+		private static bool TryParseAmountInput (string text, string itemName, bool allowBlankAsZero, out double value)
+		{
+			value = 0;
+			string normalized = (text ?? string.Empty).Replace (",", string.Empty).Trim ();
+			if (normalized.Length == 0) {
+				if (allowBlankAsZero) {
+					return true;
+				}
+				UserErrorService.ShowOkNotification (itemName + " が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			if (!double.TryParse (normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out value) &&
+				!double.TryParse (normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out value)) {
+				UserErrorService.ShowOkNotification (itemName + " は数値で入力してください。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			return true;
+		}
+
+		private static bool TryParseIntegerInput (string text, string itemName, out int value)
+		{
+			value = 0;
+			string normalized = (text ?? string.Empty).Replace (",", string.Empty).Trim ();
+			if (normalized.Length == 0) {
+				UserErrorService.ShowOkNotification (itemName + " が未入力です。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			if (!int.TryParse (normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) &&
+				!int.TryParse (normalized, NumberStyles.Integer, CultureInfo.CurrentCulture, out value)) {
+				UserErrorService.ShowOkNotification (itemName + " は整数で入力してください。", "案件情報System", MessageBoxIcon.Asterisk);
+				return false;
+			}
+			return true;
+		}
+
+		private static bool TryParseDateInput (string text, out DateTime value)
+		{
+			return DateTime.TryParse (text, CultureInfo.InvariantCulture, DateTimeStyles.None, out value) ||
+				DateTime.TryParse (text, CultureInfo.CurrentCulture, DateTimeStyles.None, out value);
+		}
+
+		private static bool IsSupportedWithholdingText (string text)
+		{
+			return string.Equals ((text ?? string.Empty).Trim (), "する", StringComparison.Ordinal) ||
+				string.Equals ((text ?? string.Empty).Trim (), "しない", StringComparison.Ordinal);
+		}
+
 		private static string FormatAmount (double value)
 		{
 			return value.ToString ("#,##0", CultureInfo.InvariantCulture);
@@ -567,10 +797,70 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private string ReadFormattedDateSafe (Workbook workbook, string sheetName, string address)
 		{
 			try {
-				return _accountingWorkbookService.ReadDateCell (workbook, sheetName, address).ToString ("yyyy/MM/dd", CultureInfo.InvariantCulture);
+				return _accountingWorkbookService.ReadDateCell (workbook, sheetName, address).ToString (DateDisplayFormat, CultureInfo.InvariantCulture);
 			} catch {
 				return _accountingWorkbookService.ReadDisplayText (workbook, sheetName, address);
 			}
+		}
+
+		private sealed class InstallmentScheduleInputs
+		{
+			internal InstallmentScheduleInputs (
+				double billingAmount,
+				double expenseAmount,
+				double depositAmount,
+				double installmentAmount,
+				DateTime firstDueDate,
+				string withholdingText,
+				int changeRound,
+				double changedInstallmentAmount)
+			{
+				BillingAmount = billingAmount;
+				ExpenseAmount = expenseAmount;
+				DepositAmount = depositAmount;
+				InstallmentAmount = installmentAmount;
+				FirstDueDate = firstDueDate;
+				WithholdingText = withholdingText;
+				ChangeRound = changeRound;
+				ChangedInstallmentAmount = changedInstallmentAmount;
+			}
+
+			internal double BillingAmount { get; private set; }
+			internal double ExpenseAmount { get; private set; }
+			internal double DepositAmount { get; private set; }
+			internal double InstallmentAmount { get; private set; }
+			internal DateTime FirstDueDate { get; private set; }
+			internal string WithholdingText { get; private set; }
+			internal int ChangeRound { get; private set; }
+			internal double ChangedInstallmentAmount { get; private set; }
+		}
+
+		private sealed class ScheduleRowGoal
+		{
+			internal ScheduleRowGoal (string formulaColumn, double targetValue, string kind)
+			{
+				FormulaColumn = formulaColumn;
+				TargetValue = targetValue;
+				Kind = kind;
+			}
+
+			internal string FormulaColumn { get; private set; }
+			internal double TargetValue { get; private set; }
+			internal string Kind { get; private set; }
+		}
+
+		private sealed class ScheduleSnapshot
+		{
+			internal ScheduleSnapshot (string address, object rangeFormulaSnapshot, object paymentTotalFormulaSnapshot)
+			{
+				Address = address;
+				RangeFormulaSnapshot = rangeFormulaSnapshot;
+				PaymentTotalFormulaSnapshot = paymentTotalFormulaSnapshot;
+			}
+
+			internal string Address { get; private set; }
+			internal object RangeFormulaSnapshot { get; private set; }
+			internal object PaymentTotalFormulaSnapshot { get; private set; }
 		}
 	}
 }

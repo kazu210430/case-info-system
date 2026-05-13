@@ -124,6 +124,23 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		internal void WriteCellFormula (Workbook workbook, string sheetName, string address, string formula)
+		{
+			Worksheet worksheet = null;
+			Range range = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
+				range.Formula = formula ?? string.Empty;
+				_logger.Debug ("AccountingWorkbookService", "WriteCellFormula sheet=" + sheetName + ", address=" + address);
+			} catch (Exception innerException) {
+				throw new InvalidOperationException ("セルへの数式書き込みに失敗しました。sheet=" + sheetName + ", address=" + address, innerException);
+			} finally {
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
 		internal void WriteSameValueToSheets (Workbook workbook, IEnumerable<string> sheetNames, string address, string valueText)
 		{
 			if (sheetNames == null) {
@@ -285,6 +302,35 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		internal object ReadRangeFormulaSnapshot (Workbook workbook, string sheetName, string address)
+		{
+			Worksheet worksheet = null;
+			Range range = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
+				return range.Formula;
+			} finally {
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		internal void WriteRangeFormulaSnapshot (Workbook workbook, string sheetName, string address, object formulaSnapshot)
+		{
+			Worksheet worksheet = null;
+			Range range = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				range = ((_Worksheet)worksheet).get_Range ((object)address, Type.Missing);
+				range.Formula = formulaSnapshot ?? string.Empty;
+				_logger.Debug ("AccountingWorkbookService", "WriteRangeFormulaSnapshot sheet=" + sheetName + ", address=" + address);
+			} finally {
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
 		internal void WriteCellValue (Worksheet worksheet, string address, object value)
 		{
 			Range range = null;
@@ -387,6 +433,43 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		internal object ReadNamedRangeValue (Workbook workbook, string sheetName, string rangeName)
+		{
+			Worksheet worksheet = null;
+			Range range = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				range = ResolveNamedRange (workbook, worksheet, rangeName);
+				return range.Value2;
+			} finally {
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		internal string GetNamedRangeAddress (Workbook workbook, string sheetName, string rangeName)
+		{
+			Worksheet worksheet = null;
+			Range range = null;
+			Worksheet ownerWorksheet = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				range = ResolveNamedRange (workbook, worksheet, rangeName);
+				ownerWorksheet = range.Worksheet as Worksheet;
+				string ownerSheetName = ownerWorksheet == null ? string.Empty : (ownerWorksheet.Name ?? string.Empty);
+				if (!string.Equals (ownerSheetName, sheetName, StringComparison.Ordinal)) {
+					throw new InvalidOperationException ("名前定義の参照先シートが想定と異なります。sheet=" + sheetName + ", name=" + rangeName + ", actualSheet=" + ownerSheetName);
+				}
+				return range.get_Address ((object)false, (object)false, XlReferenceStyle.xlA1, Type.Missing, Type.Missing);
+			} catch (Exception innerException) {
+				throw new InvalidOperationException ("名前定義が見つからないか参照できません。sheet=" + sheetName + ", name=" + rangeName, innerException);
+			} finally {
+				ComObjectReleaseService.Release (ownerWorksheet);
+				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
 		internal void ClearNamedRangeContents (Workbook workbook, string sheetName, string rangeName)
 		{
 			Worksheet worksheet = null;
@@ -437,6 +520,68 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				ComObjectReleaseService.Release (range3);
 				ComObjectReleaseService.Release (range2);
 				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		internal bool HasListObjectRange (Workbook workbook, string sheetName, string expectedAddress)
+		{
+			Worksheet worksheet = null;
+			ListObjects listObjects = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				listObjects = worksheet.ListObjects;
+				int count = listObjects == null ? 0 : listObjects.Count;
+				for (int index = 1; index <= count; index++) {
+					ListObject listObject = null;
+					Range range = null;
+					try {
+						listObject = listObjects [index];
+						range = listObject.Range;
+						string address = range.get_Address ((object)false, (object)false, XlReferenceStyle.xlA1, Type.Missing, Type.Missing);
+						if (string.Equals (address, expectedAddress, StringComparison.OrdinalIgnoreCase)) {
+							return true;
+						}
+					} finally {
+						ComObjectReleaseService.Release (range);
+						ComObjectReleaseService.Release (listObject);
+					}
+				}
+				return false;
+			} finally {
+				ComObjectReleaseService.Release (listObjects);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		internal void SetRowHidden (Workbook workbook, string sheetName, int rowNumber, bool hidden)
+		{
+			Worksheet worksheet = null;
+			Range row = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				row = worksheet.Rows [rowNumber, Type.Missing] as Range;
+				if (row != null) {
+					row.Hidden = hidden;
+				}
+			} finally {
+				ComObjectReleaseService.Release (row);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		internal void SetColumnHidden (Workbook workbook, string sheetName, string columnAddress, bool hidden)
+		{
+			Worksheet worksheet = null;
+			Range column = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				column = worksheet.Columns [columnAddress, Type.Missing] as Range;
+				if (column != null) {
+					column.Hidden = hidden;
+				}
+			} finally {
+				ComObjectReleaseService.Release (column);
 				ComObjectReleaseService.Release (worksheet);
 			}
 		}
@@ -564,6 +709,42 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				ExecuteGoalSeek (workbook, sheetName, formulaCellAddress, range, goalValue);
 			} finally {
 				ComObjectReleaseService.Release (range);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		internal void ExecuteGoalSeekOrThrow (Workbook workbook, string sheetName, string formulaCellAddress, string changingCellAddress, double goalValue)
+		{
+			Worksheet worksheet = null;
+			Range formulaCell = null;
+			Range changingCell = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				formulaCell = ((_Worksheet)worksheet).get_Range ((object)formulaCellAddress, Type.Missing);
+				changingCell = ((_Worksheet)worksheet).get_Range ((object)changingCellAddress, Type.Missing);
+				bool succeeded = formulaCell.GoalSeek (goalValue, changingCell);
+				object currentValue = formulaCell.Value2;
+				if (!succeeded) {
+					throw new InvalidOperationException (
+						"GoalSeek に失敗しました。sheet=" + sheetName +
+						", formulaCell=" + formulaCellAddress +
+						", changingCell=" + changingCellAddress +
+						", target=" + Convert.ToString (goalValue, System.Globalization.CultureInfo.InvariantCulture) +
+						", current=" + (Convert.ToString (currentValue, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty));
+				}
+				_logger.Info ("Accounting goal seek executed. sheet=" + sheetName + ", formulaCell=" + formulaCellAddress + ", changingCell=" + changingCellAddress + ", target=" + goalValue);
+			} catch (InvalidOperationException) {
+				throw;
+			} catch (Exception innerException) {
+				throw new InvalidOperationException (
+					"GoalSeek に失敗しました。sheet=" + sheetName +
+					", formulaCell=" + formulaCellAddress +
+					", changingCell=" + changingCellAddress +
+					", target=" + Convert.ToString (goalValue, System.Globalization.CultureInfo.InvariantCulture),
+					innerException);
+			} finally {
+				ComObjectReleaseService.Release (changingCell);
+				ComObjectReleaseService.Release (formulaCell);
 				ComObjectReleaseService.Release (worksheet);
 			}
 		}

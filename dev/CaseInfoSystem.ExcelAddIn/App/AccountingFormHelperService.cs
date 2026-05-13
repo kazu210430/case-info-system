@@ -82,6 +82,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			case "open-payment-history-input":
 				ShowPaymentHistoryInput (context, text);
 				break;
+			case AccountingNavigationActionIds.SetInstallmentScheduleIssueDate:
+				EnsureInstallmentScheduleActionSheet (text);
+				ApplyInstallmentScheduleIssueDate (context.Workbook, GetActiveInstallmentScheduleFormForWorkbook (context.Workbook));
+				break;
+			case AccountingNavigationActionIds.ResetInstallmentSchedule:
+				EnsureInstallmentScheduleActionSheet (text);
+				ResetInstallmentSchedule (context.Workbook, GetActiveInstallmentScheduleFormForWorkbook (context.Workbook));
+				break;
 			case AccountingNavigationActionIds.SetPaymentHistoryIssueDate:
 				EnsurePaymentHistoryActionSheet (text);
 				ApplyPaymentHistoryIssueDate (context.Workbook, GetActivePaymentHistoryFormForWorkbook (context.Workbook));
@@ -222,8 +230,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activeInstallmentScheduleOwner = owner;
 			form.IssueDateRequested += delegate {
 				try {
-					AccountingInstallmentScheduleFormState state2 = _accountingInstallmentScheduleCommandService.ApplyIssueDate (workbook);
-					form.BindState (state2);
+					ApplyInstallmentScheduleIssueDate (workbook, form);
 				} catch (Exception exception) {
 					_logger.Error ("Installment schedule issue date handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.IssueDateRequested", exception);
@@ -251,9 +258,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			};
 			form.ResetRequested += delegate {
 				try {
-					AccountingInstallmentScheduleFormState state2 = _accountingInstallmentScheduleCommandService.Reset (workbook);
-					form.BindState (state2);
-					form.FocusInstallmentAmount ();
+					ResetInstallmentSchedule (workbook, form);
 				} catch (Exception exception) {
 					_logger.Error ("Installment schedule reset handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.ResetRequested", exception);
@@ -289,6 +294,44 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				form.FocusInstallmentAmount ();
 			}
 			_logger.Info ("Accounting installment schedule input form shown. sheet=" + activeSheetCodeName);
+		}
+
+		private static void EnsureInstallmentScheduleActionSheet (string activeSheetCodeName)
+		{
+			if (!string.Equals (activeSheetCodeName, AccountingSetSpec.InstallmentSheetName, StringComparison.OrdinalIgnoreCase)) {
+				throw new InvalidOperationException ("分割払い予定表シートでのみ利用できます。");
+			}
+		}
+
+		private void ApplyInstallmentScheduleIssueDate (Workbook workbook, AccountingInstallmentScheduleInputForm form)
+		{
+			AccountingInstallmentScheduleFormState state = _accountingInstallmentScheduleCommandService.ApplyIssueDate (workbook);
+			BindInstallmentScheduleFormState (form, state, focusInstallmentAmount: false);
+		}
+
+		private void ResetInstallmentSchedule (Workbook workbook, AccountingInstallmentScheduleInputForm form)
+		{
+			AccountingInstallmentScheduleFormState state = _accountingInstallmentScheduleCommandService.Reset (workbook);
+			BindInstallmentScheduleFormState (form, state, focusInstallmentAmount: true);
+		}
+
+		private AccountingInstallmentScheduleInputForm GetActiveInstallmentScheduleFormForWorkbook (Workbook workbook)
+		{
+			if (_activeInstallmentScheduleForm == null || _activeInstallmentScheduleForm.IsDisposed || !IsSameWorkbook (_activeInstallmentScheduleWorkbook, workbook)) {
+				return null;
+			}
+			return _activeInstallmentScheduleForm;
+		}
+
+		private static void BindInstallmentScheduleFormState (AccountingInstallmentScheduleInputForm form, AccountingInstallmentScheduleFormState state, bool focusInstallmentAmount)
+		{
+			if (form == null || form.IsDisposed) {
+				return;
+			}
+			form.BindState (state);
+			if (focusInstallmentAmount) {
+				form.FocusInstallmentAmount ();
+			}
 		}
 
 		private void HideInstallmentScheduleInput ()

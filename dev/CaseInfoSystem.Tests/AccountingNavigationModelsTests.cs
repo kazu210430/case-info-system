@@ -236,5 +236,62 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(expectedNavigationCaptions, navigationActions.Select(action => action.Caption).ToArray());
             Assert.Equal(expectedNavigationEnabled, navigationActions.Select(action => action.IsEnabled).ToArray());
         }
+
+        [Fact]
+        public void CreateForSheet_WhenInstallmentScheduleSheet_BuildsExecutionActionsBeforeScreenSwitch()
+        {
+            var actions = AccountingNavigationDefinitions.CreateForSheet("分割払い予定表");
+            var sectionOrder = actions.Select(action => action.SectionTitle).Distinct().ToArray();
+            var executionActions = actions.Where(action => action.SectionTitle == SectionAction).ToArray();
+            var navigationActions = actions.Where(action => action.SectionTitle == SectionNavigation).ToArray();
+
+            string[] expectedExecutionActionIds =
+            {
+                "set-installment-schedule-issue-date",
+                "show-save-as-prompt",
+                "reset-installment-schedule"
+            };
+            string[] expectedExecutionCaptions =
+            {
+                "発行日を入力",
+                "別名保存",
+                "リセット"
+            };
+            string[] expectedNavigationActionIds =
+            {
+                "switch-to-estimate-sheet",
+                "switch-to-invoice-sheet",
+                "switch-to-receipt-sheet",
+                "switch-to-accounting-request-sheet",
+                "switch-to-installment-sheet",
+                "switch-to-payment-history-sheet"
+            };
+            string[] expectedNavigationCaptions =
+            {
+                "見積書",
+                "請求書",
+                "領収書",
+                "会計依頼書",
+                "分割払い予定表（表示中）",
+                "お支払い履歴"
+            };
+            bool[] expectedNavigationEnabled =
+            {
+                true,
+                true,
+                true,
+                true,
+                false,
+                true
+            };
+
+            Assert.Equal(new[] { SectionAction, SectionNavigation }, sectionOrder);
+            Assert.Equal(expectedExecutionActionIds, executionActions.Select(action => action.ActionId).ToArray());
+            Assert.Equal(expectedExecutionCaptions, executionActions.Select(action => action.Caption).ToArray());
+            Assert.All(executionActions, action => Assert.True(action.IsEnabled));
+            Assert.Equal(expectedNavigationActionIds, navigationActions.Select(action => action.ActionId).ToArray());
+            Assert.Equal(expectedNavigationCaptions, navigationActions.Select(action => action.Caption).ToArray());
+            Assert.Equal(expectedNavigationEnabled, navigationActions.Select(action => action.IsEnabled).ToArray());
+        }
     }
 }

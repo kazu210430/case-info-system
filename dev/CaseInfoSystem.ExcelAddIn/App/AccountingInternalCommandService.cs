@@ -38,6 +38,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				case "import-payment-history-to-request":
 					_accountingPaymentHistoryImportService.Execute (context);
 					break;
+				case AccountingNavigationActionIds.SetInstallmentScheduleIssueDate:
+				case AccountingNavigationActionIds.ResetInstallmentSchedule:
 				case AccountingNavigationActionIds.SetPaymentHistoryIssueDate:
 				case AccountingNavigationActionIds.ResetPaymentHistory:
 				case "set-issue-date":

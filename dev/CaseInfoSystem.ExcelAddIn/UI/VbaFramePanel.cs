@@ -13,7 +13,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal VbaFramePanel()
         {
             BackColor = Color.FromArgb(229, 245, 255);
-            Font = new Font("Yu Gothic UI", 10F, FontStyle.Bold, GraphicsUnit.Point, 128);
+            Font = new Font("Yu Gothic UI", 10F, FontStyle.Regular, GraphicsUnit.Point, 128);
             TabStop = false;
             ResizeRedraw = true;
         }

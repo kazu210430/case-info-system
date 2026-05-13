@@ -554,6 +554,68 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		internal bool SortListObjectAscendingByColumn (Workbook workbook, string sheetName, string tableRangeAddress, int keyColumnIndex)
+		{
+			if (keyColumnIndex <= 0) {
+				throw new ArgumentOutOfRangeException ("keyColumnIndex");
+			}
+			Worksheet worksheet = null;
+			ListObjects listObjects = null;
+			try {
+				worksheet = GetWorksheet (workbook, sheetName);
+				listObjects = worksheet.ListObjects;
+				int count = listObjects == null ? 0 : listObjects.Count;
+				for (int index = 1; index <= count; index++) {
+					ListObject listObject = null;
+					Range tableRange = null;
+					try {
+						listObject = listObjects [index];
+						tableRange = listObject.Range;
+						string address = tableRange.get_Address ((object)false, (object)false, XlReferenceStyle.xlA1, Type.Missing, Type.Missing);
+						if (!string.Equals (address, tableRangeAddress, StringComparison.OrdinalIgnoreCase)) {
+							continue;
+						}
+						SortListObjectAscending (listObject, keyColumnIndex);
+						_logger.Debug ("AccountingWorkbookService", "SortListObjectAscendingByColumn sheet=" + sheetName + ", table=" + (listObject.Name ?? string.Empty) + ", range=" + tableRangeAddress + ", keyColumnIndex=" + keyColumnIndex.ToString (System.Globalization.CultureInfo.InvariantCulture));
+						return true;
+					} finally {
+						ComObjectReleaseService.Release (tableRange);
+						ComObjectReleaseService.Release (listObject);
+					}
+				}
+				return false;
+			} finally {
+				ComObjectReleaseService.Release (listObjects);
+				ComObjectReleaseService.Release (worksheet);
+			}
+		}
+
+		private static void SortListObjectAscending (ListObject listObject, int keyColumnIndex)
+		{
+			ListColumn keyColumn = null;
+			Range keyRange = null;
+			Sort sort = null;
+			SortFields sortFields = null;
+			SortField sortField = null;
+			try {
+				keyColumn = listObject.ListColumns [keyColumnIndex];
+				keyRange = keyColumn.Range;
+				sort = listObject.Sort;
+				sortFields = sort.SortFields;
+				sortFields.Clear ();
+				sortField = sortFields.Add (keyRange, XlSortOn.xlSortOnValues, XlSortOrder.xlAscending, Type.Missing, XlSortDataOption.xlSortNormal);
+				sort.Header = XlYesNoGuess.xlYes;
+				sort.MatchCase = false;
+				sort.Apply ();
+			} finally {
+				ComObjectReleaseService.Release (sortField);
+				ComObjectReleaseService.Release (sortFields);
+				ComObjectReleaseService.Release (sort);
+				ComObjectReleaseService.Release (keyRange);
+				ComObjectReleaseService.Release (keyColumn);
+			}
+		}
+
 		internal void SetRowHidden (Workbook workbook, string sheetName, int rowNumber, bool hidden)
 		{
 			Worksheet worksheet = null;

@@ -29,7 +29,29 @@ namespace CaseInfoSystem.Tests
 			AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (14);
 			AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (73);
 
+			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (12));
+			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (13));
 			Assert.Throws<InvalidOperationException> (() => AccountingInstallmentSchedulePlanPolicy.EnsureWritableRow (74));
+		}
+
+		[Fact]
+		public void ScheduleRows_TreatRow12AsHeaderRow13AsStartValueAndRow14AsFirstDetail ()
+		{
+			Assert.Equal (12, AccountingInstallmentSchedulePlanPolicy.HeaderRow);
+			Assert.Equal (13, AccountingInstallmentSchedulePlanPolicy.StartValueRow);
+			Assert.Equal (14, AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow);
+			Assert.False (AccountingInstallmentSchedulePlanPolicy.IsScheduleDetailRow (12));
+			Assert.False (AccountingInstallmentSchedulePlanPolicy.IsScheduleDetailRow (13));
+			Assert.True (AccountingInstallmentSchedulePlanPolicy.IsScheduleDetailRow (14));
+		}
+
+		[Fact]
+		public void FirstDetailRow_UsesRow13AsPreviousBalanceRow ()
+		{
+			int previousRow = AccountingInstallmentSchedulePlanPolicy.GetPreviousBalanceRowForDetailRow (AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow);
+
+			Assert.Equal (AccountingInstallmentSchedulePlanPolicy.StartValueRow, previousRow);
+			Assert.NotEqual (AccountingInstallmentSchedulePlanPolicy.HeaderRow, previousRow);
 		}
 
 		[Fact]

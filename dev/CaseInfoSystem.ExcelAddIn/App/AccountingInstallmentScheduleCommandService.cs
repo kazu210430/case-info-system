@@ -407,8 +407,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private ScheduleRowGoal WriteScheduleRow (Workbook workbook, InstallmentScheduleInputs inputs, int row, bool isCreateFirstRow)
 		{
-			int previousRow = row - 1;
-			double previousExpenseBalance = ReadRequiredDouble (workbook, "J" + previousRow.ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingInstallmentSchedule.WriteScheduleRow");
+			int previousRow = AccountingInstallmentSchedulePlanPolicy.GetPreviousBalanceRowForDetailRow (row);
 
 			if (isCreateFirstRow) {
 				bool hasDeposit = inputs.DepositAmount != 0;
@@ -426,6 +425,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return new ScheduleRowGoal ("C", target, hasDeposit ? "14行目お預かり金額" : "14行目分割金");
 			}
 
+			double previousExpenseBalance = ReadRequiredDouble (workbook, "J" + previousRow.ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingInstallmentSchedule.WriteScheduleRow");
 			_accountingWorkbookService.WriteCellFormula (workbook, SheetName, "A" + row.ToString (CultureInfo.InvariantCulture), "=A" + previousRow.ToString (CultureInfo.InvariantCulture) + "+1");
 			_accountingWorkbookService.WriteCellValue (workbook, SheetName, "B" + row.ToString (CultureInfo.InvariantCulture), ResolveDueDate (workbook, inputs, previousRow));
 			double expenseCharge = AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (inputs.InstallmentAmount, previousExpenseBalance);
@@ -612,7 +612,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return value;
 			}
 
-			throw AccountingNumericCellReader.CreateReadFailureException (SheetName, rangeName, itemName, "AccountingInstallmentSchedule.LoadInputs", displayText, allowBlankAsZero: false);
+			string address = _accountingWorkbookService.GetNamedRangeAddress (workbook, SheetName, rangeName);
+			throw AccountingNumericCellReader.CreateReadFailureException (SheetName, address, itemName, "AccountingInstallmentSchedule.LoadInputs", displayText, allowBlankAsZero: false);
 		}
 
 		private DateTime ReadRequiredNamedDate (Workbook workbook, string rangeName, string itemName)

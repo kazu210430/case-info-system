@@ -16,6 +16,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			get { return LastScheduleRow - FirstScheduleRow + 1; }
 		}
 
+		internal static bool IsScheduleDetailRow (int rowNumber)
+		{
+			return rowNumber >= FirstScheduleRow && rowNumber <= LastScheduleRow;
+		}
+
+		internal static int GetPreviousBalanceRowForDetailRow (int detailRow)
+		{
+			EnsureWritableRow (detailRow);
+			return detailRow - 1;
+		}
+
 		internal static DateTime AddOnePaymentMonth (DateTime value)
 		{
 			return value.AddMonths (1);

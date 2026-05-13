@@ -81,7 +81,8 @@ namespace CaseInfoSystem.Tests
 
 			Assert.Contains ("請求書シートのセル F23（請求額小計）の数値読取に失敗しました。", exception.Message);
 			Assert.Contains ("処理: AccountingInstallmentSchedule.LoadFormState。", exception.Message);
-			Assert.Contains ("セル表示: ABC。", exception.Message);
+			Assert.Contains ("セル番地: F23。", exception.Message);
+			Assert.Contains ("セル表示値: ABC。", exception.Message);
 			Assert.Contains ("空欄は許容されません。", exception.Message);
 		}
 
@@ -92,8 +93,19 @@ namespace CaseInfoSystem.Tests
 
 			Assert.Contains ("請求書シートのセル F29（お預かり金額）の数値読取に失敗しました。", exception.Message);
 			Assert.Contains ("処理: AccountingPaymentHistory.LoadFormState。", exception.Message);
-			Assert.Contains ("セル表示: --。", exception.Message);
+			Assert.Contains ("セル番地: F29。", exception.Message);
+			Assert.Contains ("セル表示値: --。", exception.Message);
 			Assert.Contains ("数値または空欄を設定してください。", exception.Message);
+		}
+
+		[Fact]
+		public void CreateReadFailureException_WhenDisplayTextLooksLikeColumnHeader_KeepsCellAddressSeparate ()
+		{
+			InvalidOperationException exception = AccountingNumericCellReader.CreateReadFailureException ("分割払い予定表", "J13", "実費残高", "AccountingInstallmentSchedule.WriteScheduleRow", "列10", allowBlankAsZero: false);
+
+			Assert.Contains ("分割払い予定表シートのセル J13（実費残高）の数値読取に失敗しました。", exception.Message);
+			Assert.Contains ("セル番地: J13。", exception.Message);
+			Assert.Contains ("セル表示値: 列10。", exception.Message);
 		}
 	}
 }

@@ -41,7 +41,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			string text = string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ();
 			string text2 = allowBlankAsZero ? AllowBlankAsZeroSupplement : RequiredSupplement;
-			return new InvalidOperationException ((sheetName ?? string.Empty) + "シートのセル " + (cellAddress ?? string.Empty) + "（" + (itemName ?? string.Empty) + "）の数値読取に失敗しました。処理: " + (procedureName ?? string.Empty) + "。セル表示: " + text + "。" + text2);
+			string address = cellAddress ?? string.Empty;
+			return new InvalidOperationException ((sheetName ?? string.Empty) + "シートのセル " + address + "（" + (itemName ?? string.Empty) + "）の数値読取に失敗しました。処理: " + (procedureName ?? string.Empty) + "。セル番地: " + address + "。セル表示値: " + text + "。" + text2);
 		}
 
 		private static bool IsBlankCellValue (object cellValue)

@@ -54,9 +54,6 @@ namespace CaseInfoSystem.Tests
 			Assert.Equal (12, AccountingInstallmentSchedulePlanPolicy.HeaderRow);
 			Assert.Equal (13, AccountingInstallmentSchedulePlanPolicy.StartValueRow);
 			Assert.Equal (14, AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow);
-			Assert.False (AccountingInstallmentSchedulePlanPolicy.IsScheduleDetailRow (12));
-			Assert.False (AccountingInstallmentSchedulePlanPolicy.IsScheduleDetailRow (13));
-			Assert.True (AccountingInstallmentSchedulePlanPolicy.IsScheduleDetailRow (14));
 		}
 
 		[Fact]

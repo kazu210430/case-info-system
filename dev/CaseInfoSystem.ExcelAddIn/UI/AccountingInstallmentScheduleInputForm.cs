@@ -79,9 +79,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void ShowPendingMessage (object sender, EventArgs e)
 		{
 			this.ApplyChangeRequested?.Invoke (this, new AccountingInstallmentScheduleChangeRequestEventArgs (new AccountingInstallmentScheduleChangeRequest {
-				BillingAmountText = txtBillingAmount.Text,
-				ExpenseAmountText = txtExpenseAmount.Text,
-				WithholdingText = txtWithholding.Text,
 				ChangeRoundText = txtChangeRound.Text,
 				ChangedInstallmentAmountText = txtChangedInstallmentAmount.Text
 			}));

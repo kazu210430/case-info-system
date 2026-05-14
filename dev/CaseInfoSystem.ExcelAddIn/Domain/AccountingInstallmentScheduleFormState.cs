@@ -18,9 +18,5 @@
         internal string ChangeRoundText { get; set; }
 
         internal string ChangedInstallmentAmountText { get; set; }
-
-        internal bool HasNumericReadError { get; set; }
-
-        internal string NumericReadErrorMessage { get; set; }
     }
 }

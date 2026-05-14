@@ -12,15 +12,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal const int LastScheduleColumn = 10;
 		internal const int PrintLastColumn = 9;
 
-		internal static int MaxGeneratedRowCount {
-			get { return LastScheduleRow - FirstScheduleRow + 1; }
-		}
-
-		internal static bool IsScheduleDetailRow (int rowNumber)
-		{
-			return rowNumber >= FirstScheduleRow && rowNumber <= LastScheduleRow;
-		}
-
 		internal static int GetPreviousBalanceRowForDetailRow (int detailRow)
 		{
 			EnsureWritableRow (detailRow);

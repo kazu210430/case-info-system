@@ -89,13 +89,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				DepositAmountText = FormatAmount (depositAmount),
 				InstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentAmountRangeName),
 				ChangeRoundText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentChangeRoundRangeName),
-				ChangedInstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentChangedAmountRangeName),
-				HasNumericReadError = warnings.Count > 0,
-				NumericReadErrorMessage = string.Join (Environment.NewLine, warnings)
+				ChangedInstallmentAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, InstallmentChangedAmountRangeName)
 			};
 
 			if (warnings.Count > 0) {
-				ShowLoadFormStateNumericReadWarning (state.NumericReadErrorMessage);
+				ShowLoadFormStateNumericReadWarning (string.Join (Environment.NewLine, warnings));
 			}
 
 			return state;
@@ -122,7 +120,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					EnsureWorkbookStructure (workbook);
 					WriteCreateBaseValues (workbook, request, firstDueDate, billingAmount, expenseAmount, depositAmount, installmentAmount);
 
-					InstallmentScheduleInputs inputs = LoadInputsFromNamedRanges (workbook, requireChange: false);
+					InstallmentScheduleInputs inputs = LoadInputsFromNamedRanges (workbook);
 					snapshot = TakeScheduleSnapshot (workbook, AccountingInstallmentSchedulePlanPolicy.StartValueRow);
 					ClearScheduleRows (workbook, AccountingInstallmentSchedulePlanPolicy.FirstScheduleRow);
 					WriteStartValues (workbook, inputs);
@@ -161,9 +159,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					EnsureWorkbookStructure (workbook);
 					WriteChangeBaseValues (workbook, changeRound, changedInstallmentAmount);
 
-					InstallmentScheduleInputs inputs = LoadInputsFromNamedRanges (workbook, requireChange: true);
+					InstallmentScheduleInputs inputs = LoadInputsFromNamedRanges (workbook);
 					List<AccountingInstallmentScheduleExistingRow> existingRows = ReadExistingScheduleRows (workbook);
-					AccountingInstallmentScheduleChangeStart changeStart = AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (existingRows, inputs.ChangeRound);
+					AccountingInstallmentScheduleChangeStart changeStart = AccountingInstallmentSchedulePlanPolicy.ResolveChangeStart (existingRows, changeRound);
 
 					snapshot = TakeScheduleSnapshot (workbook, changeStart.StartRow);
 					ClearScheduleRows (workbook, changeStart.StartRow);
@@ -327,7 +325,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, InstallmentAmountRangeName, changedInstallmentAmount);
 		}
 
-		private InstallmentScheduleInputs LoadInputsFromNamedRanges (Workbook workbook, bool requireChange)
+		private InstallmentScheduleInputs LoadInputsFromNamedRanges (Workbook workbook)
 		{
 			EnsureRequiredNamedRanges (workbook);
 
@@ -354,28 +352,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new InvalidOperationException ("源泉処理は「する」または「しない」を指定してください。");
 			}
 
-			int changeRound = 0;
-			double changedInstallmentAmount = 0;
-			if (requireChange) {
-				changeRound = Convert.ToInt32 (ReadRequiredNamedDouble (workbook, InstallmentChangeRoundRangeName, "変更回"), CultureInfo.InvariantCulture);
-				changedInstallmentAmount = ReadRequiredNamedDouble (workbook, InstallmentChangedAmountRangeName, "変更後分割金");
-				if (changeRound < 1) {
-					throw new InvalidOperationException ("変更回は 1 以上を入力してください。");
-				}
-				if (changedInstallmentAmount <= 0) {
-					throw new InvalidOperationException ("変更後分割金は 1 円以上で入力してください。");
-				}
-			}
-
 			return new InstallmentScheduleInputs (
 				billingAmount,
 				expenseAmount,
 				depositAmount,
 				installmentAmount,
-				firstDueDate,
-				withholdingText,
-				changeRound,
-				changedInstallmentAmount);
+				firstDueDate);
 		}
 
 		private int GenerateSchedule (Workbook workbook, InstallmentScheduleInputs inputs, int startRow, bool isCreateFromFirstRow)
@@ -866,19 +848,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				double expenseAmount,
 				double depositAmount,
 				double installmentAmount,
-				DateTime firstDueDate,
-				string withholdingText,
-				int changeRound,
-				double changedInstallmentAmount)
+				DateTime firstDueDate)
 			{
 				BillingAmount = billingAmount;
 				ExpenseAmount = expenseAmount;
 				DepositAmount = depositAmount;
 				InstallmentAmount = installmentAmount;
 				FirstDueDate = firstDueDate;
-				WithholdingText = withholdingText;
-				ChangeRound = changeRound;
-				ChangedInstallmentAmount = changedInstallmentAmount;
 			}
 
 			internal double BillingAmount { get; private set; }
@@ -886,9 +862,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			internal double DepositAmount { get; private set; }
 			internal double InstallmentAmount { get; private set; }
 			internal DateTime FirstDueDate { get; private set; }
-			internal string WithholdingText { get; private set; }
-			internal int ChangeRound { get; private set; }
-			internal double ChangedInstallmentAmount { get; private set; }
 		}
 
 		private sealed class ScheduleRowGoal

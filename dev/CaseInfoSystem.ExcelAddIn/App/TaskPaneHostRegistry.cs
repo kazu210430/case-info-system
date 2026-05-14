@@ -76,14 +76,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             // Shutdown cleanup fixed point:
             // snapshot registered hosts -> dispose each host -> clear the shared map.
             List<TaskPaneHost> hosts = SnapshotHosts();
-            _logger.Info(KernelFlickerTracePrefix + " source=TaskPaneManager action=dispose-all-start hostCount=" + hosts.Count.ToString(CultureInfo.InvariantCulture));
+            string roleCounts = FormatHostRoleCounts(hosts);
+            _logger.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=dispose-all-start hostCount="
+                + hosts.Count.ToString(CultureInfo.InvariantCulture)
+                + ", "
+                + roleCounts);
             foreach (TaskPaneHost host in hosts)
             {
                 DisposeHostWithoutRegistryMutation(host, "dispose-all");
             }
 
             _hostsByWindowKey.Clear();
-            _logger.Info(KernelFlickerTracePrefix + " source=TaskPaneManager action=dispose-all-complete disposedCount=" + hosts.Count.ToString(CultureInfo.InvariantCulture));
+            _logger.Info(
+                KernelFlickerTracePrefix
+                + " source=TaskPaneManager action=dispose-all-complete disposedCount="
+                + hosts.Count.ToString(CultureInfo.InvariantCulture)
+                + ", "
+                + roleCounts);
         }
 
         internal void RemoveHost(string windowKey)
@@ -294,6 +305,47 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + (host.WorkbookFullName ?? string.Empty)
                 + ", controlType="
                 + controlType;
+        }
+
+        private static string FormatHostRoleCounts(IEnumerable<TaskPaneHost> hosts)
+        {
+            int kernelHostCount = 0;
+            int caseHostCount = 0;
+            int accountingHostCount = 0;
+            int unknownHostCount = 0;
+
+            foreach (TaskPaneHost host in hosts)
+            {
+                string roleName = GetSafePaneRoleName(host);
+                if (string.Equals(roleName, "Kernel", StringComparison.OrdinalIgnoreCase))
+                {
+                    kernelHostCount++;
+                    continue;
+                }
+
+                if (string.Equals(roleName, "Case", StringComparison.OrdinalIgnoreCase))
+                {
+                    caseHostCount++;
+                    continue;
+                }
+
+                if (string.Equals(roleName, "Accounting", StringComparison.OrdinalIgnoreCase))
+                {
+                    accountingHostCount++;
+                    continue;
+                }
+
+                unknownHostCount++;
+            }
+
+            return "kernelHostCount="
+                + kernelHostCount.ToString(CultureInfo.InvariantCulture)
+                + ", caseHostCount="
+                + caseHostCount.ToString(CultureInfo.InvariantCulture)
+                + ", accountingHostCount="
+                + accountingHostCount.ToString(CultureInfo.InvariantCulture)
+                + ", unknownHostCount="
+                + unknownHostCount.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string GetSafePaneRoleName(TaskPaneHost host)

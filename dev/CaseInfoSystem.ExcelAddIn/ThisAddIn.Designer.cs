@@ -162,9 +162,24 @@ namespace CaseInfoSystem.ExcelAddIn
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Never)]
         protected override void OnShutdown()
         {
+            TraceGeneratedOnShutdownBoundary("generated-onshutdown-entry");
+            TraceGeneratedOnShutdownBoundary("vsto-smarttags-dispose-before");
             VstoSmartTags.Dispose();
+            TraceGeneratedOnShutdownBoundary("vsto-smarttags-dispose-after");
+            TraceGeneratedOnShutdownBoundary("custom-taskpanes-dispose-before");
             CustomTaskPanes.Dispose();
-            base.OnShutdown();
+            TraceGeneratedOnShutdownBoundary("custom-taskpanes-dispose-after");
+            TraceGeneratedOnShutdownBoundary("base-onshutdown-before");
+            try
+            {
+                base.OnShutdown();
+            }
+            finally
+            {
+                TraceGeneratedOnShutdownBoundary("base-onshutdown-after-finally");
+            }
+
+            TraceGeneratedOnShutdownBoundary("generated-onshutdown-exit");
         }
     }
 

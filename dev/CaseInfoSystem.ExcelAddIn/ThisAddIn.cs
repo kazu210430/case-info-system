@@ -228,18 +228,27 @@ namespace CaseInfoSystem.ExcelAddIn
 			if (_logger != null)
 			{
 				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-entry");
+				LogShutdownState("handler-entry");
 				RunShutdownStep("UnhookApplicationEvents", UnhookApplicationEvents);
 				RunShutdownStep(
 					"StopPendingPaneRefreshTimer",
 					() => _taskPaneRefreshOrchestrationService?.StopPendingPaneRefreshTimer());
 				RunShutdownStep("KernelHomeFormHost.CloseOnShutdown", () => _kernelHomeFormHost?.CloseOnShutdown());
-				RunShutdownStep("TaskPaneManager.DisposeAll", () => _taskPaneManager?.DisposeAll());
+				RunShutdownStep(
+					"TaskPaneManager.DisposeAll",
+					() =>
+					{
+						LogShutdownState("before-taskpane-manager-disposeall");
+						_taskPaneManager?.DisposeAll();
+						LogShutdownState("after-taskpane-manager-disposeall");
+					});
 				RunShutdownStep("StopWordWarmupTimer", StopWordWarmupTimer);
 				RunShutdownStep("StopManagedCloseStartupGuardTimer", StopManagedCloseStartupGuardTimer);
 				RunShutdownStep(
 					"ShutdownHiddenApplicationCache",
 					() => _caseWorkbookOpenStrategy?.ShutdownHiddenApplicationCache());
 
+				LogShutdownState("before-generated-base-boundary");
 				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-before-generated-base-boundary");
 				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-exit");
 				_logger.Info("[KernelFlickerTrace] source=ThisAddIn action=shutdown-handler-complete");
@@ -276,6 +285,163 @@ namespace CaseInfoSystem.ExcelAddIn
 						+ exception.Message,
 					exception);
 				throw;
+			}
+		}
+
+		private void LogShutdownState(string phase)
+		{
+			SafeWriteShutdownTrace(
+				KernelFlickerTracePrefix
+				+ " source=ThisAddIn action=shutdown-state phase="
+				+ (phase ?? string.Empty)
+				+ ", "
+				+ CaptureShutdownExcelStateFacts()
+				+ ", "
+				+ CaptureCustomTaskPaneFacts());
+		}
+
+		private string CaptureShutdownExcelStateFacts()
+		{
+			string applicationVisible = ReadShutdownValue(() => Application.Visible, out bool applicationVisibleReadFailed);
+			string workbooksCount = ReadShutdownValue(() => Application.Workbooks.Count, out bool workbooksCountReadFailed);
+			string windowsCount = ReadShutdownValue(() => Application.Windows.Count, out bool windowsCountReadFailed);
+			string displayAlerts = ReadShutdownValue(() => Application.DisplayAlerts, out bool displayAlertsReadFailed);
+			string enableEvents = ReadShutdownValue(() => Application.EnableEvents, out bool enableEventsReadFailed);
+			string calculationState = ReadShutdownValue(() => Application.CalculationState, out bool calculationStateReadFailed);
+			string hwnd = ReadShutdownValue(() => Application.Hwnd, out bool hwndReadFailed);
+
+			return "pid="
+				+ Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture)
+				+ ", applicationPresent="
+				+ (Application != null).ToString()
+				+ ", applicationVisible="
+				+ applicationVisible
+				+ ", applicationVisibleReadFailed="
+				+ applicationVisibleReadFailed.ToString()
+				+ ", workbooksCount="
+				+ workbooksCount
+				+ ", workbooksCountReadFailed="
+				+ workbooksCountReadFailed.ToString()
+				+ ", "
+				+ CaptureShutdownActiveWorkbookFacts()
+				+ ", windowsCount="
+				+ windowsCount
+				+ ", windowsCountReadFailed="
+				+ windowsCountReadFailed.ToString()
+				+ ", displayAlerts="
+				+ displayAlerts
+				+ ", displayAlertsReadFailed="
+				+ displayAlertsReadFailed.ToString()
+				+ ", enableEvents="
+				+ enableEvents
+				+ ", enableEventsReadFailed="
+				+ enableEventsReadFailed.ToString()
+				+ ", calculationState="
+				+ calculationState
+				+ ", calculationStateReadFailed="
+				+ calculationStateReadFailed.ToString()
+				+ ", hwnd="
+				+ hwnd
+				+ ", hwndReadFailed="
+				+ hwndReadFailed.ToString();
+		}
+
+		private string CaptureShutdownActiveWorkbookFacts()
+		{
+			bool activeWorkbookPresent = false;
+			bool activeWorkbookReadFailed = false;
+			bool activeWorkbookNameReadFailed = false;
+			string activeWorkbookName = string.Empty;
+
+			try
+			{
+				Excel.Workbook activeWorkbook = Application == null ? null : Application.ActiveWorkbook;
+				activeWorkbookPresent = activeWorkbook != null;
+				if (activeWorkbook != null)
+				{
+					try
+					{
+						activeWorkbookName = SanitizeShutdownLogValue(activeWorkbook.Name);
+					}
+					catch (Exception)
+					{
+						activeWorkbookNameReadFailed = true;
+					}
+				}
+			}
+			catch (Exception)
+			{
+				activeWorkbookReadFailed = true;
+			}
+
+			return "activeWorkbookPresent="
+				+ activeWorkbookPresent.ToString()
+				+ ", activeWorkbookName=\""
+				+ activeWorkbookName
+				+ "\", activeWorkbookReadFailed="
+				+ activeWorkbookReadFailed.ToString()
+				+ ", activeWorkbookNameReadFailed="
+				+ activeWorkbookNameReadFailed.ToString();
+		}
+
+		private string CaptureCustomTaskPaneFacts()
+		{
+			string customTaskPanesCount = ReadShutdownValue(() => CustomTaskPanes.Count, out bool customTaskPanesCountReadFailed);
+			return "customTaskPanesPresent="
+				+ (CustomTaskPanes != null).ToString()
+				+ ", customTaskPanesCount="
+				+ customTaskPanesCount
+				+ ", customTaskPanesCountReadFailed="
+				+ customTaskPanesCountReadFailed.ToString();
+		}
+
+		private static string ReadShutdownValue<T>(Func<T> read, out bool readFailed)
+		{
+			readFailed = false;
+			try
+			{
+				T value = read();
+				return SanitizeShutdownLogValue(value == null ? string.Empty : value.ToString());
+			}
+			catch (Exception)
+			{
+				readFailed = true;
+				return string.Empty;
+			}
+		}
+
+		private static string SanitizeShutdownLogValue(string value)
+		{
+			return (value ?? string.Empty).Replace("\r", " ").Replace("\n", " ");
+		}
+
+		private void TraceGeneratedOnShutdownBoundary(string phase)
+		{
+			SafeWriteShutdownTrace(
+				KernelFlickerTracePrefix
+				+ " source=ThisAddIn action=generated-onshutdown-boundary phase="
+				+ (phase ?? string.Empty)
+				+ ", pid="
+				+ Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture)
+				+ ", "
+				+ CaptureCustomTaskPaneFacts());
+		}
+
+		private void SafeWriteShutdownTrace(string message)
+		{
+			try
+			{
+				if (_logger != null)
+				{
+					_logger.Info(message);
+					return;
+				}
+
+				ExcelAddInTraceLogWriter.Write((message ?? string.Empty) + " logger=null");
+			}
+			catch (Exception)
+			{
+				// Shutdown diagnostics must never change the unload control flow.
 			}
 		}
 

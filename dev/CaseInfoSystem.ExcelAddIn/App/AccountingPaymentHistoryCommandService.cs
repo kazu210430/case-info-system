@@ -254,7 +254,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return LoadFormState (workbook);
 		}
 
-		internal AccountingPaymentHistoryFormState DeleteBlankReceiptRows (Workbook workbook)
+		internal AccountingPaymentHistoryFormState DeleteSelectedRows (Workbook workbook)
 		{
 			if (workbook == null) {
 				throw new ArgumentNullException ("workbook");
@@ -267,9 +267,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				ClearRowsFrom (workbook, lastDataRow + 1);
 				RefreshPrintArea (workbook, lastDataRow);
 				RefreshPaymentTotal (workbook);
-				_logger.Info ("Payment history blank receipt rows deleted. selectedRows=" + selectedRowCount.ToString (CultureInfo.InvariantCulture));
+				_logger.Info ("Payment history selected rows deleted. selectedRows=" + selectedRowCount.ToString (CultureInfo.InvariantCulture));
 			} catch (Exception exception) {
-				_userErrorService.ShowUserError ("AccountingPaymentHistory.DeleteBlankReceiptRows", exception);
+				_userErrorService.ShowUserError ("AccountingPaymentHistory.DeleteSelectedRows", exception);
 			} finally {
 				ProtectSheetSafely (workbook, "Payment history delete reprotect failed.");
 			}

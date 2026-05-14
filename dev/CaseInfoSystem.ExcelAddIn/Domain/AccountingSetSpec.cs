@@ -66,16 +66,6 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
 
 		internal const string AccountingImportTaxNoteCellAddress = "J24";
 
-		internal const string PaymentHistoryRoundMarkerCellAddress = "A13";
-
-		internal const string PaymentHistoryDateFirstCellAddress = "B13";
-
-		internal const int PaymentHistoryBaseRowOffsetWithoutDeposit = 12;
-
-		internal const int PaymentHistoryBaseRowOffsetWithDeposit = 13;
-
-		internal const int PaymentHistoryMaximumRound = 60;
-
 		internal const int MaximumLawyerCount = 4;
 
 		internal const int UserDataFirstDataRow = 2;

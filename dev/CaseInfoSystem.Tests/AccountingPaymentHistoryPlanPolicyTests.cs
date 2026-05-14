@@ -46,12 +46,12 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
-		public void IsDepositMarker_RecognizesOfficialAndLegacyAppliedText ()
+		public void IsDepositMarker_RecognizesCurrentAppliedTextOnly ()
 		{
 			Assert.True (AccountingPaymentHistoryPlanPolicy.IsDepositMarker ("（充当済み）"));
 			Assert.True (AccountingPaymentHistoryPlanPolicy.IsDepositMarker (" （充当済み） "));
-			Assert.True (AccountingPaymentHistoryPlanPolicy.IsDepositMarker ("充当済み"));
-			Assert.True (AccountingPaymentHistoryPlanPolicy.IsDepositMarker ("(充当済み)"));
+			Assert.False (AccountingPaymentHistoryPlanPolicy.IsDepositMarker ("充当済み"));
+			Assert.False (AccountingPaymentHistoryPlanPolicy.IsDepositMarker ("(充当済み)"));
 			Assert.False (AccountingPaymentHistoryPlanPolicy.IsDepositMarker ("済み"));
 		}
 	}

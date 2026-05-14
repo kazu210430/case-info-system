@@ -363,7 +363,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void DeleteSelectedPaymentHistoryRows (Workbook workbook, AccountingPaymentHistoryInputForm form)
 		{
-			AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.DeleteBlankReceiptRows (workbook);
+			AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.DeleteSelectedRows (workbook);
 			BindPaymentHistoryFormState (form, state, focusReceiptDate: true);
 		}
 

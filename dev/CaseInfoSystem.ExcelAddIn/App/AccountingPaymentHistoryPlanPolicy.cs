@@ -36,9 +36,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal static bool IsDepositMarker (string value)
 		{
 			string text = (value ?? string.Empty).Trim ();
-			return string.Equals (text, DepositAppliedText, StringComparison.Ordinal)
-				|| string.Equals (text, "充当済み", StringComparison.Ordinal)
-				|| string.Equals (text, "(充当済み)", StringComparison.Ordinal);
+			return string.Equals (text, DepositAppliedText, StringComparison.Ordinal);
 		}
 
 		internal static void EnsureWritableRow (int rowNumber)

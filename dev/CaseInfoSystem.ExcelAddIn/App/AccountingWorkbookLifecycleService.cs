@@ -152,6 +152,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
+		internal bool TryCancelWorkbookBeforeCloseForActiveAccountingForm (Workbook workbook)
+		{
+			if (!_workbookRoleResolver.IsAccountingWorkbook (workbook)) {
+				return false;
+			}
+			try {
+				bool canceled = _accountingFormHelperService.TryCancelWorkbookCloseForActiveAccountingForm (workbook);
+				if (canceled) {
+					_logger.Info ("Accounting workbook before-close canceled by active accounting form guard.");
+				}
+				return canceled;
+			} catch (Exception exception) {
+				_logger.Error ("Accounting workbook form close guard failed.", exception);
+				return false;
+			}
+		}
+
 		private void EnsureWorkbookInitialized (Workbook workbook)
 		{
 			string workbookKey = GetWorkbookKey (workbook);

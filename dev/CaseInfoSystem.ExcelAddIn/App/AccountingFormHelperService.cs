@@ -20,6 +20,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string ReverseToolAnchorCellAddress = "AA1";
 
+		private const string ProductTitle = "案件情報System";
+
+		private const string CloseThroughFormMessage = "フォームの「Excelを閉じる」ボタンから閉じてください。";
+
+		private const string InstallmentScheduleFormKind = "InstallmentSchedule";
+
+		private const string PaymentHistoryFormKind = "PaymentHistory";
+
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
 		private readonly AccountingInstallmentScheduleCommandService _accountingInstallmentScheduleCommandService;
@@ -49,6 +57,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private Workbook _activePaymentHistoryWorkbook;
 
 		private ExcelWindowOwner _activePaymentHistoryOwner;
+
+		private string _formButtonWorkbookCloseKey;
+
+		private string _formButtonWorkbookCloseFormKind;
 
 		internal AccountingFormHelperService (AccountingWorkbookService accountingWorkbookService, AccountingInstallmentScheduleCommandService accountingInstallmentScheduleCommandService, AccountingPaymentHistoryCommandService accountingPaymentHistoryCommandService, AccountingSaveAsService accountingSaveAsService, UserErrorService userErrorService, Logger logger)
 		{
@@ -290,6 +302,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			try {
+				_logger.Info ("Accounting installment schedule input form close/dispose starting.");
 				DetachInstallmentScheduleInputHandlers (form);
 				if (!form.IsDisposed) {
 					form.Close ();
@@ -297,9 +310,105 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						form.Dispose ();
 					}
 				}
+				_logger.Info ("Accounting installment schedule input form close/dispose completed.");
 			} catch {
 			} finally {
 				ClearActiveInstallmentScheduleInputReferences ();
+				_logger.Info ("Accounting installment schedule input form active references cleared.");
+			}
+		}
+
+		internal bool TryCancelWorkbookCloseForActiveAccountingForm (Workbook workbook)
+		{
+			string formKind = GetActiveAccountingFormKindForWorkbook (workbook);
+			if (string.IsNullOrWhiteSpace (formKind)) {
+				return false;
+			}
+			if (IsFormButtonWorkbookCloseAllowed (workbook, formKind)) {
+				_logger.Info ("Accounting workbook close guard bypassed for form button. formKind=" + formKind + ", cancel=False");
+				return false;
+			}
+			_logger.Info ("Accounting workbook close canceled because accounting form is active. formKind=" + formKind + ", cancel=True");
+			ShowCloseThroughFormMessage (formKind);
+			return true;
+		}
+
+		private string GetActiveAccountingFormKindForWorkbook (Workbook workbook)
+		{
+			if (workbook == null) {
+				return string.Empty;
+			}
+			if (_activeInstallmentScheduleForm != null && !_activeInstallmentScheduleForm.IsDisposed && IsSameWorkbook (_activeInstallmentScheduleWorkbook, workbook)) {
+				return InstallmentScheduleFormKind;
+			}
+			if (_activePaymentHistoryForm != null && !_activePaymentHistoryForm.IsDisposed && IsSameWorkbook (_activePaymentHistoryWorkbook, workbook)) {
+				return PaymentHistoryFormKind;
+			}
+			return string.Empty;
+		}
+
+		private bool IsFormButtonWorkbookCloseAllowed (Workbook workbook, string formKind)
+		{
+			if (string.IsNullOrWhiteSpace (_formButtonWorkbookCloseKey) || string.IsNullOrWhiteSpace (formKind)) {
+				return false;
+			}
+			return string.Equals (_formButtonWorkbookCloseFormKind ?? string.Empty, formKind, StringComparison.OrdinalIgnoreCase)
+				&& string.Equals (_formButtonWorkbookCloseKey, SafeWorkbookKey (workbook), StringComparison.OrdinalIgnoreCase);
+		}
+
+		private void ShowCloseThroughFormMessage (string formKind)
+		{
+			IWin32Window owner = ResolveActiveAccountingFormWindow (formKind);
+			if (owner == null) {
+				MessageBox.Show (CloseThroughFormMessage, ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+			} else {
+				MessageBox.Show (owner, CloseThroughFormMessage, ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+			}
+			_logger.Info ("Accounting workbook close guard message shown. formKind=" + (formKind ?? string.Empty));
+		}
+
+		private IWin32Window ResolveActiveAccountingFormWindow (string formKind)
+		{
+			if (string.Equals (formKind, InstallmentScheduleFormKind, StringComparison.OrdinalIgnoreCase)
+				&& _activeInstallmentScheduleForm != null
+				&& !_activeInstallmentScheduleForm.IsDisposed) {
+				return _activeInstallmentScheduleForm;
+			}
+			if (string.Equals (formKind, PaymentHistoryFormKind, StringComparison.OrdinalIgnoreCase)
+				&& _activePaymentHistoryForm != null
+				&& !_activePaymentHistoryForm.IsDisposed) {
+				return _activePaymentHistoryForm;
+			}
+			return null;
+		}
+
+		private void RequestWorkbookCloseFromAccountingForm (Workbook workbook, string formKind)
+		{
+			if (workbook == null) {
+				_logger.Info ("Accounting form Excel close request ignored. reason=WorkbookMissing, formKind=" + (formKind ?? string.Empty));
+				return;
+			}
+			string workbookKey = SafeWorkbookKey (workbook);
+			_logger.Info ("Accounting form Excel close button clicked. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
+			_formButtonWorkbookCloseKey = workbookKey;
+			_formButtonWorkbookCloseFormKind = formKind ?? string.Empty;
+			_logger.Info ("Accounting form workbook close allow flag set. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
+			try {
+				if (string.Equals (formKind, InstallmentScheduleFormKind, StringComparison.OrdinalIgnoreCase)) {
+					CloseActiveInstallmentScheduleInput ();
+				} else if (string.Equals (formKind, PaymentHistoryFormKind, StringComparison.OrdinalIgnoreCase)) {
+					CloseActivePaymentHistoryInput ();
+				}
+				_logger.Info ("Accounting form closed before workbook close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
+				_logger.Info ("Accounting form invoking workbook.Close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey + ", cancelTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
+				workbook.Close ();
+			} catch (Exception exception) {
+				_logger.Error ("Accounting form workbook close request failed. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey, exception);
+				_userErrorService.ShowUserError ("AccountingForm.ExcelCloseRequested", exception);
+			} finally {
+				_formButtonWorkbookCloseKey = string.Empty;
+				_formButtonWorkbookCloseFormKind = string.Empty;
+				_logger.Info ("Accounting form workbook close allow flag cleared. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
 			}
 		}
 
@@ -310,6 +419,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			form.CreateScheduleRequested += ActiveInstallmentScheduleForm_CreateScheduleRequested;
 			form.ApplyChangeRequested += ActiveInstallmentScheduleForm_ApplyChangeRequested;
+			form.ExcelCloseRequested += ActiveInstallmentScheduleForm_ExcelCloseRequested;
 			form.FormClosed += ActiveInstallmentScheduleForm_FormClosed;
 		}
 
@@ -320,8 +430,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			form.CreateScheduleRequested -= ActiveInstallmentScheduleForm_CreateScheduleRequested;
 			form.ApplyChangeRequested -= ActiveInstallmentScheduleForm_ApplyChangeRequested;
+			form.ExcelCloseRequested -= ActiveInstallmentScheduleForm_ExcelCloseRequested;
 			form.FormClosed -= ActiveInstallmentScheduleForm_FormClosed;
 			form.ClearRequestHandlers ();
+		}
+
+		private void ActiveInstallmentScheduleForm_ExcelCloseRequested (object sender, EventArgs e)
+		{
+			RequestWorkbookCloseFromAccountingForm (_activeInstallmentScheduleWorkbook, InstallmentScheduleFormKind);
 		}
 
 		private void ActiveInstallmentScheduleForm_CreateScheduleRequested (object sender, AccountingInstallmentScheduleCreateRequestEventArgs e)
@@ -483,6 +599,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			try {
+				_logger.Info ("Accounting payment history input form close/dispose starting.");
 				DetachPaymentHistoryInputHandlers (form);
 				if (!form.IsDisposed) {
 					form.Close ();
@@ -490,9 +607,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						form.Dispose ();
 					}
 				}
+				_logger.Info ("Accounting payment history input form close/dispose completed.");
 			} catch {
 			} finally {
 				ClearActivePaymentHistoryInputReferences ();
+				_logger.Info ("Accounting payment history input form active references cleared.");
 			}
 		}
 
@@ -504,6 +623,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			form.TodayRequested += ActivePaymentHistoryForm_TodayRequested;
 			form.AddHistoryRequested += ActivePaymentHistoryForm_AddHistoryRequested;
 			form.OutputFutureBalanceRequested += ActivePaymentHistoryForm_OutputFutureBalanceRequested;
+			form.ExcelCloseRequested += ActivePaymentHistoryForm_ExcelCloseRequested;
 			form.FormClosed += ActivePaymentHistoryForm_FormClosed;
 		}
 
@@ -515,8 +635,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			form.TodayRequested -= ActivePaymentHistoryForm_TodayRequested;
 			form.AddHistoryRequested -= ActivePaymentHistoryForm_AddHistoryRequested;
 			form.OutputFutureBalanceRequested -= ActivePaymentHistoryForm_OutputFutureBalanceRequested;
+			form.ExcelCloseRequested -= ActivePaymentHistoryForm_ExcelCloseRequested;
 			form.FormClosed -= ActivePaymentHistoryForm_FormClosed;
 			form.ClearRequestHandlers ();
+		}
+
+		private void ActivePaymentHistoryForm_ExcelCloseRequested (object sender, EventArgs e)
+		{
+			RequestWorkbookCloseFromAccountingForm (_activePaymentHistoryWorkbook, PaymentHistoryFormKind);
 		}
 
 		private void ActivePaymentHistoryForm_TodayRequested (object sender, EventArgs e)
@@ -696,6 +822,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return string.Equals (left.FullName ?? string.Empty, right.FullName ?? string.Empty, StringComparison.OrdinalIgnoreCase);
 			} catch {
 				return false;
+			}
+		}
+
+		private static string SafeWorkbookKey (Workbook workbook)
+		{
+			if (workbook == null) {
+				return string.Empty;
+			}
+			try {
+				string fullName = workbook.FullName ?? string.Empty;
+				return string.IsNullOrWhiteSpace (fullName) ? (workbook.Name ?? string.Empty) : fullName;
+			} catch {
+				return string.Empty;
 			}
 		}
 

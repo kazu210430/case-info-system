@@ -52,6 +52,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private Button btn今後の残高推移を出力;
 
+		private Button btnExcelClose;
+
 		private ToolStripDropDown receiptDateCalendarDropDown;
 
 		private MonthCalendar receiptDateCalendar;
@@ -62,10 +64,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		internal event EventHandler<AccountingPaymentHistoryEntryRequestEventArgs> OutputFutureBalanceRequested;
 
+		internal event EventHandler ExcelCloseRequested;
+
 		internal AccountingPaymentHistoryInputForm ()
 		{
 			InitializeComponent ();
-			AccountingFormButtonAppearanceHelper.Apply (btn領収日カレンダー, btn今日, btn履歴を入力, btn今後の残高推移を出力);
+			AccountingFormButtonAppearanceHelper.Apply (btn領収日カレンダー, btn今日, btn履歴を入力, btn今後の残高推移を出力, btnExcelClose);
 			ButtonCursorHelper.ApplyHandCursor (this);
 		}
 
@@ -103,6 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			TodayRequested = null;
 			AddHistoryRequested = null;
 			OutputFutureBalanceRequested = null;
+			ExcelCloseRequested = null;
 		}
 
 		protected override void Dispose (bool disposing)
@@ -143,6 +148,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void BtnOutputFutureBalance_Click (object sender, EventArgs e)
 		{
 			this.OutputFutureBalanceRequested?.Invoke (this, new AccountingPaymentHistoryEntryRequestEventArgs (CreateRequest ()));
+		}
+
+		private void BtnExcelClose_Click (object sender, EventArgs e)
+		{
+			this.ExcelCloseRequested?.Invoke (this, EventArgs.Empty);
 		}
 
 		private AccountingPaymentHistoryEntryRequest CreateRequest ()
@@ -262,7 +272,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
 			this.BackColor = System.Drawing.Color.FromArgb (234, 255, 234);
-			base.ClientSize = new System.Drawing.Size (525, 356);
+			base.ClientSize = new System.Drawing.Size (525, 394);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
@@ -271,10 +281,18 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.ShowInTaskbar = false;
 			base.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
 			this.Text = "お支払い履歴入力フォーム";
+			this.btnExcelClose = new System.Windows.Forms.Button ();
+			this.btnExcelClose.Location = new System.Drawing.Point (379, 10);
+			this.btnExcelClose.Name = "btnExcelClose";
+			this.btnExcelClose.Size = new System.Drawing.Size (120, 32);
+			this.btnExcelClose.TabIndex = 2;
+			this.btnExcelClose.Text = "Excelを閉じる";
+			this.btnExcelClose.UseVisualStyleBackColor = true;
+			this.btnExcelClose.Click += new System.EventHandler (BtnExcelClose_Click);
 			this.frame請求書の記載内容 = new CaseInfoSystem.ExcelAddIn.UI.VbaFramePanel ();
 			this.frame請求書の記載内容.BackColor = this.BackColor;
 			this.frame請求書の記載内容.Caption = "請求書の読込内容";
-			this.frame請求書の記載内容.Location = new System.Drawing.Point (24, 16);
+			this.frame請求書の記載内容.Location = new System.Drawing.Point (24, 54);
 			this.frame請求書の記載内容.Name = "frame請求書の記載内容";
 			this.frame請求書の記載内容.Size = new System.Drawing.Size (475, 150);
 			this.frame請求書の記載内容.TabIndex = 0;
@@ -381,7 +399,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.frame領収内容 = new CaseInfoSystem.ExcelAddIn.UI.VbaFramePanel ();
 			this.frame領収内容.BackColor = this.BackColor;
 			this.frame領収内容.Caption = "領収内容";
-			this.frame領収内容.Location = new System.Drawing.Point (24, 178);
+			this.frame領収内容.Location = new System.Drawing.Point (24, 216);
 			this.frame領収内容.Name = "frame領収内容";
 			this.frame領収内容.Size = new System.Drawing.Size (475, 156);
 			this.frame領収内容.TabIndex = 1;
@@ -469,6 +487,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.frame領収内容.Controls.Add (this.btn今後の残高推移を出力);
 			base.Controls.Add (this.frame請求書の記載内容);
 			base.Controls.Add (this.frame領収内容);
+			base.Controls.Add (this.btnExcelClose);
 			base.ResumeLayout (false);
 		}
 	}

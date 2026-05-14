@@ -11,6 +11,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private Button btnApplyChange;
 
+		private Button btnExcelClose;
+
 		private TextBox txtBillingAmount;
 
 		private TextBox txtExpenseAmount;
@@ -31,10 +33,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		internal event EventHandler<AccountingInstallmentScheduleChangeRequestEventArgs> ApplyChangeRequested;
 
+		internal event EventHandler ExcelCloseRequested;
+
 		internal AccountingInstallmentScheduleInputForm ()
 		{
 			InitializeComponent ();
-			AccountingFormButtonAppearanceHelper.Apply (btnCreateSchedule, btnApplyChange);
+			AccountingFormButtonAppearanceHelper.Apply (btnCreateSchedule, btnApplyChange, btnExcelClose);
 			ButtonCursorHelper.ApplyHandCursor (this);
 		}
 
@@ -68,6 +72,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			CreateScheduleRequested = null;
 			ApplyChangeRequested = null;
+			ExcelCloseRequested = null;
 		}
 
 		protected override void Dispose (bool disposing)
@@ -96,6 +101,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				ChangeRoundText = txtChangeRound.Text,
 				ChangedInstallmentAmountText = txtChangedInstallmentAmount.Text
 			}));
+		}
+
+		private void BtnExcelClose_Click (object sender, EventArgs e)
+		{
+			this.ExcelCloseRequested?.Invoke (this, EventArgs.Empty);
 		}
 
 		private void ShowInvoiceEditRestrictedMessage (object sender, KeyEventArgs e)
@@ -128,7 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
 			this.BackColor = System.Drawing.Color.FromArgb (229, 245, 255);
-			base.ClientSize = new System.Drawing.Size (525, 444);
+			base.ClientSize = new System.Drawing.Size (525, 482);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
@@ -137,7 +147,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.ShowInTaskbar = false;
 			base.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
 			this.Text = "分割払い予定表入力フォーム";
-			System.Windows.Forms.GroupBox groupBox = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("請求書の読込内容", new System.Drawing.Point (24, 16), new System.Drawing.Size (475, 150));
+			this.btnExcelClose = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateButton ("Excelを閉じる", new System.Drawing.Point (379, 10), new System.Drawing.Size (120, 32), new System.EventHandler (BtnExcelClose_Click));
+			System.Windows.Forms.GroupBox groupBox = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("請求書の読込内容", new System.Drawing.Point (24, 54), new System.Drawing.Size (475, 150));
 			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("請求額", new System.Drawing.Point (24, 28), new System.Drawing.Size (72, 20)));
 			this.txtBillingAmount = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateReadOnlyTextBox (new System.Drawing.Point (32, 55), new System.Drawing.Size (120, 25));
 			this.txtBillingAmount.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
@@ -162,7 +173,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.txtDepositAmount.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
 			groupBox.Controls.Add (this.txtDepositAmount);
 			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("円", new System.Drawing.Point (332, 120), new System.Drawing.Size (24, 20)));
-			System.Windows.Forms.GroupBox groupBox2 = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("分割払い予定表の作成", new System.Drawing.Point (24, 178), new System.Drawing.Size (475, 92));
+			System.Windows.Forms.GroupBox groupBox2 = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("分割払い予定表の作成", new System.Drawing.Point (24, 216), new System.Drawing.Size (475, 92));
 			groupBox2.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("分割払い額", new System.Drawing.Point (24, 30), new System.Drawing.Size (90, 20)));
 			this.txtInstallmentAmount = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateEditableTextBox (new System.Drawing.Point (32, 56), new System.Drawing.Size (120, 25));
 			this.txtInstallmentAmount.KeyPress += new System.Windows.Forms.KeyPressEventHandler (NumericTextBox_KeyPress);
@@ -171,7 +182,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			groupBox2.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("円", new System.Drawing.Point (160, 59), new System.Drawing.Size (24, 20)));
 			this.btnCreateSchedule = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateButton ("この分割払い額で\r\n予定表を作成", new System.Drawing.Point (271, 20), new System.Drawing.Size (184, 56), new System.EventHandler (BtnCreateSchedule_Click), System.Drawing.Color.PowderBlue, System.Drawing.Color.Black);
 			groupBox2.Controls.Add (this.btnCreateSchedule);
-			System.Windows.Forms.GroupBox groupBox3 = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("分割払い額の途中変更", new System.Drawing.Point (24, 282), new System.Drawing.Size (475, 144));
+			System.Windows.Forms.GroupBox groupBox3 = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("分割払い額の途中変更", new System.Drawing.Point (24, 320), new System.Drawing.Size (475, 144));
 			groupBox3.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("分割払い額を変更する回", new System.Drawing.Point (24, 26), new System.Drawing.Size (170, 20)));
 			this.txtChangeRound = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateEditableTextBox (new System.Drawing.Point (40, 52), new System.Drawing.Size (37, 25));
 			this.txtChangeRound.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
@@ -189,6 +200,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.Controls.Add (groupBox);
 			base.Controls.Add (groupBox2);
 			base.Controls.Add (groupBox3);
+			base.Controls.Add (this.btnExcelClose);
 			base.ResumeLayout (false);
 		}
 

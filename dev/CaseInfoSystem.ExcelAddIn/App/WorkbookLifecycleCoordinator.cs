@@ -171,6 +171,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            if (_accountingWorkbookLifecycleService != null
+                && _accountingWorkbookLifecycleService.TryCancelWorkbookBeforeCloseForActiveAccountingForm(workbook))
+            {
+                cancel = true;
+                _logger?.Info("Excel WorkbookBeforeClose canceled by accounting active form guard. cancel=True");
+                return;
+            }
+
             _workbookClipboardPreservationService?.PreserveCopiedValuesForClosingWorkbook(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookBeforeClose(workbook);
 

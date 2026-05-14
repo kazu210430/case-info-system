@@ -27,9 +27,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return detailRow - 1;
 		}
 
-		internal static DateTime AddOnePaymentMonth (DateTime value)
+		internal static DateTime ResolveNextMonthEndDueDate (DateTime value)
 		{
-			return value.AddMonths (1);
+			DateTime nextMonth = value.AddMonths (1);
+			return new DateTime (nextMonth.Year, nextMonth.Month, DateTime.DaysInMonth (nextMonth.Year, nextMonth.Month));
+		}
+
+		internal static double ResolveFirstRowExpenseCharge (double depositAmount, double installmentAmount, double expenseAmount)
+		{
+			double paymentBasis = depositAmount != 0 ? depositAmount : installmentAmount;
+			return ResolveExpenseCharge (paymentBasis, expenseAmount);
 		}
 
 		internal static double ResolveExpenseCharge (double paymentBasis, double previousExpenseBalance)

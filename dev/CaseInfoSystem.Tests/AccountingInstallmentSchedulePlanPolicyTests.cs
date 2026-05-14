@@ -8,9 +8,9 @@ namespace CaseInfoSystem.Tests
 	public sealed class AccountingInstallmentSchedulePlanPolicyTests
 	{
 		[Fact]
-		public void AddOnePaymentMonth_UsesDateTimeMonthClamp ()
+		public void ResolveNextMonthEndDueDate_UsesFollowingMonthEnd ()
 		{
-			DateTime result = AccountingInstallmentSchedulePlanPolicy.AddOnePaymentMonth (new DateTime (2026, 1, 31));
+			DateTime result = AccountingInstallmentSchedulePlanPolicy.ResolveNextMonthEndDueDate (new DateTime (2026, 1, 15));
 
 			Assert.Equal (new DateTime (2026, 2, 28), result);
 		}
@@ -21,6 +21,20 @@ namespace CaseInfoSystem.Tests
 			Assert.Equal (50000, AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (50000, 120000));
 			Assert.Equal (12000, AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (50000, 12000));
 			Assert.Equal (0, AccountingInstallmentSchedulePlanPolicy.ResolveExpenseCharge (0, 12000));
+		}
+
+		[Fact]
+		public void ResolveFirstRowExpenseCharge_WithoutDeposit_UsesInstallmentAmount ()
+		{
+			Assert.Equal (50000, AccountingInstallmentSchedulePlanPolicy.ResolveFirstRowExpenseCharge (0, 50000, 120000));
+			Assert.Equal (12000, AccountingInstallmentSchedulePlanPolicy.ResolveFirstRowExpenseCharge (0, 50000, 12000));
+		}
+
+		[Fact]
+		public void ResolveFirstRowExpenseCharge_WithDeposit_UsesDepositAmount ()
+		{
+			Assert.Equal (30000, AccountingInstallmentSchedulePlanPolicy.ResolveFirstRowExpenseCharge (30000, 50000, 120000));
+			Assert.Equal (12000, AccountingInstallmentSchedulePlanPolicy.ResolveFirstRowExpenseCharge (30000, 50000, 12000));
 		}
 
 		[Fact]

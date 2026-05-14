@@ -419,7 +419,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_accountingWorkbookService.WriteCellValue (workbook, SheetName, "B" + row.ToString (CultureInfo.InvariantCulture), inputs.FirstDueDate);
 				}
 
-				double firstExpenseCharge = Math.Min (inputs.DepositAmount, inputs.ExpenseAmount);
+				double firstExpenseCharge = AccountingInstallmentSchedulePlanPolicy.ResolveFirstRowExpenseCharge (inputs.DepositAmount, inputs.InstallmentAmount, inputs.ExpenseAmount);
 				WriteScheduleRowFormulas (workbook, row, previousRow, firstExpenseCharge);
 				double target = hasDeposit ? inputs.DepositAmount : inputs.InstallmentAmount;
 				return new ScheduleRowGoal ("C", target, hasDeposit ? "14行目お預かり金額" : "14行目分割金");
@@ -452,7 +452,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			string previousDueDateAddress = "B" + previousRow.ToString (CultureInfo.InvariantCulture);
 			if (TryReadCellDate (workbook, previousDueDateAddress, out DateTime previousDueDate)) {
-				return AccountingInstallmentSchedulePlanPolicy.AddOnePaymentMonth (previousDueDate);
+				return AccountingInstallmentSchedulePlanPolicy.ResolveNextMonthEndDueDate (previousDueDate);
 			}
 
 			return inputs.FirstDueDate;

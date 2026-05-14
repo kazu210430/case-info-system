@@ -39,6 +39,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal const string ImportReceiptToCurrent = "import-receipt-to-current";
         internal const string OpenPaymentHistoryInput = "open-payment-history-input";
         internal const string SetPaymentHistoryIssueDate = "set-payment-history-issue-date";
+        internal const string DeleteSelectedPaymentHistoryRows = "delete-selected-payment-history-rows";
         internal const string ResetPaymentHistory = "reset-payment-history";
         internal const string OpenInstallmentScheduleInput = "open-installment-schedule-input";
         internal const string SetInstallmentScheduleIssueDate = "set-installment-schedule-issue-date";
@@ -236,6 +237,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ShowSaveAsPrompt,
                 "別名保存",
+                SectionAction,
+                true));
+            definitions.Add(new AccountingNavigationActionDefinition(
+                AccountingNavigationActionIds.DeleteSelectedPaymentHistoryRows,
+                "選択行の削除",
                 SectionAction,
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(

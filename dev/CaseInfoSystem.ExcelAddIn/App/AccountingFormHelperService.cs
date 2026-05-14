@@ -94,6 +94,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				EnsurePaymentHistoryActionSheet (text);
 				ApplyPaymentHistoryIssueDate (context.Workbook, GetActivePaymentHistoryFormForWorkbook (context.Workbook));
 				break;
+			case AccountingNavigationActionIds.DeleteSelectedPaymentHistoryRows:
+				EnsurePaymentHistoryActionSheet (text);
+				DeleteSelectedPaymentHistoryRows (context.Workbook, GetActivePaymentHistoryFormForWorkbook (context.Workbook));
+				break;
 			case AccountingNavigationActionIds.ResetPaymentHistory:
 				EnsurePaymentHistoryActionSheet (text);
 				ResetPaymentHistory (context.Workbook, GetActivePaymentHistoryFormForWorkbook (context.Workbook));
@@ -357,6 +361,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			BindPaymentHistoryFormState (form, state, focusReceiptDate: true);
 		}
 
+		private void DeleteSelectedPaymentHistoryRows (Workbook workbook, AccountingPaymentHistoryInputForm form)
+		{
+			AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.DeleteBlankReceiptRows (workbook);
+			BindPaymentHistoryFormState (form, state, focusReceiptDate: true);
+		}
+
 		private AccountingPaymentHistoryInputForm GetActivePaymentHistoryFormForWorkbook (Workbook workbook)
 		{
 			if (_activePaymentHistoryForm == null || _activePaymentHistoryForm.IsDisposed || !IsSameWorkbook (_activePaymentHistoryWorkbook, workbook)) {
@@ -414,14 +424,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activePaymentHistoryForm = form;
 			_activePaymentHistoryWorkbook = workbook;
 			_activePaymentHistoryOwner = owner;
-			form.IssueDateRequested += delegate {
-				try {
-					ApplyPaymentHistoryIssueDate (workbook, form);
-				} catch (Exception exception) {
-					_logger.Error ("Payment history issue date handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.IssueDateRequested", exception);
-				}
-			};
 			form.TodayRequested += delegate {
 				try {
 					AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.ApplyToday (workbook);
@@ -450,37 +452,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				} catch (Exception exception) {
 					_logger.Error ("Payment history future balance handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingPaymentHistory.OutputFutureBalanceRequested", exception);
-				}
-			};
-			form.DeleteBlankRowsRequested += delegate {
-				try {
-					AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.DeleteBlankReceiptRows (workbook);
-					form.BindState (state2);
-					form.FocusReceiptDate ();
-				} catch (Exception exception) {
-					_logger.Error ("Payment history delete blank rows handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.DeleteBlankRowsRequested", exception);
-				}
-			};
-			form.ResetRequested += delegate {
-				try {
-					ResetPaymentHistory (workbook, form);
-				} catch (Exception exception) {
-					_logger.Error ("Payment history reset handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.ResetRequested", exception);
-				}
-			};
-			form.SaveAsRequested += delegate {
-				Worksheet worksheet = null;
-				try {
-					worksheet = workbook.ActiveSheet as Worksheet;
-					WorkbookContext context = new WorkbookContext (workbook, window, WorkbookRole.Accounting, string.Empty, workbook.FullName ?? string.Empty, (worksheet == null) ? string.Empty : (worksheet.CodeName ?? string.Empty));
-					_accountingSaveAsService.Execute (context);
-				} catch (Exception exception) {
-					_logger.Error ("Payment history save-as handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.SaveAsRequested", exception);
-				} finally {
-					CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
 				}
 			};
 			form.FormClosed += delegate {
@@ -618,7 +589,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_accountingWorkbookService.ClearReverseToolTargets (_activeReverseToolWorkbook, _activeReverseToolSheetName);
 				}
 				if (!_activeReverseToolForm.IsDisposed) {
-					_activeReverseToolForm.Close ();
+					_activeReverseToolForm.CloseByCode ();
 				}
 			} catch {
 			} finally {

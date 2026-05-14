@@ -25,7 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
 			BackColor = Color.White;
-			base.ClientSize = new Size (474, 350);
+			base.ClientSize = new Size (474, 374);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
@@ -92,9 +92,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Text = "→ ⑵で選択したセルに計算結果が表示されます\r\n   それと連動して “④請求金額” が⑴の金額になります"
 			};
 			_btnCalculate = new Button {
-				BackColor = Color.FromArgb (0, 0, 128),
-				ForeColor = Color.White,
-				Location = new Point (56, 300),
+				BackColor = Color.PowderBlue,
+				ForeColor = Color.Black,
+				Location = new Point (56, 314),
 				Name = "btnCalculate",
 				Size = new Size (107, 40),
 				TabIndex = 1,
@@ -103,7 +103,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_btnCalculate.Click += BtnCalculate_Click;
 			_btnClose = new Button {
-				Location = new Point (296, 300),
+				Location = new Point (296, 314),
 				Name = "btnClose",
 				Size = new Size (107, 40),
 				TabIndex = 2,
@@ -121,6 +121,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.Controls.Add (value7);
 			base.Controls.Add (_btnCalculate);
 			base.Controls.Add (_btnClose);
+			AccountingFormButtonAppearanceHelper.Apply (_btnCalculate, _btnClose);
 			ButtonCursorHelper.ApplyHandCursor (this);
 			ResumeLayout (performLayout: false);
 		}
@@ -134,6 +135,12 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
+		internal void CloseByCode ()
+		{
+			_allowCloseByButton = true;
+			Close ();
+		}
+
 		private void BtnCalculate_Click (object sender, EventArgs e)
 		{
 			if (!TryParseTargetAmount (out var targetAmount)) {
@@ -145,8 +152,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private void BtnClose_Click (object sender, EventArgs e)
 		{
-			_allowCloseByButton = true;
-			Close ();
+			CloseByCode ();
 		}
 
 		private void TxtTargetAmount_TextChanged (object sender, EventArgs e)

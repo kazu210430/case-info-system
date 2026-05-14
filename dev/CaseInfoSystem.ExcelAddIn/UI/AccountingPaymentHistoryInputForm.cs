@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
 
@@ -7,10 +8,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 {
 	internal sealed partial class AccountingPaymentHistoryInputForm : Form
 	{
-		private Button btn発行日を入力;
-
-		private Button btnリセット;
-
 		private VbaFramePanel frame請求書の記載内容;
 
 		private Label lbl請求額;
@@ -41,6 +38,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private TextBox text領収日;
 
+		private Button btn領収日カレンダー;
+
 		private Button btn今日;
 
 		private Label lbl領収額;
@@ -53,27 +52,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private Button btn今後の残高推移を出力;
 
-		private Button btn別名保存;
+		private ToolStripDropDown receiptDateCalendarDropDown;
 
-		private Label lbl修正削除見出し;
-
-		private Label lbl手順1;
-
-		private Label lbl手順2;
-
-		private Button btn削除;
-
-		private Label lbl手順3;
-
-		internal event EventHandler IssueDateRequested;
+		private MonthCalendar receiptDateCalendar;
 
 		internal event EventHandler TodayRequested;
-
-		internal event EventHandler ResetRequested;
-
-		internal event EventHandler SaveAsRequested;
-
-		internal event EventHandler DeleteBlankRowsRequested;
 
 		internal event EventHandler<AccountingPaymentHistoryEntryRequestEventArgs> AddHistoryRequested;
 
@@ -82,7 +65,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		internal AccountingPaymentHistoryInputForm ()
 		{
 			InitializeComponent ();
-			AccountingFormButtonAppearanceHelper.Apply (btn発行日を入力, btnリセット, btn今日, btn履歴を入力, btn今後の残高推移を出力, btn別名保存, btn削除);
+			AccountingFormButtonAppearanceHelper.Apply (btn領収日カレンダー, btn今日, btn履歴を入力, btn今後の残高推移を出力);
 			ButtonCursorHelper.ApplyHandCursor (this);
 		}
 
@@ -115,9 +98,10 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			text領収額.Focus ();
 		}
 
-		private void BtnIssueDate_Click (object sender, EventArgs e)
+		protected override void OnFormClosed (FormClosedEventArgs e)
 		{
-			this.IssueDateRequested?.Invoke (this, EventArgs.Empty);
+			DisposeReceiptDateCalendarDropDown ();
+			base.OnFormClosed (e);
 		}
 
 		private void BtnToday_Click (object sender, EventArgs e)
@@ -125,19 +109,14 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.TodayRequested?.Invoke (this, EventArgs.Empty);
 		}
 
-		private void BtnReset_Click (object sender, EventArgs e)
+		private void BtnReceiptDateCalendar_Click (object sender, EventArgs e)
 		{
-			this.ResetRequested?.Invoke (this, EventArgs.Empty);
+			ShowReceiptDateCalendar ();
 		}
 
-		private void BtnSaveAs_Click (object sender, EventArgs e)
+		private void TextReceiptDate_MouseDown (object sender, MouseEventArgs e)
 		{
-			this.SaveAsRequested?.Invoke (this, EventArgs.Empty);
-		}
-
-		private void BtnDeleteBlankRows_Click (object sender, EventArgs e)
-		{
-			this.DeleteBlankRowsRequested?.Invoke (this, EventArgs.Empty);
+			ShowReceiptDateCalendar ();
 		}
 
 		private void BtnAddHistory_Click (object sender, EventArgs e)
@@ -187,12 +166,87 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
+		private void ShowReceiptDateCalendar ()
+		{
+			EnsureReceiptDateCalendarDropDown ();
+			if (receiptDateCalendarDropDown.Visible) {
+				return;
+			}
+
+			receiptDateCalendar.SetDate (ResolveReceiptDateCalendarDate ());
+			receiptDateCalendarDropDown.Show (frame領収内容, new Point (text領収日.Left, text領収日.Bottom + 2));
+		}
+
+		private void EnsureReceiptDateCalendarDropDown ()
+		{
+			if (receiptDateCalendarDropDown != null) {
+				return;
+			}
+
+			receiptDateCalendar = new MonthCalendar {
+				MaxSelectionCount = 1,
+				ShowToday = true,
+				ShowTodayCircle = true
+			};
+			receiptDateCalendar.DateSelected += ReceiptDateCalendar_DateSelected;
+
+			ToolStripControlHost host = new ToolStripControlHost (receiptDateCalendar) {
+				Margin = Padding.Empty,
+				Padding = Padding.Empty
+			};
+			receiptDateCalendarDropDown = new ToolStripDropDown {
+				AutoClose = true,
+				Padding = Padding.Empty
+			};
+			receiptDateCalendarDropDown.Items.Add (host);
+		}
+
+		private DateTime ResolveReceiptDateCalendarDate ()
+		{
+			DateTime date;
+			if (TryParseReceiptDateText (text領収日.Text, out date)) {
+				return date.Date;
+			}
+			return DateTime.Today;
+		}
+
+		private static bool TryParseReceiptDateText (string text, out DateTime date)
+		{
+			string value = (text ?? string.Empty).Trim ();
+			if (value.Length == 0) {
+				date = DateTime.Today;
+				return false;
+			}
+
+			return DateTime.TryParse (value, CultureInfo.CurrentCulture, DateTimeStyles.None, out date)
+				|| DateTime.TryParse (value, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+		}
+
+		private void ReceiptDateCalendar_DateSelected (object sender, DateRangeEventArgs e)
+		{
+			text領収日.Text = e.Start.ToString ("yyyy/MM/dd", CultureInfo.InvariantCulture);
+			receiptDateCalendarDropDown.Close ();
+			text領収日.Focus ();
+			text領収日.SelectionStart = text領収日.TextLength;
+		}
+
+		private void DisposeReceiptDateCalendarDropDown ()
+		{
+			if (receiptDateCalendarDropDown == null) {
+				return;
+			}
+
+			receiptDateCalendarDropDown.Dispose ();
+			receiptDateCalendarDropDown = null;
+			receiptDateCalendar = null;
+		}
+
 		private void InitializeComponent ()
 		{
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
 			this.BackColor = System.Drawing.Color.FromArgb (234, 255, 234);
-			base.ClientSize = new System.Drawing.Size (525, 605);
+			base.ClientSize = new System.Drawing.Size (525, 356);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
@@ -201,30 +255,13 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.ShowInTaskbar = false;
 			base.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
 			this.Text = "お支払い履歴入力フォーム";
-			this.btn発行日を入力 = new System.Windows.Forms.Button ();
-			this.btn発行日を入力.Location = new System.Drawing.Point (64, 20);
-			this.btn発行日を入力.Name = "btn発行日を入力";
-			this.btn発行日を入力.Size = new System.Drawing.Size (120, 33);
-			this.btn発行日を入力.TabIndex = 0;
-			this.btn発行日を入力.Text = "発行日を入力";
-			this.btn発行日を入力.UseVisualStyleBackColor = true;
-			this.btn発行日を入力.Click += new System.EventHandler (BtnIssueDate_Click);
-			this.btnリセット = new System.Windows.Forms.Button ();
-			this.btnリセット.BackColor = System.Drawing.Color.FromArgb (255, 192, 192);
-			this.btnリセット.Location = new System.Drawing.Point (341, 20);
-			this.btnリセット.Name = "btnリセット";
-			this.btnリセット.Size = new System.Drawing.Size (120, 33);
-			this.btnリセット.TabIndex = 3;
-			this.btnリセット.Text = "リセット";
-			this.btnリセット.UseVisualStyleBackColor = false;
-			this.btnリセット.Click += new System.EventHandler (BtnReset_Click);
 			this.frame請求書の記載内容 = new CaseInfoSystem.ExcelAddIn.UI.VbaFramePanel ();
 			this.frame請求書の記載内容.BackColor = this.BackColor;
-			this.frame請求書の記載内容.Caption = "【請求書の記載内容】";
-			this.frame請求書の記載内容.Location = new System.Drawing.Point (24, 68);
+			this.frame請求書の記載内容.Caption = "請求書の読込内容";
+			this.frame請求書の記載内容.Location = new System.Drawing.Point (24, 16);
 			this.frame請求書の記載内容.Name = "frame請求書の記載内容";
 			this.frame請求書の記載内容.Size = new System.Drawing.Size (475, 150);
-			this.frame請求書の記載内容.TabIndex = 4;
+			this.frame請求書の記載内容.TabIndex = 0;
 			this.lbl請求額 = new System.Windows.Forms.Label ();
 			this.lbl請求額.BackColor = System.Drawing.Color.Transparent;
 			this.lbl請求額.Location = new System.Drawing.Point (24, 23);
@@ -288,7 +325,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.text源泉処理.ReadOnly = true;
 			this.text源泉処理.Size = new System.Drawing.Size (53, 25);
 			this.text源泉処理.TabIndex = 7;
-			this.text源泉処理.TextAlign = System.Windows.Forms.HorizontalAlignment.Left;
+			this.text源泉処理.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
 			this.text源泉処理.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
 			this.lblお預かり金額 = new System.Windows.Forms.Label ();
 			this.lblお預かり金額.BackColor = System.Drawing.Color.Transparent;
@@ -327,8 +364,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.frame請求書の記載内容.Controls.Add (this.lblお預かり金額円);
 			this.frame領収内容 = new CaseInfoSystem.ExcelAddIn.UI.VbaFramePanel ();
 			this.frame領収内容.BackColor = this.BackColor;
-			this.frame領収内容.Caption = "【領収内容】";
-			this.frame領収内容.Location = new System.Drawing.Point (24, 230);
+			this.frame領収内容.Caption = "領収内容";
+			this.frame領収内容.Location = new System.Drawing.Point (24, 178);
 			this.frame領収内容.Name = "frame領収内容";
 			this.frame領収内容.Size = new System.Drawing.Size (475, 156);
 			this.frame領収内容.TabIndex = 1;
@@ -346,8 +383,18 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.text領収日.Size = new System.Drawing.Size (120, 25);
 			this.text領収日.TabIndex = 0;
 			this.text領収日.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
+			this.text領収日.MouseDown += new System.Windows.Forms.MouseEventHandler (TextReceiptDate_MouseDown);
+			this.btn領収日カレンダー = new System.Windows.Forms.Button ();
+			this.btn領収日カレンダー.Font = new System.Drawing.Font ("Yu Gothic UI", 8f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
+			this.btn領収日カレンダー.Location = new System.Drawing.Point (154, 47);
+			this.btn領収日カレンダー.Name = "btn領収日カレンダー";
+			this.btn領収日カレンダー.Size = new System.Drawing.Size (26, 25);
+			this.btn領収日カレンダー.TabStop = false;
+			this.btn領収日カレンダー.Text = "▼";
+			this.btn領収日カレンダー.UseVisualStyleBackColor = true;
+			this.btn領収日カレンダー.Click += new System.EventHandler (BtnReceiptDateCalendar_Click);
 			this.btn今日 = new System.Windows.Forms.Button ();
-			this.btn今日.Location = new System.Drawing.Point (160, 47);
+			this.btn今日.Location = new System.Drawing.Point (188, 47);
 			this.btn今日.Name = "btn今日";
 			this.btn今日.Size = new System.Drawing.Size (52, 25);
 			this.btn今日.TabIndex = 2;
@@ -378,8 +425,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.lbl領収額円.TabIndex = 7;
 			this.lbl領収額円.Text = "円";
 			this.btn履歴を入力 = new System.Windows.Forms.Button ();
-			this.btn履歴を入力.BackColor = System.Drawing.Color.FromArgb (0, 0, 128);
-			this.btn履歴を入力.ForeColor = System.Drawing.Color.White;
+			this.btn履歴を入力.BackColor = System.Drawing.Color.PowderBlue;
+			this.btn履歴を入力.ForeColor = System.Drawing.Color.Black;
 			this.btn履歴を入力.Location = new System.Drawing.Point (251, 29);
 			this.btn履歴を入力.Name = "btn履歴を入力";
 			this.btn履歴を入力.Size = new System.Drawing.Size (181, 52);
@@ -397,67 +444,15 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.btn今後の残高推移を出力.Click += new System.EventHandler (BtnOutputFutureBalance_Click);
 			this.frame領収内容.Controls.Add (this.lbl領収日);
 			this.frame領収内容.Controls.Add (this.text領収日);
+			this.frame領収内容.Controls.Add (this.btn領収日カレンダー);
 			this.frame領収内容.Controls.Add (this.btn今日);
 			this.frame領収内容.Controls.Add (this.lbl領収額);
 			this.frame領収内容.Controls.Add (this.text領収額);
 			this.frame領収内容.Controls.Add (this.lbl領収額円);
 			this.frame領収内容.Controls.Add (this.btn履歴を入力);
 			this.frame領収内容.Controls.Add (this.btn今後の残高推移を出力);
-			this.btn別名保存 = new System.Windows.Forms.Button ();
-			this.btn別名保存.Location = new System.Drawing.Point (64, 394);
-			this.btn別名保存.Name = "btn別名保存";
-			this.btn別名保存.Size = new System.Drawing.Size (120, 33);
-			this.btn別名保存.TabIndex = 2;
-			this.btn別名保存.Text = "別名保存";
-			this.btn別名保存.UseVisualStyleBackColor = true;
-			this.btn別名保存.Click += new System.EventHandler (BtnSaveAs_Click);
-			this.lbl修正削除見出し = new System.Windows.Forms.Label ();
-			this.lbl修正削除見出し.BorderStyle = System.Windows.Forms.BorderStyle.None;
-			this.lbl修正削除見出し.Location = new System.Drawing.Point (0, 440);
-			this.lbl修正削除見出し.Name = "lbl修正削除見出し";
-			this.lbl修正削除見出し.Size = new System.Drawing.Size (525, 28);
-			this.lbl修正削除見出し.TabIndex = 6;
-			this.lbl修正削除見出し.Text = "------《修正・削除の手順》------------------------------------------------------------";
-			this.lbl手順1 = new System.Windows.Forms.Label ();
-			this.lbl手順1.BackColor = System.Drawing.Color.Transparent;
-			this.lbl手順1.Location = new System.Drawing.Point (24, 474);
-			this.lbl手順1.Name = "lbl手順1";
-			this.lbl手順1.Size = new System.Drawing.Size (470, 24);
-			this.lbl手順1.TabIndex = 7;
-			this.lbl手順1.Text = "⑴\u3000履歴シート上の修正・削除したい回の領収日を手動でクリア";
-			this.lbl手順2 = new System.Windows.Forms.Label ();
-			this.lbl手順2.BackColor = System.Drawing.Color.Transparent;
-			this.lbl手順2.Location = new System.Drawing.Point (24, 498);
-			this.lbl手順2.Name = "lbl手順2";
-			this.lbl手順2.Size = new System.Drawing.Size (470, 24);
-			this.lbl手順2.TabIndex = 8;
-			this.lbl手順2.Text = "⑵\u3000削除ボタン↓をクリック（履歴シート上の領収日が空白の回を削除します）";
-			this.btn削除 = new System.Windows.Forms.Button ();
-			this.btn削除.Font = new System.Drawing.Font ("Yu Gothic UI", 8f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
-			this.btn削除.Location = new System.Drawing.Point (64, 521);
-			this.btn削除.Name = "btn削除";
-			this.btn削除.Size = new System.Drawing.Size (120, 33);
-			this.btn削除.TabIndex = 9;
-			this.btn削除.Text = "領収日空白回の削除";
-			this.btn削除.UseVisualStyleBackColor = true;
-			this.btn削除.Click += new System.EventHandler (BtnDeleteBlankRows_Click);
-			this.lbl手順3 = new System.Windows.Forms.Label ();
-			this.lbl手順3.BackColor = System.Drawing.Color.Transparent;
-			this.lbl手順3.Location = new System.Drawing.Point (24, 559);
-			this.lbl手順3.Name = "lbl手順3";
-			this.lbl手順3.Size = new System.Drawing.Size (470, 24);
-			this.lbl手順3.TabIndex = 10;
-			this.lbl手順3.Text = "⑶\u3000正しい領収日・領収額で再入力（履歴シートは日付順にソートされます）";
-			base.Controls.Add (this.btn発行日を入力);
-			base.Controls.Add (this.btnリセット);
 			base.Controls.Add (this.frame請求書の記載内容);
 			base.Controls.Add (this.frame領収内容);
-			base.Controls.Add (this.btn別名保存);
-			base.Controls.Add (this.lbl修正削除見出し);
-			base.Controls.Add (this.lbl手順1);
-			base.Controls.Add (this.lbl手順2);
-			base.Controls.Add (this.btn削除);
-			base.Controls.Add (this.lbl手順3);
 			base.ResumeLayout (false);
 		}
 	}

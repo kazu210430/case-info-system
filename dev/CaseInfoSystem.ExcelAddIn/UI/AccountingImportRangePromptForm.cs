@@ -30,7 +30,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
 			BackColor = Color.White;
-			base.ClientSize = new Size (508, 198);
+			base.ClientSize = new Size (508, 282);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
@@ -39,21 +39,21 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.StartPosition = FormStartPosition.CenterParent;
 			Text = "お支払い履歴から取り込む";
 			Label value = new Label {
-				Location = new Point (16, 7),
+				Location = new Point (16, 16),
 				Name = "lblGuide",
 				Size = new Size (478, 24),
 				TabIndex = 6,
-				Text = "・・お支払い履歴で指定した範囲の合計額を会計依頼書の対応する欄に入力します"
+				Text = "お支払い履歴で指定した範囲の合計額を会計依頼書の対応する欄に入力します"
 			};
 			Label value2 = new Label {
-				Location = new Point (0, 28),
+				Location = new Point (0, 54),
 				Name = "lblDivider",
 				Size = new Size (508, 18),
 				TabIndex = 7,
 				Text = "------《作業手順》--------------------------------------------------------------"
 			};
 			Label value3 = new Label {
-				Location = new Point (16, 49),
+				Location = new Point (16, 88),
 				Name = "lblStep1",
 				Size = new Size (160, 22),
 				TabIndex = 8,
@@ -61,7 +61,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_txtStartRound = new TextBox {
 				BorderStyle = BorderStyle.FixedSingle,
-				Location = new Point (45, 72),
+				Location = new Point (45, 120),
 				Name = "txtStartRound",
 				Size = new Size (28, 25),
 				TabIndex = 0,
@@ -70,7 +70,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_txtStartRound.KeyPress += RoundTextBox_KeyPress;
 			Label value4 = new Label {
-				Location = new Point (79, 74),
+				Location = new Point (79, 122),
 				Name = "lblStartRoundSuffix",
 				Size = new Size (58, 22),
 				TabIndex = 9,
@@ -78,7 +78,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_txtEndRound = new TextBox {
 				BorderStyle = BorderStyle.FixedSingle,
-				Location = new Point (142, 72),
+				Location = new Point (142, 120),
 				Name = "txtEndRound",
 				Size = new Size (28, 25),
 				TabIndex = 1,
@@ -87,30 +87,30 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_txtEndRound.KeyPress += RoundTextBox_KeyPress;
 			Label value5 = new Label {
-				Location = new Point (176, 74),
+				Location = new Point (176, 122),
 				Name = "lblEndRoundSuffix",
 				Size = new Size (304, 22),
 				TabIndex = 10,
 				Text = "回目の支払い（範囲を絞るときは修正してください）"
 			};
 			Label value6 = new Label {
-				Location = new Point (16, 99),
+				Location = new Point (16, 158),
 				Name = "lblStep2",
 				Size = new Size (472, 22),
 				TabIndex = 11,
 				Text = "⑵\u3000税処理前の金額を表示させる場所を指定（黄色エリア内のセルを1つ選択）"
 			};
 			Label value7 = new Label {
-				Location = new Point (16, 126),
+				Location = new Point (16, 192),
 				Name = "lblStep3",
 				Size = new Size (410, 22),
 				TabIndex = 12,
 				Text = "⑶\u3000決定ボタンをクリック（費用項目は適宜手入力してください）"
 			};
 			_btnConfirm = new Button {
-				BackColor = Color.FromArgb (0, 0, 128),
-				ForeColor = Color.White,
-				Location = new Point (56, 157),
+				BackColor = Color.PowderBlue,
+				ForeColor = Color.Black,
+				Location = new Point (56, 228),
 				Name = "btnConfirm",
 				Size = new Size (108, 34),
 				TabIndex = 2,
@@ -119,7 +119,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_btnConfirm.Click += BtnConfirm_Click;
 			_btnClose = new Button {
-				Location = new Point (339, 157),
+				Location = new Point (339, 228),
 				Name = "btnClose",
 				Size = new Size (108, 34),
 				TabIndex = 3,
@@ -138,6 +138,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.Controls.Add (value7);
 			base.Controls.Add (_btnConfirm);
 			base.Controls.Add (_btnClose);
+			AccountingFormButtonAppearanceHelper.Apply (_btnConfirm, _btnClose);
 			ButtonCursorHelper.ApplyHandCursor (this);
 			ResumeLayout (performLayout: false);
 		}

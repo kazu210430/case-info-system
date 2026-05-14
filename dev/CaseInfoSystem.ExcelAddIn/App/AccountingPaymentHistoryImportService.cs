@@ -17,6 +17,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string PromptAnchorCellAddress = "AA1";
 
+		private const int FirstHistoryDataRow = 14;
+
+		private const int LastHistoryDataRow = 73;
+
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
 		private readonly UserErrorService _userErrorService;
@@ -49,8 +53,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			Worksheet worksheet2 = _accountingWorkbookService.GetWorksheet (workbook, "お支払い履歴");
 			ValidatePaymentHistoryExists (worksheet2);
 			string selectedTargetAddress = TryResolveTargetCellAddress (context, workbook, worksheet);
-			int startRound = ReadRoundValue (worksheet2, "A13", 1);
+			int startRound = ResolveFirstImportRound (worksheet2);
 			int endRound = ResolveLatestRound (worksheet2);
+			if (endRound < startRound) {
+				throw new InvalidOperationException ("お支払い履歴を先に作成してください。");
+			}
 			_accountingWorkbookService.HighlightAccountingImportTargets (workbook);
 			ShowPrompt (context, workbook, worksheet, worksheet2, selectedTargetAddress, startRound, endRound);
 		}
@@ -78,6 +85,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (num3 < num2) {
 				throw new InvalidOperationException ("終期は始期以上で指定してください。");
 			}
+			EnsureImportRangeWithinPaymentHistoryRows (num2, num3);
 			double num4 = SumColumn (paymentHistoryWorksheet, num2, num3, "D");
 			double num5 = SumColumn (paymentHistoryWorksheet, num2, num3, "G");
 			double num6 = SumColumn (paymentHistoryWorksheet, num2, num3, "H");
@@ -103,28 +111,53 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (paymentHistoryWorksheet == null) {
 				throw new InvalidOperationException ("お支払い履歴シートが見つかりません。");
 			}
-			object value = _accountingWorkbookService.ReadCellValue (paymentHistoryWorksheet, "B13");
-			if (string.IsNullOrWhiteSpace (Convert.ToString (value))) {
+			if (!HasAnyPaymentHistoryRow (paymentHistoryWorksheet)) {
 				throw new InvalidOperationException ("お支払い履歴を先に作成してください。");
 			}
 		}
 
 		private int ResolvePaymentHistoryBaseRowOffset (Worksheet paymentHistoryWorksheet)
 		{
-			int num = ReadRoundValue (paymentHistoryWorksheet, "A13", 1);
-			return (num == 1) ? 12 : 13;
+			int firstRound = ReadRoundValue (paymentHistoryWorksheet, "A14", 1);
+			return firstRound == 0 ? 14 : 13;
 		}
 
 		private int ResolveLatestRound (Worksheet paymentHistoryWorksheet)
 		{
-			Range range = null;
-			try {
-				range = ((dynamic)paymentHistoryWorksheet.Cells [12, "B"]).End [XlDirection.xlDown] as Range;
-				int num = range?.Row ?? 13;
-				int num2 = ReadRoundValue (paymentHistoryWorksheet, "A13", 1);
-				return (num2 == 1) ? (num - 12) : (num - 13);
-			} finally {
-				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
+			for (int row = LastHistoryDataRow; row >= FirstHistoryDataRow; row--) {
+				if (IsPaymentHistoryRowFilled (paymentHistoryWorksheet, row)) {
+					return ReadRoundValue (paymentHistoryWorksheet, "A" + row.ToString (System.Globalization.CultureInfo.InvariantCulture), 0);
+				}
+			}
+			return 0;
+		}
+
+		private int ResolveFirstImportRound (Worksheet paymentHistoryWorksheet)
+		{
+			int firstRound = ReadRoundValue (paymentHistoryWorksheet, "A14", 1);
+			return firstRound == 0 ? 1 : firstRound;
+		}
+
+		private bool HasAnyPaymentHistoryRow (Worksheet paymentHistoryWorksheet)
+		{
+			for (int row = FirstHistoryDataRow; row <= LastHistoryDataRow; row++) {
+				if (IsPaymentHistoryRowFilled (paymentHistoryWorksheet, row)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private bool IsPaymentHistoryRowFilled (Worksheet paymentHistoryWorksheet, int row)
+		{
+			object value = _accountingWorkbookService.ReadCellValue (paymentHistoryWorksheet, "B" + row.ToString (System.Globalization.CultureInfo.InvariantCulture));
+			return !string.IsNullOrWhiteSpace (Convert.ToString (value));
+		}
+
+		private void EnsureImportRangeWithinPaymentHistoryRows (int startRow, int endRow)
+		{
+			if (startRow < FirstHistoryDataRow || endRow > LastHistoryDataRow) {
+				throw new InvalidOperationException ("お支払い履歴の取込範囲が A12:J73 のデータ行範囲を超えています。");
 			}
 		}
 
@@ -286,7 +319,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_accountingWorkbookService.ClearAccountingImportTargetHighlight (_activePromptWorkbook);
 				}
 				if (!_activePromptForm.IsDisposed) {
-					_activePromptForm.Close ();
+					_activePromptForm.CloseByCode ();
 				}
 			} catch {
 			} finally {

@@ -15,20 +15,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string ArgumentSheetName = "引数";
 
-		private const string PaymentHistoryChargedMarker = "(充当済み)";
-
-		private const string PaymentHistoryDefaultSortRangeAddress = "B13:H72";
-
-		private const string PaymentHistoryDefaultSortKeyAddress = "B13";
-
-		private const string PaymentHistoryChargedSortRangeAddress = "B14:H72";
-
-		private const string PaymentHistoryChargedSortKeyAddress = "B14";
-
-		private const string PaymentHistoryTableRangeAddress = "A12:J73";
-
-		private const int PaymentHistoryTableSortKeyColumnIndex = 2;
-
 		private readonly WorkbookRoleResolver _workbookRoleResolver;
 
 		private readonly AccountingWorkbookService _accountingWorkbookService;
@@ -132,9 +118,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (ShouldSelectTopLeftCell (text)) {
 					_accountingWorkbookService.ActivateCell (workbook, text, "A1");
 				}
-				if (string.Equals (text, "お支払い履歴", StringComparison.OrdinalIgnoreCase)) {
-					TryApplyPaymentHistorySort (workbook);
-				}
 				if (!string.Equals (text, "会計依頼書", StringComparison.OrdinalIgnoreCase)) {
 					_accountingWorkbookService.ClearAccountingImportTargetHighlight (workbook);
 				}
@@ -186,29 +169,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			_initializedWorkbookKeys.Add (workbookKey);
 			_logger.Info ("Accounting workbook lifecycle initialization completed. workbook=" + workbookKey);
-		}
-
-		private void ApplyPaymentHistorySort (Workbook workbook)
-		{
-			string text = _accountingWorkbookService.ReadDisplayText (workbook, "お支払い履歴", "B13");
-			if (_accountingWorkbookService.SortListObjectAscendingByColumn (workbook, "お支払い履歴", PaymentHistoryTableRangeAddress, PaymentHistoryTableSortKeyColumnIndex)) {
-				_logger.Info ("Accounting payment history table sorted on sheet activation. firstMarker=" + (text ?? string.Empty) + ", tableRange=" + PaymentHistoryTableRangeAddress + ", keyColumnIndex=" + PaymentHistoryTableSortKeyColumnIndex.ToString (System.Globalization.CultureInfo.InvariantCulture));
-				return;
-			}
-			bool flag = string.Equals (text, "(充当済み)", StringComparison.OrdinalIgnoreCase);
-			string text2 = (flag ? "B14:H72" : "B13:H72");
-			string text3 = (flag ? "B14" : "B13");
-			_accountingWorkbookService.SortRangeAscending (workbook, "お支払い履歴", text2, text3);
-			_logger.Info ("Accounting payment history sorted on sheet activation. firstMarker=" + (text ?? string.Empty) + ", range=" + text2 + ", key=" + text3);
-		}
-
-		private void TryApplyPaymentHistorySort (Workbook workbook)
-		{
-			try {
-				ApplyPaymentHistorySort (workbook);
-			} catch (Exception exception) {
-				_logger.Error ("Accounting payment history sort failed. Continuing sheet activation so the input form can be shown.", exception);
-			}
 		}
 
 		private static bool ShouldSelectTopLeftCell (string activeSheetCodeName)

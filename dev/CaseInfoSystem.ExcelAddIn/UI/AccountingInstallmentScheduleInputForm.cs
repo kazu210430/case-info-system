@@ -117,7 +117,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
 			this.BackColor = System.Drawing.Color.FromArgb (229, 245, 255);
-			base.ClientSize = new System.Drawing.Size (540, 444);
+			base.ClientSize = new System.Drawing.Size (525, 444);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
@@ -132,7 +132,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.txtBillingAmount.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
 			groupBox.Controls.Add (this.txtBillingAmount);
 			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("円", new System.Drawing.Point (160, 58), new System.Drawing.Size (24, 20)));
-			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("実費等", new System.Drawing.Point (196, 28), new System.Drawing.Size (72, 20)));
+			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("（うち実費等）", new System.Drawing.Point (196, 28), new System.Drawing.Size (108, 20)));
 			this.txtExpenseAmount = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateReadOnlyTextBox (new System.Drawing.Point (204, 55), new System.Drawing.Size (120, 25));
 			this.txtExpenseAmount.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
 			groupBox.Controls.Add (this.txtExpenseAmount);
@@ -146,7 +146,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.txtFirstDueDate = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateReadOnlyTextBox (new System.Drawing.Point (32, 117), new System.Drawing.Size (120, 25));
 			this.txtFirstDueDate.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
 			groupBox.Controls.Add (this.txtFirstDueDate);
-			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("お預かり金額", new System.Drawing.Point (196, 92), new System.Drawing.Size (120, 20)));
+			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("お預かり金額（充当額）", new System.Drawing.Point (196, 92), new System.Drawing.Size (192, 20)));
 			this.txtDepositAmount = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateReadOnlyTextBox (new System.Drawing.Point (204, 117), new System.Drawing.Size (120, 25));
 			this.txtDepositAmount.KeyDown += new System.Windows.Forms.KeyEventHandler (ShowInvoiceEditRestrictedMessage);
 			groupBox.Controls.Add (this.txtDepositAmount);

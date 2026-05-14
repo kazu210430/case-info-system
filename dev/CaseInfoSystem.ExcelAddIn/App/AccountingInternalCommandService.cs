@@ -41,6 +41,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				case AccountingNavigationActionIds.SetInstallmentScheduleIssueDate:
 				case AccountingNavigationActionIds.ResetInstallmentSchedule:
 				case AccountingNavigationActionIds.SetPaymentHistoryIssueDate:
+				case AccountingNavigationActionIds.DeleteSelectedPaymentHistoryRows:
 				case AccountingNavigationActionIds.ResetPaymentHistory:
 				case "set-issue-date":
 				case "set-issue-date-and-due-date":

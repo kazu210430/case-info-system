@@ -83,6 +83,7 @@
     <Compile Include="AccountingNumericCellReaderTests.cs" />
     <Compile Include="AccountingIssueDateDueDatePolicyTests.cs" />
     <Compile Include="AccountingInstallmentSchedulePlanPolicyTests.cs" />
+    <Compile Include="AccountingPaymentHistoryPlanPolicyTests.cs" />
     <Compile Include="AccountingInitialSheetSyncPolicyTests.cs" />
     <Compile Include="AccountingSetSpecTests.cs" />
     <Compile Include="AccountingSetCreateServiceTests.cs" />
@@ -113,6 +114,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingInitialSheetSyncPolicy.cs" Link="Source\App\AccountingInitialSheetSyncPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingIssueDateDueDatePolicy.cs" Link="Source\App\AccountingIssueDateDueDatePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingInstallmentSchedulePlanPolicy.cs" Link="Source\App\AccountingInstallmentSchedulePlanPolicy.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingPaymentHistoryPlanPolicy.cs" Link="Source\App\AccountingPaymentHistoryPlanPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSaveAsService.cs" Link="Source\App\AccountingSaveAsService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetCreateService.cs" Link="Source\App\AccountingSetCreateService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingSetKernelSyncService.cs" Link="Source\App\AccountingSetKernelSyncService.cs" />

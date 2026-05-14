@@ -167,6 +167,7 @@
     <Compile Include="App\AccountingIssueDateDueDatePolicy.cs" />
     <Compile Include="App\AccountingInstallmentScheduleCommandService.cs" />
     <Compile Include="App\AccountingInstallmentSchedulePlanPolicy.cs" />
+    <Compile Include="App\AccountingPaymentHistoryPlanPolicy.cs" />
     <Compile Include="App\AccountingNumericCellReader.cs" />
     <Compile Include="App\AccountingInternalCommandService.cs" />
     <Compile Include="App\AccountingPaymentHistoryCommandService.cs" />

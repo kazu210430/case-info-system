@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
@@ -13,21 +13,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
 	{
 		private sealed class PaymentHistoryEditableRow
 		{
-			internal object DateValue { get; }
-
-			internal object TargetAmountValue { get; }
-
-			internal object ExpenseAmountValue { get; }
-
-			internal DateTime SortDate { get; }
-
-			internal PaymentHistoryEditableRow (object dateValue, object targetAmountValue, object expenseAmountValue, DateTime sortDate)
+			internal PaymentHistoryEditableRow (int originalRow, object dateValue, object taxBaseValue, object expenseChargeValue, DateTime sortDate, bool isDepositRow)
 			{
+				OriginalRow = originalRow;
 				DateValue = dateValue;
-				TargetAmountValue = targetAmountValue;
-				ExpenseAmountValue = expenseAmountValue;
+				TaxBaseValue = taxBaseValue;
+				ExpenseChargeValue = expenseChargeValue;
 				SortDate = sortDate;
+				IsDepositRow = isDepositRow;
 			}
+
+			internal int OriginalRow { get; private set; }
+
+			internal object DateValue { get; private set; }
+
+			internal object TaxBaseValue { get; private set; }
+
+			internal object ExpenseChargeValue { get; private set; }
+
+			internal DateTime SortDate { get; private set; }
+
+			internal bool IsDepositRow { get; private set; }
 		}
 
 		private const string SheetName = "お支払い履歴";
@@ -40,7 +46,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string PaymentHistoryReceiptDateRangeName = "領収日";
 
-		private const string PaymentHistoryAmountRangeName = "分割金";
+		private const string PaymentHistoryAmountRangeName = "領収額";
 
 		private const string PaymentHistoryExpenseAmountRangeName = "実費等総額";
 
@@ -48,15 +54,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string PaymentHistoryDepositAmountRangeName = "お預かり金額";
 
-		private const string PaymentHistoryDepositProcessedRangeName = "お預かり金額処理";
-
 		private const string PaymentTotalCellAddress = "I9";
 
 		private const string MarkerCellAddress = "B12";
-
-		private const string FirstRoundMarkerCellAddress = "A13";
-
-		private const string FirstReceiptDateCellAddress = "B13";
 
 		private const string InvoiceBillingSubtotalCellAddress = "F23";
 
@@ -74,21 +74,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string DateDisplayFormat = "yyyy/MM/dd";
 
-		private const string DepositAppliedText = "(充当済み)";
+		private const string TableRangeAddress = "A12:J73";
 
-		private const string DepositProcessedText = "済み";
-
-		private const int FirstHistoryRow = 13;
-
-		private const int LastHistoryRow = 72;
-
-		private const int ClearEndRow = 73;
-
-		private const int PrintLastColumn = 9;
-
-		private const int MaximumRounds = 60;
-
-		private const int PaymentHistoryFirstRoundOffset = 12;
+		private const double AmountTolerance = 0.01;
 
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
@@ -109,33 +97,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new ArgumentNullException ("workbook");
 			}
 			SyncPaymentHistoryHeaderFromInvoice (workbook);
-			const string text = "AccountingPaymentHistory.LoadFormState";
-			List<string> list = new List<string> ();
-			double num = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F23", "請求額小計", text, list);
-			double num2 = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F25", "実費等総額", text, list);
-			double num3 = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, "請求書", "F29", "お預かり金額", text, list);
-			bool flag = ReadBooleanSafe (workbook, "請求書", "Y24");
-			AccountingPaymentHistoryFormState accountingPaymentHistoryFormState = new AccountingPaymentHistoryFormState {
-				BillingAmountText = FormatAmount (num + num2),
-				ExpenseAmountText = FormatAmount (num2),
-				WithholdingText = (flag ? "する" : "しない"),
-				DepositAmountText = FormatAmount (num3),
-				ReceiptDateText = ReadFormattedDateFromNamedRangeSafe (workbook, "お支払い履歴", "領収日"),
-				ReceiptAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, "お支払い履歴", "分割金"),
-				HasNumericReadError = list.Count > 0,
-				NumericReadErrorMessage = string.Join (Environment.NewLine, list)
+			const string procedureName = "AccountingPaymentHistory.LoadFormState";
+			List<string> warnings = new List<string> ();
+			double billingSubtotal = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, InvoiceSheetName, InvoiceBillingSubtotalCellAddress, "請求額小計", procedureName, warnings);
+			double expenseAmount = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, InvoiceSheetName, InvoiceExpenseCellAddress, "実費等総額", procedureName, warnings);
+			double depositAmount = ReadLoadFormStateDoubleAllowBlankAsZero (workbook, InvoiceSheetName, InvoiceDepositAmountCellAddress, "お預かり金額", procedureName, warnings);
+			bool withholding = ReadBooleanSafe (workbook, InvoiceSheetName, InvoiceWithholdingFlagCellAddress);
+			AccountingPaymentHistoryFormState state = new AccountingPaymentHistoryFormState {
+				BillingAmountText = FormatAmount (billingSubtotal + expenseAmount),
+				ExpenseAmountText = FormatAmount (expenseAmount),
+				WithholdingText = (withholding ? "する" : "しない"),
+				DepositAmountText = FormatAmount (depositAmount),
+				ReceiptDateText = ReadFormattedDateFromNamedRangeSafe (workbook, SheetName, PaymentHistoryReceiptDateRangeName),
+				ReceiptAmountText = _accountingWorkbookService.ReadDisplayTextByNamedRange (workbook, SheetName, PaymentHistoryAmountRangeName),
+				HasNumericReadError = warnings.Count > 0,
+				NumericReadErrorMessage = string.Join (Environment.NewLine, warnings)
 			};
-			if (list.Count > 0) {
-				ShowLoadFormStateNumericReadWarning (accountingPaymentHistoryFormState.NumericReadErrorMessage);
+			if (warnings.Count > 0) {
+				ShowLoadFormStateNumericReadWarning (state.NumericReadErrorMessage);
 			}
-			return accountingPaymentHistoryFormState;
+			return state;
 		}
 
 		internal AccountingPaymentHistoryFormState ApplyIssueDate (Workbook workbook)
 		{
 			try {
-				object value = _accountingWorkbookService.ReadCellValue (workbook, "お支払い履歴", "J1");
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "発行日", value);
+				object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, IssueDateSourceCellAddress);
+				_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryIssueDateRangeName, value);
 				_logger.Info ("Payment history issue date applied.");
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingPaymentHistory.ApplyIssueDate", exception);
@@ -146,8 +134,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal AccountingPaymentHistoryFormState ApplyToday (Workbook workbook)
 		{
 			try {
-				object value = _accountingWorkbookService.ReadCellValue (workbook, "お支払い履歴", "J1");
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "領収日", value);
+				object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, IssueDateSourceCellAddress);
+				_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryReceiptDateRangeName, value);
 				_logger.Info ("Payment history today applied from J1.");
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingPaymentHistory.ApplyToday", exception);
@@ -163,33 +151,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (request == null) {
 				throw new ArgumentNullException ("request");
 			}
-			if (!TryValidateEntryRequest (request, out var receiptDate, out var billingAmount, out var expenseAmount, out var depositAmount, out var receiptAmount)) {
+			DateTime receiptDate;
+			double billingAmount;
+			double expenseAmount;
+			double depositAmount;
+			double receiptAmount;
+			if (!TryValidateEntryRequest (request, out receiptDate, out billingAmount, out expenseAmount, out depositAmount, out receiptAmount)) {
 				return LoadFormState (workbook);
 			}
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "お支払い履歴");
-				CompactBlankDateRows (workbook, GetEditableStartRow (workbook));
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				EnsureWorkbookStructure (workbook);
 				WriteBaseValues (workbook, request, receiptDate, billingAmount, expenseAmount, depositAmount, receiptAmount);
-				if (depositAmount != 0.0 && !IsDepositProcessed (workbook)) {
-					ApplyDepositRow (workbook, depositAmount);
-					int nextAppendRow = GetNextAppendRow (workbook);
-					WriteReceiptDateRow (workbook, nextAppendRow, receiptDate);
-					ApplyExpenseAmount (workbook, nextAppendRow, receiptAmount);
-					ExecuteReceiptGoalSeek (workbook, nextAppendRow, receiptAmount);
-				} else if (string.IsNullOrWhiteSpace (_accountingWorkbookService.ReadText (workbook, "お支払い履歴", "B13"))) {
-					WriteReceiptDateRow (workbook, 13, receiptDate);
-					ApplyExpenseAmount (workbook, 13, receiptAmount);
-					ExecuteReceiptGoalSeek (workbook, 13, receiptAmount);
+				CalculateWorkbook (workbook);
+
+				int lastDataRow = SortPaymentHistoryRows (workbook);
+				if (lastDataRow < AccountingPaymentHistoryPlanPolicy.FirstDataRow) {
+					if (depositAmount != 0) {
+						WriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 0, AccountingPaymentHistoryPlanPolicy.DepositAppliedText, depositAmount, "お預かり金額");
+						WriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow + 1, 1, receiptDate, receiptAmount, "領収額");
+					} else {
+						WriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 1, receiptDate, receiptAmount, "領収額");
+					}
 				} else {
-					int nextAppendRow2 = GetNextAppendRow (workbook);
-					WriteReceiptDateRow (workbook, nextAppendRow2, receiptDate);
-					ApplyExpenseAmount (workbook, nextAppendRow2, receiptAmount);
-					ExecuteReceiptGoalSeek (workbook, nextAppendRow2, receiptAmount);
+					int nextAppendRow = lastDataRow + 1;
+					AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (nextAppendRow);
+					WriteCalculatedRow (workbook, nextAppendRow, ResolveNextRoundNumber (workbook, nextAppendRow), receiptDate, receiptAmount, "領収額");
 				}
-				int startRow = CompactBlankDateRows (workbook, GetEditableStartRow (workbook));
-				ClearRowsFrom (workbook, startRow);
-				RefreshPrintArea (workbook);
-				WritePaymentTotal (workbook);
+
+				lastDataRow = SortPaymentHistoryRows (workbook);
+				ClearRowsFrom (workbook, lastDataRow + 1);
+				RefreshPrintArea (workbook, lastDataRow);
+				RefreshPaymentTotal (workbook);
 				_logger.Info ("Payment history entry added.");
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingPaymentHistory.AddHistoryEntry", exception);
@@ -207,37 +200,51 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (request == null) {
 				throw new ArgumentNullException ("request");
 			}
-			if (!TryValidateProjectionRequest (workbook, request, out var billingAmount, out var expenseAmount, out var receiptAmount)) {
+			DateTime receiptDate;
+			double billingAmount;
+			double expenseAmount;
+			double depositAmount;
+			double receiptAmount;
+			if (!TryValidateProjectionRequest (request, out receiptDate, out billingAmount, out expenseAmount, out depositAmount, out receiptAmount)) {
 				return LoadFormState (workbook);
 			}
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "お支払い履歴");
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "請求額", billingAmount);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "実費等総額", expenseAmount);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "源泉処理", request.WithholdingText ?? string.Empty);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "分割金", receiptAmount);
-				int lastOccupiedHistoryRow = GetLastOccupiedHistoryRow (workbook, GetEditableStartRow (workbook));
-				int num = lastOccupiedHistoryRow + 1;
-				ApplyExpenseAmount (workbook, num, receiptAmount);
-				ExecuteReceiptGoalSeek (workbook, num, receiptAmount);
-				double num2 = ReadRequiredDouble (workbook, "お支払い履歴", "I" + num.ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.OutputFutureBalance");
-				while (num2 > receiptAmount) {
-					num++;
-					ApplyExpenseAmount (workbook, num, receiptAmount);
-					ExecuteReceiptGoalSeek (workbook, num, receiptAmount);
-					num2 = ReadRequiredDouble (workbook, "お支払い履歴", "I" + num.ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.OutputFutureBalance");
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				EnsureWorkbookStructure (workbook);
+				WriteBaseValues (workbook, request, receiptDate, billingAmount, expenseAmount, depositAmount, receiptAmount);
+				CalculateWorkbook (workbook);
+
+				int lastDataRow = SortPaymentHistoryRows (workbook);
+				if (lastDataRow >= AccountingPaymentHistoryPlanPolicy.FirstDataRow) {
+					double currentBalance = ReadRequiredDouble (workbook, SheetName, Address ("I", lastDataRow), "請求残高", "AccountingPaymentHistory.OutputFutureBalance");
+					if (currentBalance <= AmountTolerance) {
+						ClearRowsFrom (workbook, lastDataRow + 1);
+						RefreshPrintArea (workbook, lastDataRow);
+						RefreshPaymentTotal (workbook);
+						return LoadFormState (workbook);
+					}
 				}
-				if (num2 < 0.0) {
-					CorrectRow (workbook, num);
-					ClearRowsFrom (workbook, num + 1);
-				} else {
-					int num3 = num + 1;
-					ApplyExpenseAmount (workbook, num3, receiptAmount);
-					CorrectRow (workbook, num3);
-					ClearRowsFrom (workbook, num3 + 1);
+
+				int row = lastDataRow < AccountingPaymentHistoryPlanPolicy.FirstDataRow ? AccountingPaymentHistoryPlanPolicy.FirstDataRow : lastDataRow + 1;
+				int lastWrittenRow = lastDataRow;
+				while (true) {
+					AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (row);
+					WriteCalculatedRow (workbook, row, ResolveNextRoundNumber (workbook, row), string.Empty, receiptAmount, "領収額");
+					lastWrittenRow = row;
+					double balance = ReadRequiredDouble (workbook, SheetName, Address ("I", row), "請求残高", "AccountingPaymentHistory.OutputFutureBalance");
+					if (balance > AmountTolerance) {
+						row++;
+						continue;
+					}
+					if (balance < -AmountTolerance) {
+						GoalSeekAndVerify (workbook, row, "I", "D", 0, "最終回の請求残高");
+					}
+					break;
 				}
-				RefreshPrintArea (workbook);
-				WritePaymentTotal (workbook);
+
+				ClearRowsFrom (workbook, lastWrittenRow + 1);
+				RefreshPrintArea (workbook, lastWrittenRow);
+				RefreshPaymentTotal (workbook);
 				_logger.Info ("Payment history future balance output completed.");
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingPaymentHistory.OutputFutureBalance", exception);
@@ -253,19 +260,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new ArgumentNullException ("workbook");
 			}
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "お支払い履歴");
-				int editableStartRow = GetEditableStartRow (workbook);
-				int startRow = CompactBlankDateRows (workbook, editableStartRow);
-				if (editableStartRow == 13 && string.IsNullOrWhiteSpace (_accountingWorkbookService.ReadText (workbook, "お支払い履歴", "B13"))) {
-					ClearRowsFrom (workbook, 13);
-					_accountingWorkbookService.SetPrintAreaByBounds (workbook, "お支払い履歴", 13, 9);
-					ClearPaymentTotal (workbook);
-				} else {
-					ClearRowsFrom (workbook, startRow);
-					RefreshPrintArea (workbook);
-					WritePaymentTotal (workbook);
-				}
-				_logger.Info ("Payment history blank receipt rows deleted.");
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				EnsureWorkbookStructure (workbook);
+				int selectedRowCount = ClearReceiptDatesForSelectedTableRows (workbook);
+				int lastDataRow = SortPaymentHistoryRows (workbook);
+				ClearRowsFrom (workbook, lastDataRow + 1);
+				RefreshPrintArea (workbook, lastDataRow);
+				RefreshPaymentTotal (workbook);
+				_logger.Info ("Payment history blank receipt rows deleted. selectedRows=" + selectedRowCount.ToString (CultureInfo.InvariantCulture));
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingPaymentHistory.DeleteBlankReceiptRows", exception);
 			} finally {
@@ -280,22 +282,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new ArgumentNullException ("workbook");
 			}
 			try {
-				_accountingWorkbookService.UnprotectSheet (workbook, "お支払い履歴");
+				_accountingWorkbookService.UnprotectSheet (workbook, SheetName);
+				EnsureWorkbookStructure (workbook);
 				SyncPaymentHistoryHeaderFromInvoice (workbook);
-				_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "B12", "※");
-				_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "A13", 1);
-				_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "発行日", "発行日");
-				_accountingWorkbookService.ClearNamedRangeMergeAreaContents (workbook, "お支払い履歴", "請求額");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "お支払い履歴", "領収日");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "お支払い履歴", "分割金");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "お支払い履歴", "実費等総額");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "お支払い履歴", "源泉処理");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "お支払い履歴", "お預かり金額");
-				_accountingWorkbookService.ClearNamedRangeContents (workbook, "お支払い履歴", "お預かり金額処理");
-				_accountingWorkbookService.ClearRangeContents (workbook, "お支払い履歴", "B13:B72");
-				ClearRowsFrom (workbook, 13);
-				_accountingWorkbookService.SetPrintAreaByBounds (workbook, "お支払い履歴", 13, 9);
-				ClearPaymentTotal (workbook);
+				_accountingWorkbookService.WriteCellValue (workbook, SheetName, MarkerCellAddress, ResetMarkerText);
+				_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryIssueDateRangeName, IssueDatePlaceholderText);
+				_accountingWorkbookService.ClearNamedRangeMergeAreaContents (workbook, SheetName, PaymentHistoryBillingAmountRangeName);
+				_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, PaymentHistoryReceiptDateRangeName);
+				_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, PaymentHistoryAmountRangeName);
+				_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, PaymentHistoryExpenseAmountRangeName);
+				_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, PaymentHistoryWithholdingRangeName);
+				_accountingWorkbookService.ClearNamedRangeContents (workbook, SheetName, PaymentHistoryDepositAmountRangeName);
+				ClearRowsFrom (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow);
+				RefreshPrintArea (workbook, AccountingPaymentHistoryPlanPolicy.StartValueRow);
+				RefreshPaymentTotal (workbook);
 				_logger.Info ("Payment history reset completed.");
 			} catch (Exception exception) {
 				_userErrorService.ShowUserError ("AccountingPaymentHistory.Reset", exception);
@@ -307,6 +307,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private bool TryValidateEntryRequest (AccountingPaymentHistoryEntryRequest request, out DateTime receiptDate, out double billingAmount, out double expenseAmount, out double depositAmount, out double receiptAmount)
 		{
+			return TryValidateCommonRequest (request, requireReceiptDate: true, receiptDate: out receiptDate, billingAmount: out billingAmount, expenseAmount: out expenseAmount, depositAmount: out depositAmount, receiptAmount: out receiptAmount);
+		}
+
+		private bool TryValidateProjectionRequest (AccountingPaymentHistoryEntryRequest request, out DateTime receiptDate, out double billingAmount, out double expenseAmount, out double depositAmount, out double receiptAmount)
+		{
+			return TryValidateCommonRequest (request, requireReceiptDate: true, receiptDate: out receiptDate, billingAmount: out billingAmount, expenseAmount: out expenseAmount, depositAmount: out depositAmount, receiptAmount: out receiptAmount);
+		}
+
+		private bool TryValidateCommonRequest (AccountingPaymentHistoryEntryRequest request, bool requireReceiptDate, out DateTime receiptDate, out double billingAmount, out double expenseAmount, out double depositAmount, out double receiptAmount)
+		{
 			receiptDate = DateTime.MinValue;
 			billingAmount = ParseAmount (request.BillingAmountText);
 			expenseAmount = ParseAmount (request.ExpenseAmountText);
@@ -316,7 +326,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				ShowInformationMessage ("請求額が0円です。請求書を作成してください。");
 				return false;
 			}
-			if (!TryParseDate (request.ReceiptDateText, out receiptDate)) {
+			if (expenseAmount < 0.0) {
+				ShowInformationMessage ("実費等総額にマイナス金額は指定できません。");
+				return false;
+			}
+			if (depositAmount < 0.0) {
+				ShowInformationMessage ("お預かり金額にマイナス金額は指定できません。");
+				return false;
+			}
+			if (requireReceiptDate && !TryParseDate (request.ReceiptDateText, out receiptDate)) {
 				ShowInformationMessage ("領収日欄が日付になっていません。\r\n1973/02/10形式で入力し直してください。");
 				return false;
 			}
@@ -324,32 +342,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				ShowInformationMessage ("領収額が未入力です。");
 				return false;
 			}
-			return true;
-		}
-
-		private bool TryValidateProjectionRequest (Workbook workbook, AccountingPaymentHistoryEntryRequest request, out double billingAmount, out double expenseAmount, out double receiptAmount)
-		{
-			billingAmount = ParseAmount (request.BillingAmountText);
-			expenseAmount = ParseAmount (request.ExpenseAmountText);
-			receiptAmount = ParseAmount (request.ReceiptAmountText);
-			if (billingAmount == 0.0) {
-				ShowInformationMessage ("請求額が0円です。請求書を作成してください。");
-				return false;
-			}
-			if (string.IsNullOrWhiteSpace (request.ReceiptAmountText)) {
-				ShowInformationMessage ("領収額が未入力です。");
-				return false;
-			}
-			if (string.IsNullOrWhiteSpace (_accountingWorkbookService.ReadText (workbook, "お支払い履歴", "B13"))) {
-				ShowInformationMessage ("1回目の領収日が未入力です。");
-				return false;
-			}
-			int lastOccupiedHistoryRow = GetLastOccupiedHistoryRow (workbook, GetEditableStartRow (workbook));
-			double num = ReadRequiredDouble (workbook, "お支払い履歴", "I" + lastOccupiedHistoryRow.ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.OutputFutureBalance");
-			double num2 = num / Math.Max (1.0, receiptAmount);
-			double num3 = 60 - (lastOccupiedHistoryRow - 12) + 1;
-			if (num2 > num3) {
-				ShowInformationMessage ("分割回数が60回を超えてしまいます");
+			if (receiptAmount <= 0.0) {
+				ShowInformationMessage ("領収額は1円以上で入力してください。");
 				return false;
 			}
 			return true;
@@ -357,170 +351,407 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void WriteBaseValues (Workbook workbook, AccountingPaymentHistoryEntryRequest request, DateTime receiptDate, double billingAmount, double expenseAmount, double depositAmount, double receiptAmount)
 		{
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "請求額", billingAmount);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "実費等総額", expenseAmount);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "源泉処理", request.WithholdingText ?? string.Empty);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "領収日", receiptDate);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "分割金", receiptAmount);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "お預かり金額", depositAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryBillingAmountRangeName, billingAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryExpenseAmountRangeName, expenseAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryWithholdingRangeName, request.WithholdingText ?? string.Empty);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryReceiptDateRangeName, receiptDate);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryAmountRangeName, receiptAmount);
+			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryDepositAmountRangeName, depositAmount);
 		}
 
-		private void ApplyDepositRow (Workbook workbook, double depositAmount)
+		private void WriteCalculatedRow (Workbook workbook, int rowIndex, int roundNumber, object dateValue, double targetAmount, string targetName)
 		{
-			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "A13", 0);
-			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "B13", "(充当済み)");
-			_accountingWorkbookService.SetHorizontalAlignmentCenter (workbook, "お支払い履歴", "B13");
-			double num = ReadRequiredDouble (workbook, "お支払い履歴", "J12", "実費残高", "AccountingPaymentHistory.AddHistoryEntry");
-			double num2 = ((depositAmount >= num) ? num : depositAmount);
-			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "H13", num2);
-			_accountingWorkbookService.ExecuteGoalSeek (workbook, "お支払い履歴", "C13", "D13", depositAmount);
-			_accountingWorkbookService.RoundDownCell (workbook, "お支払い履歴", "D13", 0);
-			_accountingWorkbookService.WriteNamedRangeValue (workbook, "お支払い履歴", "お預かり金額処理", "済み");
+			AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (rowIndex);
+			int previousRow = AccountingPaymentHistoryPlanPolicy.GetPreviousBalanceRowForDataRow (rowIndex);
+			double previousExpenseBalance = ReadRequiredDouble (workbook, SheetName, Address ("J", previousRow), "実費残高", "AccountingPaymentHistory.WriteCalculatedRow");
+			double expenseCharge = AccountingPaymentHistoryPlanPolicy.ResolveExpenseCharge (targetAmount, previousExpenseBalance);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("A", rowIndex), roundNumber);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("B", rowIndex), dateValue);
+			if (dateValue is string && AccountingPaymentHistoryPlanPolicy.IsDepositMarker ((string)dateValue)) {
+				_accountingWorkbookService.SetHorizontalAlignmentCenter (workbook, SheetName, Address ("B", rowIndex));
+			}
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("D", rowIndex), 0);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("H", rowIndex), expenseCharge);
+			CalculateWorkbook (workbook);
+			GoalSeekAndVerify (workbook, rowIndex, "C", "D", targetAmount, targetName);
 		}
 
-		private void WriteReceiptDateRow (Workbook workbook, int rowIndex, DateTime receiptDate)
+		private void GoalSeekAndVerify (Workbook workbook, int rowIndex, string formulaColumn, string changingColumn, double targetAmount, string targetName)
 		{
-			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "B" + rowIndex.ToString (CultureInfo.InvariantCulture), receiptDate);
+			string formulaCell = Address (formulaColumn, rowIndex);
+			string changingCell = Address (changingColumn, rowIndex);
+			try {
+				_accountingWorkbookService.ExecuteGoalSeekOrThrow (workbook, SheetName, formulaCell, changingCell, targetAmount);
+			} catch (Exception exception) {
+				throw new InvalidOperationException (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, targetName, "GoalSeek が失敗しました。"), exception);
+			}
+			CalculateWorkbook (workbook);
+			double actual = ReadRequiredDouble (workbook, SheetName, formulaCell, targetName, "AccountingPaymentHistory.GoalSeekAndVerify");
+			if (Math.Abs (actual - targetAmount) > AmountTolerance) {
+				throw new InvalidOperationException (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, targetName, "逆算後の値が目標額と一致しません。"));
+			}
+			double taxBase = ReadRequiredDouble (workbook, SheetName, changingCell, "10％対象計", "AccountingPaymentHistory.GoalSeekAndVerify");
+			if (taxBase < -AmountTolerance) {
+				throw new InvalidOperationException (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, targetName, "逆算後の10％対象計がマイナスになりました。"));
+			}
 		}
 
-		private void ApplyExpenseAmount (Workbook workbook, int rowIndex, double targetAmount)
+		private int SortPaymentHistoryRows (Workbook workbook)
 		{
-			double num = ReadRequiredDouble (workbook, "お支払い履歴", "J" + (rowIndex - 1).ToString (CultureInfo.InvariantCulture), "実費残高", "AccountingPaymentHistory.ApplyExpenseAmount");
-			double num2 = ((targetAmount >= num) ? num : targetAmount);
-			_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "H" + rowIndex.ToString (CultureInfo.InvariantCulture), num2);
+			List<PaymentHistoryEditableRow> rows = ReadEditableRows (workbook);
+			PaymentHistoryEditableRow depositRow = null;
+			List<PaymentHistoryEditableRow> receiptRows = new List<PaymentHistoryEditableRow> ();
+			foreach (PaymentHistoryEditableRow row in rows) {
+				if (row.IsDepositRow) {
+					if (depositRow != null) {
+						throw new InvalidOperationException ("お支払い履歴に0回目の充当行が複数あります。B列の「（充当済み）」行を確認してください。");
+					}
+					depositRow = row;
+				} else {
+					receiptRows.Add (row);
+				}
+			}
+
+			receiptRows.Sort (CompareEditableRows);
+			ClearRowsFrom (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow);
+			int targetRow = AccountingPaymentHistoryPlanPolicy.FirstDataRow;
+			int roundNumber = 1;
+			if (depositRow != null) {
+				WriteEditableRowValues (workbook, targetRow, 0, AccountingPaymentHistoryPlanPolicy.DepositAppliedText, depositRow.TaxBaseValue, depositRow.ExpenseChargeValue);
+				targetRow++;
+			}
+			foreach (PaymentHistoryEditableRow row in receiptRows) {
+				WriteEditableRowValues (workbook, targetRow, roundNumber, row.DateValue, row.TaxBaseValue, row.ExpenseChargeValue);
+				targetRow++;
+				roundNumber++;
+			}
+			CalculateWorkbook (workbook);
+			return targetRow - 1;
 		}
 
-		private void ExecuteReceiptGoalSeek (Workbook workbook, int rowIndex, double targetAmount)
+		private List<PaymentHistoryEditableRow> ReadEditableRows (Workbook workbook)
 		{
-			string text = rowIndex.ToString (CultureInfo.InvariantCulture);
-			_accountingWorkbookService.ExecuteGoalSeek (workbook, "お支払い履歴", "C" + text, "D" + text, targetAmount);
-			_accountingWorkbookService.RoundDownCell (workbook, "お支払い履歴", "D" + text, 0);
+			List<PaymentHistoryEditableRow> rows = new List<PaymentHistoryEditableRow> ();
+			for (int row = AccountingPaymentHistoryPlanPolicy.FirstDataRow; row <= AccountingPaymentHistoryPlanPolicy.LastDataRow; row++) {
+				object dateValue = _accountingWorkbookService.ReadCellValue (workbook, SheetName, Address ("B", row));
+				string displayText = _accountingWorkbookService.ReadDisplayText (workbook, SheetName, Address ("B", row));
+				if (IsBlankCellValue (dateValue) && string.IsNullOrWhiteSpace (displayText)) {
+					continue;
+				}
+				bool isDepositRow = AccountingPaymentHistoryPlanPolicy.IsDepositMarker (displayText) || AccountingPaymentHistoryPlanPolicy.IsDepositMarker (Convert.ToString (dateValue, CultureInfo.InvariantCulture));
+				DateTime sortDate = isDepositRow ? DateTime.MinValue : ResolveSortDate (dateValue, displayText, row);
+				rows.Add (new PaymentHistoryEditableRow (
+					row,
+					isDepositRow ? (object)AccountingPaymentHistoryPlanPolicy.DepositAppliedText : dateValue,
+					_accountingWorkbookService.ReadCellValue (workbook, SheetName, Address ("D", row)),
+					_accountingWorkbookService.ReadCellValue (workbook, SheetName, Address ("H", row)),
+					sortDate,
+					isDepositRow));
+			}
+			return rows;
 		}
 
-		private void CorrectRow (Workbook workbook, int rowIndex)
+		private static int CompareEditableRows (PaymentHistoryEditableRow left, PaymentHistoryEditableRow right)
 		{
-			string text = rowIndex.ToString (CultureInfo.InvariantCulture);
-			double num = ReadRequiredDouble (workbook, "お支払い履歴", "I" + (rowIndex - 1).ToString (CultureInfo.InvariantCulture), "残高", "AccountingPaymentHistory.CorrectRow");
-			double num2 = ReadRequiredDouble (workbook, "お支払い履歴", "H" + text, "実費等", "AccountingPaymentHistory.CorrectRow");
-			_accountingWorkbookService.ExecuteGoalSeek (workbook, "お支払い履歴", "F" + text, "D" + text, num - num2);
-			_accountingWorkbookService.RoundDownCell (workbook, "お支払い履歴", "D" + text, 0);
+			int result = DateTime.Compare (left.SortDate, right.SortDate);
+			if (result != 0) {
+				return result;
+			}
+			return left.OriginalRow.CompareTo (right.OriginalRow);
+		}
+
+		private void WriteEditableRowValues (Workbook workbook, int rowIndex, int roundNumber, object dateValue, object taxBaseValue, object expenseChargeValue)
+		{
+			AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (rowIndex);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("A", rowIndex), roundNumber);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("B", rowIndex), dateValue);
+			if (dateValue is string && AccountingPaymentHistoryPlanPolicy.IsDepositMarker ((string)dateValue)) {
+				_accountingWorkbookService.SetHorizontalAlignmentCenter (workbook, SheetName, Address ("B", rowIndex));
+			}
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("D", rowIndex), taxBaseValue);
+			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("H", rowIndex), expenseChargeValue);
+		}
+
+		private int ResolveNextRoundNumber (Workbook workbook, int rowIndex)
+		{
+			if (rowIndex <= AccountingPaymentHistoryPlanPolicy.FirstDataRow) {
+				return 1;
+			}
+			double previousRound = ReadRequiredDouble (workbook, SheetName, Address ("A", rowIndex - 1), "回数", "AccountingPaymentHistory.ResolveNextRoundNumber");
+			return Math.Max (0, Convert.ToInt32 (Math.Round (previousRound, 0))) + 1;
 		}
 
 		private void ClearRowsFrom (Workbook workbook, int startRow)
 		{
-			string text = Math.Max (13, startRow).ToString (CultureInfo.InvariantCulture);
-			string text2 = 73.ToString (CultureInfo.InvariantCulture);
-			_accountingWorkbookService.ClearRangeContents (workbook, "お支払い履歴", "B" + text + ":B" + text2);
-			_accountingWorkbookService.ClearRangeContents (workbook, "お支払い履歴", "D" + text + ":D" + text2);
-			_accountingWorkbookService.ClearRangeContents (workbook, "お支払い履歴", "H" + text + ":H" + text2);
+			int row = Math.Max (AccountingPaymentHistoryPlanPolicy.FirstDataRow, startRow);
+			if (row > AccountingPaymentHistoryPlanPolicy.LastDataRow) {
+				return;
+			}
+			string start = row.ToString (CultureInfo.InvariantCulture);
+			string end = AccountingPaymentHistoryPlanPolicy.LastDataRow.ToString (CultureInfo.InvariantCulture);
+			_accountingWorkbookService.ClearRangeContents (workbook, SheetName, "B" + start + ":B" + end);
+			_accountingWorkbookService.ClearRangeContents (workbook, SheetName, "D" + start + ":D" + end);
+			_accountingWorkbookService.ClearRangeContents (workbook, SheetName, "H" + start + ":H" + end);
 		}
 
-		private int CompactBlankDateRows (Workbook workbook, int startRow)
+		private int ClearReceiptDatesForSelectedTableRows (Workbook workbook)
 		{
+			List<int> selectedRows = ResolveSelectedPaymentHistoryRows (workbook);
+			if (selectedRows.Count == 0) {
+				return 0;
+			}
+
+			foreach (int row in selectedRows) {
+				_accountingWorkbookService.ClearRangeContents (workbook, SheetName, Address ("B", row));
+			}
+
+			_logger.Info ("Payment history selected receipt dates cleared. rows=" + string.Join (",", selectedRows));
+			return selectedRows.Count;
+		}
+
+		private List<int> ResolveSelectedPaymentHistoryRows (Workbook workbook)
+		{
+			List<int> selectedRows = new List<int> ();
+			Range selection = null;
+			Worksheet selectedWorksheet = null;
 			Worksheet worksheet = null;
+			Range dataRange = null;
+			Range intersection = null;
+			Areas areas = null;
+
 			try {
-				worksheet = _accountingWorkbookService.GetWorksheet (workbook, "お支払い履歴");
-				List<PaymentHistoryEditableRow> list = new List<PaymentHistoryEditableRow> ();
-				for (int i = startRow; i <= 72; i++) {
-					object value = ((_Worksheet)worksheet).get_Range ((object)("B" + i.ToString (CultureInfo.InvariantCulture)), Type.Missing).Value2;
-					string value2 = Convert.ToString (value) ?? string.Empty;
-					if (!string.IsNullOrWhiteSpace (value2)) {
-						list.Add (new PaymentHistoryEditableRow (value, (dynamic)((_Worksheet)worksheet).get_Range ((object)("D" + i.ToString (CultureInfo.InvariantCulture)), Type.Missing).Value2, (dynamic)((_Worksheet)worksheet).get_Range ((object)("H" + i.ToString (CultureInfo.InvariantCulture)), Type.Missing).Value2, ResolveSortDate (value)));
+				selection = workbook != null && workbook.Application != null ? workbook.Application.Selection as Range : null;
+				if (selection == null) {
+					return selectedRows;
+				}
+
+				selectedWorksheet = selection.Worksheet as Worksheet;
+				if (selectedWorksheet == null || !string.Equals (selectedWorksheet.Name, SheetName, StringComparison.Ordinal)) {
+					return selectedRows;
+				}
+
+				worksheet = _accountingWorkbookService.GetWorksheet (workbook, SheetName);
+				dataRange = worksheet.Range["A" + AccountingPaymentHistoryPlanPolicy.FirstDataRow.ToString (CultureInfo.InvariantCulture) + ":J" + AccountingPaymentHistoryPlanPolicy.LastDataRow.ToString (CultureInfo.InvariantCulture)];
+				intersection = worksheet.Application.Intersect (
+					selection,
+					dataRange,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing,
+					Type.Missing);
+
+				if (intersection == null) {
+					return selectedRows;
+				}
+
+				areas = intersection.Areas;
+				for (int areaIndex = 1; areaIndex <= areas.Count; areaIndex++) {
+					Range area = null;
+					Range areaRows = null;
+					try {
+						area = areas[areaIndex];
+						areaRows = area.Rows;
+						int firstRow = area.Row;
+						int lastRow = Math.Min (AccountingPaymentHistoryPlanPolicy.LastDataRow, firstRow + areaRows.Count - 1);
+
+						for (int selectedRow = Math.Max (AccountingPaymentHistoryPlanPolicy.FirstDataRow, firstRow); selectedRow <= lastRow; selectedRow++) {
+							if (!selectedRows.Contains (selectedRow)) {
+								selectedRows.Add (selectedRow);
+							}
+						}
+					} finally {
+						ComObjectReleaseService.Release (areaRows);
+						ComObjectReleaseService.Release (area);
 					}
 				}
-				list.Sort ((PaymentHistoryEditableRow left, PaymentHistoryEditableRow right) => DateTime.Compare (left.SortDate, right.SortDate));
-				ClearRowsFrom (workbook, startRow);
-				int num = startRow;
-				foreach (PaymentHistoryEditableRow item in list) {
-					_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "B" + num.ToString (CultureInfo.InvariantCulture), item.DateValue);
-					_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "D" + num.ToString (CultureInfo.InvariantCulture), item.TargetAmountValue);
-					_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "H" + num.ToString (CultureInfo.InvariantCulture), item.ExpenseAmountValue);
-					num++;
-				}
-				return num;
+
+				selectedRows.Sort ();
+				return selectedRows;
 			} finally {
-				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
+				ComObjectReleaseService.Release (areas);
+				ComObjectReleaseService.Release (intersection);
+				ComObjectReleaseService.Release (dataRange);
+				ComObjectReleaseService.Release (worksheet);
+				ComObjectReleaseService.Release (selectedWorksheet);
 			}
 		}
 
-		private static DateTime ResolveSortDate (object value)
+		private void RefreshPrintArea (Workbook workbook, int lastDataRow)
 		{
-			if (value is double d) {
-				return DateTime.FromOADate (d);
+			int printLastRow = Math.Max (AccountingPaymentHistoryPlanPolicy.StartValueRow, Math.Min (lastDataRow, AccountingPaymentHistoryPlanPolicy.LastDataRow));
+			_accountingWorkbookService.SetPrintAreaByBounds (workbook, SheetName, printLastRow, AccountingPaymentHistoryPlanPolicy.PrintLastColumn);
+		}
+
+		private void RefreshPaymentTotal (Workbook workbook)
+		{
+			EnsureFormulaEquals (workbook, PaymentTotalCellAddress, "=SUM(C14:C73)", "既払い額計");
+			CalculateWorkbook (workbook);
+		}
+
+		private void EnsureWorkbookStructure (Workbook workbook)
+		{
+			EnsureNamedRangeAddress (workbook, PaymentHistoryBillingAmountRangeName, "I7");
+			EnsureNamedRangeAddress (workbook, PaymentHistoryReceiptDateRangeName, "K5");
+			EnsureNamedRangeAddress (workbook, PaymentHistoryAmountRangeName, "K3");
+			EnsureNamedRangeAddress (workbook, PaymentHistoryExpenseAmountRangeName, "K7");
+			EnsureNamedRangeAddress (workbook, PaymentHistoryWithholdingRangeName, "K9");
+			EnsureNamedRangeAddress (workbook, PaymentHistoryDepositAmountRangeName, "K11");
+			EnsureNamedRangeAddress (workbook, "既払い額計", "I9");
+
+			if (!_accountingWorkbookService.HasListObjectRange (workbook, SheetName, TableRangeAddress)) {
+				throw new InvalidOperationException ("お支払い履歴のテーブル範囲 A12:J73 が見つかりません。ブック側を先に確認してください。");
 			}
-			if (value is DateTime result) {
+
+			EnsureFormulaEquals (workbook, "I13", "=" + PaymentHistoryBillingAmountRangeName, "13行目 請求額開始値");
+			EnsureFormulaEquals (workbook, "J13", "=" + PaymentHistoryExpenseAmountRangeName, "13行目 実費等総額開始値");
+			EnsureFormulaEquals (workbook, PaymentTotalCellAddress, "=SUM(C14:C73)", "既払い額計");
+			for (int row = AccountingPaymentHistoryPlanPolicy.FirstDataRow; row <= AccountingPaymentHistoryPlanPolicy.LastDataRow; row++) {
+				EnsureFormulaPresent (workbook, Address ("C", row), "領収額");
+				EnsureFormulaPresent (workbook, Address ("E", row), "10％消費税");
+				EnsureFormulaPresent (workbook, Address ("F", row), "小計");
+				EnsureFormulaPresent (workbook, Address ("G", row), "源泉徴収税");
+				EnsureFormulaPresent (workbook, Address ("I", row), "請求残高");
+				EnsureFormulaPresent (workbook, Address ("J", row), "実費残高");
+			}
+		}
+
+		private void EnsureNamedRangeAddress (Workbook workbook, string rangeName, string expectedAddress)
+		{
+			string actualAddress = NormalizeAddress (_accountingWorkbookService.GetNamedRangeAddress (workbook, SheetName, rangeName));
+			if (!string.Equals (actualAddress, expectedAddress, StringComparison.OrdinalIgnoreCase)) {
+				throw new InvalidOperationException ("お支払い履歴の名付セル [" + rangeName + "] の参照先が想定と違います。想定: " + expectedAddress + ", 実際: " + actualAddress);
+			}
+		}
+
+		private void EnsureFormulaPresent (Workbook workbook, string address, string itemName)
+		{
+			string formula = ReadFormulaText (workbook, address);
+			if (string.IsNullOrWhiteSpace (formula) || !formula.TrimStart ().StartsWith ("=", StringComparison.Ordinal)) {
+				throw new InvalidOperationException ("お支払い履歴!" + address + " の " + itemName + " の式が見つかりません。ブック側の式を先に確認してください。");
+			}
+		}
+
+		private void EnsureFormulaEquals (Workbook workbook, string address, string expectedFormula, string itemName)
+		{
+			string actualFormula = NormalizeFormula (ReadFormulaText (workbook, address));
+			string expected = NormalizeFormula (expectedFormula);
+			if (!string.Equals (actualFormula, expected, StringComparison.OrdinalIgnoreCase)) {
+				throw new InvalidOperationException ("お支払い履歴!" + address + " の " + itemName + " の式が想定と違います。想定: " + expectedFormula + ", 実際: " + ReadFormulaText (workbook, address));
+			}
+		}
+
+		private string ReadFormulaText (Workbook workbook, string address)
+		{
+			object formula = _accountingWorkbookService.ReadRangeFormulaSnapshot (workbook, SheetName, address);
+			return Convert.ToString (formula, CultureInfo.InvariantCulture) ?? string.Empty;
+		}
+
+		private string CreateGoalSeekDiagnostic (Workbook workbook, int rowIndex, string formulaCell, string changingCell, double targetAmount, string targetName, string reason)
+		{
+			StringBuilder builder = new StringBuilder ();
+			builder.AppendLine (reason);
+			builder.AppendLine ("対象行: " + rowIndex.ToString (CultureInfo.InvariantCulture));
+			builder.AppendLine ("目標: " + targetName + " = " + targetAmount.ToString (CultureInfo.InvariantCulture));
+			builder.AppendLine ("数式セル: " + formulaCell + ", 変更セル: " + changingCell);
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "C", "領収額"));
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "D", "10％対象計"));
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "F", "小計"));
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "G", "源泉徴収税"));
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "H", "実費等への充当額"));
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "I", "請求残高"));
+			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "J", "実費残高"));
+			return builder.ToString ();
+		}
+
+		private string ReadDiagnosticCell (Workbook workbook, int rowIndex, string column, string itemName)
+		{
+			string address = Address (column, rowIndex);
+			try {
+				object value = _accountingWorkbookService.ReadCellValue (workbook, SheetName, address);
+				string display = _accountingWorkbookService.ReadDisplayText (workbook, SheetName, address);
+				string formula = ReadFormulaText (workbook, address);
+				string formulaState = string.IsNullOrWhiteSpace (formula) || !formula.TrimStart ().StartsWith ("=", StringComparison.Ordinal) ? "式なし" : "式あり";
+				return address + " " + itemName + ": value=" + (Convert.ToString (value, CultureInfo.InvariantCulture) ?? string.Empty) + ", display=" + display + ", " + formulaState;
+			} catch (Exception exception) {
+				return address + " " + itemName + ": 診断取得失敗 " + exception.Message;
+			}
+		}
+
+		private static DateTime ResolveSortDate (object value, string displayText, int rowIndex)
+		{
+			if (value is double) {
+				return DateTime.FromOADate ((double)value);
+			}
+			if (value is DateTime) {
+				return (DateTime)value;
+			}
+			string text = (displayText ?? string.Empty).Trim ();
+			DateTime result;
+			if (DateTime.TryParse (text, CultureInfo.CurrentCulture, DateTimeStyles.None, out result)) {
 				return result;
 			}
-			string s = Convert.ToString (value) ?? string.Empty;
-			if (DateTime.TryParse (s, CultureInfo.CurrentCulture, DateTimeStyles.None, out var result2)) {
-				return result2;
+			if (DateTime.TryParse (text, CultureInfo.InvariantCulture, DateTimeStyles.None, out result)) {
+				return result;
 			}
-			if (DateTime.TryParse (s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var result3)) {
-				return result3;
+			string valueText = Convert.ToString (value, CultureInfo.InvariantCulture) ?? string.Empty;
+			if (DateTime.TryParse (valueText, CultureInfo.CurrentCulture, DateTimeStyles.None, out result)) {
+				return result;
 			}
-			return DateTime.MaxValue;
-		}
-
-		private int GetNextAppendRow (Workbook workbook)
-		{
-			int lastOccupiedHistoryRow = GetLastOccupiedHistoryRow (workbook, GetEditableStartRow (workbook));
-			return Math.Min (72, lastOccupiedHistoryRow + 1);
-		}
-
-		private int GetLastOccupiedHistoryRow (Workbook workbook, int startRow)
-		{
-			for (int num = 72; num >= startRow; num--) {
-				string value = _accountingWorkbookService.ReadText (workbook, "お支払い履歴", "B" + num.ToString (CultureInfo.InvariantCulture));
-				if (!string.IsNullOrWhiteSpace (value)) {
-					return num;
-				}
+			if (DateTime.TryParse (valueText, CultureInfo.InvariantCulture, DateTimeStyles.None, out result)) {
+				return result;
 			}
-			return startRow - 1;
+			throw new InvalidOperationException ("お支払い履歴!B" + rowIndex.ToString (CultureInfo.InvariantCulture) + " が日付として読めません。B列には日付または「（充当済み）」を入力してください。");
 		}
 
-		private bool IsDepositProcessed (Workbook workbook)
+		private static bool IsBlankCellValue (object value)
 		{
-			string a = _accountingWorkbookService.ReadNamedRangeText (workbook, "お支払い履歴", "お預かり金額処理");
-			return string.Equals (a, "済み", StringComparison.OrdinalIgnoreCase);
-		}
-
-		private void RefreshPrintArea (Workbook workbook)
-		{
-			int lastUsedRowInColumn = _accountingWorkbookService.GetLastUsedRowInColumn (workbook, "お支払い履歴", "D");
-			if (lastUsedRowInColumn >= 1) {
-				_accountingWorkbookService.SetPrintAreaByBounds (workbook, "お支払い履歴", lastUsedRowInColumn, 9);
+			if (value == null) {
+				return true;
 			}
+			string text = Convert.ToString (value, CultureInfo.InvariantCulture);
+			return string.IsNullOrWhiteSpace (text);
 		}
 
-		private void WritePaymentTotal (Workbook workbook)
+		private static void CalculateWorkbook (Workbook workbook)
 		{
-			Worksheet worksheet = null;
-			Range range = null;
-			try {
-				worksheet = _accountingWorkbookService.GetWorksheet (workbook, "お支払い履歴");
-				range = ((_Worksheet)worksheet).get_Range ((object)("C13:C" + Math.Max (13, _accountingWorkbookService.GetLastUsedRowInColumn (workbook, "お支払い履歴", "C")).ToString (CultureInfo.InvariantCulture)), Type.Missing);
-				object value = worksheet.Application.WorksheetFunction.Sum (range, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
-				_accountingWorkbookService.WriteCellValue (workbook, "お支払い履歴", "I9", value);
-			} finally {
-				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (range);
-				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.Release (worksheet);
+			if (workbook != null && workbook.Application != null) {
+				workbook.Application.Calculate ();
 			}
-		}
-
-		private void ClearPaymentTotal (Workbook workbook)
-		{
-			_accountingWorkbookService.ClearRangeContents (workbook, "お支払い履歴", "I9");
 		}
 
 		private void SyncPaymentHistoryHeaderFromInvoice (Workbook workbook)
 		{
-			_accountingWorkbookService.CopyValueRange (workbook, "請求書", "A3:A4", "お支払い履歴", "A3:A4");
+			_accountingWorkbookService.CopyValueRange (workbook, InvoiceSheetName, "A3:A4", SheetName, "A3:A4");
 		}
 
 		private static bool TryParseDate (string text, out DateTime date)
 		{
-			string s = (text ?? string.Empty).Trim ();
-			return DateTime.TryParse (s, CultureInfo.CurrentCulture, DateTimeStyles.None, out date) || DateTime.TryParse (s, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+			string value = (text ?? string.Empty).Trim ();
+			return DateTime.TryParse (value, CultureInfo.CurrentCulture, DateTimeStyles.None, out date) || DateTime.TryParse (value, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
 		}
 
 		private static string FormatAmount (double amount)
@@ -530,11 +761,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private static double ParseAmount (string text)
 		{
-			string text2 = (text ?? string.Empty).Replace (",", string.Empty).Trim ();
-			if (text2.Length == 0) {
+			string value = (text ?? string.Empty).Replace (",", string.Empty).Trim ();
+			if (value.Length == 0) {
 				return 0.0;
 			}
-			if (double.TryParse (text2, NumberStyles.Any, CultureInfo.InvariantCulture, out var result)) {
+			double result;
+			if (double.TryParse (value, NumberStyles.Any, CultureInfo.InvariantCulture, out result)) {
+				return result;
+			}
+			if (double.TryParse (value, NumberStyles.Any, CultureInfo.CurrentCulture, out result)) {
 				return result;
 			}
 			return 0.0;
@@ -544,11 +779,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			try {
 				string text = _accountingWorkbookService.ReadNamedRangeText (workbook, sheetName, rangeName);
-				if (TryParseDate (text, out var date)) {
-					return date.ToString ("yyyy/MM/dd", CultureInfo.InvariantCulture);
+				DateTime date;
+				if (TryParseDate (text, out date)) {
+					return date.ToString (DateDisplayFormat, CultureInfo.InvariantCulture);
 				}
-				if (double.TryParse (text, NumberStyles.Any, CultureInfo.InvariantCulture, out var result)) {
-					return DateTime.FromOADate (result).ToString ("yyyy/MM/dd", CultureInfo.InvariantCulture);
+				double result;
+				if (double.TryParse (text, NumberStyles.Any, CultureInfo.InvariantCulture, out result)) {
+					return DateTime.FromOADate (result).ToString (DateDisplayFormat, CultureInfo.InvariantCulture);
 				}
 				return text;
 			} catch {
@@ -582,37 +819,33 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			object cellValue = _accountingWorkbookService.ReadCellValue (workbook, sheetName, address);
 			string displayText = _accountingWorkbookService.ReadDisplayText (workbook, sheetName, address);
-			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out var value, out var isBlank)) {
+			double value;
+			bool isBlank;
+			if (AccountingNumericCellReader.TryParseNumericCell (cellValue, displayText, out value, out isBlank)) {
 				return value;
 			}
 			if (allowBlankAsZero && isBlank) {
 				return 0.0;
 			}
-			InvalidOperationException ex = AccountingNumericCellReader.CreateReadFailureException (sheetName, address, itemName, procedureName, displayText, allowBlankAsZero);
+			InvalidOperationException exception = AccountingNumericCellReader.CreateReadFailureException (sheetName, address, itemName, procedureName, displayText, allowBlankAsZero);
 			string text = Convert.ToString (cellValue, CultureInfo.InvariantCulture) ?? string.Empty;
-			_logger.Error ("Accounting numeric cell read failed. sheet=" + sheetName + ", address=" + address + ", item=" + itemName + ", procedure=" + procedureName + ", displayText=" + (string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ()) + ", cellValue=" + text, ex);
-			throw ex;
+			_logger.Error ("Accounting numeric cell read failed. sheet=" + sheetName + ", address=" + address + ", item=" + itemName + ", procedure=" + procedureName + ", displayText=" + (string.IsNullOrWhiteSpace (displayText) ? "（空欄）" : displayText.Trim ()) + ", cellValue=" + text, exception);
+			throw exception;
 		}
 
 		private bool ReadBooleanSafe (Workbook workbook, string sheetName, string address)
 		{
-			string a = _accountingWorkbookService.ReadText (workbook, sheetName, address);
-			return string.Equals (a, "TRUE", StringComparison.OrdinalIgnoreCase) || string.Equals (a, "1", StringComparison.OrdinalIgnoreCase) || string.Equals (a, "-1", StringComparison.OrdinalIgnoreCase);
+			string value = _accountingWorkbookService.ReadText (workbook, sheetName, address);
+			return string.Equals (value, "TRUE", StringComparison.OrdinalIgnoreCase) || string.Equals (value, "1", StringComparison.OrdinalIgnoreCase) || string.Equals (value, "-1", StringComparison.OrdinalIgnoreCase);
 		}
 
 		private void ProtectSheetSafely (Workbook workbook, string logMessage)
 		{
 			try {
-				_accountingWorkbookService.ProtectSheetUiOnly (workbook, "お支払い履歴");
+				_accountingWorkbookService.ProtectSheetUiOnly (workbook, SheetName);
 			} catch (Exception exception) {
 				_logger.Error (logMessage, exception);
 			}
-		}
-
-		private int GetEditableStartRow (Workbook workbook)
-		{
-			string a = _accountingWorkbookService.ReadText (workbook, "お支払い履歴", "B13");
-			return string.Equals (a, "(充当済み)", StringComparison.OrdinalIgnoreCase) ? 14 : 13;
 		}
 
 		private void ShowLoadFormStateNumericReadWarning (string warningMessage)
@@ -622,6 +855,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			_logger.Warn ("AccountingPaymentHistory.LoadFormState numeric read warning. " + warningMessage.Replace (Environment.NewLine, " | "));
 			UserErrorService.ShowOkNotification ("数値読取に失敗した項目があります。該当項目は 0 として表示しています。" + Environment.NewLine + Environment.NewLine + warningMessage, "案件情報System", MessageBoxIcon.Warning);
+		}
+
+		private static string Address (string column, int row)
+		{
+			return column + row.ToString (CultureInfo.InvariantCulture);
+		}
+
+		private static string NormalizeAddress (string address)
+		{
+			return (address ?? string.Empty).Replace ("$", string.Empty).Trim ();
+		}
+
+		private static string NormalizeFormula (string formula)
+		{
+			return (formula ?? string.Empty).Replace ("$", string.Empty).Replace (" ", string.Empty).Trim ();
 		}
 
 		private static void ShowInformationMessage (string message)

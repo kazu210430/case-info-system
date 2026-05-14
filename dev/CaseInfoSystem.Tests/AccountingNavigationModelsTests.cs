@@ -192,12 +192,14 @@ namespace CaseInfoSystem.Tests
             {
                 "set-payment-history-issue-date",
                 "show-save-as-prompt",
+                "delete-selected-payment-history-rows",
                 "reset-payment-history"
             };
             string[] expectedExecutionCaptions =
             {
                 "発行日を入力",
                 "別名保存",
+                "選択行の削除",
                 "リセット"
             };
             string[] expectedNavigationActionIds =

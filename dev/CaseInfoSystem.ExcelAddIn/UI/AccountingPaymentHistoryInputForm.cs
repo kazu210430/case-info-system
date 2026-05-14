@@ -98,6 +98,22 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			text領収額.Focus ();
 		}
 
+		internal void ClearRequestHandlers ()
+		{
+			TodayRequested = null;
+			AddHistoryRequested = null;
+			OutputFutureBalanceRequested = null;
+		}
+
+		protected override void Dispose (bool disposing)
+		{
+			if (disposing) {
+				ClearRequestHandlers ();
+				DisposeReceiptDateCalendarDropDown ();
+			}
+			base.Dispose (disposing);
+		}
+
 		protected override void OnFormClosed (FormClosedEventArgs e)
 		{
 			DisposeReceiptDateCalendarDropDown ();

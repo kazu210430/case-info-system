@@ -232,38 +232,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activeInstallmentScheduleForm = form;
 			_activeInstallmentScheduleWorkbook = workbook;
 			_activeInstallmentScheduleOwner = owner;
-			form.CreateScheduleRequested += delegate(object sender, AccountingInstallmentScheduleCreateRequestEventArgs e) {
-				try {
-					AccountingInstallmentScheduleFormState state2 = _accountingInstallmentScheduleCommandService.CreateSchedule (workbook, e.Request);
-					form.BindState (state2);
-					form.FocusInstallmentAmount ();
-				} catch (Exception exception) {
-					_logger.Error ("Installment schedule create handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.CreateScheduleRequested", exception);
-				}
-			};
-			form.ApplyChangeRequested += delegate(object sender, AccountingInstallmentScheduleChangeRequestEventArgs e) {
-				try {
-					AccountingInstallmentScheduleFormState state2 = _accountingInstallmentScheduleCommandService.ApplyChange (workbook, e.Request);
-					form.BindState (state2);
-					form.FocusInstallmentAmount ();
-				} catch (Exception exception) {
-					_logger.Error ("Installment schedule apply change handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingInstallmentSchedule.ApplyChangeRequested", exception);
-				}
-			};
-			form.FormClosed += delegate {
-				if (_activeInstallmentScheduleForm == form) {
-					_activeInstallmentScheduleForm = null;
-					_activeInstallmentScheduleWorkbook = null;
-				}
-				if (_activeInstallmentScheduleOwner == owner) {
-					_activeInstallmentScheduleOwner = null;
-				}
-				if (owner != null) {
-					owner.Dispose ();
-				}
-			};
+			AttachInstallmentScheduleInputHandlers (form);
 			form.ShowModeless (owner);
 			if (activateExisting) {
 				form.FocusInstallmentAmount ();
@@ -311,25 +280,95 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void HideInstallmentScheduleInput ()
 		{
-			if (_activeInstallmentScheduleForm != null && !_activeInstallmentScheduleForm.IsDisposed) {
-				_activeInstallmentScheduleForm.Hide ();
-			}
+			CloseActiveInstallmentScheduleInput ();
 		}
 
 		private void CloseActiveInstallmentScheduleInput ()
 		{
-			if (_activeInstallmentScheduleForm == null) {
+			AccountingInstallmentScheduleInputForm form = _activeInstallmentScheduleForm;
+			if (form == null) {
 				return;
 			}
 			try {
-				if (!_activeInstallmentScheduleForm.IsDisposed) {
-					_activeInstallmentScheduleForm.Close ();
+				DetachInstallmentScheduleInputHandlers (form);
+				if (!form.IsDisposed) {
+					form.Close ();
+					if (!form.IsDisposed) {
+						form.Dispose ();
+					}
 				}
 			} catch {
 			} finally {
-				_activeInstallmentScheduleForm = null;
-				_activeInstallmentScheduleWorkbook = null;
-				_activeInstallmentScheduleOwner = null;
+				ClearActiveInstallmentScheduleInputReferences ();
+			}
+		}
+
+		private void AttachInstallmentScheduleInputHandlers (AccountingInstallmentScheduleInputForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.CreateScheduleRequested += ActiveInstallmentScheduleForm_CreateScheduleRequested;
+			form.ApplyChangeRequested += ActiveInstallmentScheduleForm_ApplyChangeRequested;
+			form.FormClosed += ActiveInstallmentScheduleForm_FormClosed;
+		}
+
+		private void DetachInstallmentScheduleInputHandlers (AccountingInstallmentScheduleInputForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.CreateScheduleRequested -= ActiveInstallmentScheduleForm_CreateScheduleRequested;
+			form.ApplyChangeRequested -= ActiveInstallmentScheduleForm_ApplyChangeRequested;
+			form.FormClosed -= ActiveInstallmentScheduleForm_FormClosed;
+			form.ClearRequestHandlers ();
+		}
+
+		private void ActiveInstallmentScheduleForm_CreateScheduleRequested (object sender, AccountingInstallmentScheduleCreateRequestEventArgs e)
+		{
+			if (_activeInstallmentScheduleWorkbook == null || _activeInstallmentScheduleForm == null || _activeInstallmentScheduleForm.IsDisposed) {
+				return;
+			}
+			try {
+				AccountingInstallmentScheduleFormState state = _accountingInstallmentScheduleCommandService.CreateSchedule (_activeInstallmentScheduleWorkbook, e.Request);
+				BindInstallmentScheduleFormState (_activeInstallmentScheduleForm, state, focusInstallmentAmount: true);
+			} catch (Exception exception) {
+				_logger.Error ("Installment schedule create handler failed.", exception);
+				_userErrorService.ShowUserError ("AccountingInstallmentSchedule.CreateScheduleRequested", exception);
+			}
+		}
+
+		private void ActiveInstallmentScheduleForm_ApplyChangeRequested (object sender, AccountingInstallmentScheduleChangeRequestEventArgs e)
+		{
+			if (_activeInstallmentScheduleWorkbook == null || _activeInstallmentScheduleForm == null || _activeInstallmentScheduleForm.IsDisposed) {
+				return;
+			}
+			try {
+				AccountingInstallmentScheduleFormState state = _accountingInstallmentScheduleCommandService.ApplyChange (_activeInstallmentScheduleWorkbook, e.Request);
+				BindInstallmentScheduleFormState (_activeInstallmentScheduleForm, state, focusInstallmentAmount: true);
+			} catch (Exception exception) {
+				_logger.Error ("Installment schedule apply change handler failed.", exception);
+				_userErrorService.ShowUserError ("AccountingInstallmentSchedule.ApplyChangeRequested", exception);
+			}
+		}
+
+		private void ActiveInstallmentScheduleForm_FormClosed (object sender, FormClosedEventArgs e)
+		{
+			AccountingInstallmentScheduleInputForm form = sender as AccountingInstallmentScheduleInputForm;
+			DetachInstallmentScheduleInputHandlers (form);
+			if (ReferenceEquals (form, _activeInstallmentScheduleForm)) {
+				ClearActiveInstallmentScheduleInputReferences ();
+			}
+		}
+
+		private void ClearActiveInstallmentScheduleInputReferences ()
+		{
+			_activeInstallmentScheduleForm = null;
+			_activeInstallmentScheduleWorkbook = null;
+			ExcelWindowOwner owner = _activeInstallmentScheduleOwner;
+			_activeInstallmentScheduleOwner = null;
+			if (owner != null) {
+				owner.Dispose ();
 			}
 		}
 
@@ -424,48 +463,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activePaymentHistoryForm = form;
 			_activePaymentHistoryWorkbook = workbook;
 			_activePaymentHistoryOwner = owner;
-			form.TodayRequested += delegate {
-				try {
-					AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.ApplyToday (workbook);
-					form.BindState (state2);
-					form.FocusReceiptAmount ();
-				} catch (Exception exception) {
-					_logger.Error ("Payment history today handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.TodayRequested", exception);
-				}
-			};
-			form.AddHistoryRequested += delegate(object sender, AccountingPaymentHistoryEntryRequestEventArgs e) {
-				try {
-					AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.AddHistoryEntry (workbook, e.Request);
-					form.BindState (state2);
-					form.FocusReceiptDate ();
-				} catch (Exception exception) {
-					_logger.Error ("Payment history add handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.AddHistoryRequested", exception);
-				}
-			};
-			form.OutputFutureBalanceRequested += delegate(object sender, AccountingPaymentHistoryEntryRequestEventArgs e) {
-				try {
-					AccountingPaymentHistoryFormState state2 = _accountingPaymentHistoryCommandService.OutputFutureBalance (workbook, e.Request);
-					form.BindState (state2);
-					form.FocusReceiptDate ();
-				} catch (Exception exception) {
-					_logger.Error ("Payment history future balance handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingPaymentHistory.OutputFutureBalanceRequested", exception);
-				}
-			};
-			form.FormClosed += delegate {
-				if (_activePaymentHistoryForm == form) {
-					_activePaymentHistoryForm = null;
-					_activePaymentHistoryWorkbook = null;
-				}
-				if (_activePaymentHistoryOwner == owner) {
-					_activePaymentHistoryOwner = null;
-				}
-				if (owner != null) {
-					owner.Dispose ();
-				}
-			};
+			AttachPaymentHistoryInputHandlers (form);
 			form.ShowModeless (owner);
 			if (activateExisting) {
 				form.FocusReceiptDate ();
@@ -475,25 +473,112 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void HidePaymentHistoryInput ()
 		{
-			if (_activePaymentHistoryForm != null && !_activePaymentHistoryForm.IsDisposed) {
-				_activePaymentHistoryForm.Hide ();
-			}
+			CloseActivePaymentHistoryInput ();
 		}
 
 		private void CloseActivePaymentHistoryInput ()
 		{
-			if (_activePaymentHistoryForm == null) {
+			AccountingPaymentHistoryInputForm form = _activePaymentHistoryForm;
+			if (form == null) {
 				return;
 			}
 			try {
-				if (!_activePaymentHistoryForm.IsDisposed) {
-					_activePaymentHistoryForm.Close ();
+				DetachPaymentHistoryInputHandlers (form);
+				if (!form.IsDisposed) {
+					form.Close ();
+					if (!form.IsDisposed) {
+						form.Dispose ();
+					}
 				}
 			} catch {
 			} finally {
-				_activePaymentHistoryForm = null;
-				_activePaymentHistoryWorkbook = null;
-				_activePaymentHistoryOwner = null;
+				ClearActivePaymentHistoryInputReferences ();
+			}
+		}
+
+		private void AttachPaymentHistoryInputHandlers (AccountingPaymentHistoryInputForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.TodayRequested += ActivePaymentHistoryForm_TodayRequested;
+			form.AddHistoryRequested += ActivePaymentHistoryForm_AddHistoryRequested;
+			form.OutputFutureBalanceRequested += ActivePaymentHistoryForm_OutputFutureBalanceRequested;
+			form.FormClosed += ActivePaymentHistoryForm_FormClosed;
+		}
+
+		private void DetachPaymentHistoryInputHandlers (AccountingPaymentHistoryInputForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.TodayRequested -= ActivePaymentHistoryForm_TodayRequested;
+			form.AddHistoryRequested -= ActivePaymentHistoryForm_AddHistoryRequested;
+			form.OutputFutureBalanceRequested -= ActivePaymentHistoryForm_OutputFutureBalanceRequested;
+			form.FormClosed -= ActivePaymentHistoryForm_FormClosed;
+			form.ClearRequestHandlers ();
+		}
+
+		private void ActivePaymentHistoryForm_TodayRequested (object sender, EventArgs e)
+		{
+			if (_activePaymentHistoryWorkbook == null || _activePaymentHistoryForm == null || _activePaymentHistoryForm.IsDisposed) {
+				return;
+			}
+			try {
+				AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.ApplyToday (_activePaymentHistoryWorkbook);
+				BindPaymentHistoryFormState (_activePaymentHistoryForm, state, focusReceiptDate: false);
+				_activePaymentHistoryForm.FocusReceiptAmount ();
+			} catch (Exception exception) {
+				_logger.Error ("Payment history today handler failed.", exception);
+				_userErrorService.ShowUserError ("AccountingPaymentHistory.TodayRequested", exception);
+			}
+		}
+
+		private void ActivePaymentHistoryForm_AddHistoryRequested (object sender, AccountingPaymentHistoryEntryRequestEventArgs e)
+		{
+			if (_activePaymentHistoryWorkbook == null || _activePaymentHistoryForm == null || _activePaymentHistoryForm.IsDisposed) {
+				return;
+			}
+			try {
+				AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.AddHistoryEntry (_activePaymentHistoryWorkbook, e.Request);
+				BindPaymentHistoryFormState (_activePaymentHistoryForm, state, focusReceiptDate: true);
+			} catch (Exception exception) {
+				_logger.Error ("Payment history add handler failed.", exception);
+				_userErrorService.ShowUserError ("AccountingPaymentHistory.AddHistoryRequested", exception);
+			}
+		}
+
+		private void ActivePaymentHistoryForm_OutputFutureBalanceRequested (object sender, AccountingPaymentHistoryEntryRequestEventArgs e)
+		{
+			if (_activePaymentHistoryWorkbook == null || _activePaymentHistoryForm == null || _activePaymentHistoryForm.IsDisposed) {
+				return;
+			}
+			try {
+				AccountingPaymentHistoryFormState state = _accountingPaymentHistoryCommandService.OutputFutureBalance (_activePaymentHistoryWorkbook, e.Request);
+				BindPaymentHistoryFormState (_activePaymentHistoryForm, state, focusReceiptDate: true);
+			} catch (Exception exception) {
+				_logger.Error ("Payment history future balance handler failed.", exception);
+				_userErrorService.ShowUserError ("AccountingPaymentHistory.OutputFutureBalanceRequested", exception);
+			}
+		}
+
+		private void ActivePaymentHistoryForm_FormClosed (object sender, FormClosedEventArgs e)
+		{
+			AccountingPaymentHistoryInputForm form = sender as AccountingPaymentHistoryInputForm;
+			DetachPaymentHistoryInputHandlers (form);
+			if (ReferenceEquals (form, _activePaymentHistoryForm)) {
+				ClearActivePaymentHistoryInputReferences ();
+			}
+		}
+
+		private void ClearActivePaymentHistoryInputReferences ()
+		{
+			_activePaymentHistoryForm = null;
+			_activePaymentHistoryWorkbook = null;
+			ExcelWindowOwner owner = _activePaymentHistoryOwner;
+			_activePaymentHistoryOwner = null;
+			if (owner != null) {
+				owner.Dispose ();
 			}
 		}
 

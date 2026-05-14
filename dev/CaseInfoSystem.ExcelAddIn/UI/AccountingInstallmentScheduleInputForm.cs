@@ -64,6 +64,20 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			txtInstallmentAmount.Focus ();
 		}
 
+		internal void ClearRequestHandlers ()
+		{
+			CreateScheduleRequested = null;
+			ApplyChangeRequested = null;
+		}
+
+		protected override void Dispose (bool disposing)
+		{
+			if (disposing) {
+				ClearRequestHandlers ();
+			}
+			base.Dispose (disposing);
+		}
+
 		private void BtnCreateSchedule_Click (object sender, EventArgs e)
 		{
 			this.CreateScheduleRequested?.Invoke (this, new AccountingInstallmentScheduleCreateRequestEventArgs (new AccountingInstallmentScheduleCreateRequest {

@@ -50,6 +50,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private ExcelWindowOwner _activeReverseToolOwner;
 
+		private bool _activeReverseToolHighlightCleanupCompleted;
+
 		private AccountingInstallmentScheduleInputForm _activeInstallmentScheduleForm;
 
 		private Workbook _activeInstallmentScheduleWorkbook;
@@ -124,7 +126,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		internal void HandleSheetActivated (Workbook workbook, Window window, string activeSheetCodeName)
 		{
 			if (workbook == null || _activeReverseToolWorkbook != workbook || !string.Equals (_activeReverseToolSheetName, activeSheetCodeName, StringComparison.OrdinalIgnoreCase) || !IsMainFormSheet (activeSheetCodeName)) {
-				CloseActiveReverseTool (clearHighlight: true);
+				CloseActiveReverseTool ();
 			}
 			if (string.Equals (activeSheetCodeName, "分割払い予定表", StringComparison.OrdinalIgnoreCase)) {
 				EnsureInstallmentScheduleInputVisible (workbook, window, activeSheetCodeName, activateExisting: false);
@@ -142,7 +144,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			if (workbook != null) {
 				if (IsSameWorkbook (_activeReverseToolWorkbook, workbook)) {
-					CloseActiveReverseTool (clearHighlight: true);
+					CloseActiveReverseTool ();
 				}
 				if (IsSameWorkbook (_activeInstallmentScheduleWorkbook, workbook)) {
 					CloseActiveInstallmentScheduleInput ();
@@ -183,7 +185,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void ShowReverseTool (WorkbookContext context, string activeSheetCodeName)
 		{
-			CloseActiveReverseTool (clearHighlight: true);
+			CloseActiveReverseTool ();
+			_activeReverseToolHighlightCleanupCompleted = false;
 			_accountingWorkbookService.HighlightReverseToolTargets (context.Workbook, activeSheetCodeName);
 			ExcelWindowOwner owner = ExcelWindowOwner.From (context.Window);
 			AccountingReverseGoalSeekForm form = new AccountingReverseGoalSeekForm ();
@@ -389,7 +392,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				} else if (string.Equals (formKind, PaymentHistoryFormKind, StringComparison.OrdinalIgnoreCase)) {
 					CloseActivePaymentHistoryInput ();
 				} else if (string.Equals (formKind, ReverseGoalSeekFormKind, StringComparison.OrdinalIgnoreCase)) {
-					CloseActiveReverseTool (clearHighlight: true);
+					CloseActiveReverseTool ();
 				}
 				_logger.Info ("Accounting form closed before workbook close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
 				_logger.Info ("Accounting form invoking workbook.Close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey + ", cancelTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
@@ -822,8 +825,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			form.Confirmed += ActiveReverseToolForm_Confirmed;
-			form.Canceled += ActiveReverseToolForm_Canceled;
 			form.ExcelCloseRequested += ActiveReverseToolForm_ExcelCloseRequested;
+			form.FormClosing += ActiveReverseToolForm_FormClosing;
+			form.FormClosed += ActiveReverseToolForm_FormClosed;
 		}
 
 		private void DetachReverseToolHandlers (AccountingReverseGoalSeekForm form)
@@ -832,8 +836,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			form.Confirmed -= ActiveReverseToolForm_Confirmed;
-			form.Canceled -= ActiveReverseToolForm_Canceled;
 			form.ExcelCloseRequested -= ActiveReverseToolForm_ExcelCloseRequested;
+			form.FormClosing -= ActiveReverseToolForm_FormClosing;
+			form.FormClosed -= ActiveReverseToolForm_FormClosed;
 			form.ClearRequestHandlers ();
 		}
 
@@ -855,10 +860,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void ActiveReverseToolForm_Canceled (object sender, EventArgs e)
+		private void ActiveReverseToolForm_FormClosing (object sender, FormClosingEventArgs e)
 		{
-			ClearReverseToolHighlight ();
 			if (ReferenceEquals (sender, _activeReverseToolForm)) {
+				CleanupActiveReverseToolHighlightOnce ("FormClosing");
+			}
+		}
+
+		private void ActiveReverseToolForm_FormClosed (object sender, FormClosedEventArgs e)
+		{
+			AccountingReverseGoalSeekForm form = sender as AccountingReverseGoalSeekForm;
+			if (ReferenceEquals (form, _activeReverseToolForm)) {
+				CleanupActiveReverseToolHighlightOnce ("FormClosed");
+			}
+			DetachReverseToolHandlers (form);
+			if (ReferenceEquals (form, _activeReverseToolForm)) {
 				ClearActiveReverseToolReferences ();
 				_logger.Info ("Accounting reverse tool active references cleared.");
 			}
@@ -881,7 +897,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void CloseActiveReverseTool (bool clearHighlight)
+		private void CloseActiveReverseTool ()
 		{
 			AccountingReverseGoalSeekForm form = _activeReverseToolForm;
 			if (form == null) {
@@ -889,12 +905,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			try {
 				_logger.Info ("Accounting reverse tool form close/dispose starting.");
-				if (clearHighlight) {
-					ClearReverseToolHighlight ();
-				}
-				DetachReverseToolHandlers (form);
 				if (!form.IsDisposed) {
-					form.CloseByCode ();
+					form.Close ();
 					if (!form.IsDisposed) {
 						form.Dispose ();
 					}
@@ -902,9 +914,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Accounting reverse tool form close/dispose completed.");
 			} catch {
 			} finally {
-				ClearActiveReverseToolReferences ();
-				_logger.Info ("Accounting reverse tool active references cleared.");
+				CleanupActiveReverseToolHighlightOnce ("CloseActiveReverseTool");
+				if (ReferenceEquals (form, _activeReverseToolForm)) {
+					DetachReverseToolHandlers (form);
+					ClearActiveReverseToolReferences ();
+					_logger.Info ("Accounting reverse tool active references cleared.");
+				}
 			}
+		}
+
+		private void CleanupActiveReverseToolHighlightOnce (string reason)
+		{
+			if (_activeReverseToolHighlightCleanupCompleted) {
+				return;
+			}
+			_activeReverseToolHighlightCleanupCompleted = true;
+			ClearReverseToolHighlight ();
+			_logger.Info ("Accounting reverse tool highlight cleanup completed. reason=" + (reason ?? string.Empty));
 		}
 
 		private void ClearReverseToolHighlight ()

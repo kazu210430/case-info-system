@@ -12,15 +12,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private readonly Button _btnCalculate;
 
-		private readonly Button _btnClose;
-
 		private readonly Button _btnExcelClose;
 
-		private bool _allowCloseByButton;
-
 		internal event EventHandler<AccountingReverseGoalSeekConfirmedEventArgs> Confirmed;
-
-		internal event EventHandler Canceled;
 
 		internal event EventHandler ExcelCloseRequested;
 
@@ -115,15 +109,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				UseVisualStyleBackColor = false
 			};
 			_btnCalculate.Click += BtnCalculate_Click;
-			_btnClose = new Button {
-				Location = new Point (296, 352),
-				Name = "btnClose",
-				Size = new Size (107, 40),
-				TabIndex = 2,
-				Text = "閉じる",
-				UseVisualStyleBackColor = true
-			};
-			_btnClose.Click += BtnClose_Click;
 			base.Controls.Add (value);
 			base.Controls.Add (value2);
 			base.Controls.Add (value3);
@@ -133,9 +118,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.Controls.Add (value6);
 			base.Controls.Add (value7);
 			base.Controls.Add (_btnCalculate);
-			base.Controls.Add (_btnClose);
 			base.Controls.Add (_btnExcelClose);
-			AccountingFormButtonAppearanceHelper.Apply (_btnCalculate, _btnClose, _btnExcelClose);
+			AccountingFormButtonAppearanceHelper.Apply (_btnCalculate, _btnExcelClose);
 			ButtonCursorHelper.ApplyHandCursor (this);
 			ResumeLayout (performLayout: false);
 		}
@@ -149,16 +133,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
-		internal void CloseByCode ()
-		{
-			_allowCloseByButton = true;
-			Close ();
-		}
-
 		internal void ClearRequestHandlers ()
 		{
 			Confirmed = null;
-			Canceled = null;
 			ExcelCloseRequested = null;
 		}
 
@@ -169,11 +146,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			} else {
 				this.Confirmed?.Invoke (this, new AccountingReverseGoalSeekConfirmedEventArgs (new AccountingReverseGoalSeekRequest (targetAmount)));
 			}
-		}
-
-		private void BtnClose_Click (object sender, EventArgs e)
-		{
-			CloseByCode ();
 		}
 
 		private void BtnExcelClose_Click (object sender, EventArgs e)
@@ -194,22 +166,6 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 					_txtTargetAmount.TextChanged += TxtTargetAmount_TextChanged;
 				}
 			}
-		}
-
-		protected override void OnFormClosing (FormClosingEventArgs e)
-		{
-			if (e.CloseReason == CloseReason.UserClosing && !_allowCloseByButton) {
-				MessageBox.Show (this, "ボタンで閉じてください", "案件情報System", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-				e.Cancel = true;
-			} else {
-				base.OnFormClosing (e);
-			}
-		}
-
-		protected override void OnFormClosed (FormClosedEventArgs e)
-		{
-			base.OnFormClosed (e);
-			this.Canceled?.Invoke (this, EventArgs.Empty);
 		}
 
 		protected override void Dispose (bool disposing)

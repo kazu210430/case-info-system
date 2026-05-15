@@ -89,6 +89,7 @@
     <Compile Include="AccountingSetCreateServiceTests.cs" />
     <Compile Include="AccountingSaveAsServiceTests.cs" />
     <Compile Include="AccountingSetKernelSyncServiceTests.cs" />
+    <Compile Include="AccountingReverseGoalSeekFormTests.cs" />
     <Compile Include="KernelUserDataRegistrationExecutionServiceTests.cs" />
     <Compile Include="KernelUserDataReflectionServiceTests.cs" />
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
@@ -221,6 +222,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookCloseService.cs" Link="Source\App\KernelWorkbookCloseService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingSetSpec.cs" Link="Source\Domain\AccountingSetSpec.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingReverseGoalSeekRequest.cs" Link="Source\Domain\AccountingReverseGoalSeekRequest.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationMode.cs" Link="Source\Domain\KernelCaseCreationMode.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationPlan.cs" Link="Source\Domain\KernelCaseCreationPlan.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationRequest.cs" Link="Source\Domain\KernelCaseCreationRequest.cs" />
@@ -263,6 +265,9 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\TaskPaneModels.cs" Link="Source\UI\TaskPaneModels.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\KernelNavigationModels.cs" Link="Source\UI\KernelNavigationModels.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationModels.cs" Link="Source\UI\AccountingNavigationModels.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingFormButtonAppearanceHelper.cs" Link="Source\UI\AccountingFormButtonAppearanceHelper.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingReverseGoalSeekForm.cs" Link="Source\UI\AccountingReverseGoalSeekForm.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ButtonCursorHelper.cs" Link="Source\UI\ButtonCursorHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\KernelNavigationControl.cs" Link="Source\UI\KernelNavigationControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationControl.cs" Link="Source\UI\AccountingNavigationControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocTaskPaneControl.cs" Link="Source\UI\DocTaskPaneControl.cs" />

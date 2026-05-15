@@ -22,7 +22,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
-			BackColor = Color.White;
+			BackColor = SystemColors.Menu;
 			base.ClientSize = new Size (474, 412);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;

@@ -13,6 +13,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		internal AccountingSetPresentationWaitForm ()
 		{
 			Text = "案件情報System";
+			BackColor = SystemColors.Menu;
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			FormBorderStyle = FormBorderStyle.FixedDialog;
 			StartPosition = FormStartPosition.CenterScreen;

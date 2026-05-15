@@ -38,9 +38,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private Workbook _activePromptWorkbook;
 
-		private string _activePromptWorkbookFullName;
-
 		private ExcelWindowOwner _activePromptOwner;
+
+		private bool _activePromptHighlightCleanupCompleted;
 
 		private string _formButtonWorkbookCloseKey;
 
@@ -71,7 +71,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (endRound < startRound) {
 				throw new InvalidOperationException ("お支払い履歴を先に作成してください。");
 			}
-			_accountingWorkbookService.HighlightAccountingImportTargets (workbook);
 			ShowPrompt (context, workbook, worksheet, worksheet2, selectedTargetAddress, startRound, endRound);
 		}
 
@@ -267,37 +266,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private void ShowPrompt (WorkbookContext context, Workbook workbook, Worksheet requestWorksheet, Worksheet paymentHistoryWorksheet, string selectedTargetAddress, int startRound, int endRound)
 		{
 			CloseActivePrompt (clearHighlight: true);
+			_activePromptHighlightCleanupCompleted = false;
+			_accountingWorkbookService.HighlightAccountingImportTargets (workbook);
 			ExcelWindowOwner owner = ExcelWindowOwner.From (context.Window);
 			AccountingImportRangePromptForm form = new AccountingImportRangePromptForm (startRound, endRound);
 			ApplySheetAnchoredLocation (form, context.Window, requestWorksheet, PromptAnchorCellAddress);
 			_activePromptForm = form;
 			_activePromptWorkbook = workbook;
-			_activePromptWorkbookFullName = SafeWorkbookFullName (workbook);
 			_activePromptOwner = owner;
-			form.ExcelCloseRequested += ActivePromptForm_ExcelCloseRequested;
+			AttachPromptHandlers (form);
 			form.Confirmed += delegate(object sender, AccountingImportRangePromptConfirmedEventArgs e) {
 				try {
 					Range targetCell = ResolveTargetCell (context, workbook, requestWorksheet, selectedTargetAddress);
 					ApplyImport (workbook, requestWorksheet, paymentHistoryWorksheet, targetCell, e.ImportRange);
-					form.CloseByCode ();
+					form.Close ();
 				} catch (Exception exception) {
 					_logger.Error ("Accounting payment history import prompt confirmed handler failed.", exception);
 					_userErrorService.ShowUserError ("AccountingControl_ActionInvoked", exception);
-				}
-			};
-			form.Canceled += delegate {
-				_logger.Info ("Accounting payment history import prompt closed.");
-				if (workbook != null) {
-					try {
-						_accountingWorkbookService.ClearAccountingImportTargetHighlight (workbook);
-					} catch (Exception exception) {
-						_logger.Error ("Accounting payment history import prompt highlight cleanup failed.", exception);
-					}
-				}
-				if (_activePromptForm == form) {
-					ClearActivePromptReferences ();
-				} else if (owner != null) {
-					owner.Dispose ();
 				}
 			};
 			form.ShowModeless (owner);
@@ -343,13 +328,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			try {
 				_logger.Info ("Accounting payment history import prompt close/dispose starting.");
-				if (clearHighlight && _activePromptWorkbook != null) {
-					_accountingWorkbookService.ClearAccountingImportTargetHighlight (_activePromptWorkbook);
+				if (clearHighlight) {
+					CleanupActivePromptHighlightOnce ("CloseActivePrompt");
 				}
-				form.ExcelCloseRequested -= ActivePromptForm_ExcelCloseRequested;
-				form.ClearRequestHandlers ();
 				if (!form.IsDisposed) {
-					form.CloseByCode ();
+					form.Close ();
 					if (!form.IsDisposed) {
 						form.Dispose ();
 					}
@@ -357,14 +340,80 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Accounting payment history import prompt close/dispose completed.");
 			} catch {
 			} finally {
-				ClearActivePromptReferences ();
-				_logger.Info ("Accounting payment history import prompt active references cleared.");
+				if (ReferenceEquals (form, _activePromptForm)) {
+					DetachPromptHandlers (form);
+					ClearActivePromptReferences ();
+					_logger.Info ("Accounting payment history import prompt active references cleared.");
+				}
 			}
+		}
+
+		private void AttachPromptHandlers (AccountingImportRangePromptForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.ExcelCloseRequested += ActivePromptForm_ExcelCloseRequested;
+			form.FormClosing += ActivePromptForm_FormClosing;
+			form.FormClosed += ActivePromptForm_FormClosed;
+		}
+
+		private void DetachPromptHandlers (AccountingImportRangePromptForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.ExcelCloseRequested -= ActivePromptForm_ExcelCloseRequested;
+			form.FormClosing -= ActivePromptForm_FormClosing;
+			form.FormClosed -= ActivePromptForm_FormClosed;
+			form.ClearRequestHandlers ();
 		}
 
 		private void ActivePromptForm_ExcelCloseRequested (object sender, EventArgs e)
 		{
 			RequestWorkbookCloseFromImportPrompt (_activePromptWorkbook);
+		}
+
+		private void ActivePromptForm_FormClosing (object sender, FormClosingEventArgs e)
+		{
+			if (ReferenceEquals (sender, _activePromptForm)) {
+				CleanupActivePromptHighlightOnce ("FormClosing");
+			}
+		}
+
+		private void ActivePromptForm_FormClosed (object sender, FormClosedEventArgs e)
+		{
+			AccountingImportRangePromptForm form = sender as AccountingImportRangePromptForm;
+			if (ReferenceEquals (form, _activePromptForm)) {
+				CleanupActivePromptHighlightOnce ("FormClosed");
+			}
+			DetachPromptHandlers (form);
+			if (ReferenceEquals (form, _activePromptForm)) {
+				ClearActivePromptReferences ();
+				_logger.Info ("Accounting payment history import prompt active references cleared.");
+			}
+			_logger.Info ("Accounting payment history import prompt closed.");
+		}
+
+		private void CleanupActivePromptHighlightOnce (string reason)
+		{
+			if (_activePromptHighlightCleanupCompleted) {
+				return;
+			}
+			_activePromptHighlightCleanupCompleted = true;
+			ClearActivePromptHighlight ();
+			_logger.Info ("Accounting payment history import prompt highlight cleanup completed. reason=" + (reason ?? string.Empty));
+		}
+
+		private void ClearActivePromptHighlight ()
+		{
+			try {
+				if (_activePromptWorkbook != null) {
+					_accountingWorkbookService.ClearAccountingImportTargetHighlight (_activePromptWorkbook);
+				}
+			} catch (Exception exception) {
+				_logger.Error ("Accounting payment history import prompt highlight cleanup failed.", exception);
+			}
 		}
 
 		private void RequestWorkbookCloseFromImportPrompt (Workbook workbook)
@@ -439,7 +488,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			_activePromptForm = null;
 			_activePromptWorkbook = null;
-			_activePromptWorkbookFullName = string.Empty;
 			ExcelWindowOwner owner = _activePromptOwner;
 			_activePromptOwner = null;
 			if (owner != null) {
@@ -484,15 +532,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			try {
 				string fullName = workbook.FullName ?? string.Empty;
 				return string.IsNullOrWhiteSpace (fullName) ? (workbook.Name ?? string.Empty) : fullName;
-			} catch {
-				return string.Empty;
-			}
-		}
-
-		private static string SafeWorkbookFullName (Workbook workbook)
-		{
-			try {
-				return (workbook == null) ? string.Empty : (workbook.FullName ?? string.Empty);
 			} catch {
 				return string.Empty;
 			}

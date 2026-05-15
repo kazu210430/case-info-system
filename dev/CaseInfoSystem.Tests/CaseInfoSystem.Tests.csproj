@@ -90,6 +90,7 @@
     <Compile Include="AccountingSaveAsServiceTests.cs" />
     <Compile Include="AccountingSetKernelSyncServiceTests.cs" />
     <Compile Include="AccountingReverseGoalSeekFormTests.cs" />
+    <Compile Include="AccountingImportRangePromptFormTests.cs" />
     <Compile Include="KernelUserDataRegistrationExecutionServiceTests.cs" />
     <Compile Include="KernelUserDataReflectionServiceTests.cs" />
     <Compile Include="MasterTemplateSheetReaderTests.cs" />
@@ -223,6 +224,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelWorkbookWindowRestorePolicy.cs" Link="Source\App\KernelWorkbookWindowRestorePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingSetSpec.cs" Link="Source\Domain\AccountingSetSpec.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingReverseGoalSeekRequest.cs" Link="Source\Domain\AccountingReverseGoalSeekRequest.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\AccountingImportRange.cs" Link="Source\Domain\AccountingImportRange.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationMode.cs" Link="Source\Domain\KernelCaseCreationMode.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationPlan.cs" Link="Source\Domain\KernelCaseCreationPlan.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Domain\KernelCaseCreationRequest.cs" Link="Source\Domain\KernelCaseCreationRequest.cs" />
@@ -267,6 +269,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationModels.cs" Link="Source\UI\AccountingNavigationModels.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingFormButtonAppearanceHelper.cs" Link="Source\UI\AccountingFormButtonAppearanceHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingReverseGoalSeekForm.cs" Link="Source\UI\AccountingReverseGoalSeekForm.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingImportRangePromptForm.cs" Link="Source\UI\AccountingImportRangePromptForm.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\ButtonCursorHelper.cs" Link="Source\UI\ButtonCursorHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\KernelNavigationControl.cs" Link="Source\UI\KernelNavigationControl.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\AccountingNavigationControl.cs" Link="Source\UI\AccountingNavigationControl.cs" />

@@ -389,6 +389,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return;
 			}
 			string workbookKey = SafeWorkbookKey (workbook);
+			Microsoft.Office.Interop.Excel.Application application = TryGetWorkbookApplication (workbook);
 			_logger.Info ("Accounting form Excel close button clicked. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
 			_formButtonWorkbookCloseKey = workbookKey;
 			_formButtonWorkbookCloseFormKind = formKind ?? string.Empty;
@@ -402,6 +403,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("Accounting form closed before workbook close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
 				_logger.Info ("Accounting form invoking workbook.Close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey + ", cancelTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
 				workbook.Close ();
+				QuitExcelIfNoWorkbooksAfterFormButtonClose (application, workbookKey, formKind);
 			} catch (Exception exception) {
 				_logger.Error ("Accounting form workbook close request failed. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey, exception);
 				_userErrorService.ShowUserError ("AccountingForm.ExcelCloseRequested", exception);
@@ -409,6 +411,56 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_formButtonWorkbookCloseKey = string.Empty;
 				_formButtonWorkbookCloseFormKind = string.Empty;
 				_logger.Info ("Accounting form workbook close allow flag cleared. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
+			}
+		}
+
+		private void QuitExcelIfNoWorkbooksAfterFormButtonClose (Microsoft.Office.Interop.Excel.Application application, string workbookKey, string formKind)
+		{
+			if (application == null) {
+				_logger.Info ("Accounting form button close quit skipped. reason=ApplicationMissing, formKind=" + (formKind ?? string.Empty) + ", workbook=" + (workbookKey ?? string.Empty));
+				return;
+			}
+			bool readFailed;
+			int workbooksCount = ReadWorkbooksCount (application, out readFailed);
+			string visible = SafeApplicationVisible (application);
+			if (readFailed) {
+				_logger.Info ("Accounting form button close quit skipped. reason=WorkbooksCountReadFailed, formKind=" + (formKind ?? string.Empty) + ", workbook=" + (workbookKey ?? string.Empty) + ", applicationVisible=" + visible);
+				return;
+			}
+			if (workbooksCount != 0) {
+				_logger.Info ("Accounting form button close quit skipped. reason=WorkbookStillOpenOrOtherWorkbookPresent, formKind=" + (formKind ?? string.Empty) + ", workbook=" + (workbookKey ?? string.Empty) + ", workbooksCount=" + workbooksCount.ToString (CultureInfo.InvariantCulture) + ", applicationVisible=" + visible);
+				return;
+			}
+			_logger.Info ("form-button-close-after-workbook-close-no-workbooks-quit. formKind=" + (formKind ?? string.Empty) + ", workbook=" + (workbookKey ?? string.Empty) + ", workbooksCount=0, applicationVisible=" + visible + ", applicationVisibleFalseTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
+			application.Quit ();
+		}
+
+		private static Microsoft.Office.Interop.Excel.Application TryGetWorkbookApplication (Workbook workbook)
+		{
+			try {
+				return workbook == null ? null : workbook.Application;
+			} catch {
+				return null;
+			}
+		}
+
+		private static int ReadWorkbooksCount (Microsoft.Office.Interop.Excel.Application application, out bool readFailed)
+		{
+			readFailed = false;
+			try {
+				return application == null || application.Workbooks == null ? -1 : application.Workbooks.Count;
+			} catch {
+				readFailed = true;
+				return -1;
+			}
+		}
+
+		private static string SafeApplicationVisible (Microsoft.Office.Interop.Excel.Application application)
+		{
+			try {
+				return application == null ? string.Empty : application.Visible.ToString ();
+			} catch {
+				return string.Empty;
 			}
 		}
 

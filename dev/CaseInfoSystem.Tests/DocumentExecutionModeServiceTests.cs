@@ -31,7 +31,7 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileA, service.GetConfiguredMode());
 
             currentTimestamp = updatedTimestamp;
-            currentValue = "AllowlistedOnly";
+            currentValue = "WarmupEnabledProfileB";
 
             Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileB, service.GetConfiguredMode());
         }
@@ -131,7 +131,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void IsWordWarmupEnabled_WhenModeIsAllowlistedOnlyAlias_ReturnsTrue()
+        public void IsWordWarmupEnabled_WhenModeIsAllowlistedOnlyLegacyAlias_ReturnsTrueForCompatibility()
         {
             var service = new DocumentExecutionModeService(
                 OrchestrationTestSupport.CreateLogger(new List<string>()),
@@ -144,6 +144,7 @@ namespace CaseInfoSystem.Tests
                     ResolveModeFilePath = () => @"C:\runtime\DocumentExecutionMode.txt"
                 });
 
+            Assert.Equal(DocumentExecutionMode.WarmupEnabledProfileB, service.GetConfiguredMode());
             Assert.True(service.IsWordWarmupEnabled());
         }
 

@@ -9,4 +9,4 @@
 #   AllowlistedOnly   -> WarmupEnabledProfileB
 #
 # Keep Disabled until VBA parity review is complete.
-AllowlistedOnly
+WarmupEnabledProfileB

@@ -15,6 +15,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private const string WarmupEnabledProfileAModeName = "WarmupEnabledProfileA";
         private const string WarmupEnabledProfileBModeName = "WarmupEnabledProfileB";
         private const string LegacyPilotOnlyModeName = "PilotOnly";
+        // Legacy aliases are accepted only to keep existing runtime config files readable.
         private const string LegacyAllowlistedOnlyModeName = "AllowlistedOnly";
         private const string DefaultDocumentsSystemRootFolderName = "\u6848\u4EF6\u60C5\u5831System";
         private const string AddInsFolderName = "Addins";

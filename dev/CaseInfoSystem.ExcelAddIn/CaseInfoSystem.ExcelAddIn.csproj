@@ -165,6 +165,7 @@
     <Compile Include="App\AccountingFormHelperService.cs" />
     <Compile Include="App\AccountingInitialSheetSyncPolicy.cs" />
     <Compile Include="App\AccountingIssueDateDueDatePolicy.cs" />
+    <Compile Include="App\AccountingGoalSeekResidualPolicy.cs" />
     <Compile Include="App\AccountingInstallmentScheduleCommandService.cs" />
     <Compile Include="App\AccountingInstallmentSchedulePlanPolicy.cs" />
     <Compile Include="App\AccountingPaymentHistoryPlanPolicy.cs" />
@@ -389,9 +390,11 @@
     <Compile Include="Infrastructure\CreatedCaseNoticeService.cs" />
     <Compile Include="Infrastructure\CreatedCasePresentationWaitService.cs" />
     <Compile Include="Infrastructure\AccountingSetPresentationWaitService.cs" />
+    <Compile Include="Infrastructure\AccountingGoalSeekExecutionResult.cs" />
     <Compile Include="Infrastructure\DocumentPresentationWaitService.cs" />
     <Compile Include="Infrastructure\KernelUserDataRegistrationWaitService.cs" />
     <Compile Include="Infrastructure\UserErrorService.cs" />
+    <Compile Include="Infrastructure\UserFacingException.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotParser.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotChunkReadHelper.cs" />
     <Compile Include="Infrastructure\TaskPaneSnapshotChunkStorageHelper.cs" />

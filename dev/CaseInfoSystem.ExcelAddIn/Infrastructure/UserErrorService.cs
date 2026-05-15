@@ -19,6 +19,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			string text = (string.IsNullOrWhiteSpace (procedureName) ? "(unknown)" : procedureName.Trim ());
 			Exception ex = exception ?? new InvalidOperationException ("不明なエラーが発生しました。");
 			_logger.Error (text, ex);
+			UserFacingException userFacingException = ex as UserFacingException;
+			if (userFacingException != null) {
+				ShowOkNotification (userFacingException.UserMessage, DefaultTitle, MessageBoxIcon.Hand);
+				return;
+			}
 			string text2 = "エラーが発生しました。" + Environment.NewLine + Environment.NewLine + "処理: " + text + Environment.NewLine + "種類: " + ex.GetType ().Name + Environment.NewLine + "内容: " + ex.Message;
 			ShowOkNotification (text2, DefaultTitle, MessageBoxIcon.Hand);
 		}

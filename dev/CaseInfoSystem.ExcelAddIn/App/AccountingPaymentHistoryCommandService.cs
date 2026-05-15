@@ -77,6 +77,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private const string TableRangeAddress = "A12:J73";
 
 		private const double AmountTolerance = 0.01;
+		private const string GoalSeekGenericUserMessage = "入力内容をご確認ください。";
 
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
@@ -168,15 +169,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				int lastDataRow = SortPaymentHistoryRows (workbook);
 				if (lastDataRow < AccountingPaymentHistoryPlanPolicy.FirstDataRow) {
 					if (depositAmount != 0) {
-						WriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 0, AccountingPaymentHistoryPlanPolicy.DepositAppliedText, depositAmount, "お預かり金額");
-						WriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow + 1, 1, receiptDate, receiptAmount, "領収額");
+						if (!TryWriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 0, AccountingPaymentHistoryPlanPolicy.DepositAppliedText, depositAmount, "お預かり金額")) {
+							return LoadFormState (workbook);
+						}
+						if (!TryWriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow + 1, 1, receiptDate, receiptAmount, "領収額")) {
+							return LoadFormState (workbook);
+						}
 					} else {
-						WriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 1, receiptDate, receiptAmount, "領収額");
+						if (!TryWriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 1, receiptDate, receiptAmount, "領収額")) {
+							return LoadFormState (workbook);
+						}
 					}
 				} else {
 					int nextAppendRow = lastDataRow + 1;
 					AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (nextAppendRow);
-					WriteCalculatedRow (workbook, nextAppendRow, ResolveNextRoundNumber (workbook, nextAppendRow), receiptDate, receiptAmount, "領収額");
+					if (!TryWriteCalculatedRow (workbook, nextAppendRow, ResolveNextRoundNumber (workbook, nextAppendRow), receiptDate, receiptAmount, "領収額")) {
+						return LoadFormState (workbook);
+					}
 				}
 
 				lastDataRow = SortPaymentHistoryRows (workbook);
@@ -229,7 +238,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				int lastWrittenRow = lastDataRow;
 				while (true) {
 					AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (row);
-					WriteCalculatedRow (workbook, row, ResolveNextRoundNumber (workbook, row), string.Empty, receiptAmount, "領収額");
+					if (!TryWriteCalculatedRow (workbook, row, ResolveNextRoundNumber (workbook, row), string.Empty, receiptAmount, "領収額")) {
+						return LoadFormState (workbook);
+					}
 					lastWrittenRow = row;
 					double balance = ReadRequiredDouble (workbook, SheetName, Address ("I", row), "請求残高", "AccountingPaymentHistory.OutputFutureBalance");
 					if (balance > AmountTolerance) {
@@ -237,7 +248,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						continue;
 					}
 					if (balance < -AmountTolerance) {
-						GoalSeekAndVerify (workbook, row, "I", "D", 0, "最終回の請求残高");
+						if (!TryGoalSeekAndVerify (workbook, row, "I", "D", 0, "最終回の請求残高")) {
+							return LoadFormState (workbook);
+						}
 					}
 					break;
 				}
@@ -359,7 +372,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingWorkbookService.WriteNamedRangeValue (workbook, SheetName, PaymentHistoryDepositAmountRangeName, depositAmount);
 		}
 
-		private void WriteCalculatedRow (Workbook workbook, int rowIndex, int roundNumber, object dateValue, double targetAmount, string targetName)
+		private bool TryWriteCalculatedRow (Workbook workbook, int rowIndex, int roundNumber, object dateValue, double targetAmount, string targetName)
 		{
 			AccountingPaymentHistoryPlanPolicy.EnsureWritableRow (rowIndex);
 			int previousRow = AccountingPaymentHistoryPlanPolicy.GetPreviousBalanceRowForDataRow (rowIndex);
@@ -373,27 +386,62 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("D", rowIndex), 0);
 			_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("H", rowIndex), expenseCharge);
 			CalculateWorkbook (workbook);
-			GoalSeekAndVerify (workbook, rowIndex, "C", "D", targetAmount, targetName);
+			return TryGoalSeekAndVerify (workbook, rowIndex, "C", "D", targetAmount, targetName);
 		}
 
-		private void GoalSeekAndVerify (Workbook workbook, int rowIndex, string formulaColumn, string changingColumn, double targetAmount, string targetName)
+		private bool TryGoalSeekAndVerify (Workbook workbook, int rowIndex, string formulaColumn, string changingColumn, double targetAmount, string targetName)
 		{
 			string formulaCell = Address (formulaColumn, rowIndex);
 			string changingCell = Address (changingColumn, rowIndex);
+			AccountingGoalSeekExecutionResult goalSeekResult;
 			try {
-				_accountingWorkbookService.ExecuteGoalSeekOrThrow (workbook, SheetName, formulaCell, changingCell, targetAmount);
+				goalSeekResult = _accountingWorkbookService.ExecuteGoalSeekAndReadResult (workbook, SheetName, formulaCell, changingCell, targetAmount);
 			} catch (Exception exception) {
-				throw new InvalidOperationException (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, targetName, "GoalSeek が失敗しました。"), exception);
+				throw CreateGoalSeekFailureException (workbook, rowIndex, formulaCell, changingCell, targetAmount, null, null, null, targetName, GoalSeekGenericUserMessage, "GoalSeek 実行中に例外が発生しました。", exception);
+			}
+			if (!goalSeekResult.Succeeded) {
+				double resultCurrent;
+				double? current = TryGetGoalSeekCurrentFromResult (goalSeekResult, out resultCurrent) ? resultCurrent : (double?)null;
+				if (current.HasValue && AccountingGoalSeekResidualPolicy.IsWithinAllowedResidual (current.Value, targetAmount)) {
+					_logger.Warn (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, current, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, "GoalSeek が false を返しましたが残差は 1 円未満です。", null));
+				} else if (current.HasValue) {
+					ShowGoalSeekResidualNotice (workbook, rowIndex, formulaCell, changingCell, targetAmount, current.Value, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, "GoalSeek が false を返し、1 円以上の残差が残りました。");
+					return false;
+				} else {
+					throw CreateGoalSeekFailureException (workbook, rowIndex, formulaCell, changingCell, targetAmount, current, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, GoalSeekGenericUserMessage, "GoalSeek が false を返し、目標セル値を数値として取得できません。", null);
+				}
 			}
 			CalculateWorkbook (workbook);
-			double actual = ReadRequiredDouble (workbook, SheetName, formulaCell, targetName, "AccountingPaymentHistory.GoalSeekAndVerify");
-			if (Math.Abs (actual - targetAmount) > AmountTolerance) {
-				throw new InvalidOperationException (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, targetName, "逆算後の値が目標額と一致しません。"));
+
+			double actual;
+			try {
+				actual = ReadRequiredDouble (workbook, SheetName, formulaCell, targetName, "AccountingPaymentHistory.GoalSeekAndVerify");
+			} catch (Exception exception) {
+				throw CreateGoalSeekFailureException (workbook, rowIndex, formulaCell, changingCell, targetAmount, null, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, GoalSeekGenericUserMessage, "GoalSeek 後の目標セル値を数値として読み取れません。", exception);
 			}
-			double taxBase = ReadRequiredDouble (workbook, SheetName, changingCell, "10％対象計", "AccountingPaymentHistory.GoalSeekAndVerify");
+
+			if (AccountingGoalSeekResidualPolicy.ShouldShowResidualNotice (actual, targetAmount)) {
+				ShowGoalSeekResidualNotice (workbook, rowIndex, formulaCell, changingCell, targetAmount, actual, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, "GoalSeek 後に 1 円以上の残差が残りました。");
+				return false;
+			}
+
+			double taxBase;
+			try {
+				taxBase = ReadRequiredDouble (workbook, SheetName, changingCell, "10％対象計", "AccountingPaymentHistory.GoalSeekAndVerify");
+			} catch (Exception exception) {
+				throw CreateGoalSeekFailureException (workbook, rowIndex, formulaCell, changingCell, targetAmount, actual, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, GoalSeekGenericUserMessage, "GoalSeek 後の変更セル値を数値として読み取れません。", exception);
+			}
 			if (taxBase < -AmountTolerance) {
-				throw new InvalidOperationException (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, targetName, "逆算後の10％対象計がマイナスになりました。"));
+				throw CreateGoalSeekFailureException (workbook, rowIndex, formulaCell, changingCell, targetAmount, actual, goalSeekResult.CurrentValue, goalSeekResult.Succeeded, targetName, "10％対象計がマイナスになっているのでご確認ください。", "GoalSeek 後の10％対象計がマイナスになりました。taxBase=" + taxBase.ToString (CultureInfo.InvariantCulture), null);
 			}
+
+			return true;
+		}
+
+		private void ShowGoalSeekResidualNotice (Workbook workbook, int rowIndex, string formulaCell, string changingCell, double targetAmount, double current, object rawCurrent, bool? goalSeekSucceeded, string targetName, string reason)
+		{
+			_logger.Warn (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, current, rawCurrent, goalSeekSucceeded, targetName, reason, null));
+			UserErrorService.ShowOkNotification (AccountingGoalSeekResidualPolicy.CreateResidualNoticeUserMessage (current, targetAmount), "案件情報System", MessageBoxIcon.Warning);
 		}
 
 		private int SortPaymentHistoryRows (Workbook workbook)
@@ -670,13 +718,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return Convert.ToString (formula, CultureInfo.InvariantCulture) ?? string.Empty;
 		}
 
-		private string CreateGoalSeekDiagnostic (Workbook workbook, int rowIndex, string formulaCell, string changingCell, double targetAmount, string targetName, string reason)
+		private UserFacingException CreateGoalSeekFailureException (Workbook workbook, int rowIndex, string formulaCell, string changingCell, double targetAmount, double? current, object rawCurrent, bool? goalSeekSucceeded, string targetName, string userMessage, string reason, Exception exception)
 		{
+			string diagnostic = CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, current, rawCurrent, goalSeekSucceeded, targetName, reason, exception);
+			return exception == null ? new UserFacingException (userMessage, diagnostic) : new UserFacingException (userMessage, diagnostic, exception);
+		}
+
+		private string CreateGoalSeekDiagnostic (Workbook workbook, int rowIndex, string formulaCell, string changingCell, double targetAmount, double? current, object rawCurrent, bool? goalSeekSucceeded, string targetName, string reason, Exception exception)
+		{
+			double? residual = current.HasValue ? AccountingGoalSeekResidualPolicy.GetResidual (current.Value, targetAmount) : (double?)null;
+			double? residualAbs = current.HasValue ? AccountingGoalSeekResidualPolicy.GetResidualAbs (current.Value, targetAmount) : (double?)null;
 			StringBuilder builder = new StringBuilder ();
-			builder.AppendLine (reason);
+			builder.AppendLine ("AccountingPaymentHistory.GoalSeek diagnostic. reason=" + (reason ?? string.Empty));
+			builder.AppendLine ("procedure=AccountingPaymentHistory.GoalSeekAndVerify");
+			builder.AppendLine ("sheet=" + SheetName);
 			builder.AppendLine ("対象行: " + rowIndex.ToString (CultureInfo.InvariantCulture));
-			builder.AppendLine ("目標: " + targetName + " = " + targetAmount.ToString (CultureInfo.InvariantCulture));
-			builder.AppendLine ("数式セル: " + formulaCell + ", 変更セル: " + changingCell);
+			builder.AppendLine ("targetName=" + (targetName ?? string.Empty));
+			builder.AppendLine ("formulaCell=" + (formulaCell ?? string.Empty) + ", changingCell=" + (changingCell ?? string.Empty));
+			builder.AppendLine ("target=" + targetAmount.ToString (CultureInfo.InvariantCulture) + ", current=" + FormatNullableDouble (current) + ", rawCurrent=" + FormatObjectForLog (rawCurrent));
+			builder.AppendLine ("residual=" + FormatNullableDouble (residual) + ", residualAbs=" + FormatNullableDouble (residualAbs) + ", residualYen=" + (residualAbs.HasValue ? AccountingGoalSeekResidualPolicy.FormatResidualYen (residualAbs.Value) : "(unavailable)"));
+			builder.AppendLine ("goalSeekResult=" + FormatNullableBool (goalSeekSucceeded));
+			if (exception != null) {
+				builder.AppendLine ("exceptionType=" + exception.GetType ().FullName + ", exceptionMessage=" + exception.Message);
+			}
 			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "C", "領収額"));
 			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "D", "10％対象計"));
 			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "F", "小計"));
@@ -685,6 +749,31 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "I", "請求残高"));
 			builder.AppendLine (ReadDiagnosticCell (workbook, rowIndex, "J", "実費残高"));
 			return builder.ToString ();
+		}
+
+		private static bool TryGetGoalSeekCurrentFromResult (AccountingGoalSeekExecutionResult goalSeekResult, out double current)
+		{
+			current = 0;
+			if (goalSeekResult == null || !(goalSeekResult.CurrentValue is double)) {
+				return false;
+			}
+			current = (double)goalSeekResult.CurrentValue;
+			return true;
+		}
+
+		private static string FormatNullableDouble (double? value)
+		{
+			return value.HasValue ? value.Value.ToString (CultureInfo.InvariantCulture) : "(unavailable)";
+		}
+
+		private static string FormatNullableBool (bool? value)
+		{
+			return value.HasValue ? value.Value.ToString () : "(unknown)";
+		}
+
+		private static string FormatObjectForLog (object value)
+		{
+			return Convert.ToString (value, CultureInfo.InvariantCulture) ?? string.Empty;
 		}
 
 		private string ReadDiagnosticCell (Workbook workbook, int rowIndex, string column, string itemName)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using Microsoft.Office.Interop.Excel;
@@ -777,6 +778,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal void ExecuteGoalSeekOrThrow (Workbook workbook, string sheetName, string formulaCellAddress, string changingCellAddress, double goalValue)
 		{
+			AccountingGoalSeekExecutionResult result = ExecuteGoalSeekAndReadResult (workbook, sheetName, formulaCellAddress, changingCellAddress, goalValue);
+			if (!result.Succeeded) {
+				throw new InvalidOperationException (
+					"GoalSeek に失敗しました。sheet=" + sheetName +
+					", formulaCell=" + formulaCellAddress +
+					", changingCell=" + changingCellAddress +
+					", target=" + Convert.ToString (goalValue, CultureInfo.InvariantCulture) +
+					", current=" + ConvertGoalSeekValueToString (result.CurrentValue) +
+					", goalSeekResult=False");
+			}
+		}
+
+		internal AccountingGoalSeekExecutionResult ExecuteGoalSeekAndReadResult (Workbook workbook, string sheetName, string formulaCellAddress, string changingCellAddress, double goalValue)
+		{
 			Worksheet worksheet = null;
 			Range formulaCell = null;
 			Range changingCell = null;
@@ -786,29 +801,27 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				changingCell = ((_Worksheet)worksheet).get_Range ((object)changingCellAddress, Type.Missing);
 				bool succeeded = formulaCell.GoalSeek (goalValue, changingCell);
 				object currentValue = formulaCell.Value2;
-				if (!succeeded) {
-					throw new InvalidOperationException (
-						"GoalSeek に失敗しました。sheet=" + sheetName +
-						", formulaCell=" + formulaCellAddress +
-						", changingCell=" + changingCellAddress +
-						", target=" + Convert.ToString (goalValue, System.Globalization.CultureInfo.InvariantCulture) +
-						", current=" + (Convert.ToString (currentValue, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty));
-				}
-				_logger.Info ("Accounting goal seek executed. sheet=" + sheetName + ", formulaCell=" + formulaCellAddress + ", changingCell=" + changingCellAddress + ", target=" + goalValue);
-			} catch (InvalidOperationException) {
-				throw;
+				_logger.Info ("Accounting goal seek executed. sheet=" + sheetName + ", formulaCell=" + formulaCellAddress + ", changingCell=" + changingCellAddress + ", target=" + Convert.ToString (goalValue, CultureInfo.InvariantCulture) + ", current=" + ConvertGoalSeekValueToString (currentValue) + ", goalSeekResult=" + succeeded.ToString ());
+				return new AccountingGoalSeekExecutionResult (succeeded, currentValue);
 			} catch (Exception innerException) {
 				throw new InvalidOperationException (
-					"GoalSeek に失敗しました。sheet=" + sheetName +
+					"GoalSeek 実行中に例外が発生しました。sheet=" + sheetName +
 					", formulaCell=" + formulaCellAddress +
 					", changingCell=" + changingCellAddress +
-					", target=" + Convert.ToString (goalValue, System.Globalization.CultureInfo.InvariantCulture),
+					", target=" + Convert.ToString (goalValue, CultureInfo.InvariantCulture) +
+					", exceptionType=" + innerException.GetType ().FullName +
+					", exceptionMessage=" + innerException.Message,
 					innerException);
 			} finally {
 				ComObjectReleaseService.Release (changingCell);
 				ComObjectReleaseService.Release (formulaCell);
 				ComObjectReleaseService.Release (worksheet);
 			}
+		}
+
+		private static string ConvertGoalSeekValueToString (object value)
+		{
+			return Convert.ToString (value, CultureInfo.InvariantCulture) ?? string.Empty;
 		}
 
 		internal void RoundDownCell (Range cell, int digits)

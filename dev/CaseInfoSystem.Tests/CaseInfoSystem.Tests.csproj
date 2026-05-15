@@ -81,6 +81,7 @@
     <Compile Include="TransientPaneSuppressionServiceTests.cs" />
     <Compile Include="WorkbookSessionServiceTests.cs" />
     <Compile Include="AccountingNumericCellReaderTests.cs" />
+    <Compile Include="AccountingGoalSeekResidualPolicyTests.cs" />
     <Compile Include="AccountingIssueDateDueDatePolicyTests.cs" />
     <Compile Include="AccountingInstallmentSchedulePlanPolicyTests.cs" />
     <Compile Include="AccountingPaymentHistoryPlanPolicyTests.cs" />
@@ -113,6 +114,7 @@
     <Compile Include="WindowActivatePaneHandlingServiceTests.cs" />
     <!-- TaskPaneManager policies -->
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingNumericCellReader.cs" Link="Source\App\AccountingNumericCellReader.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingGoalSeekResidualPolicy.cs" Link="Source\App\AccountingGoalSeekResidualPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingInitialSheetSyncPolicy.cs" Link="Source\App\AccountingInitialSheetSyncPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingIssueDateDueDatePolicy.cs" Link="Source\App\AccountingIssueDateDueDatePolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AccountingInstallmentSchedulePlanPolicy.cs" Link="Source\App\AccountingInstallmentSchedulePlanPolicy.cs" />

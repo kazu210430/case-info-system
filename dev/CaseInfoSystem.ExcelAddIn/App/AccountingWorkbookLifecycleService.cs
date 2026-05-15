@@ -159,6 +159,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			try {
 				bool canceled = _accountingFormHelperService.TryCancelWorkbookCloseForActiveAccountingForm (workbook);
+				if (!canceled) {
+					canceled = _accountingPaymentHistoryImportService.TryCancelWorkbookCloseForActiveImportPrompt (workbook);
+				}
 				if (canceled) {
 					_logger.Info ("Accounting workbook before-close canceled by active accounting form guard.");
 				}

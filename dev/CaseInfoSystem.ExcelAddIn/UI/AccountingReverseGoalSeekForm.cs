@@ -14,41 +14,54 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 
 		private readonly Button _btnClose;
 
+		private readonly Button _btnExcelClose;
+
 		private bool _allowCloseByButton;
 
 		internal event EventHandler<AccountingReverseGoalSeekConfirmedEventArgs> Confirmed;
 
 		internal event EventHandler Canceled;
 
+		internal event EventHandler ExcelCloseRequested;
+
 		internal AccountingReverseGoalSeekForm ()
 		{
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
 			BackColor = Color.White;
-			base.ClientSize = new Size (474, 374);
+			base.ClientSize = new Size (474, 412);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;
 			base.MaximizeBox = false;
 			base.MinimizeBox = false;
 			base.ShowInTaskbar = false;
 			base.StartPosition = FormStartPosition.CenterParent;
+			_btnExcelClose = new Button {
+				Location = new Point (332, 10),
+				Name = "btnExcelClose",
+				Size = new Size (120, 32),
+				TabIndex = 3,
+				Text = "Excelを閉じる",
+				UseVisualStyleBackColor = true
+			};
+			_btnExcelClose.Click += BtnExcelClose_Click;
 			Text = "逆算ツール";
 			Label value = new Label {
-				Location = new Point (14, 14),
+				Location = new Point (14, 52),
 				Name = "lblGuide",
 				Size = new Size (438, 40),
 				TabIndex = 5,
 				Text = "・丸めた数字で請求したい → 請求額から値引き額を逆算できます\r\n・丸めた金額を受け取った → 領収額から税処理前の価額を逆算できます"
 			};
 			Label value2 = new Label {
-				Location = new Point (0, 64),
+				Location = new Point (0, 102),
 				Name = "lblDivider",
 				Size = new Size (474, 22),
 				TabIndex = 6,
 				Text = "----《作業手順》--------------------------------------------------------------------------"
 			};
 			Label value3 = new Label {
-				Location = new Point (18, 95),
+				Location = new Point (18, 133),
 				Name = "lblStep1",
 				Size = new Size (418, 22),
 				TabIndex = 7,
@@ -56,7 +69,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_txtTargetAmount = new TextBox {
 				BorderStyle = BorderStyle.FixedSingle,
-				Location = new Point (56, 133),
+				Location = new Point (56, 171),
 				Name = "txtTargetAmount",
 				Size = new Size (106, 25),
 				TabIndex = 0,
@@ -64,28 +77,28 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_txtTargetAmount.TextChanged += TxtTargetAmount_TextChanged;
 			Label value4 = new Label {
-				Location = new Point (169, 133),
+				Location = new Point (169, 171),
 				Name = "lblYen",
 				Size = new Size (24, 24),
 				TabIndex = 8,
 				Text = "円"
 			};
 			Label value5 = new Label {
-				Location = new Point (18, 180),
+				Location = new Point (18, 218),
 				Name = "lblStep2",
 				Size = new Size (434, 22),
 				TabIndex = 9,
 				Text = "⑵  値引き額等を表示させる場所を指定（黄色エリア内のセルを1つ選択）"
 			};
 			Label value6 = new Label {
-				Location = new Point (18, 220),
+				Location = new Point (18, 258),
 				Name = "lblStep3",
 				Size = new Size (210, 22),
 				TabIndex = 10,
 				Text = "⑶  逆算ボタンをクリック"
 			};
 			Label value7 = new Label {
-				Location = new Point (38, 246),
+				Location = new Point (38, 284),
 				Name = "lblResultNote",
 				Size = new Size (332, 48),
 				TabIndex = 11,
@@ -94,7 +107,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			_btnCalculate = new Button {
 				BackColor = Color.PowderBlue,
 				ForeColor = Color.Black,
-				Location = new Point (56, 314),
+				Location = new Point (56, 352),
 				Name = "btnCalculate",
 				Size = new Size (107, 40),
 				TabIndex = 1,
@@ -103,7 +116,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			};
 			_btnCalculate.Click += BtnCalculate_Click;
 			_btnClose = new Button {
-				Location = new Point (296, 314),
+				Location = new Point (296, 352),
 				Name = "btnClose",
 				Size = new Size (107, 40),
 				TabIndex = 2,
@@ -121,7 +134,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.Controls.Add (value7);
 			base.Controls.Add (_btnCalculate);
 			base.Controls.Add (_btnClose);
-			AccountingFormButtonAppearanceHelper.Apply (_btnCalculate, _btnClose);
+			base.Controls.Add (_btnExcelClose);
+			AccountingFormButtonAppearanceHelper.Apply (_btnCalculate, _btnClose, _btnExcelClose);
 			ButtonCursorHelper.ApplyHandCursor (this);
 			ResumeLayout (performLayout: false);
 		}
@@ -141,6 +155,13 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			Close ();
 		}
 
+		internal void ClearRequestHandlers ()
+		{
+			Confirmed = null;
+			Canceled = null;
+			ExcelCloseRequested = null;
+		}
+
 		private void BtnCalculate_Click (object sender, EventArgs e)
 		{
 			if (!TryParseTargetAmount (out var targetAmount)) {
@@ -153,6 +174,11 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		private void BtnClose_Click (object sender, EventArgs e)
 		{
 			CloseByCode ();
+		}
+
+		private void BtnExcelClose_Click (object sender, EventArgs e)
+		{
+			this.ExcelCloseRequested?.Invoke (this, EventArgs.Empty);
 		}
 
 		private void TxtTargetAmount_TextChanged (object sender, EventArgs e)
@@ -184,6 +210,14 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			base.OnFormClosed (e);
 			this.Canceled?.Invoke (this, EventArgs.Empty);
+		}
+
+		protected override void Dispose (bool disposing)
+		{
+			if (disposing) {
+				ClearRequestHandlers ();
+			}
+			base.Dispose (disposing);
 		}
 
 		private bool TryParseTargetAmount (out double targetAmount)

@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -21,6 +22,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const int LastHistoryDataRow = 73;
 
+		private const string ProductTitle = "案件情報System";
+
+		private const string CloseThroughFormMessage = "フォームの「Excelを閉じる」ボタンから閉じてください。";
+
+		private const string ImportPromptFormKind = "PaymentHistoryImportPrompt";
+
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
 		private readonly UserErrorService _userErrorService;
@@ -32,6 +39,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private Workbook _activePromptWorkbook;
 
 		private string _activePromptWorkbookFullName;
+
+		private ExcelWindowOwner _activePromptOwner;
+
+		private string _formButtonWorkbookCloseKey;
+
+		private string _formButtonWorkbookCloseFormKind;
 
 		internal AccountingPaymentHistoryImportService (AccountingWorkbookService accountingWorkbookService, UserErrorService userErrorService, Logger logger)
 		{
@@ -67,6 +80,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (IsSameWorkbook (_activePromptWorkbook, workbook)) {
 				CloseActivePrompt (clearHighlight: true);
 			}
+		}
+
+		internal bool TryCancelWorkbookCloseForActiveImportPrompt (Workbook workbook)
+		{
+			if (_activePromptForm == null || _activePromptForm.IsDisposed || !IsSameWorkbook (_activePromptWorkbook, workbook)) {
+				return false;
+			}
+			if (IsFormButtonWorkbookCloseAllowed (workbook, ImportPromptFormKind)) {
+				_logger.Info ("Accounting payment history import prompt close guard bypassed for form button. formKind=" + ImportPromptFormKind + ", cancel=False");
+				return false;
+			}
+			_logger.Info ("Accounting payment history import prompt close canceled because form is active. formKind=" + ImportPromptFormKind + ", cancel=True");
+			ShowCloseThroughFormMessage ();
+			return true;
 		}
 
 		internal void HandleSheetActivated (Workbook workbook, string activeSheetCodeName)
@@ -246,6 +273,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activePromptForm = form;
 			_activePromptWorkbook = workbook;
 			_activePromptWorkbookFullName = SafeWorkbookFullName (workbook);
+			_activePromptOwner = owner;
+			form.ExcelCloseRequested += ActivePromptForm_ExcelCloseRequested;
 			form.Confirmed += delegate(object sender, AccountingImportRangePromptConfirmedEventArgs e) {
 				try {
 					Range targetCell = ResolveTargetCell (context, workbook, requestWorksheet, selectedTargetAddress);
@@ -266,11 +295,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					}
 				}
 				if (_activePromptForm == form) {
-					_activePromptForm = null;
-					_activePromptWorkbook = null;
-					_activePromptWorkbookFullName = string.Empty;
-				}
-				if (owner != null) {
+					ClearActivePromptReferences ();
+				} else if (owner != null) {
 					owner.Dispose ();
 				}
 			};
@@ -311,21 +337,155 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void CloseActivePrompt (bool clearHighlight)
 		{
-			if (_activePromptForm == null) {
+			AccountingImportRangePromptForm form = _activePromptForm;
+			if (form == null) {
 				return;
 			}
 			try {
+				_logger.Info ("Accounting payment history import prompt close/dispose starting.");
 				if (clearHighlight && _activePromptWorkbook != null) {
 					_accountingWorkbookService.ClearAccountingImportTargetHighlight (_activePromptWorkbook);
 				}
-				if (!_activePromptForm.IsDisposed) {
-					_activePromptForm.CloseByCode ();
+				form.ExcelCloseRequested -= ActivePromptForm_ExcelCloseRequested;
+				form.ClearRequestHandlers ();
+				if (!form.IsDisposed) {
+					form.CloseByCode ();
+					if (!form.IsDisposed) {
+						form.Dispose ();
+					}
 				}
+				_logger.Info ("Accounting payment history import prompt close/dispose completed.");
 			} catch {
 			} finally {
-				_activePromptForm = null;
-				_activePromptWorkbook = null;
-				_activePromptWorkbookFullName = string.Empty;
+				ClearActivePromptReferences ();
+				_logger.Info ("Accounting payment history import prompt active references cleared.");
+			}
+		}
+
+		private void ActivePromptForm_ExcelCloseRequested (object sender, EventArgs e)
+		{
+			RequestWorkbookCloseFromImportPrompt (_activePromptWorkbook);
+		}
+
+		private void RequestWorkbookCloseFromImportPrompt (Workbook workbook)
+		{
+			if (workbook == null) {
+				_logger.Info ("Accounting payment history import prompt Excel close request ignored. reason=WorkbookMissing, formKind=" + ImportPromptFormKind);
+				return;
+			}
+			string workbookKey = SafeWorkbookKey (workbook);
+			Microsoft.Office.Interop.Excel.Application application = TryGetWorkbookApplication (workbook);
+			_logger.Info ("Accounting payment history import prompt Excel close button clicked. formKind=" + ImportPromptFormKind + ", workbook=" + workbookKey);
+			_formButtonWorkbookCloseKey = workbookKey;
+			_formButtonWorkbookCloseFormKind = ImportPromptFormKind;
+			_logger.Info ("Accounting payment history import prompt workbook close allow flag set. formKind=" + ImportPromptFormKind + ", workbook=" + workbookKey);
+			try {
+				CloseActivePrompt (clearHighlight: true);
+				_logger.Info ("Accounting payment history import prompt closed before workbook close. formKind=" + ImportPromptFormKind + ", workbook=" + workbookKey);
+				_logger.Info ("Accounting payment history import prompt invoking workbook.Close. formKind=" + ImportPromptFormKind + ", workbook=" + workbookKey + ", cancelTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
+				workbook.Close ();
+				QuitExcelIfNoWorkbooksAfterFormButtonClose (application, workbookKey);
+			} catch (Exception exception) {
+				_logger.Error ("Accounting payment history import prompt workbook close request failed. formKind=" + ImportPromptFormKind + ", workbook=" + workbookKey, exception);
+				_userErrorService.ShowUserError ("AccountingPaymentHistoryImport.ExcelCloseRequested", exception);
+			} finally {
+				_formButtonWorkbookCloseKey = string.Empty;
+				_formButtonWorkbookCloseFormKind = string.Empty;
+				_logger.Info ("Accounting payment history import prompt workbook close allow flag cleared. formKind=" + ImportPromptFormKind + ", workbook=" + workbookKey);
+			}
+		}
+
+		private void QuitExcelIfNoWorkbooksAfterFormButtonClose (Microsoft.Office.Interop.Excel.Application application, string workbookKey)
+		{
+			if (application == null) {
+				_logger.Info ("Accounting payment history import prompt button close quit skipped. reason=ApplicationMissing, formKind=" + ImportPromptFormKind + ", workbook=" + (workbookKey ?? string.Empty));
+				return;
+			}
+			bool readFailed;
+			int workbooksCount = ReadWorkbooksCount (application, out readFailed);
+			string visible = SafeApplicationVisible (application);
+			if (readFailed) {
+				_logger.Info ("Accounting payment history import prompt button close quit skipped. reason=WorkbooksCountReadFailed, formKind=" + ImportPromptFormKind + ", workbook=" + (workbookKey ?? string.Empty) + ", applicationVisible=" + visible);
+				return;
+			}
+			if (workbooksCount != 0) {
+				_logger.Info ("Accounting payment history import prompt button close quit skipped. reason=WorkbookStillOpenOrOtherWorkbookPresent, formKind=" + ImportPromptFormKind + ", workbook=" + (workbookKey ?? string.Empty) + ", workbooksCount=" + workbooksCount.ToString (CultureInfo.InvariantCulture) + ", applicationVisible=" + visible);
+				return;
+			}
+			_logger.Info ("form-button-close-after-workbook-close-no-workbooks-quit. formKind=" + ImportPromptFormKind + ", workbook=" + (workbookKey ?? string.Empty) + ", workbooksCount=0, applicationVisible=" + visible + ", applicationVisibleFalseTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
+			application.Quit ();
+		}
+
+		private bool IsFormButtonWorkbookCloseAllowed (Workbook workbook, string formKind)
+		{
+			if (string.IsNullOrWhiteSpace (_formButtonWorkbookCloseKey) || string.IsNullOrWhiteSpace (formKind)) {
+				return false;
+			}
+			return string.Equals (_formButtonWorkbookCloseFormKind ?? string.Empty, formKind, StringComparison.OrdinalIgnoreCase)
+				&& string.Equals (_formButtonWorkbookCloseKey, SafeWorkbookKey (workbook), StringComparison.OrdinalIgnoreCase);
+		}
+
+		private void ShowCloseThroughFormMessage ()
+		{
+			if (_activePromptForm == null || _activePromptForm.IsDisposed) {
+				MessageBox.Show (CloseThroughFormMessage, ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+			} else {
+				MessageBox.Show (_activePromptForm, CloseThroughFormMessage, ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+			}
+			_logger.Info ("Accounting payment history import prompt close guard message shown. formKind=" + ImportPromptFormKind);
+		}
+
+		private void ClearActivePromptReferences ()
+		{
+			_activePromptForm = null;
+			_activePromptWorkbook = null;
+			_activePromptWorkbookFullName = string.Empty;
+			ExcelWindowOwner owner = _activePromptOwner;
+			_activePromptOwner = null;
+			if (owner != null) {
+				owner.Dispose ();
+			}
+		}
+
+		private static Microsoft.Office.Interop.Excel.Application TryGetWorkbookApplication (Workbook workbook)
+		{
+			try {
+				return workbook == null ? null : workbook.Application;
+			} catch {
+				return null;
+			}
+		}
+
+		private static int ReadWorkbooksCount (Microsoft.Office.Interop.Excel.Application application, out bool readFailed)
+		{
+			readFailed = false;
+			try {
+				return application == null || application.Workbooks == null ? -1 : application.Workbooks.Count;
+			} catch {
+				readFailed = true;
+				return -1;
+			}
+		}
+
+		private static string SafeApplicationVisible (Microsoft.Office.Interop.Excel.Application application)
+		{
+			try {
+				return application == null ? string.Empty : application.Visible.ToString ();
+			} catch {
+				return string.Empty;
+			}
+		}
+
+		private static string SafeWorkbookKey (Workbook workbook)
+		{
+			if (workbook == null) {
+				return string.Empty;
+			}
+			try {
+				string fullName = workbook.FullName ?? string.Empty;
+				return string.IsNullOrWhiteSpace (fullName) ? (workbook.Name ?? string.Empty) : fullName;
+			} catch {
+				return string.Empty;
 			}
 		}
 

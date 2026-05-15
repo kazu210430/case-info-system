@@ -28,6 +28,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string PaymentHistoryFormKind = "PaymentHistory";
 
+		private const string ReverseGoalSeekFormKind = "ReverseGoalSeek";
+
 		private readonly AccountingWorkbookService _accountingWorkbookService;
 
 		private readonly AccountingInstallmentScheduleCommandService _accountingInstallmentScheduleCommandService;
@@ -45,6 +47,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private Workbook _activeReverseToolWorkbook;
 
 		private string _activeReverseToolSheetName;
+
+		private ExcelWindowOwner _activeReverseToolOwner;
 
 		private AccountingInstallmentScheduleInputForm _activeInstallmentScheduleForm;
 
@@ -187,31 +191,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_activeReverseToolForm = form;
 			_activeReverseToolWorkbook = context.Workbook;
 			_activeReverseToolSheetName = activeSheetCodeName;
-			form.Confirmed += delegate(object sender, AccountingReverseGoalSeekConfirmedEventArgs e) {
-				try {
-					ApplyReverseGoalSeek (context.Workbook, activeSheetCodeName, e.Request);
-				} catch (Exception exception) {
-					_logger.Error ("Accounting reverse tool confirmed handler failed.", exception);
-					_userErrorService.ShowUserError ("AccountingReverseGoalSeek", exception);
-				}
-			};
-			form.Canceled += delegate {
-				try {
-					if (_activeReverseToolWorkbook != null && !string.IsNullOrWhiteSpace (_activeReverseToolSheetName)) {
-						_accountingWorkbookService.ClearReverseToolTargets (_activeReverseToolWorkbook, _activeReverseToolSheetName);
-					}
-				} catch (Exception exception) {
-					_logger.Error ("Accounting reverse tool highlight cleanup failed.", exception);
-				}
-				if (_activeReverseToolForm == form) {
-					_activeReverseToolForm = null;
-					_activeReverseToolWorkbook = null;
-					_activeReverseToolSheetName = string.Empty;
-				}
-				if (owner != null) {
-					owner.Dispose ();
-				}
-			};
+			_activeReverseToolOwner = owner;
+			AttachReverseToolHandlers (form);
 			form.ShowModeless (owner);
 			_logger.Info ("Accounting reverse tool shown. sheet=" + activeSheetCodeName);
 		}
@@ -344,6 +325,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (_activePaymentHistoryForm != null && !_activePaymentHistoryForm.IsDisposed && IsSameWorkbook (_activePaymentHistoryWorkbook, workbook)) {
 				return PaymentHistoryFormKind;
 			}
+			if (_activeReverseToolForm != null && !_activeReverseToolForm.IsDisposed && IsSameWorkbook (_activeReverseToolWorkbook, workbook)) {
+				return ReverseGoalSeekFormKind;
+			}
 			return string.Empty;
 		}
 
@@ -379,6 +363,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				&& !_activePaymentHistoryForm.IsDisposed) {
 				return _activePaymentHistoryForm;
 			}
+			if (string.Equals (formKind, ReverseGoalSeekFormKind, StringComparison.OrdinalIgnoreCase)
+				&& _activeReverseToolForm != null
+				&& !_activeReverseToolForm.IsDisposed) {
+				return _activeReverseToolForm;
+			}
 			return null;
 		}
 
@@ -399,6 +388,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					CloseActiveInstallmentScheduleInput ();
 				} else if (string.Equals (formKind, PaymentHistoryFormKind, StringComparison.OrdinalIgnoreCase)) {
 					CloseActivePaymentHistoryInput ();
+				} else if (string.Equals (formKind, ReverseGoalSeekFormKind, StringComparison.OrdinalIgnoreCase)) {
+					CloseActiveReverseTool (clearHighlight: true);
 				}
 				_logger.Info ("Accounting form closed before workbook close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey);
 				_logger.Info ("Accounting form invoking workbook.Close. formKind=" + (formKind ?? string.Empty) + ", workbook=" + workbookKey + ", cancelTouched=False, saveInvoked=False, saveAsInvoked=False, savedForced=False");
@@ -825,6 +816,54 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
+		private void AttachReverseToolHandlers (AccountingReverseGoalSeekForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.Confirmed += ActiveReverseToolForm_Confirmed;
+			form.Canceled += ActiveReverseToolForm_Canceled;
+			form.ExcelCloseRequested += ActiveReverseToolForm_ExcelCloseRequested;
+		}
+
+		private void DetachReverseToolHandlers (AccountingReverseGoalSeekForm form)
+		{
+			if (form == null) {
+				return;
+			}
+			form.Confirmed -= ActiveReverseToolForm_Confirmed;
+			form.Canceled -= ActiveReverseToolForm_Canceled;
+			form.ExcelCloseRequested -= ActiveReverseToolForm_ExcelCloseRequested;
+			form.ClearRequestHandlers ();
+		}
+
+		private void ActiveReverseToolForm_ExcelCloseRequested (object sender, EventArgs e)
+		{
+			RequestWorkbookCloseFromAccountingForm (_activeReverseToolWorkbook, ReverseGoalSeekFormKind);
+		}
+
+		private void ActiveReverseToolForm_Confirmed (object sender, AccountingReverseGoalSeekConfirmedEventArgs e)
+		{
+			if (_activeReverseToolWorkbook == null || string.IsNullOrWhiteSpace (_activeReverseToolSheetName)) {
+				return;
+			}
+			try {
+				ApplyReverseGoalSeek (_activeReverseToolWorkbook, _activeReverseToolSheetName, e.Request);
+			} catch (Exception exception) {
+				_logger.Error ("Accounting reverse tool confirmed handler failed.", exception);
+				_userErrorService.ShowUserError ("AccountingReverseGoalSeek", exception);
+			}
+		}
+
+		private void ActiveReverseToolForm_Canceled (object sender, EventArgs e)
+		{
+			ClearReverseToolHighlight ();
+			if (ReferenceEquals (sender, _activeReverseToolForm)) {
+				ClearActiveReverseToolReferences ();
+				_logger.Info ("Accounting reverse tool active references cleared.");
+			}
+		}
+
 		private void ApplyReverseGoalSeek (Workbook workbook, string activeSheetCodeName, AccountingReverseGoalSeekRequest request)
 		{
 			if (request == null) {
@@ -844,21 +883,50 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private void CloseActiveReverseTool (bool clearHighlight)
 		{
-			if (_activeReverseToolForm == null) {
+			AccountingReverseGoalSeekForm form = _activeReverseToolForm;
+			if (form == null) {
 				return;
 			}
 			try {
-				if (clearHighlight && _activeReverseToolWorkbook != null && !string.IsNullOrWhiteSpace (_activeReverseToolSheetName)) {
-					_accountingWorkbookService.ClearReverseToolTargets (_activeReverseToolWorkbook, _activeReverseToolSheetName);
+				_logger.Info ("Accounting reverse tool form close/dispose starting.");
+				if (clearHighlight) {
+					ClearReverseToolHighlight ();
 				}
-				if (!_activeReverseToolForm.IsDisposed) {
-					_activeReverseToolForm.CloseByCode ();
+				DetachReverseToolHandlers (form);
+				if (!form.IsDisposed) {
+					form.CloseByCode ();
+					if (!form.IsDisposed) {
+						form.Dispose ();
+					}
 				}
+				_logger.Info ("Accounting reverse tool form close/dispose completed.");
 			} catch {
 			} finally {
-				_activeReverseToolForm = null;
-				_activeReverseToolWorkbook = null;
-				_activeReverseToolSheetName = string.Empty;
+				ClearActiveReverseToolReferences ();
+				_logger.Info ("Accounting reverse tool active references cleared.");
+			}
+		}
+
+		private void ClearReverseToolHighlight ()
+		{
+			try {
+				if (_activeReverseToolWorkbook != null && !string.IsNullOrWhiteSpace (_activeReverseToolSheetName)) {
+					_accountingWorkbookService.ClearReverseToolTargets (_activeReverseToolWorkbook, _activeReverseToolSheetName);
+				}
+			} catch (Exception exception) {
+				_logger.Error ("Accounting reverse tool highlight cleanup failed.", exception);
+			}
+		}
+
+		private void ClearActiveReverseToolReferences ()
+		{
+			_activeReverseToolForm = null;
+			_activeReverseToolWorkbook = null;
+			_activeReverseToolSheetName = string.Empty;
+			ExcelWindowOwner owner = _activeReverseToolOwner;
+			_activeReverseToolOwner = null;
+			if (owner != null) {
+				owner.Dispose ();
 			}
 		}
 

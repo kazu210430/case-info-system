@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
@@ -450,34 +449,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		private void LogCreateSavedCasePhase (string phaseName, string path, string routeName, Stopwatch stopwatch, long phaseStartElapsedMs)
 		{
 			_logger.Info ("NewCaseDefault timing detail. segment=waitUiShownToCaseCreated, phase=" + (phaseName ?? string.Empty) + ", caseWorkbookPath=" + (path ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + Math.Max (0L, stopwatch.ElapsedMilliseconds - phaseStartElapsedMs) + ", totalElapsedMs=" + stopwatch.ElapsedMilliseconds);
-		}
-
-		private string PrepareWorkingCaseWorkbookPath (string finalCaseWorkbookPath, string reason, Stopwatch stopwatch)
-		{
-			// OneDrive など同期配下の CASE だけは、hidden Excel による初期化中のフリーズ回避のため
-			// 一時的にローカル作業コピーへ退避する。適用範囲は CASE 初期化中のみで、表示・運用は final path に戻す。
-			if (!_kernelCasePathService.IsUnderSyncRoot (finalCaseWorkbookPath)) {
-				return finalCaseWorkbookPath;
-			}
-			string text = _kernelCasePathService.BuildLocalWorkingCaseWorkbookPath (finalCaseWorkbookPath);
-			if (string.IsNullOrWhiteSpace (text)) {
-				_logger.Info ("Kernel case local working path was not prepared. reason=" + reason + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				return finalCaseWorkbookPath;
-			}
-			File.Copy (finalCaseWorkbookPath, text, overwrite: false);
-			_logger.Info ("Kernel case local working copy prepared. reason=" + reason + ", localPath=" + text + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-			return text;
-		}
-
-		private void FinalizeWorkingCaseWorkbookPath (string workingCaseWorkbookPath, string finalCaseWorkbookPath, string reason, Stopwatch stopwatch)
-		{
-			// 作業コピーは初期化が終わった時点で final path へ戻し、CASE の実体を temp に残さない。
-			if (!string.Equals (workingCaseWorkbookPath, finalCaseWorkbookPath, StringComparison.OrdinalIgnoreCase)) {
-				if (!_kernelCasePathService.MoveLocalWorkingCaseToFinalPath (workingCaseWorkbookPath, finalCaseWorkbookPath)) {
-					throw new IOException ("Initialized CASE workbook could not be moved to final path.");
-				}
-				_logger.Info ("Kernel case local working copy finalized. reason=" + reason + ", finalPath=" + finalCaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
-			}
 		}
 
 		private static int SafeWorkbookWindowCount (Workbook workbook)

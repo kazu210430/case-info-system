@@ -132,7 +132,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ShowSaveAsPrompt,
-                "別名保存",
+                "シート名で別名保存",
                 SectionAction,
                 true));
 
@@ -171,7 +171,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ShowSaveAsPrompt,
-                "別名保存",
+                "シート名で別名保存",
                 SectionAction,
                 true));
 
@@ -236,7 +236,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ShowSaveAsPrompt,
-                "別名保存",
+                "シート名で別名保存",
                 SectionAction,
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
@@ -264,7 +264,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(
                 AccountingNavigationActionIds.ShowSaveAsPrompt,
-                "別名保存",
+                "シート名で別名保存",
                 SectionAction,
                 true));
             definitions.Add(new AccountingNavigationActionDefinition(

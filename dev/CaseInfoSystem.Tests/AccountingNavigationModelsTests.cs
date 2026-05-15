@@ -35,7 +35,7 @@ namespace CaseInfoSystem.Tests
             string[] expectedCaptions =
             {
                 "発行日を入力",
-                "別名保存",
+                "シート名で別名保存",
                 "見積書を取り込む",
                 "請求書を取り込む",
                 "領収書を取り込む",
@@ -127,7 +127,7 @@ namespace CaseInfoSystem.Tests
             string[] expectedCaptions =
             {
                 "発行日を入力",
-                "別名保存",
+                "シート名で別名保存",
                 "見積書を取り込む",
                 "請求書を取り込む",
                 "領収書を取り込む",
@@ -198,7 +198,7 @@ namespace CaseInfoSystem.Tests
             string[] expectedExecutionCaptions =
             {
                 "発行日を入力",
-                "別名保存",
+                "シート名で別名保存",
                 "選択行の削除",
                 "リセット"
             };
@@ -256,7 +256,7 @@ namespace CaseInfoSystem.Tests
             string[] expectedExecutionCaptions =
             {
                 "発行日を入力",
-                "別名保存",
+                "シート名で別名保存",
                 "リセット"
             };
             string[] expectedNavigationActionIds =

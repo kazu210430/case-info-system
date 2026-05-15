@@ -163,6 +163,11 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             return _excelInteropService.TryGetDocumentProperty(CaseWorkbook, propertyName);
         }
 
+        internal void SetCaseProperty(string propertyName, string value)
+        {
+            _excelInteropService.SetDocumentProperty(CaseWorkbook, propertyName, value);
+        }
+
         public void Dispose()
         {
             foreach (Excel.Workbook workbook in Application.Workbooks.ToArray())

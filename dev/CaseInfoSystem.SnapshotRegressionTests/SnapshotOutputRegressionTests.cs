@@ -30,6 +30,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
         public void BuildSnapshotText_RebuildThenCaseCache_ProducesStableProjectionJson()
         {
             using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: true);
+            EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
 
             TaskPaneSnapshotBuilderService.TaskPaneBuildResult first = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
             TaskPaneSnapshotBuilderService.TaskPaneBuildResult second = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
@@ -41,11 +42,54 @@ namespace CaseInfoSystem.SnapshotRegressionTests
                 scenario.TabBackColors);
 
             Assert.True(first.UpdatedCaseSnapshotCache);
+            Assert.False(second.UpdatedCaseSnapshotCache);
+            Assert.Equal(TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.CaseCache, second.SnapshotSource);
             Assert.Equal(expected, first.SnapshotText);
             Assert.Equal(expected, second.SnapshotText);
             Assert.Equal(
                 SnapshotProjection.FromSnapshotText(expected).ToJson(),
                 SnapshotProjection.FromSnapshotText(second.SnapshotText).ToJson());
+        }
+
+        [Fact]
+        public void BuildSnapshotText_WhenCaseMasterVersionMatchesLatest_UsesBaseSnapshotReadOnlyWithoutSavingCaseCache()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: true);
+            EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
+            string expected = SnapshotLegacySerializer.Serialize(
+                scenario.CaseWorkbook,
+                42,
+                scenario.Values,
+                scenario.FillColors,
+                scenario.TabBackColors);
+            scenario.SetCaseProperty("TASKPANE_MASTER_VERSION", "42");
+            scenario.SetCaseProperty("TASKPANE_BASE_MASTER_VERSION", "42");
+            scenario.SetCaseProperty("TASKPANE_BASE_SNAPSHOT_COUNT", "1");
+            scenario.SetCaseProperty("TASKPANE_BASE_SNAPSHOT_01", expected);
+
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult result = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+
+            Assert.False(result.UpdatedCaseSnapshotCache);
+            Assert.Equal(TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.BaseCache, result.SnapshotSource);
+            Assert.Equal(expected, result.SnapshotText);
+            Assert.Equal(string.Empty, scenario.LoadCaseCacheSnapshot());
+            Assert.Equal(string.Empty, scenario.GetCaseProperty("TASKPANE_SNAPSHOT_CACHE_COUNT"));
+            Assert.Equal("42", scenario.GetCaseProperty("TASKPANE_MASTER_VERSION"));
+        }
+
+        [Fact]
+        public void BuildSnapshotText_WhenCaseMasterVersionDiffers_RebuildsAndUpdatesCaseVersion()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
+            scenario.SetCaseProperty("TASKPANE_MASTER_VERSION", "41");
+
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult result = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+
+            Assert.True(result.UpdatedCaseSnapshotCache);
+            Assert.Equal(TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.MasterListRebuild, result.SnapshotSource);
+            Assert.Equal("42", scenario.GetCaseProperty("TASKPANE_MASTER_VERSION"));
+            Assert.Equal(result.SnapshotText, scenario.LoadCaseCacheSnapshot());
         }
 
         [Fact]

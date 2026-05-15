@@ -273,7 +273,59 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			try {
 				long masterVersion = 0L;
 				num = 5L;
+				bool latestMasterVersionAvailable = TryReadLatestMasterVersion (workbook, out masterVersion);
+				if (latestMasterVersionAvailable) {
+					latestMasterVersion = masterVersion;
+					caseMasterVersion = GetDocumentPropertyLong (workbook, TaskPaneMasterVersionProp, 0L);
+				}
 				string text = LoadSnapshotCache (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT", "TASKPANE_SNAPSHOT_CACHE_");
+				if (latestMasterVersionAvailable && masterVersion > 0 && masterVersion == caseMasterVersion) {
+					if (!string.IsNullOrWhiteSpace (text) && TaskPaneSnapshotFormat.IsCompatible (text)) {
+						string snapshotText = ApplyDynamicSpecialButtonOverrides (text, workbook);
+						_logger.Info ("Task pane snapshot update skipped because CASE master version is current. source=CaseCache, caseListCaption=" + caseListCaption + ", cacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, TaskPaneCacheCountProp) ?? string.Empty) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
+						return new TaskPaneBuildResult (
+							snapshotText,
+							updatedCaseSnapshotCache: false,
+							TaskPaneSnapshotSource.CaseCache,
+							rebuildFallback,
+							masterListRebuildAttempted: false,
+							masterListRebuildSucceeded: false,
+							failureReason: string.Empty,
+							degradedReason: string.Empty);
+					}
+					if (!string.IsNullOrWhiteSpace (text)) {
+						AppendFallbackReason (ref rebuildFallback, "CaseCacheIncompatible");
+						_logger.Info ("Task pane snapshot CASE cache is incompatible, but update was skipped because CASE master version is current. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (text) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
+					}
+					string baseCacheText = LoadSnapshotCache (workbook, TaskPaneBaseCacheCountProp, TaskPaneBaseCachePartPropPrefix);
+					if (!string.IsNullOrWhiteSpace (baseCacheText) && TaskPaneSnapshotFormat.IsCompatible (baseCacheText)) {
+						string snapshotText = ApplyDynamicSpecialButtonOverrides (baseCacheText, workbook);
+						_logger.Info ("Task pane snapshot update skipped because CASE master version is current. source=BaseCacheReadOnly, caseListCaption=" + caseListCaption + ", baseCacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, TaskPaneBaseCacheCountProp) ?? string.Empty) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
+						return new TaskPaneBuildResult (
+							snapshotText,
+							updatedCaseSnapshotCache: false,
+							TaskPaneSnapshotSource.BaseCache,
+							rebuildFallback,
+							masterListRebuildAttempted: false,
+							masterListRebuildSucceeded: false,
+							failureReason: string.Empty,
+							degradedReason: "CaseMasterVersionCurrent");
+					}
+					if (!string.IsNullOrWhiteSpace (baseCacheText)) {
+						AppendFallbackReason (ref rebuildFallback, "BaseCacheIncompatible");
+						_logger.Info ("Task pane snapshot Base cache is incompatible, but update was skipped because CASE master version is current. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (baseCacheText) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
+					}
+					_logger.Info ("Task pane snapshot update skipped because CASE master version is current. source=None, caseListCaption=" + caseListCaption + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + ", rebuildFallback=" + rebuildFallback + FormatObservationContext (workbook));
+					return new TaskPaneBuildResult (
+						string.Empty,
+						updatedCaseSnapshotCache: false,
+						TaskPaneSnapshotSource.None,
+						rebuildFallback,
+						masterListRebuildAttempted: false,
+						masterListRebuildSucceeded: false,
+						failureReason: string.Empty,
+						degradedReason: "CaseMasterVersionCurrent");
+				}
 				if (!string.IsNullOrWhiteSpace (text)) {
 					num = 8L;
 					if (!TaskPaneSnapshotFormat.IsCompatible (text)) {
@@ -282,10 +334,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						_logger.Info ("Task pane snapshot incompatible CASE cache was cleared. exportVersion=" + TaskPaneSnapshotFormat.TryReadExportVersion (text) + FormatObservationContext (workbook));
 						text = string.Empty;
 					}
-					if (!string.IsNullOrWhiteSpace (text) && TryReadLatestMasterVersion (workbook, out masterVersion)) {
-						latestMasterVersion = masterVersion;
-						caseMasterVersion = GetDocumentPropertyLong (workbook, "TASKPANE_MASTER_VERSION", 0L);
-						if (masterVersion <= 0 || masterVersion <= caseMasterVersion) {
+					if (!string.IsNullOrWhiteSpace (text) && latestMasterVersionAvailable) {
+						if (masterVersion <= 0 || masterVersion == caseMasterVersion) {
 							string snapshotText2 = ApplyDynamicSpecialButtonOverrides (text, workbook);
 							_logger.Info ("Task pane snapshot source=CaseCache, caseListCaption=" + caseListCaption + ", cacheCount=" + (_excelInteropService.TryGetDocumentProperty (workbook, "TASKPANE_SNAPSHOT_CACHE_COUNT") ?? string.Empty) + ", caseMasterVersion=" + caseMasterVersion + ", latestMasterVersion=" + latestMasterVersion + FormatObservationContext (workbook));
 							return new TaskPaneBuildResult (
@@ -317,7 +367,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 						long result = 0L;
 						long.TryParse (text3, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
 						embeddedMasterVersion = result;
-						if (!TryReadLatestMasterVersion (workbook, out masterVersion)) {
+						if (!latestMasterVersionAvailable) {
 							AppendFallbackReason (ref rebuildFallback, "LatestMasterVersionUnavailable");
 							string snapshotText3 = ApplyDynamicSpecialButtonOverrides (text2, workbook);
 							SaveCaseSnapshotCache (workbook, snapshotText3);
@@ -335,7 +385,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 								failureReason: string.Empty,
 								degradedReason: string.Empty);
 						}
-						latestMasterVersion = masterVersion;
 						if (masterVersion <= 0 || masterVersion <= result) {
 							string snapshotText4 = ApplyDynamicSpecialButtonOverrides (text2, workbook);
 							SaveCaseSnapshotCache (workbook, snapshotText4);

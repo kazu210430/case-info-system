@@ -1,11 +1,21 @@
 using System;
 using System.Globalization;
+using System.Text;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
     internal sealed class CaseWorkbookHiddenAppLifecycleSupportService
     {
+        internal const string LifecycleActionAcquire = "retained-hidden-app-cache-acquire";
+        internal const string LifecycleActionIdleReturn = "retained-hidden-app-cache-idle-return";
+        internal const string LifecycleActionPoisonMark = "retained-hidden-app-cache-poison-mark";
+        internal const string LifecycleActionShutdown = "retained-hidden-app-cache-shutdown";
+        internal const string LifecycleActionDispose = "retained-hidden-app-cache-dispose";
+        internal const string LifecycleActionTimeoutFallback = "retained-hidden-app-cache-timeout-fallback";
+        internal const string LifecycleActionFallback = "retained-hidden-app-cache-fallback";
+        internal const string LifecycleActionOrphanSuspicion = "retained-hidden-app-cache-orphan-suspicion";
+
         internal const string ReuseBlockReasonApplicationMissing = "application-missing";
         internal const string ReuseBlockReasonInUse = "in-use";
         internal const string ReuseBlockReasonPoisoned = "poisoned";
@@ -323,12 +333,15 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             string caseWorkbookPath,
             string routeName,
             string appHwnd,
-            long elapsedMilliseconds)
+            long elapsedMilliseconds,
+            string poisonReason)
         {
             return "hidden-app-cache poisoned. path="
                 + (caseWorkbookPath ?? string.Empty)
                 + ", route="
                 + (routeName ?? string.Empty)
+                + ", poisonReason="
+                + (poisonReason ?? string.Empty)
                 + ", appHwnd="
                 + (appHwnd ?? string.Empty)
                 + ", elapsedMs="
@@ -373,6 +386,158 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             return "route=" + (routeName ?? string.Empty);
         }
+
+        internal string BuildDiagnosticEventMessage(CaseWorkbookHiddenAppLifecycleDiagnosticEvent diagnosticEvent)
+        {
+            if (diagnosticEvent == null)
+            {
+                diagnosticEvent = new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
+                    "retained-hidden-app-cache-unknown",
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    "diagnostic-event-missing");
+            }
+
+            StringBuilder builder = new StringBuilder();
+            builder.Append("[KernelFlickerTrace] source=CaseWorkbookOpenStrategy action=")
+                .Append(diagnosticEvent.Action)
+                .Append(" path=")
+                .Append(diagnosticEvent.CaseWorkbookPath);
+            AppendField(builder, "route", diagnosticEvent.RouteName);
+            AppendField(builder, "caller", diagnosticEvent.Caller);
+            AppendField(builder, "eventOutcome", diagnosticEvent.EventOutcome);
+            AppendField(builder, "reason", diagnosticEvent.Reason);
+            AppendField(builder, "cacheEvent", diagnosticEvent.CacheEvent);
+            AppendField(builder, "acquisitionKind", diagnosticEvent.AcquisitionKind);
+            AppendField(builder, "returnOutcome", diagnosticEvent.ReturnOutcome);
+            AppendField(builder, "poisonReason", diagnosticEvent.PoisonReason);
+            AppendField(builder, "cleanupReason", diagnosticEvent.CleanupReason);
+            AppendField(builder, "fallbackRoute", diagnosticEvent.FallbackRoute);
+            AppendField(builder, "abandonedOperation", diagnosticEvent.AbandonedOperation);
+            AppendField(builder, "safetyAction", diagnosticEvent.SafetyAction);
+            AppendField(builder, "appHwnd", diagnosticEvent.AppHwnd);
+            AppendField(builder, "exceptionType", diagnosticEvent.ExceptionType);
+
+            if (diagnosticEvent.ReusedApplication.HasValue)
+            {
+                AppendField(builder, "reusedApplication", diagnosticEvent.ReusedApplication.Value.ToString());
+            }
+
+            if (diagnosticEvent.RetainedInstancePresent.HasValue)
+            {
+                AppendField(builder, "retainedInstancePresent", diagnosticEvent.RetainedInstancePresent.Value.ToString());
+            }
+
+            if (diagnosticEvent.AppQuitAttempted.HasValue)
+            {
+                AppendField(builder, "appQuitAttempted", diagnosticEvent.AppQuitAttempted.Value.ToString());
+            }
+
+            if (diagnosticEvent.AppQuitCompleted.HasValue)
+            {
+                AppendField(builder, "appQuitCompleted", diagnosticEvent.AppQuitCompleted.Value.ToString());
+            }
+
+            if (diagnosticEvent.ElapsedMilliseconds.HasValue)
+            {
+                AppendField(
+                    builder,
+                    "elapsedMs",
+                    diagnosticEvent.ElapsedMilliseconds.Value.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (!string.IsNullOrEmpty(diagnosticEvent.ApplicationOwnerFacts))
+            {
+                builder.Append(",").Append(diagnosticEvent.ApplicationOwnerFacts);
+            }
+
+            if (diagnosticEvent.ExpirationDecision != null)
+            {
+                builder.Append(",").Append(diagnosticEvent.ExpirationDecision.DiagnosticDetails);
+            }
+            else if (diagnosticEvent.LifecycleFacts != null)
+            {
+                builder.Append(",").Append(diagnosticEvent.LifecycleFacts.DiagnosticDetails);
+            }
+
+            return builder.ToString();
+        }
+
+        private static void AppendField(StringBuilder builder, string name, string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
+            builder.Append(",").Append(name).Append("=").Append(value);
+        }
+    }
+
+    internal sealed class CaseWorkbookHiddenAppLifecycleDiagnosticEvent
+    {
+        internal CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
+            string action,
+            string caseWorkbookPath,
+            string routeName,
+            string caller,
+            string reason)
+        {
+            Action = action ?? string.Empty;
+            CaseWorkbookPath = caseWorkbookPath ?? string.Empty;
+            RouteName = routeName ?? string.Empty;
+            Caller = caller ?? string.Empty;
+            Reason = reason ?? string.Empty;
+        }
+
+        internal string Action { get; }
+
+        internal string CaseWorkbookPath { get; }
+
+        internal string RouteName { get; }
+
+        internal string Caller { get; }
+
+        internal string Reason { get; }
+
+        internal string EventOutcome { get; set; }
+
+        internal string CacheEvent { get; set; }
+
+        internal string AcquisitionKind { get; set; }
+
+        internal string ReturnOutcome { get; set; }
+
+        internal string PoisonReason { get; set; }
+
+        internal string CleanupReason { get; set; }
+
+        internal string FallbackRoute { get; set; }
+
+        internal string AbandonedOperation { get; set; }
+
+        internal string SafetyAction { get; set; }
+
+        internal string AppHwnd { get; set; }
+
+        internal string ExceptionType { get; set; }
+
+        internal string ApplicationOwnerFacts { get; set; }
+
+        internal bool? ReusedApplication { get; set; }
+
+        internal bool? RetainedInstancePresent { get; set; }
+
+        internal bool? AppQuitAttempted { get; set; }
+
+        internal bool? AppQuitCompleted { get; set; }
+
+        internal long? ElapsedMilliseconds { get; set; }
+
+        internal CaseWorkbookHiddenAppLifecycleFacts LifecycleFacts { get; set; }
+
+        internal CaseWorkbookHiddenAppExpirationDecision ExpirationDecision { get; set; }
     }
 
     internal sealed class CaseWorkbookHiddenAppLifecycleFacts

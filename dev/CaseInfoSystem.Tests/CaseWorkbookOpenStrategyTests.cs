@@ -158,6 +158,22 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, cachedApplication.QuitCallCount);
                 Assert.Contains(cachedApplication, releasedObjects);
                 Assert.Contains(logs, message => message.IndexOf("hidden-app-cache reused", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-acquire", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("acquisitionKind=created", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("reusedApplication=False", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-acquire", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("acquisitionKind=reused", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("reason=cache-reusable", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-idle-return", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("returnOutcome=returned-to-idle", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("safetyAction=keep-retained-application-idle", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-shutdown", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=shutdown-cleanup", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("retainedInstancePresent=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-dispose", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=shutdown-cleanup", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("appQuitCompleted=True", StringComparison.OrdinalIgnoreCase) >= 0);
                 Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("route=app-cache", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("hiddenCleanupOutcome=HiddenExcelCleanupCompleted", StringComparison.OrdinalIgnoreCase) >= 0
@@ -216,6 +232,10 @@ namespace CaseInfoSystem.Tests
                     && message.IndexOf("applicationKind=retained-hidden-app-cache", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("applicationLifetimeOwner=CaseWorkbookOpenStrategy", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("isRetainedHiddenAppCache=True", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-timeout-fallback", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=idle-timeout", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("decisionReason=idle-timeout-reached", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("safetyAction=dispose-retained-application", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
@@ -280,6 +300,10 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, bypassApplication.QuitCallCount);
                 Assert.Equal(1, cachedApplication.QuitCallCount);
                 Assert.Contains(logs, message => message.IndexOf("bypassed because in-use", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-fallback", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("reason=hiddenApplicationCacheInUse", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("fallbackRoute=app-cache-bypass-inuse", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("safetyAction=open-dedicated-hidden-session", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
@@ -308,6 +332,9 @@ namespace CaseInfoSystem.Tests
                 strategy.ShutdownHiddenApplicationCache();
 
                 Assert.Equal(1, secondApplication.QuitCallCount);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-poison-mark", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("poisonReason=markPoisoned", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("eventOutcome=marked", StringComparison.OrdinalIgnoreCase) >= 0);
                 Assert.Contains(logs, message => message.IndexOf("hidden-excel-cleanup-outcome", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("route=app-cache", StringComparison.OrdinalIgnoreCase) >= 0
                     && message.IndexOf("retainedInstanceOutcome=RetainedInstancePoisoned", StringComparison.OrdinalIgnoreCase) >= 0
@@ -339,6 +366,44 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, hiddenApplication.QuitCallCount);
                 Assert.Contains(hiddenApplication, releasedObjects);
                 Assert.Contains(logs, message => message.IndexOf("poisoned", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-poison-mark", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("poisonReason=workbookOpenFailed", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("exceptionType=InvalidOperationException", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("safetyAction=poison-dispose", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+        }
+
+        [Fact]
+        public void OpenHiddenWorkbook_WithCacheEnabled_LogsOrphanSuspicion_WhenRetainedApplicationIsUnhealthyOnAcquire()
+        {
+            using (new HiddenRouteEnvironmentScope())
+            {
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheEnvironmentVariableName, "1");
+                Environment.SetEnvironmentVariable(HiddenApplicationCacheIdleSecondsEnvironmentVariableName, "60");
+                var logs = new List<string>();
+                var releasedObjects = new List<object>();
+                Excel.Application firstApplication = CreateHiddenApplication();
+                Excel.Application secondApplication = CreateHiddenApplication();
+                var strategy = CreateStrategy(logs, releasedObjects, new Queue<Excel.Application>(new[] { firstApplication, secondApplication }));
+
+                CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession firstSession = strategy.OpenHiddenWorkbook(@"C:\Cases\orphan-1.xlsx");
+                firstSession.Close();
+                firstApplication.Workbooks.Add(new Excel.Workbook());
+
+                CaseWorkbookOpenStrategy.HiddenCaseWorkbookSession secondSession = strategy.OpenHiddenWorkbook(@"C:\Cases\orphan-2.xlsx");
+                Assert.Same(secondApplication, secondSession.Application);
+                secondSession.Close();
+                strategy.ShutdownHiddenApplicationCache();
+
+                Assert.Equal(1, firstApplication.QuitCallCount);
+                Assert.Contains(firstApplication, releasedObjects);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-orphan-suspicion", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("reason=acquire-health-check-failed", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("reuseBlockReason=workbooks-open", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("abandonedOperation=reuse-retained-application", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("safetyAction=dispose-retained-application", StringComparison.OrdinalIgnoreCase) >= 0);
+                Assert.Contains(logs, message => message.IndexOf("action=retained-hidden-app-cache-dispose", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("cleanupReason=acquire-unhealthy", StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 

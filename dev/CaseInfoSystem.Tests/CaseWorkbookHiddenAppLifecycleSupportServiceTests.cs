@@ -180,6 +180,33 @@ namespace CaseInfoSystem.Tests
                 "app-cache",
                 reusedApplication: true,
                 "applicationKind=retained-hidden-app-cache");
+            string acquireEvent = service.BuildDiagnosticEventMessage(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
+                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionAcquire,
+                @"C:\Cases\idle.xlsx",
+                "app-cache",
+                "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
+                "cache-reusable")
+            {
+                EventOutcome = "acquired",
+                CacheEvent = "acquire",
+                AcquisitionKind = "reused",
+                ReusedApplication = true,
+                AppHwnd = "42",
+                ApplicationOwnerFacts = "applicationKind=retained-hidden-app-cache"
+            });
+            string fallbackEvent = service.BuildDiagnosticEventMessage(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
+                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionFallback,
+                @"C:\Cases\bypass.xlsx",
+                "app-cache-bypass-inuse",
+                "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
+                "hiddenApplicationCacheInUse")
+            {
+                EventOutcome = "fallback-to-dedicated-hidden-session",
+                CacheEvent = "acquire-fallback",
+                FallbackRoute = "app-cache-bypass-inuse",
+                AbandonedOperation = "retained-cache-acquire",
+                SafetyAction = "open-dedicated-hidden-session"
+            });
 
             Assert.Contains("bypassed because in-use", bypassMessage);
             Assert.Contains("route=app-cache-bypass-inuse", bypassMessage);
@@ -191,6 +218,12 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("discarded", discardedMessage);
             Assert.Contains("reason=shutdown-cleanup", discardedMessage);
             Assert.Equal("route=app-cache,reused=True,applicationKind=retained-hidden-app-cache", details);
+            Assert.Contains("action=retained-hidden-app-cache-acquire", acquireEvent);
+            Assert.Contains("acquisitionKind=reused", acquireEvent);
+            Assert.Contains("reusedApplication=True", acquireEvent);
+            Assert.Contains("action=retained-hidden-app-cache-fallback", fallbackEvent);
+            Assert.Contains("abandonedOperation=retained-cache-acquire", fallbackEvent);
+            Assert.Contains("safetyAction=open-dedicated-hidden-session", fallbackEvent);
         }
 
         [Fact]

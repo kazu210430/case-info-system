@@ -483,9 +483,16 @@ namespace Microsoft.Office.Interop.Excel
             set => Value2 = value;
         }
 
+        public int SelectCallCount { get; private set; }
+
         public void ClearContents()
         {
             Value2 = null;
+        }
+
+        public void Select()
+        {
+            SelectCallCount++;
         }
     }
 
@@ -609,6 +616,16 @@ namespace CaseInfoSystem.ExcelAddIn
 
         internal Action<CaseInfoSystem.ExcelAddIn.App.TaskPaneDisplayRequest, Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window> RequestTaskPaneDisplayForTargetWindowHandler { get; set; }
 
+        internal Action<string, string> SuppressUpcomingCasePaneActivationRefreshHandler { get; set; }
+
+        internal Func<Microsoft.Office.Interop.Excel.Workbook, bool> ShouldIgnoreWorkbookActivateDuringCaseProtectionHandler { get; set; }
+
+        internal Func<string, Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window, bool> ShouldIgnoreTaskPaneRefreshDuringCaseProtectionHandler { get; set; }
+
+        internal Func<Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window, bool> HasVisibleCasePaneForWorkbookWindowHandler { get; set; }
+
+        internal Action<Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window, string> BeginCaseWorkbookActivateProtectionHandler { get; set; }
+
         internal Func<Microsoft.Office.Interop.Excel.Workbook, Microsoft.Office.Interop.Excel.Window, bool> ShouldIgnoreWindowActivateDuringCaseProtectionHandler { get; set; }
 
         internal Func<CaseInfoSystem.ExcelAddIn.Domain.WorkbookContext, string, string, bool> ShowKernelSheetAndRefreshPaneFromHomeHandler { get; set; }
@@ -681,6 +698,42 @@ namespace CaseInfoSystem.ExcelAddIn
         internal void ShowWorkbookTaskPaneWhenReady(Microsoft.Office.Interop.Excel.Workbook workbook, string reason)
         {
             ShowWorkbookTaskPaneWhenReadyHandler?.Invoke(workbook, reason);
+        }
+
+        internal void SuppressUpcomingCasePaneActivationRefresh(string workbookFullName, string reason)
+        {
+            SuppressUpcomingCasePaneActivationRefreshHandler?.Invoke(workbookFullName, reason);
+        }
+
+        internal bool ShouldIgnoreWorkbookActivateDuringCaseProtection(Microsoft.Office.Interop.Excel.Workbook workbook)
+        {
+            return ShouldIgnoreWorkbookActivateDuringCaseProtectionHandler != null
+                && ShouldIgnoreWorkbookActivateDuringCaseProtectionHandler(workbook);
+        }
+
+        internal bool ShouldIgnoreTaskPaneRefreshDuringCaseProtection(
+            string reason,
+            Microsoft.Office.Interop.Excel.Workbook workbook,
+            Microsoft.Office.Interop.Excel.Window window)
+        {
+            return ShouldIgnoreTaskPaneRefreshDuringCaseProtectionHandler != null
+                && ShouldIgnoreTaskPaneRefreshDuringCaseProtectionHandler(reason, workbook, window);
+        }
+
+        internal bool HasVisibleCasePaneForWorkbookWindow(
+            Microsoft.Office.Interop.Excel.Workbook workbook,
+            Microsoft.Office.Interop.Excel.Window window)
+        {
+            return HasVisibleCasePaneForWorkbookWindowHandler != null
+                && HasVisibleCasePaneForWorkbookWindowHandler(workbook, window);
+        }
+
+        internal void BeginCaseWorkbookActivateProtection(
+            Microsoft.Office.Interop.Excel.Workbook workbook,
+            Microsoft.Office.Interop.Excel.Window window,
+            string reason)
+        {
+            BeginCaseWorkbookActivateProtectionHandler?.Invoke(workbook, window, reason);
         }
 
         private sealed class NoOpDisposable : IDisposable

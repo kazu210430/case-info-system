@@ -45,6 +45,7 @@
     <Compile Include="DocumentSaveServiceTests.cs" />
     <Compile Include="DocumentMergeServiceTests.cs" />
     <Compile Include="KernelCaseCreationServiceTests.cs" />
+    <Compile Include="KernelCasePresentationServiceTests.cs" />
     <Compile Include="PathCompatibilityServiceTests.cs" />
     <Compile Include="EventBoundaryGuardTests.cs" />
     <Compile Include="WorkbookPromptSuppressionHelperTests.cs" />
@@ -57,7 +58,6 @@
     <Compile Include="Fakes\OfficeInteropShims.cs" />
     <Compile Include="Fakes\OrchestrationDependencyPlaceholders.cs" />
     <Compile Include="Fakes\OrchestrationTestSupport.cs" />
-    <Compile Include="Fakes\NewCaseDefaultTimingLogHelper.cs" />
     <Compile Include="CaseWorkbookLifecycleServicePolicyTests.cs" />
     <Compile Include="DocumentCommandActionRoutePolicyTests.cs" />
     <Compile Include="DocumentCommandExecutionDecisionPolicyTests.cs" />
@@ -191,6 +191,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentSaveService.cs" Link="Source\App\DocumentSaveService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\EventBoundaryGuard.cs" Link="Source\App\EventBoundaryGuard.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCaseCreationService.cs" Link="Source\App\KernelCaseCreationService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelCasePresentationService.cs" Link="Source\App\KernelCasePresentationService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CasePaneHostBridge.cs" Link="Source\App\CasePaneHostBridge.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\KernelNameRuleReader.cs" Link="Source\App\KernelNameRuleReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ManagedCloseState.cs" Link="Source\App\ManagedCloseState.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\ManagedCloseStartupGuardPolicy.cs" Link="Source\App\ManagedCloseStartupGuardPolicy.cs" />

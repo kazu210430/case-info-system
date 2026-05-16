@@ -38,6 +38,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         internal Func<Excel.Worksheet, IReadOnlyList<IReadOnlyDictionary<string, string>>> OnReadRecordsFromHeaderRow { get; set; }
 
+        internal Func<Excel.Workbook, Excel.Worksheet, CaseInfoSystem.ExcelAddIn.Domain.CaseListFieldDefinition, Excel.Range> OnResolveFieldRange { get; set; }
+
         internal Excel.Workbook GetActiveWorkbook() => _application?.ActiveWorkbook;
 
         internal Excel.Window GetActiveWindow()
@@ -142,6 +144,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         internal bool ActivateWorkbook(Excel.Workbook workbook) => true;
 
         internal bool ActivateWorksheetByCodeName(Excel.Workbook workbook, string sheetCodeName) => true;
+
+        internal Excel.Range ResolveFieldRange(Excel.Workbook workbook, Excel.Worksheet worksheet, CaseInfoSystem.ExcelAddIn.Domain.CaseListFieldDefinition definition)
+        {
+            return OnResolveFieldRange == null ? null : OnResolveFieldRange(workbook, worksheet, definition);
+        }
     }
 
     internal sealed class WorkbookRoleResolver
@@ -246,6 +253,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             window.Visible = true;
             window.Activate();
             return true;
+        }
+
+        internal Func<Excel.Workbook, string, bool, bool> OnTryRecoverWorkbookWindowWithoutShowing { get; set; }
+
+        internal bool TryRecoverWorkbookWindowWithoutShowing(Excel.Workbook workbook, string reason, bool bringToFront)
+        {
+            if (OnTryRecoverWorkbookWindowWithoutShowing != null)
+            {
+                return OnTryRecoverWorkbookWindowWithoutShowing(workbook, reason, bringToFront);
+            }
+
+            return workbook != null;
         }
     }
 
@@ -506,6 +525,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal Func<string, string, bool> OnMoveLocalWorkingCaseToFinalPath { get; set; }
 
+        internal Func<string, string, string> OnSelectFolderPath { get; set; }
+
         internal string ResolveSystemRoot(Excel.Workbook kernelWorkbook)
         {
             return OnResolveSystemRoot == null ? string.Empty : OnResolveSystemRoot(kernelWorkbook);
@@ -550,6 +571,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             return OnMoveLocalWorkingCaseToFinalPath == null
                 || OnMoveLocalWorkingCaseToFinalPath(localWorkingPath, finalCaseWorkbookPath);
+        }
+
+        internal string SelectFolderPath(string title, string initialDirectory)
+        {
+            return OnSelectFolderPath == null ? string.Empty : OnSelectFolderPath(title, initialDirectory) ?? string.Empty;
         }
     }
 
@@ -899,6 +925,63 @@ namespace CaseInfoSystem.ExcelAddIn.App
             public void Dispose()
             {
                 OnDispose?.Invoke();
+            }
+        }
+    }
+
+    internal sealed class CreatedCasePresentationWaitService
+    {
+        internal const string CreatingStageTitle = "案件情報.xlsxを作成しています";
+
+        internal const string PreparingOpenStageTitle = "案件情報.xlsxを開く準備をしています";
+
+        internal const string ShowingScreenStageTitle = "案件情報.xlsxの画面を表示しています";
+
+        internal const string BatchOpeningFolderStageTitle = "保存先フォルダを開いています";
+
+        internal const string BatchReturningHomeStageTitle = "HOME画面に戻ります。作成を続けてください。";
+
+        internal const string DefaultStageDetail = "画面が切り替わるまでそのままでお待ちください。";
+
+        internal Func<System.Diagnostics.Stopwatch, WaitSession> OnShowWaiting { get; set; }
+
+        internal CreatedCasePresentationWaitService(CaseInfoSystem.ExcelAddIn.Infrastructure.Logger logger)
+        {
+        }
+
+        internal WaitSession ShowWaiting(System.Diagnostics.Stopwatch commandStopwatch)
+        {
+            return OnShowWaiting == null ? new WaitSession() : OnShowWaiting(commandStopwatch) ?? new WaitSession();
+        }
+
+        internal sealed class WaitSession : IDisposable
+        {
+            internal readonly List<string> Stages = new List<string>();
+
+            internal bool ClosedForSuccessfulPresentation { get; private set; }
+
+            internal bool ClosedAndRestoredOwner { get; private set; }
+
+            internal bool Disposed { get; private set; }
+
+            internal void UpdateStage(string title, string detail = null)
+            {
+                Stages.Add(title ?? string.Empty);
+            }
+
+            internal void CloseForSuccessfulPresentation()
+            {
+                ClosedForSuccessfulPresentation = true;
+            }
+
+            internal void CloseAndRestoreOwner()
+            {
+                ClosedAndRestoredOwner = true;
+            }
+
+            public void Dispose()
+            {
+                Disposed = true;
             }
         }
     }

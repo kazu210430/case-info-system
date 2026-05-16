@@ -18,5 +18,17 @@ namespace CaseInfoSystem.ExcelAddIn.Domain
         internal string UserMessage { get; set; }
 
         internal bool ShouldCloseKernelHome { get; set; }
+
+        internal CasePresentationOutcome PresentationOutcome { get; set; }
+
+        internal string PresentationOutcomeReason { get; set; }
+    }
+
+    internal enum CasePresentationOutcome
+    {
+        NotStarted = 0,
+        Completed = 1,
+        Degraded = 2,
+        Failed = 3
     }
 }

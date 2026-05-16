@@ -128,7 +128,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					NewCaseDefaultTimingLogHelper.AttachWorkbookAlias (result.CaseWorkbookPath, workbookFullName);
 				}
 				result.CreatedWorkbook = workbook;
-				ShowCreatedCase (workbook, waitSession);
+				CasePresentationResult presentationResult = ShowCreatedCase (workbook, waitSession);
+				ApplyPresentationOutcome (result, presentationResult);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
 					NewCaseDefaultTimingLogHelper.StartWaitUiCloseToFinalForegroundStable (result.CaseWorkbookPath);
 				}
@@ -136,11 +137,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (result.Mode != KernelCaseCreationMode.NewCaseDefault) {
 					PromoteWorkbookWindowOnce (workbook, "KernelCasePresentationService.OpenCreatedCase.AfterWaitUiClose");
 				} else {
-					NewCaseDefaultTimingLogHelper.LogWaitUiCloseToFinalForegroundStableIfPending (_logger, result.CaseWorkbookPath, "presentationCompletedWithoutAdditionalForegroundRecovery");
+					NewCaseDefaultTimingLogHelper.LogWaitUiCloseToFinalForegroundStableIfPending (_logger, result.CaseWorkbookPath, "presentationOutcome=" + result.PresentationOutcome.ToString ());
 				}
-				_logger.Info ("Kernel prompt CASE presentation completed. path=" + result.CaseWorkbookPath + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				_logger.Info ("Kernel prompt CASE presentation completed. path=" + result.CaseWorkbookPath + ", presentationOutcome=" + result.PresentationOutcome.ToString () + ", presentationOutcomeReason=" + SanitizeOutcomeReason (result.PresentationOutcomeReason) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return result;
-			} catch {
+			} catch (Exception exception) {
+				ApplyPresentationOutcome (result, CasePresentationResult.Failed ("OpenCreatedCaseException:" + exception.GetType ().Name));
+				_logger.Error ("Kernel prompt CASE presentation failed. path=" + result.CaseWorkbookPath + ", presentationOutcome=" + result.PresentationOutcome.ToString () + ", presentationOutcomeReason=" + SanitizeOutcomeReason (result.PresentationOutcomeReason), exception);
 				NewCaseVisibilityObservation.Complete (result.CaseWorkbookPath);
 				if (result.Mode == KernelCaseCreationMode.NewCaseDefault) {
 					NewCaseDefaultTimingLogHelper.Clear (result.CaseWorkbookPath);
@@ -168,45 +171,54 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return mode == KernelCaseCreationMode.NewCaseDefault || mode == KernelCaseCreationMode.CreateCaseSingle;
 		}
 
-		private void ShowCreatedCase (Workbook workbook, CreatedCasePresentationWaitService.WaitSession waitSession)
+		private CasePresentationResult ShowCreatedCase (Workbook workbook, CreatedCasePresentationWaitService.WaitSession waitSession)
 		{
 			if (workbook == null) {
-				return;
+				return CasePresentationResult.Failed ("WorkbookMissing");
 			}
+			CasePresentationResult presentationResult = CasePresentationResult.Completed ();
 			try {
 				Stopwatch stopwatch = Stopwatch.StartNew ();
 				string workbookFullName = _excelInteropService.GetWorkbookFullName (workbook);
 				Stopwatch stopwatch2 = Stopwatch.StartNew ();
-				EnsureWorkbookWindowVisibleBeforeInitialRecovery (workbook, stopwatch);
+				WorkbookWindowVisibilityEnsureResult initialVisibilityResult = EnsureWorkbookWindowVisibleBeforeInitialRecovery (workbook, stopwatch);
+				MarkVisibilityDegradationIfNeeded (presentationResult, "InitialVisibility", initialVisibilityResult);
 				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeInitialRecovery", stopwatch2.ElapsedMilliseconds);
 				stopwatch2 = Stopwatch.StartNew ();
-				_excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing (workbook, "KernelCasePresentationService.ShowCreatedCase", bringToFront: false);
+				bool initialRecoveryCompleted = _excelWindowRecoveryService.TryRecoverWorkbookWindowWithoutShowing (workbook, "KernelCasePresentationService.ShowCreatedCase", bringToFront: false);
+				if (!initialRecoveryCompleted) {
+					presentationResult.MarkDegraded ("InitialRecoveryNotCompleted");
+				}
 				NewCaseDefaultTimingLogHelper.LogDetail (_logger, workbookFullName, "hiddenOpenToWindowVisible", "tryRecoverWorkbookWindowWithoutShowing", stopwatch2.ElapsedMilliseconds);
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=InitialRecoveryCompleted, workbook=" + workbookFullName + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "initial-recovery-completed", "KernelCasePresentationService.ShowCreatedCase", workbookFullName);
-				_logger.Info ("ShowCreatedCase workbook activated. elapsedMs=" + stopwatch.ElapsedMilliseconds);
-				ExecuteDeferredPresentationEnhancements (workbook, stopwatch, waitSession);
+				_logger.Info ("ShowCreatedCase workbook activated. recovered=" + initialRecoveryCompleted + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				presentationResult.Merge (ExecuteDeferredPresentationEnhancements (workbook, stopwatch, waitSession));
 			} catch (Exception exception) {
 				_logger.Error ("ShowCreatedCase failed.", exception);
+				presentationResult.MarkFailed ("ShowCreatedCaseException:" + exception.GetType ().Name);
 			}
+			return presentationResult;
 		}
 
-		private void EnsureWorkbookWindowVisibleBeforeInitialRecovery (Workbook workbook, Stopwatch stopwatch)
+		private WorkbookWindowVisibilityEnsureResult EnsureWorkbookWindowVisibleBeforeInitialRecovery (Workbook workbook, Stopwatch stopwatch)
 		{
 			if (workbook == null) {
-				return;
+				return null;
 			}
 			WorkbookWindowVisibilityEnsureResult result = _workbookWindowVisibilityService.EnsureVisible (workbook, "KernelCasePresentationService.EnsureWorkbookWindowVisibleBeforeInitialRecovery");
 			if (result.Outcome == WorkbookWindowVisibilityEnsureOutcome.MadeVisible) {
 				_logger.Info ("ShowCreatedCase workbook window primed before shared application visibility recovery. workbook=" + result.WorkbookFullName + ", windowHwnd=" + result.WindowHwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 			}
+			return result;
 		}
 
-		private void ExecuteDeferredPresentationEnhancements (Workbook workbook, Stopwatch stopwatch, CreatedCasePresentationWaitService.WaitSession waitSession)
+		private CasePresentationResult ExecuteDeferredPresentationEnhancements (Workbook workbook, Stopwatch stopwatch, CreatedCasePresentationWaitService.WaitSession waitSession)
 		{
 			if (workbook == null) {
-				return;
+				return CasePresentationResult.Failed ("WorkbookMissing");
 			}
+			CasePresentationResult presentationResult = CasePresentationResult.Completed ();
 			bool flag = false;
 				try {
 					_logger.Info ("ShowCreatedCase deferred presentation started. elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
@@ -214,7 +226,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					flag = true;
 					Stopwatch stopwatch2 = Stopwatch.StartNew ();
 					waitSession?.UpdateStage (CreatedCasePresentationWaitService.ShowingScreenStageTitle);
-					EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
+					WorkbookWindowVisibilityEnsureResult readyShowVisibilityResult = EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
+					MarkVisibilityDegradationIfNeeded (presentationResult, "ReadyShowVisibility", readyShowVisibilityResult);
 					NewCaseDefaultTimingLogHelper.LogDetail (_logger, _excelInteropService.GetWorkbookFullName (workbook), "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeReadyShow", stopwatch2.ElapsedMilliseconds);
 					_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
 				_logger.Info ("ShowCreatedCase post-release activation suppression prepared. elapsedMs=" + stopwatch.ElapsedMilliseconds);
@@ -228,12 +241,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					MoveInitialCursorToHomeCell (workbook);
 					_logger.Info ("ShowCreatedCase cursor positioned. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				} catch (Exception exception2) {
+					presentationResult.MarkDegraded ("CursorPositioningSkipped:" + exception2.GetType ().Name);
 					_logger.Warn ("ShowCreatedCase cursor positioning skipped after deferred presentation. message=" + exception2.Message + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				}
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=DeferredPresentationCompleted, workbook=" + _excelInteropService.GetWorkbookFullName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("ShowCreatedCase deferred presentation completed. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 			} catch (Exception exception) {
 				_logger.Error ("ShowCreatedCase deferred presentation failed.", exception);
+				presentationResult.MarkDegraded ("DeferredPresentationException:" + exception.GetType ().Name);
 			} finally {
 				if (!flag) {
 					try {
@@ -243,12 +258,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					}
 				}
 			}
+			return presentationResult;
 		}
 
-		private void EnsureWorkbookWindowVisibleBeforeReadyShow (Workbook workbook, Stopwatch stopwatch)
+		private WorkbookWindowVisibilityEnsureResult EnsureWorkbookWindowVisibleBeforeReadyShow (Workbook workbook, Stopwatch stopwatch)
 		{
 			if (workbook == null) {
-				return;
+				return null;
 			}
 			WorkbookWindowVisibilityEnsureResult result = _workbookWindowVisibilityService.EnsureVisible (workbook, "KernelCasePresentationService.EnsureWorkbookWindowVisibleBeforeReadyShow");
 			switch (result.Outcome) {
@@ -261,6 +277,35 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				_logger.Info ("ShowCreatedCase workbook window made visible before ready-show. workbook=" + result.WorkbookFullName + ", windowHwnd=" + result.WindowHwnd + ", elapsedMs=" + ((stopwatch == null) ? 0L : stopwatch.ElapsedMilliseconds));
 				break;
 			}
+			return result;
+		}
+
+		private static void ApplyPresentationOutcome (KernelCaseCreationResult result, CasePresentationResult presentationResult)
+		{
+			if (result == null || presentationResult == null) {
+				return;
+			}
+			result.PresentationOutcome = presentationResult.Outcome;
+			result.PresentationOutcomeReason = presentationResult.OutcomeReason;
+		}
+
+		private static void MarkVisibilityDegradationIfNeeded (CasePresentationResult presentationResult, string phase, WorkbookWindowVisibilityEnsureResult ensureResult)
+		{
+			if (presentationResult == null || IsSuccessfulVisibilityEnsure (ensureResult)) {
+				return;
+			}
+			presentationResult.MarkDegraded ((phase ?? "Visibility") + ":" + ((ensureResult == null) ? "NoResult" : ensureResult.Outcome.ToString ()));
+		}
+
+		private static bool IsSuccessfulVisibilityEnsure (WorkbookWindowVisibilityEnsureResult ensureResult)
+		{
+			return ensureResult != null
+				&& (ensureResult.Outcome == WorkbookWindowVisibilityEnsureOutcome.AlreadyVisible || ensureResult.Outcome == WorkbookWindowVisibilityEnsureOutcome.MadeVisible);
+		}
+
+		private static string SanitizeOutcomeReason (string outcomeReason)
+		{
+			return (outcomeReason ?? string.Empty).Replace ("\r\n", " | ").Replace ("\n", " | ").Replace ("\r", " | ");
 		}
 
 		private void MoveInitialCursorToHomeCell (Workbook workbook)
@@ -347,6 +392,78 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				SetWindowPos (hwnd, HwndNoTopMost, 0, 0, 0, 0, 67u);
 				SetForegroundWindow (hwnd);
 			}
+		}
+	}
+
+	internal sealed class CasePresentationResult
+	{
+		private readonly List<string> _outcomeReasons = new List<string> ();
+
+		private CasePresentationResult (CasePresentationOutcome outcome, string outcomeReason)
+		{
+			Outcome = outcome;
+			AddReason (outcomeReason);
+		}
+
+		internal CasePresentationOutcome Outcome { get; private set; }
+
+		internal string OutcomeReason
+		{
+			get
+			{
+				return _outcomeReasons.Count == 0 ? Outcome.ToString () : string.Join ("|", _outcomeReasons.ToArray ());
+			}
+		}
+
+		internal static CasePresentationResult Completed ()
+		{
+			return new CasePresentationResult (CasePresentationOutcome.Completed, null);
+		}
+
+		internal static CasePresentationResult Failed (string outcomeReason)
+		{
+			return new CasePresentationResult (CasePresentationOutcome.Failed, outcomeReason);
+		}
+
+		internal void MarkDegraded (string outcomeReason)
+		{
+			if (Outcome != CasePresentationOutcome.Failed) {
+				Outcome = CasePresentationOutcome.Degraded;
+			}
+			AddReason (outcomeReason);
+		}
+
+		internal void MarkFailed (string outcomeReason)
+		{
+			Outcome = CasePresentationOutcome.Failed;
+			AddReason (outcomeReason);
+		}
+
+		internal void Merge (CasePresentationResult result)
+		{
+			if (result == null) {
+				return;
+			}
+			if (result.Outcome == CasePresentationOutcome.Failed) {
+				Outcome = CasePresentationOutcome.Failed;
+			} else if (result.Outcome == CasePresentationOutcome.Degraded && Outcome == CasePresentationOutcome.Completed) {
+				Outcome = CasePresentationOutcome.Degraded;
+			}
+			foreach (string reason in result._outcomeReasons) {
+				AddReason (reason);
+			}
+		}
+
+		private void AddReason (string outcomeReason)
+		{
+			if (string.IsNullOrWhiteSpace (outcomeReason)) {
+				return;
+			}
+			string text = outcomeReason.Trim ();
+			if (_outcomeReasons.Contains (text)) {
+				return;
+			}
+			_outcomeReasons.Add (text);
 		}
 	}
 

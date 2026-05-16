@@ -164,11 +164,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					_caseWorkbookLifecycleService.MarkCreatedCaseFolderOfferPending (kernelCaseCreationResult.CreatedWorkbook);
 				}
 				kernelCaseCreationResult.ShouldCloseKernelHome = true;
-				_logger.Info ("Kernel case presentation complete. mode=" + kernelCaseCreationResult.Mode.ToString () + ", success=" + kernelCaseCreationResult.Success + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
+				_logger.Info ("Kernel case presentation complete. mode=" + kernelCaseCreationResult.Mode.ToString () + ", success=" + kernelCaseCreationResult.Success + ", presentationOutcome=" + kernelCaseCreationResult.PresentationOutcome.ToString () + ", presentationOutcomeReason=" + SanitizeForSingleLine (kernelCaseCreationResult.PresentationOutcomeReason) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				return kernelCaseCreationResult;
 			} catch (Exception exception) {
-				_logger.Error ("Kernel case open after save failed.", exception);
-				return BuildFailure (OpenCaseFailedMessage);
+				_logger.Error ("Kernel case open after save failed. mode=" + result.Mode.ToString () + ", presentationOutcome=" + CasePresentationOutcome.Failed.ToString () + ", presentationOutcomeReason=" + ResolvePresentationFailureReason (result, exception), exception);
+				return BuildOpenFailure (result, OpenCaseFailedMessage, ResolvePresentationFailureReason (result, exception));
 			}
 		}
 
@@ -281,8 +281,38 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return new KernelCaseCreationResult {
 				Success = false,
 				UserMessage = (userMessage ?? string.Empty),
-				ShouldCloseKernelHome = false
+				ShouldCloseKernelHome = false,
+				PresentationOutcome = CasePresentationOutcome.NotStarted,
+				PresentationOutcomeReason = string.Empty
 			};
+		}
+
+		private static KernelCaseCreationResult BuildOpenFailure (KernelCaseCreationResult source, string userMessage, string presentationOutcomeReason)
+		{
+			return new KernelCaseCreationResult {
+				Success = false,
+				Mode = (source == null) ? KernelCaseCreationMode.NewCaseDefault : source.Mode,
+				CaseFolderPath = (source == null) ? string.Empty : source.CaseFolderPath,
+				CaseWorkbookPath = (source == null) ? string.Empty : source.CaseWorkbookPath,
+				CreatedWorkbook = (source == null) ? null : source.CreatedWorkbook,
+				UserMessage = (userMessage ?? string.Empty),
+				ShouldCloseKernelHome = false,
+				PresentationOutcome = CasePresentationOutcome.Failed,
+				PresentationOutcomeReason = presentationOutcomeReason ?? string.Empty
+			};
+		}
+
+		private static string ResolvePresentationFailureReason (KernelCaseCreationResult result, Exception exception)
+		{
+			if (result != null && !string.IsNullOrWhiteSpace (result.PresentationOutcomeReason)) {
+				return SanitizeForSingleLine (result.PresentationOutcomeReason);
+			}
+			return "OpenCreatedCaseException:" + ((exception == null) ? string.Empty : exception.GetType ().Name);
+		}
+
+		private static string SanitizeForSingleLine (string value)
+		{
+			return (value ?? string.Empty).Replace ("\r\n", " | ").Replace ("\n", " | ").Replace ("\r", " | ");
 		}
 
 		private static void CloseWaitSession (CreatedCasePresentationWaitService.WaitSession waitSession, bool restoreOwner)

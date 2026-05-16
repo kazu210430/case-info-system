@@ -42,6 +42,9 @@
 - `TaskPaneRefreshPreconditionDecisionService` は refresh 実行前の continue / fail-closed skip decision と `TaskPaneRefreshFailClosedOutcome` の組み立てだけを担います。retry timer、callback、completion / emit / session owner、WindowActivate observation 発火、TaskPane 表示命令は持ちません。
 - `TaskPaneRefreshObservationDecisionService` は observation 後の normalized outcome chain 接続、foreground 実行要否、診断 details 組み立てだけを担います。foreground 実行、completion / emit / session owner、WindowActivate observation 発火、TaskPane 表示命令は持ちません。
 - `TaskPaneRefreshRetryContinuationDecisionService` は pending retry tick の継続 / 停止 / active context fallback 判断だけを担います。retry timer start / stop、refresh 実行、callback、completion / emit は持ちません。
+- `CreatedCaseDisplaySessionStateReader` は created-case display session の start 判定、lookup 判定、snapshot DTO 化だけを担います。session lifecycle、dictionary / lock / `IsCompleted` mark / remove、emit 発火は持ちません。
+- `TaskPaneRefreshEmitContext` / `TaskPaneRefreshEmitPayloadBuilder` は `case-display-completed` emit payload 用の材料整形と diagnostic material 構築だけを担います。emit 発火責務や発火タイミングは持ちません。
+- `TaskPaneRefreshCompletionDecisionService` は completion 判定材料と hard gate reason / status、`Blocked` / `SessionMissing` / `ReadyToEmit` result 分類だけを担います。completion callback 発火、retry、foreground guarantee、ready-show、emit、session lifecycle は持ちません。
 - ready-show attempt 本体は `WorkbookTaskPaneReadyShowAttemptWorker` に分離済みで、`TaskPaneRefreshOrchestrationService` へ戻さない前提で読むべきです。
 - workbook window visible ensure は `WorkbookWindowVisibilityService` に分離済みで、ready-show / protection / event flow の判定から切り離されています。
 - protection / visible pane 判定 / ready-show 要求に関わる case-pane 系 `ThisAddIn` 依存は `ICasePaneHostBridge` 経由へ整理済みです。
@@ -56,6 +59,27 @@
 - `TaskPaneReadyShowRetryScheduler` が ready retry `80ms` の scheduling を担います。
 - `ScheduleWorkbookTaskPaneRefresh(...)` と `PendingPaneRefreshRetryService` が ready-show 失敗後の fallback refresh を受け持ちます。
 - `ResolveWorkbookPaneWindow(...)` は ready-show と refresh orchestration が共有する window resolve 入口です。
+- completion callback 発火、emit 発火、created-case display session lifecycle、session dictionary / lock / `IsCompleted` mark / remove はここに残します。
+- `CreatedCaseDisplaySessionStateReader`、`TaskPaneRefreshEmitContext` / `TaskPaneRefreshEmitPayloadBuilder`、`TaskPaneRefreshCompletionDecisionService` は材料読み取り・payload 構築・判定分類の collaborator であり、owner / lifecycle / 発火タイミングは持ちません。
+
+### `CreatedCaseDisplaySessionStateReader`
+
+- created-case display session の start 判定、lookup 判定、snapshot DTO 化を担います。
+- session lifecycle owner ではありません。
+- session dictionary / lock / `IsCompleted` mark / remove を持ちません。
+- emit、foreground guarantee、ready-show、retry、表示回復実行を行いません。
+
+### `TaskPaneRefreshEmitContext` / `TaskPaneRefreshEmitPayloadBuilder`
+
+- emit payload 用の材料整形、workbook / window diagnostic descriptor、created-case display session snapshot の emit 用変換を担います。
+- `TaskPaneRefreshEmitPayloadBuilder` は context から payload を構築します。
+- emit 発火責務、emit 発火タイミング、UI 操作、retry / foreground guarantee / ready-show、session lifecycle は持ちません。
+
+### `TaskPaneRefreshCompletionDecisionService`
+
+- completion 判定材料、hard gate reason / status、session 解決後の `Blocked` / `SessionMissing` / `ReadyToEmit` 分類を担います。
+- completion callback 発火責務や発火タイミングを持ちません。
+- retry、foreground guarantee、ready-show、emit、session dictionary / lock / `IsCompleted` mark / remove、route semantics / callback meaning には触れません。
 
 ### `WorkbookTaskPaneReadyShowAttemptWorker`
 
@@ -84,6 +108,11 @@
 - `WorkbookTaskPaneReadyShowAttemptWorker` に pending retry state を持たせない
 - `WorkbookWindowVisibilityService` に ready-show / retry / protection 判定を持たせない
 - CASE 専用 visible pane early-complete を accounting に広げない
+- completion callback 発火責務 / 発火タイミングを collaborator 側へ移さない
+- emit 発火責務 / 発火タイミングを collaborator 側へ移さない
+- created-case display session lifecycle、session dictionary / lock / `IsCompleted` mark / remove を collaborator 側へ移さない
+- retry owner / retry timer lifecycle、ready-show 実行責務、foreground guarantee 実行責務を collaborator 側へ移さない
+- route semantics、callback meaning、UI 表示順序、表示回復そのものの実行責務を collaborator 側へ移さない
 
 ## WorkbookOpen 境界
 

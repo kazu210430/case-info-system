@@ -450,6 +450,8 @@ R09 runtime extraction は禁止します。少なくとも Phase 5 で R07 / R1
 - created CASE display session が解決できる。
 - その session がまだ completed ではない。
 
+現行実装では、hard gate の reason / status 分類と session 解決後の `Blocked` / `SessionMissing` / `ReadyToEmit` 分類は `TaskPaneRefreshCompletionDecisionService` が担当します。ただし、completion callback 発火責務、発火タイミング、emit 発火責務、emit 発火タイミングは `TaskPaneRefreshOrchestrationService` に残します。
+
 ### emit してはいけない条件
 
 - `WorkbookTaskPaneReadyShowAttemptWorker`、`TaskPaneRefreshCoordinator`、`TaskPaneHostFlowService`、`TaskPaneManager` から直接 emit しない。
@@ -546,6 +548,8 @@ display session は単なる dictionary / state bag ではありません。
 - foreground terminal / visibility terminal が揃うまで completion しない fail-closed 条件を持ちます。
 
 したがって Phase 4 で R04 / R14 を動かす場合、session state だけを外へ出すのではなく、display protocol session boundary として一体で扱います。R04 / R14 は Phase 4 後半まで orchestration に残すのが安全です。
+
+現行で許容済みの分離は `CreatedCaseDisplaySessionStateReader` による start 判定、lookup 判定、snapshot DTO 化だけです。この reader は session lifecycle owner ではなく、session dictionary / lock / `IsCompleted` mark / remove、emit 発火、ready-show、retry、foreground guarantee、表示回復実行を持ちません。これを根拠に session lifecycle や one-time emit guard を collaborator 側へ移すことは STOP とします。
 
 ## 7. Protection Gate / Fail-Closed 条件
 

@@ -189,6 +189,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				}
 
 				lastDataRow = SortPaymentHistoryRows (workbook);
+				if (!TryRecalculateAfterSortIfNeeded (workbook, lastDataRow)) {
+					return LoadFormState (workbook);
+				}
 				ClearRowsFrom (workbook, lastDataRow + 1);
 				RefreshPrintArea (workbook, lastDataRow);
 				RefreshPaymentTotal (workbook);
@@ -445,6 +448,68 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			_logger.Warn (CreateGoalSeekDiagnostic (workbook, rowIndex, formulaCell, changingCell, targetAmount, current, rawCurrent, goalSeekSucceeded, targetName, reason, null));
 			UserErrorService.ShowOkNotification (AccountingGoalSeekResidualPolicy.CreateResidualNoticeUserMessage (current, targetAmount), "案件情報System", MessageBoxIcon.Warning);
+		}
+
+		private bool TryRecalculateAfterSortIfNeeded (Workbook workbook, int lastDataRow)
+		{
+			if (lastDataRow < AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow + 1) {
+				return true;
+			}
+
+			List<double> expenseCharges = ReadExpenseChargesForRecalculation (workbook, lastDataRow);
+			if (!AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (expenseCharges)) {
+				return true;
+			}
+
+			CalculateWorkbook (workbook);
+			Dictionary<int, double> targetReceiptAmounts = CaptureRecalculationTargetReceiptAmounts (workbook, lastDataRow);
+			ClearExpenseChargesForRecalculation (workbook, lastDataRow);
+			CalculateWorkbook (workbook);
+
+			for (int row = AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow; row <= lastDataRow; row++) {
+				double targetReceiptAmount = targetReceiptAmounts[row];
+				int previousRow = AccountingPaymentHistoryPlanPolicy.GetPreviousBalanceRowForDataRow (row);
+				double previousExpenseBalance = ReadRequiredDouble (workbook, SheetName, Address ("J", previousRow), "実費残高", "AccountingPaymentHistory.RecalculateAfterSort");
+				double expenseCharge = AccountingPaymentHistoryPlanPolicy.ResolveExpenseCharge (targetReceiptAmount, previousExpenseBalance);
+				_accountingWorkbookService.WriteCellValue (workbook, SheetName, Address ("H", row), expenseCharge);
+				CalculateWorkbook (workbook);
+				if (!TryGoalSeekAndVerify (workbook, row, "C", "D", targetReceiptAmount, "領収額")) {
+					return false;
+				}
+				CalculateWorkbook (workbook);
+			}
+
+			_logger.Info ("Payment history rows recalculated after sort. firstRow=" + AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow.ToString (CultureInfo.InvariantCulture) + ", lastRow=" + lastDataRow.ToString (CultureInfo.InvariantCulture));
+			return true;
+		}
+
+		private List<double> ReadExpenseChargesForRecalculation (Workbook workbook, int lastDataRow)
+		{
+			List<double> expenseCharges = new List<double> ();
+			for (int row = AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow; row <= lastDataRow; row++) {
+				expenseCharges.Add (ReadRequiredDouble (workbook, SheetName, Address ("H", row), "実費等への充当額", "AccountingPaymentHistory.ReadExpenseChargesForRecalculation"));
+			}
+			return expenseCharges;
+		}
+
+		private Dictionary<int, double> CaptureRecalculationTargetReceiptAmounts (Workbook workbook, int lastDataRow)
+		{
+			Dictionary<int, double> targetReceiptAmounts = new Dictionary<int, double> ();
+			for (int row = AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow; row <= lastDataRow; row++) {
+				targetReceiptAmounts[row] = ReadRequiredDouble (workbook, SheetName, Address ("C", row), "領収額", "AccountingPaymentHistory.CaptureRecalculationTargetReceiptAmounts");
+			}
+			return targetReceiptAmounts;
+		}
+
+		private void ClearExpenseChargesForRecalculation (Workbook workbook, int lastDataRow)
+		{
+			if (lastDataRow < AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow) {
+				return;
+			}
+
+			string firstRow = AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow.ToString (CultureInfo.InvariantCulture);
+			string lastRow = lastDataRow.ToString (CultureInfo.InvariantCulture);
+			_accountingWorkbookService.ClearRangeContents (workbook, SheetName, "H" + firstRow + ":H" + lastRow);
 		}
 
 		private int SortPaymentHistoryRows (Workbook workbook)

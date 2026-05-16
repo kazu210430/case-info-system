@@ -170,6 +170,7 @@
     <Compile Include="App\AccountingInstallmentSchedulePlanPolicy.cs" />
     <Compile Include="App\AccountingPaymentOverflowUserMessage.cs" />
     <Compile Include="App\AccountingPaymentHistoryPlanPolicy.cs" />
+    <Compile Include="App\AccountingPaymentHistoryRecalculationPolicy.cs" />
     <Compile Include="App\AccountingNumericCellReader.cs" />
     <Compile Include="App\AccountingInternalCommandService.cs" />
     <Compile Include="App\AccountingPaymentHistoryCommandService.cs" />

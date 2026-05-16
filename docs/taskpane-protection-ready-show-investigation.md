@@ -73,8 +73,10 @@
 - `TaskPaneRefreshOrchestrationService` には次の定数がある。
   - `PendingPaneRefreshIntervalMs = 400`
   - `PendingPaneRefreshMaxAttempts = 3`
-  - `WorkbookPaneWindowResolveDelayMs = 80`
   - `WorkbookPaneWindowResolveAttempts = 2`
+- `WorkbookTaskPaneReadyShowAttemptWorker` には次の定数がある。
+  - `ReadyShowRetryDelayMs = 80`
+  - `ReadyShowMaxAttempts = 2`
 - `KernelCasePresentationService` の `_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady(...)` は、`ThisAddInCasePaneHostBridge` を経由して `TaskPaneRefreshOrchestrationService.ShowWorkbookTaskPaneWhenReady(...)` に到達する。
 - `ShowWorkbookTaskPaneWhenReady(...)` は `TaskPaneDisplayRetryCoordinator.ShowWhenReady(...)` を呼び、次を渡す。
   - `TryShowWorkbookTaskPaneOnce`

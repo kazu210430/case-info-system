@@ -677,7 +677,6 @@ R09 が返すのは、現時点で pane refresh / visible-pane 判定 / context 
 attempt:
 
 - `WorkbookPaneWindowResolveAttempts = 2`
-- `WorkbookPaneWindowResolveDelayMs = 80`
 - `activateWorkbook=true` の場合だけ `ExcelInteropService.ActivateWorkbook(workbook)` を呼ぶ。
 
 trace:
@@ -701,7 +700,7 @@ trace:
 
 | route | R09 呼び出し / window source | `activateWorkbook` | window unresolved の意味 | retry / fallback への委譲 | completion への接続 | foreground semantics |
 | --- | --- | --- | --- | --- | --- | --- |
-| ready-show immediate / wait-ready path | `WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce(...)` が `ResolveWorkbookPaneWindow(...)` を呼ぶ | `true` | ready-show attempt の pane 対象 window がまだ unavailable。attempt result は refresh success として確定しない。 | attempt 1 失敗なら `80ms` attempt 2、attempt 2 も失敗した場合だけ R07 pending fallback handoff。 | worker では completion しない。orchestration の callback が visibility / source / rebuild / foreground outcome を正規化した後だけ `case-display-completed` 候補になる。 | activation request はするが foreground guarantee success ではない。 |
+| ready-show immediate / wait-ready path | `WorkbookTaskPaneReadyShowAttemptWorker.TryShowWorkbookTaskPaneOnce(...)` が `ResolveWorkbookPaneWindow(...)` を呼ぶ | `true` | ready-show attempt の pane 対象 window がまだ unavailable。attempt result は refresh success として確定しない。 | attempt 1 失敗なら `ReadyShowRetryDelayMs` の `80ms` 後に attempt 2、attempt 2 も失敗した場合だけ R07 pending fallback handoff。 | worker では completion しない。orchestration の callback が visibility / source / rebuild / foreground outcome を正規化した後だけ `case-display-completed` 候補になる。 | activation request はするが foreground guarantee success ではない。 |
 | R07 `ScheduleWorkbookTaskPaneRefresh(...)` immediate refresh | pending timer 開始前に `ResolveWorkbookPaneWindow(...)` で workbook target window を準備 | `false` | immediate refresh に渡す window がないだけ。`WorkbookOpen` skip 以外では、refresh path 側が再度 fail-closed / context 解決する。 | immediate refresh が success しない場合だけ pending retry `400ms / 3 attempts` へ進む。 | immediate refresh success は completion ではない。created CASE reason かつ existing completion chain 条件を満たした場合だけ completion。 | foreground semantics は持たない。 |
 | R08 pending retry tick | tracked workbook を見つけた tick で `ResolveWorkbookPaneWindow(...)` を呼ぶ | `true` | target workbook の window availability がまだ不十分。active CASE context fallback に移れる場合がある。 | tick の refresh attempt が success しなければ attempts を消費して継続。target を見失った場合は active CASE context fallback。 | retry tick success は completion ではない。refresh / outcome / display session boundary に戻れた場合だけ completion 候補。 | activation request は window resolve / refresh attempt のためで、foreground guarantee success ではない。 |
 | `WorkbookOpen` skip / stabilization boundary | `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` が R09 呼び出し前に止める | 該当なし | workbook はあるが window-dependent refresh の安定境界に達していない。 | `ScheduleWorkbookTaskPaneRefresh(...)` では pending retry start へ進まず、後続 `WorkbookActivate` / `WindowActivate` に委ねる。 | skip は success / completion / fallback start ではない。 | foreground semantics は持たない。 |

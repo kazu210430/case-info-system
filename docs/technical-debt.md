@@ -81,13 +81,12 @@
 
 ## Thread.Sleep 依存
 
-### TaskPaneRefreshOrchestrationService.cs:300
+### TaskPaneRefreshOrchestrationService / ResolveWorkbookPaneWindow（現コード確認）
 
-* 内容: `ResolveWorkbookPaneWindow` で `Application.DoEvents()` の後に固定待機している。
-* 何を待っているか: 対象 workbook に対応する `Excel.Window` が解決可能になるまでの UI 更新。
+* 内容: 現コードの `ResolveWorkbookPaneWindow` では `Application.DoEvents()` や固定待機は確認されない。window 解決は `WorkbookPaneWindowResolveAttempts` 回の同期確認で行い、解決できない場合は retry coordinator 側の後続処理へ委譲する。
 * 影響範囲: UI / Office操作
-* 危険度: 高
-* 現状: 実機では安定動作しているため未対応
+* 危険度: 低
+* 現状: Thread.Sleep 依存の対象外。DoEvents / sleep / timing hack は追加しない方針を維持する。
 
 ### TaskPaneRefreshOrchestrationService.cs:472
 

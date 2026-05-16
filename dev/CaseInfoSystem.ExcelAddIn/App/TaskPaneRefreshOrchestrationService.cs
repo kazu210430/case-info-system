@@ -15,7 +15,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         internal const int PendingPaneRefreshIntervalMs = 400;
         internal const int PendingPaneRefreshMaxAttempts = 3;
         internal const int WorkbookPaneWindowResolveAttempts = 2;
-        internal const int WorkbookPaneWindowResolveDelayMs = 80;
 
         private readonly ExcelInteropService _excelInteropService;
         private readonly WorkbookSessionService _workbookSessionService;

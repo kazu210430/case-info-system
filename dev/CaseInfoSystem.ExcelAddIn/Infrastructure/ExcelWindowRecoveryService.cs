@@ -13,17 +13,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private static readonly IntPtr HwndTopMost = new IntPtr(-1);
         private static readonly IntPtr HwndNoTopMost = new IntPtr(-2);
         private const int SwHide = 0;
-        private const int SwShowNormal = 1;
-        private const int SwShowMinimized = 2;
-        private const int SwShowMaximized = 3;
-        private const int SwShowNoActivate = 4;
         private const int SwShow = 5;
-        private const int SwMinimize = 6;
-        private const int SwShowMinNoActive = 7;
-        private const int SwShowNa = 8;
         private const int SwRestore = 9;
-        private const int SwShowDefault = 10;
-        private const int SwForceMinimize = 11;
         private const uint SwpNoMove = 0x0002;
         private const uint SwpNoSize = 0x0001;
         private const uint SwpShowWindow = 0x0040;
@@ -102,22 +93,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             internal string RestoreSkipped { get; set; }
 
             internal string RestoreSkipReason { get; set; }
-        }
-
-        private sealed class WindowRestoreDecision
-        {
-            internal WindowRestoreDecision(bool shouldRestore, bool restoreSkipped, string restoreSkipReason)
-            {
-                ShouldRestore = shouldRestore;
-                RestoreSkipped = FormatBooleanLike(restoreSkipped);
-                RestoreSkipReason = restoreSkipReason ?? string.Empty;
-            }
-
-            internal bool ShouldRestore { get; }
-
-            internal string RestoreSkipped { get; }
-
-            internal string RestoreSkipReason { get; }
         }
 
         private sealed class WindowMutationSnapshot
@@ -307,9 +282,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 TraceWindowMutation(traceContext, "show-application-visible-after", GetCurrentActiveWindowForTracing());
 
                 IntPtr hwnd = new IntPtr(_application.Hwnd);
-                TraceWindowMutation(traceContext, "show-application-showwindow-restore-before", GetCurrentActiveWindowForTracing());
-                ShowWindow(hwnd, SwRestore);
-                TraceWindowMutation(traceContext, "show-application-showwindow-restore-after", GetCurrentActiveWindowForTracing());
+                RestoreApplicationWindowIfRequired(
+                    hwnd,
+                    GetCurrentActiveWindowForTracing(),
+                    traceContext,
+                    "show-application-showwindow-restore-before",
+                    "show-application-showwindow-restore-after",
+                    "show-application-showwindow-restore-skip");
 
                 ShowWindow(hwnd, SwShow);
                 TraceWindowMutation(traceContext, "show-application-showwindow-after", GetCurrentActiveWindowForTracing());
@@ -377,9 +356,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 TraceWindowMutation(traceContext, "application-visible-after", window);
 
                 IntPtr hwnd = new IntPtr(_application.Hwnd);
-                TraceWindowMutation(traceContext, "application-showwindow-restore-before", window);
-                ShowWindow(hwnd, SwRestore);
-                TraceWindowMutation(traceContext, "application-showwindow-restore-after", window);
+                RestoreApplicationWindowIfRequired(
+                    hwnd,
+                    window,
+                    traceContext,
+                    "application-showwindow-restore-before",
+                    "application-showwindow-restore-after",
+                    "application-showwindow-restore-skip");
 
                 ShowWindow(hwnd, SwShow);
                 TraceWindowMutation(traceContext, "application-showwindow-after", window);
@@ -595,7 +578,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return;
             }
 
-            WindowRestoreDecision restoreDecision = EvaluateRestoreDecision(hwnd, window);
+            ExcelWindowRestoreDecision restoreDecision = EvaluateRestoreDecision(hwnd, window);
             traceContext.RestoreSkipped = restoreDecision.RestoreSkipped;
             traceContext.RestoreSkipReason = restoreDecision.RestoreSkipReason;
             TraceWindowMutation(traceContext, "promote-showwindow-restore-before", window);
@@ -614,6 +597,29 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             TraceWindowMutation(traceContext, "promote-setforeground-before", window);
             SetForegroundWindow(hwnd);
             TraceWindowMutation(traceContext, "promote-setforeground-after", window);
+        }
+
+        private void RestoreApplicationWindowIfRequired(
+            IntPtr hwnd,
+            Excel.Window window,
+            WindowMutationTraceContext traceContext,
+            string beforeStep,
+            string afterStep,
+            string skipStep)
+        {
+            ExcelWindowRestoreDecision restoreDecision = EvaluateRestoreDecision(hwnd, window);
+            traceContext.RestoreSkipped = restoreDecision.RestoreSkipped;
+            traceContext.RestoreSkipReason = restoreDecision.RestoreSkipReason;
+            TraceWindowMutation(traceContext, beforeStep, window);
+            if (restoreDecision.ShouldRestore)
+            {
+                ShowWindow(hwnd, SwRestore);
+                TraceWindowMutation(traceContext, afterStep, window);
+            }
+            else
+            {
+                TraceWindowMutation(traceContext, skipStep, window);
+            }
         }
 
         private void TraceWindowMutation(WindowMutationTraceContext traceContext, string step, Excel.Window window)
@@ -948,14 +954,16 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             changedFields.Add(fieldName ?? string.Empty);
         }
 
-        private WindowRestoreDecision EvaluateRestoreDecision(IntPtr hwnd, Excel.Window window)
+        private ExcelWindowRestoreDecision EvaluateRestoreDecision(IntPtr hwnd, Excel.Window window)
         {
             if (window == null)
             {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:window-null");
+                return ExcelWindowRestoreDecisionPolicy.Decide(
+                    windowResolved: false,
+                    visibleReadSucceeded: false,
+                    visible: false,
+                    placementReadSucceeded: false,
+                    showCmd: 0);
             }
 
             bool visible;
@@ -965,65 +973,31 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             catch
             {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:visible-read-failed");
-            }
-
-            if (!visible)
-            {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:not-visible");
+                return ExcelWindowRestoreDecisionPolicy.Decide(
+                    windowResolved: true,
+                    visibleReadSucceeded: false,
+                    visible: false,
+                    placementReadSucceeded: false,
+                    showCmd: 0);
             }
 
             NativeWindowPlacement placement;
             if (!TryGetWindowPlacement(hwnd, out placement))
             {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:placement-read-failed");
+                return ExcelWindowRestoreDecisionPolicy.Decide(
+                    windowResolved: true,
+                    visibleReadSucceeded: true,
+                    visible: visible,
+                    placementReadSucceeded: false,
+                    showCmd: 0);
             }
 
-            if (placement.ShowCmd == SwHide)
-            {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:hidden");
-            }
-
-            if (IsPlacementMinimized(placement.ShowCmd))
-            {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:minimized");
-            }
-
-            if (IsPlacementMaximized(placement.ShowCmd))
-            {
-                return new WindowRestoreDecision(
-                    shouldRestore: true,
-                    restoreSkipped: false,
-                    restoreSkipReason: "restore-required:maximized");
-            }
-
-            if (placement.ShowCmd == SwShowNormal)
-            {
-                return new WindowRestoreDecision(
-                    shouldRestore: false,
-                    restoreSkipped: true,
-                    restoreSkipReason: "visible-shownormal-not-minimized-not-maximized");
-            }
-
-            return new WindowRestoreDecision(
-                shouldRestore: true,
-                restoreSkipped: false,
-                restoreSkipReason: "restore-required:showCmd=" + ResolveShowCmdName(placement.ShowCmd));
+            return ExcelWindowRestoreDecisionPolicy.Decide(
+                windowResolved: true,
+                visibleReadSucceeded: true,
+                visible: visible,
+                placementReadSucceeded: true,
+                showCmd: placement.ShowCmd);
         }
 
         private Excel.Window GetCurrentActiveWindowForTracing()
@@ -1096,66 +1070,27 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
         private static string FormatShowCmd(int showCmd)
         {
-            return ResolveShowCmdName(showCmd)
-                + "("
-                + showCmd.ToString(CultureInfo.InvariantCulture)
-                + ")";
-        }
-
-        private static string ResolveShowCmdName(int showCmd)
-        {
-            switch (showCmd)
-            {
-                case SwHide:
-                    return "SW_HIDE";
-                case SwShowNormal:
-                    return "SW_SHOWNORMAL";
-                case SwShowMinimized:
-                    return "SW_SHOWMINIMIZED";
-                case SwShowMaximized:
-                    return "SW_SHOWMAXIMIZED";
-                case SwShowNoActivate:
-                    return "SW_SHOWNOACTIVATE";
-                case SwShow:
-                    return "SW_SHOW";
-                case SwMinimize:
-                    return "SW_MINIMIZE";
-                case SwShowMinNoActive:
-                    return "SW_SHOWMINNOACTIVE";
-                case SwShowNa:
-                    return "SW_SHOWNA";
-                case SwRestore:
-                    return "SW_RESTORE";
-                case SwShowDefault:
-                    return "SW_SHOWDEFAULT";
-                case SwForceMinimize:
-                    return "SW_FORCEMINIMIZE";
-                default:
-                    return "SW_UNKNOWN";
-            }
+            return ExcelWindowRestoreDecisionPolicy.FormatShowCmd(showCmd);
         }
 
         private static string FormatBooleanLike(bool value)
         {
-            return value.ToString();
+            return ExcelWindowRestoreDecisionPolicy.FormatBooleanLike(value);
         }
 
         private static bool IsPlacementMinimized(int showCmd)
         {
-            return showCmd == SwShowMinimized
-                || showCmd == SwMinimize
-                || showCmd == SwShowMinNoActive
-                || showCmd == SwForceMinimize;
+            return ExcelWindowRestoreDecisionPolicy.IsPlacementMinimized(showCmd);
         }
 
         private static bool IsPlacementMaximized(int showCmd)
         {
-            return showCmd == SwShowMaximized;
+            return ExcelWindowRestoreDecisionPolicy.IsPlacementMaximized(showCmd);
         }
 
         private static bool IsPlacementNormal(int showCmd)
         {
-            return !IsPlacementMinimized(showCmd) && !IsPlacementMaximized(showCmd);
+            return ExcelWindowRestoreDecisionPolicy.IsPlacementNormal(showCmd);
         }
 
         private static void SetWindowPlacementValues(WindowMutationSnapshot snapshot, string value)

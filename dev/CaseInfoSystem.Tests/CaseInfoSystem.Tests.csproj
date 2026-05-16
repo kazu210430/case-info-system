@@ -73,6 +73,7 @@
     <Compile Include="NavigationServiceTests.cs" />
     <Compile Include="ExcelAddInTraceInfrastructureTests.cs" />
     <Compile Include="ExcelWindowRecoveryServiceTests.cs" />
+    <Compile Include="ExcelWindowRestoreDecisionPolicyTests.cs" />
     <Compile Include="ExcelApplicationStateScopeTests.cs" />
     <Compile Include="WorkbookCloseInteropHelperTests.cs" />
     <Compile Include="TaskPaneHostReusePolicyTests.cs" />
@@ -262,6 +263,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\IWorkbookRoleResolver.cs" Link="Source\Infrastructure\IWorkbookRoleResolver.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelAddInTraceLogWriter.cs" Link="Source\Infrastructure\ExcelAddInTraceLogWriter.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelProcessLaunchContextTracer.cs" Link="Source\Infrastructure\ExcelProcessLaunchContextTracer.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelWindowRestoreDecisionPolicy.cs" Link="Source\Infrastructure\ExcelWindowRestoreDecisionPolicy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelApplicationStateScope.cs" Link="Source\Infrastructure\ExcelApplicationStateScope.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookCloseInteropHelper.cs" Link="Source\Infrastructure\WorkbookCloseInteropHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\KernelWorkbookResolverService.cs" Link="Source\Infrastructure\KernelWorkbookResolverService.cs" />

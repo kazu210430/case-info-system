@@ -380,6 +380,7 @@
     <Compile Include="Infrastructure\ExcelInteropService.cs" />
     <Compile Include="Infrastructure\ExcelProcessLaunchContextTracer.cs" />
     <Compile Include="Infrastructure\ExcelWindowRecoveryService.cs" />
+    <Compile Include="Infrastructure\ExcelWindowRestoreDecisionPolicy.cs" />
     <Compile Include="Infrastructure\FolderWindowService.cs" />
     <Compile Include="Infrastructure\KernelWorkbookResolverService.cs" />
     <Compile Include="Infrastructure\Logger.cs" />

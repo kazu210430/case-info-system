@@ -216,6 +216,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshPreconditionDecisionService.cs" Link="Source\App\TaskPaneRefreshPreconditionDecisionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshObservationDecisionService.cs" Link="Source\App\TaskPaneRefreshObservationDecisionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshCompletionDecisionService.cs" Link="Source\App\TaskPaneRefreshCompletionDecisionService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshEmitContext.cs" Link="Source\App\TaskPaneRefreshEmitContext.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshEmitPayloadBuilder.cs" Link="Source\App\TaskPaneRefreshEmitPayloadBuilder.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\CreatedCaseDisplaySessionStateReader.cs" Link="Source\App\CreatedCaseDisplaySessionStateReader.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneForegroundGuaranteeTraceBuilder.cs" Link="Source\App\TaskPaneForegroundGuaranteeTraceBuilder.cs" />

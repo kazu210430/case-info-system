@@ -298,6 +298,7 @@
     <Compile Include="App\TaskPaneRefreshPreconditionDecisionService.cs" />
     <Compile Include="App\TaskPaneRefreshObservationDecisionService.cs" />
     <Compile Include="App\TaskPaneRefreshCompletionDecisionService.cs" />
+    <Compile Include="App\TaskPaneRefreshEmitContext.cs" />
     <Compile Include="App\TaskPaneRefreshEmitPayloadBuilder.cs" />
     <Compile Include="App\CreatedCaseDisplaySessionStateReader.cs" />
     <Compile Include="App\TaskPaneForegroundGuaranteeTraceBuilder.cs" />

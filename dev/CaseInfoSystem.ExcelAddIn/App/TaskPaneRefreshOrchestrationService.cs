@@ -26,6 +26,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneRefreshObservationDecisionService _observationDecisionService;
         private readonly TaskPaneRefreshCompletionDecisionService _completionDecisionService;
         private readonly TaskPaneRefreshEmitPayloadBuilder _emitPayloadBuilder;
+        private readonly TaskPaneRefreshEmitContextBuilder _emitContextBuilder;
         private readonly CreatedCaseDisplaySessionStateReader _createdCaseDisplaySessionStateReader;
         private readonly TaskPaneForegroundGuaranteeTraceBuilder _foregroundTraceBuilder;
         private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
@@ -66,6 +67,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _observationDecisionService = new TaskPaneRefreshObservationDecisionService();
             _completionDecisionService = new TaskPaneRefreshCompletionDecisionService();
             _emitPayloadBuilder = new TaskPaneRefreshEmitPayloadBuilder();
+            _emitContextBuilder = new TaskPaneRefreshEmitContextBuilder(
+                workbook => FormatWorkbookDescriptor(workbook),
+                window => FormatWindowDescriptor(window));
             _createdCaseDisplaySessionStateReader = new CreatedCaseDisplaySessionStateReader();
             _foregroundTraceBuilder = new TaskPaneForegroundGuaranteeTraceBuilder();
             _getKernelHomeForm = getKernelHomeForm;
@@ -1186,24 +1190,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(
-                new CaseDisplayCompletedPayloadInput(
+            TaskPaneRefreshEmitContext emitContext = _emitContextBuilder.Build(
+                TaskPaneRefreshEmitContextInput.ForCompletedSession(
                     reason,
-                    resolvedSession.ToSnapshot(),
+                    resolvedSession,
                     attemptResult,
                     completionSource,
                     attemptNumber,
                     displayRequest,
-                    FormatWorkbookDescriptor(workbook),
-                    FormatWindowDescriptor(window)));
+                    workbook,
+                    window));
+            CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(emitContext);
 
             _logger?.Info(payload.KernelTraceMessage);
             NewCaseVisibilityObservation.Log(
                 _logger,
                 _excelInteropService,
                 null,
-                workbook,
-                window,
+                emitContext.Workbook,
+                emitContext.Window,
                 payload.ObservationAction,
                 payload.ObservationSource,
                 payload.WorkbookFullName,

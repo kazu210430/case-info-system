@@ -10,6 +10,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
             "TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession";
 
         internal CaseDisplayCompletedPayload BuildCaseDisplayCompleted(
+            TaskPaneRefreshEmitContext context)
+        {
+            return BuildCaseDisplayCompleted(new CaseDisplayCompletedPayloadInput(context));
+        }
+
+        internal CaseDisplayCompletedPayload BuildCaseDisplayCompleted(
             CaseDisplayCompletedPayloadInput input)
         {
             string details =
@@ -84,6 +90,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
     internal sealed class CaseDisplayCompletedPayloadInput
     {
+        internal CaseDisplayCompletedPayloadInput(TaskPaneRefreshEmitContext context)
+            : this(
+                context == null ? null : context.Reason,
+                context == null ? null : context.SessionSnapshot,
+                context == null ? null : context.AttemptResult,
+                context == null ? null : context.CompletionSource,
+                context == null ? null : context.AttemptNumber,
+                context == null ? null : context.DisplayRequest,
+                context == null ? null : context.FormattedWorkbook,
+                context == null ? null : context.FormattedWindow)
+        {
+        }
+
         internal CaseDisplayCompletedPayloadInput(
             string reason,
             CreatedCaseDisplaySessionSnapshot sessionSnapshot,

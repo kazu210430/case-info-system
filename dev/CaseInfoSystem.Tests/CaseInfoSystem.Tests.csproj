@@ -115,6 +115,9 @@
     <Compile Include="TaskPaneRefreshFailClosedOutcomeTests.cs" />
     <Compile Include="TaskPaneRefreshPreconditionDecisionServiceTests.cs" />
     <Compile Include="TaskPaneRefreshObservationDecisionServiceTests.cs" />
+    <Compile Include="TaskPaneRefreshCompletionDecisionServiceTests.cs" />
+    <Compile Include="TaskPaneRefreshEmitPayloadBuilderTests.cs" />
+    <Compile Include="TaskPaneForegroundGuaranteeTraceBuilderTests.cs" />
     <Compile Include="TaskPaneRefreshRetryContinuationDecisionServiceTests.cs" />
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
     <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
@@ -208,6 +211,9 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshFailClosedOutcome.cs" Link="Source\App\TaskPaneRefreshFailClosedOutcome.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshPreconditionDecisionService.cs" Link="Source\App\TaskPaneRefreshPreconditionDecisionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshObservationDecisionService.cs" Link="Source\App\TaskPaneRefreshObservationDecisionService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshCompletionDecisionService.cs" Link="Source\App\TaskPaneRefreshCompletionDecisionService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshEmitPayloadBuilder.cs" Link="Source\App\TaskPaneRefreshEmitPayloadBuilder.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneForegroundGuaranteeTraceBuilder.cs" Link="Source\App\TaskPaneForegroundGuaranteeTraceBuilder.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshRetryContinuationDecisionService.cs" Link="Source\App\TaskPaneRefreshRetryContinuationDecisionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneNormalizedOutcomeMapper.cs" Link="Source\App\TaskPaneNormalizedOutcomeMapper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshAttemptResult.cs" Link="Source\App\TaskPaneRefreshAttemptResult.cs" />

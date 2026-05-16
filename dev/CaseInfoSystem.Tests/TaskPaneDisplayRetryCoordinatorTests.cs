@@ -122,19 +122,21 @@ namespace CaseInfoSystem.Tests
         public void CaseDisplayCompleted_EmitOwnerAndOneTimeGateStayInOrchestrationOnly()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string payloadBuilderSource = ReadAppSource("TaskPaneRefreshEmitPayloadBuilder.cs");
             string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
             string markMethod = ReadMethod(orchestrationSource, "private bool TryMarkCreatedCaseDisplaySessionCompletedForEmit");
 
             Assert.Contains("TryCompleteCreatedCaseDisplaySession", orchestrationSource);
-            Assert.Contains("action=case-display-completed", orchestrationSource);
-            Assert.Contains("\"case-display-completed\"", orchestrationSource);
-            Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", orchestrationSource);
+            Assert.Contains("_emitPayloadBuilder.BuildCaseDisplayCompleted(", orchestrationSource);
+            Assert.Contains("action=case-display-completed", payloadBuilderSource);
+            Assert.Contains("\"case-display-completed\"", payloadBuilderSource);
+            Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", payloadBuilderSource);
             Assert.Contains("NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);", orchestrationSource);
             AssertContainsInOrder(
                 completionMethod,
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
                 "return;",
-                "string details =");
+                "CaseDisplayCompletedPayload payload =");
             AssertContainsInOrder(
                 markMethod,
                 "bool shouldEmit = false;",
@@ -146,7 +148,7 @@ namespace CaseInfoSystem.Tests
                 "return shouldEmit;");
             Assert.DoesNotContain("case-display-completed", markMethod);
             Assert.DoesNotContain("NewCaseVisibilityObservation", markMethod);
-            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", markMethod);
+            Assert.DoesNotContain("BuildCaseDisplayCompleted", markMethod);
 
             AssertDoesNotOwnCompletion("WorkbookTaskPaneReadyShowAttemptWorker.cs");
             AssertDoesNotOwnCompletion("PendingPaneRefreshRetryService.cs");
@@ -160,17 +162,19 @@ namespace CaseInfoSystem.Tests
         public void CompletionHardGateDecisionContract_RequiresVisibilityAndForegroundDisplayCompletableFacts()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string completionDecisionSource = ReadAppSource("TaskPaneRefreshCompletionDecisionService.cs");
 
             Assert.Contains("IsCreatedCaseDisplayReason(reason)", orchestrationSource);
-            Assert.Contains("attemptResult == null", orchestrationSource);
-            Assert.Contains("!attemptResult.IsRefreshSucceeded", orchestrationSource);
-            Assert.Contains("!attemptResult.IsPaneVisible", orchestrationSource);
-            Assert.Contains("attemptResult.VisibilityRecoveryOutcome == null", orchestrationSource);
-            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsTerminal", orchestrationSource);
-            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable", orchestrationSource);
+            Assert.Contains("_completionDecisionService.DecideCreatedCaseDisplayCompletion(", orchestrationSource);
+            Assert.Contains("attemptResult == null", completionDecisionSource);
+            Assert.Contains("!attemptResult.IsRefreshSucceeded", completionDecisionSource);
+            Assert.Contains("!attemptResult.IsPaneVisible", completionDecisionSource);
+            Assert.Contains("attemptResult.VisibilityRecoveryOutcome == null", completionDecisionSource);
+            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsTerminal", completionDecisionSource);
+            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable", completionDecisionSource);
             Assert.Contains(
-                "!_observationDecisionService.IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome)",
-                orchestrationSource);
+                "!IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome)",
+                completionDecisionSource);
 
             string foregroundInputSource = ReadOptionalForegroundDisplayCompletableDecisionSource(orchestrationSource);
             Assert.Contains("outcome != null", foregroundInputSource);
@@ -183,10 +187,11 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string payloadBuilderSource = ReadAppSource("TaskPaneRefreshEmitPayloadBuilder.cs");
             string payloadHelper = Slice(
-                orchestrationSource,
-                "private static string BuildCaseDisplayCompletedDetailsPayload",
-                "private CreatedCaseDisplayCompletionDecision");
+                payloadBuilderSource,
+                "internal CaseDisplayCompletedPayload BuildCaseDisplayCompleted",
+                "return new CaseDisplayCompletedPayload");
 
             AssertContainsInOrder(
                 completionMethod,
@@ -194,54 +199,55 @@ namespace CaseInfoSystem.Tests
                 "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
                 "return;",
-                "string details = BuildCaseDisplayCompletedDetailsPayload(",
-                "_logger?.Info(",
-                "\"case-display-completed\"",
-                "details);",
+                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(",
+                "_logger?.Info(payload.KernelTraceMessage);",
+                "payload.ObservationAction",
+                "payload.ObservationSource",
+                "payload.Details);",
                 "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
             AssertContainsInOrder(
                 payloadHelper,
                 "string details =",
-                "\"reason=\" + (reason ?? string.Empty)",
-                "\",sessionId=\" + resolvedSession.SessionId",
-                "\",completionSource=\" + (completionSource ?? string.Empty)",
-                "\",completion=\" + attemptResult.CompletionBasis",
-                "\",paneVisible=\" + attemptResult.IsPaneVisible.ToString()",
-                "\",visibilityRecoveryStatus=\" + attemptResult.VisibilityRecoveryOutcome.Status.ToString()",
-                "\",visibilityRecoveryDisplayCompletable=\" + attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable.ToString()",
-                "\",visibilityRecoveryPaneVisible=\" + attemptResult.VisibilityRecoveryOutcome.IsPaneVisible.ToString()",
-                "\",visibilityRecoveryTargetKind=\" + attemptResult.VisibilityRecoveryOutcome.TargetKind.ToString()",
-                "\",visibilityPaneVisibleSource=\" + attemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()",
-                "\",visibilityRecoveryReason=\" + attemptResult.VisibilityRecoveryOutcome.Reason",
-                "\",visibilityRecoveryDegradedReason=\" + attemptResult.VisibilityRecoveryOutcome.DegradedReason",
-                "\",refreshSourceStatus=\" + attemptResult.RefreshSourceSelectionOutcome.Status.ToString()",
-                "\",refreshSourceSelectedSource=\" + attemptResult.RefreshSourceSelectionOutcome.SelectedSource.ToString()",
-                "\",refreshSourceSelectionReason=\" + attemptResult.RefreshSourceSelectionOutcome.SelectionReason",
-                "\",refreshSourceFallbackReasons=\" + attemptResult.RefreshSourceSelectionOutcome.FallbackReasons",
-                "\",refreshSourceCacheFallback=\" + attemptResult.RefreshSourceSelectionOutcome.IsCacheFallback.ToString()",
-                "\",refreshSourceRebuildRequired=\" + attemptResult.RefreshSourceSelectionOutcome.IsRebuildRequired.ToString()",
-                "\",refreshSourceCanContinue=\" + attemptResult.RefreshSourceSelectionOutcome.CanContinueRefresh.ToString()",
-                "\",refreshSourceFailureReason=\" + attemptResult.RefreshSourceSelectionOutcome.FailureReason",
-                "\",refreshSourceDegradedReason=\" + attemptResult.RefreshSourceSelectionOutcome.DegradedReason",
-                "\",rebuildFallbackStatus=\" + attemptResult.RebuildFallbackOutcome.Status.ToString()",
-                "\",rebuildFallbackRequired=\" + attemptResult.RebuildFallbackOutcome.IsRequired.ToString()",
-                "\",rebuildFallbackCanContinue=\" + attemptResult.RebuildFallbackOutcome.CanContinueRefresh.ToString()",
-                "\",rebuildFallbackSnapshotSource=\" + attemptResult.RebuildFallbackOutcome.SnapshotSource.ToString()",
-                "\",rebuildFallbackReasons=\" + attemptResult.RebuildFallbackOutcome.FallbackReasons",
-                "\",rebuildFallbackFailureReason=\" + attemptResult.RebuildFallbackOutcome.FailureReason",
-                "\",rebuildFallbackDegradedReason=\" + attemptResult.RebuildFallbackOutcome.DegradedReason",
-                "\",refreshCompleted=\" + attemptResult.IsRefreshCompleted.ToString()",
-                "\",foregroundGuaranteeTerminal=\" + attemptResult.IsForegroundGuaranteeTerminal.ToString()",
-                "\",foregroundGuaranteeRequired=\" + attemptResult.WasForegroundGuaranteeRequired.ToString()",
-                "\",foregroundGuaranteeStatus=\" + attemptResult.ForegroundGuaranteeOutcome.Status.ToString()",
-                "\",foregroundGuaranteeDisplayCompletable=\" + attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable.ToString()",
-                "\",foregroundGuaranteeExecutionAttempted=\" + attemptResult.ForegroundGuaranteeOutcome.WasExecutionAttempted.ToString()",
-                "\",foregroundGuaranteeTargetKind=\" + attemptResult.ForegroundGuaranteeOutcome.TargetKind.ToString()",
+                "\"reason=\" + (input.Reason ?? string.Empty)",
+                "\",sessionId=\" + input.SessionId",
+                "\",completionSource=\" + (input.CompletionSource ?? string.Empty)",
+                "\",completion=\" + input.AttemptResult.CompletionBasis",
+                "\",paneVisible=\" + input.AttemptResult.IsPaneVisible.ToString()",
+                "\",visibilityRecoveryStatus=\" + input.AttemptResult.VisibilityRecoveryOutcome.Status.ToString()",
+                "\",visibilityRecoveryDisplayCompletable=\" + input.AttemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable.ToString()",
+                "\",visibilityRecoveryPaneVisible=\" + input.AttemptResult.VisibilityRecoveryOutcome.IsPaneVisible.ToString()",
+                "\",visibilityRecoveryTargetKind=\" + input.AttemptResult.VisibilityRecoveryOutcome.TargetKind.ToString()",
+                "\",visibilityPaneVisibleSource=\" + input.AttemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()",
+                "\",visibilityRecoveryReason=\" + input.AttemptResult.VisibilityRecoveryOutcome.Reason",
+                "\",visibilityRecoveryDegradedReason=\" + input.AttemptResult.VisibilityRecoveryOutcome.DegradedReason",
+                "\",refreshSourceStatus=\" + input.AttemptResult.RefreshSourceSelectionOutcome.Status.ToString()",
+                "\",refreshSourceSelectedSource=\" + input.AttemptResult.RefreshSourceSelectionOutcome.SelectedSource.ToString()",
+                "\",refreshSourceSelectionReason=\" + input.AttemptResult.RefreshSourceSelectionOutcome.SelectionReason",
+                "\",refreshSourceFallbackReasons=\" + input.AttemptResult.RefreshSourceSelectionOutcome.FallbackReasons",
+                "\",refreshSourceCacheFallback=\" + input.AttemptResult.RefreshSourceSelectionOutcome.IsCacheFallback.ToString()",
+                "\",refreshSourceRebuildRequired=\" + input.AttemptResult.RefreshSourceSelectionOutcome.IsRebuildRequired.ToString()",
+                "\",refreshSourceCanContinue=\" + input.AttemptResult.RefreshSourceSelectionOutcome.CanContinueRefresh.ToString()",
+                "\",refreshSourceFailureReason=\" + input.AttemptResult.RefreshSourceSelectionOutcome.FailureReason",
+                "\",refreshSourceDegradedReason=\" + input.AttemptResult.RefreshSourceSelectionOutcome.DegradedReason",
+                "\",rebuildFallbackStatus=\" + input.AttemptResult.RebuildFallbackOutcome.Status.ToString()",
+                "\",rebuildFallbackRequired=\" + input.AttemptResult.RebuildFallbackOutcome.IsRequired.ToString()",
+                "\",rebuildFallbackCanContinue=\" + input.AttemptResult.RebuildFallbackOutcome.CanContinueRefresh.ToString()",
+                "\",rebuildFallbackSnapshotSource=\" + input.AttemptResult.RebuildFallbackOutcome.SnapshotSource.ToString()",
+                "\",rebuildFallbackReasons=\" + input.AttemptResult.RebuildFallbackOutcome.FallbackReasons",
+                "\",rebuildFallbackFailureReason=\" + input.AttemptResult.RebuildFallbackOutcome.FailureReason",
+                "\",rebuildFallbackDegradedReason=\" + input.AttemptResult.RebuildFallbackOutcome.DegradedReason",
+                "\",refreshCompleted=\" + input.AttemptResult.IsRefreshCompleted.ToString()",
+                "\",foregroundGuaranteeTerminal=\" + input.AttemptResult.IsForegroundGuaranteeTerminal.ToString()",
+                "\",foregroundGuaranteeRequired=\" + input.AttemptResult.WasForegroundGuaranteeRequired.ToString()",
+                "\",foregroundGuaranteeStatus=\" + input.AttemptResult.ForegroundGuaranteeOutcome.Status.ToString()",
+                "\",foregroundGuaranteeDisplayCompletable=\" + input.AttemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable.ToString()",
+                "\",foregroundGuaranteeExecutionAttempted=\" + input.AttemptResult.ForegroundGuaranteeOutcome.WasExecutionAttempted.ToString()",
+                "\",foregroundGuaranteeTargetKind=\" + input.AttemptResult.ForegroundGuaranteeOutcome.TargetKind.ToString()",
                 "\",foregroundRecoverySucceeded=\"",
-                "\",foregroundOutcomeReason=\" + attemptResult.ForegroundGuaranteeOutcome.Reason",
-                "WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest)",
-                "details += \",attempt=\" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);",
-                "return details;");
+                "\",foregroundOutcomeReason=\" + input.AttemptResult.ForegroundGuaranteeOutcome.Reason",
+                "WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(input.DisplayRequest)",
+                "details += \",attempt=\" + input.AttemptNumber.Value.ToString(CultureInfo.InvariantCulture);",
+                "string kernelTraceMessage =");
             Assert.DoesNotContain("_logger", payloadHelper);
             Assert.DoesNotContain("NewCaseVisibilityObservation", payloadHelper);
             Assert.DoesNotContain("_createdCaseDisplaySessions", payloadHelper);
@@ -265,11 +271,11 @@ namespace CaseInfoSystem.Tests
                 "return;",
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
                 "return;",
-                "string details = BuildCaseDisplayCompletedDetailsPayload(",
-                "_logger?.Info(",
-                "action=case-display-completed",
+                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(",
+                "_logger?.Info(payload.KernelTraceMessage);",
                 "NewCaseVisibilityObservation.Log(",
-                "\"case-display-completed\"",
+                "payload.ObservationAction",
+                "payload.ObservationSource",
                 "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
             AssertContainsInOrder(
                 markMethod,
@@ -284,19 +290,19 @@ namespace CaseInfoSystem.Tests
             string beforePayloadBuild = Slice(
                 completionMethod,
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
-                "string details = BuildCaseDisplayCompletedDetailsPayload(");
+                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(");
             Assert.DoesNotContain("action=case-display-completed", beforePayloadBuild);
             Assert.DoesNotContain("\"case-display-completed\"", beforePayloadBuild);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Log", beforePayloadBuild);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", beforePayloadBuild);
             Assert.DoesNotContain("case-display-completed", markMethod);
             Assert.DoesNotContain("NewCaseVisibilityObservation", markMethod);
-            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", markMethod);
+            Assert.DoesNotContain("BuildCaseDisplayCompleted", markMethod);
 
             Assert.Equal(1, CountOccurrences(completionMethod, "NewCaseVisibilityObservation.Complete("));
             Assert.Equal(1, CountOccurrences(completionMethod, "NewCaseVisibilityObservation.Log("));
-            Assert.Equal(1, CountOccurrences(completionMethod, "action=case-display-completed"));
-            Assert.Equal(1, CountOccurrences(completionMethod, "\"case-display-completed\""));
+            Assert.Equal(1, CountOccurrences(completionMethod, "payload.KernelTraceMessage"));
+            Assert.Equal(1, CountOccurrences(completionMethod, "payload.ObservationAction"));
             Assert.Equal(1, CountOccurrences(markMethod, "resolvedSession.IsCompleted = true;"));
             Assert.Equal(1, CountOccurrences(markMethod, "_createdCaseDisplaySessions.Remove(resolvedSession.WorkbookFullName);"));
             Assert.Equal(1, CountOccurrences(markMethod, "shouldEmit = true;"));
@@ -320,7 +326,7 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("resolvedSession.IsCompleted", missingSessionGate);
             Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", missingSessionGate);
             Assert.DoesNotContain("TryMarkCreatedCaseDisplaySessionCompletedForEmit", missingSessionGate);
-            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", missingSessionGate);
+            Assert.DoesNotContain("BuildCaseDisplayCompleted", missingSessionGate);
             Assert.DoesNotContain("action=case-display-completed", missingSessionGate);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Log", missingSessionGate);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", missingSessionGate);
@@ -347,7 +353,7 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("NewCaseVisibilityObservation", lookupMethod);
             Assert.DoesNotContain("IsCompleted", lookupMethod);
             Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", lookupMethod);
-            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", lookupMethod);
+            Assert.DoesNotContain("BuildCaseDisplayCompleted", lookupMethod);
         }
 
         [Fact]
@@ -363,13 +369,13 @@ namespace CaseInfoSystem.Tests
             AssertContainsInOrder(
                 hardGateBlock,
                 "CreatedCaseDisplayCompletionDecision completionDecision =",
-                "EvaluateCreatedCaseDisplayCompletionDecision(reason, attemptResult);",
+                "_completionDecisionService.DecideCreatedCaseDisplayCompletion(",
                 "if (!completionDecision.CanComplete)",
                 "return;");
             Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", hardGateBlock);
             Assert.DoesNotContain("_createdCaseDisplaySessions", hardGateBlock);
             Assert.DoesNotContain("IsCompleted", hardGateBlock);
-            Assert.DoesNotContain("BuildCaseDisplayCompletedDetailsPayload", hardGateBlock);
+            Assert.DoesNotContain("BuildCaseDisplayCompleted", hardGateBlock);
             Assert.DoesNotContain("case-display-completed", hardGateBlock);
             Assert.DoesNotContain("NewCaseVisibilityObservation", hardGateBlock);
         }
@@ -773,9 +779,11 @@ namespace CaseInfoSystem.Tests
         public void ForegroundTraceActionsSourcesAndDetails_PreserveContract()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
-            string decisionTrace = ReadMethod(orchestrationSource, "private void LogForegroundGuaranteeDecision");
-            string startedTrace = ReadMethod(orchestrationSource, "private void LogFinalForegroundGuaranteeStarted");
-            string completedTrace = ReadMethod(orchestrationSource, "private void LogFinalForegroundGuaranteeCompleted");
+            string traceBuilderSource = ReadAppSource("TaskPaneForegroundGuaranteeTraceBuilder.cs");
+            string decisionTrace = ReadMethod(traceBuilderSource, "internal TaskPaneForegroundGuaranteeTracePayload BuildDecisionTrace");
+            string startedTrace = ReadMethod(traceBuilderSource, "internal TaskPaneForegroundGuaranteeTracePayload BuildStartedTrace");
+            string completedTrace = ReadMethod(traceBuilderSource, "internal TaskPaneForegroundGuaranteeTracePayload BuildCompletedTrace");
+            string orchestrationDecisionTrace = ReadMethod(orchestrationSource, "private void LogForegroundGuaranteeDecision");
 
             AssertContainsInOrder(
                 decisionTrace,
@@ -789,18 +797,26 @@ namespace CaseInfoSystem.Tests
                 ", foregroundOutcomeStatus=",
                 ", foregroundOutcomeDisplayCompletable=",
                 "\"foreground-recovery-decision\"",
-                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"");
+                "ForegroundGuaranteeOutcomeSource");
             AssertContainsInOrder(
                 startedTrace,
                 "action=final-foreground-guarantee-start",
                 "\"final-foreground-guarantee-started\"",
-                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"");
+                "ForegroundGuaranteeOutcomeSource");
             AssertContainsInOrder(
                 completedTrace,
                 "action=final-foreground-guarantee-end",
                 ", recovered=",
                 "\"final-foreground-guarantee-completed\"",
-                "\"TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome\"");
+                "ForegroundGuaranteeOutcomeSource");
+            AssertContainsInOrder(
+                orchestrationDecisionTrace,
+                "_foregroundTraceBuilder.BuildDecisionTrace(",
+                "_logger?.Info(trace.KernelTraceMessage);",
+                "NewCaseVisibilityObservation.Log(",
+                "trace.ObservationAction",
+                "trace.ObservationSource",
+                "trace.Details);");
         }
 
         [Fact]
@@ -813,15 +829,15 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 decisionDetailsSource,
-                "\"reason=\" + (reason ?? string.Empty)",
-                "\",foregroundRecoveryStarted=\" + foregroundRecoveryStarted.ToString()",
-                "\",foregroundSkipReason=\" + (foregroundSkipReason ?? string.Empty)",
+                "\"reason=\" + (input.Reason ?? string.Empty)",
+                "\",foregroundRecoveryStarted=\" + (input.Decision != null && input.Decision.ForegroundRecoveryStarted).ToString()",
+                "\",foregroundSkipReason=\" + (input.Decision == null ? string.Empty : input.Decision.ForegroundSkipReason)",
                 "\",foregroundOutcomeStatus=\" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString())");
             Assert.DoesNotContain("foregroundOutcomeDisplayCompletable", decisionDetailsSource);
             Assert.DoesNotContain("recovered=", decisionDetailsSource);
             Assert.DoesNotContain("case-display-completed", decisionDetailsSource);
 
-            Assert.Contains("\"reason=\" + (reason ?? string.Empty)", startedDetailsSource);
+            Assert.Contains("\"reason=\" + (input.Reason ?? string.Empty)", startedDetailsSource);
             Assert.DoesNotContain("foregroundRecoveryStarted", startedDetailsSource);
             Assert.DoesNotContain("foregroundOutcomeStatus", startedDetailsSource);
             Assert.DoesNotContain("recovered=", startedDetailsSource);
@@ -829,8 +845,8 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 completedDetailsSource,
-                "\"reason=\" + (reason ?? string.Empty)",
-                "\",recovered=\" + (executionResult != null && executionResult.Recovered).ToString()",
+                "\"reason=\" + (input.Reason ?? string.Empty)",
+                "\",recovered=\" + recovered.ToString()",
                 "\",foregroundOutcomeStatus=\"");
             Assert.DoesNotContain("foregroundRecoveryStarted", completedDetailsSource);
             Assert.DoesNotContain("foregroundSkipReason", completedDetailsSource);
@@ -845,8 +861,8 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 completedDetailsSource,
+                "bool recovered = input.ExecutionResult != null && input.ExecutionResult.Recovered;",
                 "\",foregroundOutcomeStatus=\"",
-                "executionResult != null && executionResult.Recovered",
                 "? ForegroundGuaranteeOutcomeStatus.RequiredSucceeded.ToString()",
                 ": ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString()");
             Assert.DoesNotContain("ForegroundGuaranteeOutcomeStatus.RequiredFailed", completedDetailsSource);
@@ -1181,20 +1197,23 @@ namespace CaseInfoSystem.Tests
 
         private static string ReadForegroundDecisionObservationDetailsSource(string source)
         {
-            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
-            return ReadMethod(decisionServiceSource, "internal string BuildForegroundRecoveryDecisionDetails");
+            string traceBuilderSource = ReadAppSource("TaskPaneForegroundGuaranteeTraceBuilder.cs");
+            string method = ReadMethod(traceBuilderSource, "internal TaskPaneForegroundGuaranteeTracePayload BuildDecisionTrace");
+            return Slice(method, "string details =", "string message =");
         }
 
         private static string ReadFinalForegroundStartedObservationDetailsSource(string source)
         {
-            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
-            return ReadMethod(decisionServiceSource, "internal string BuildFinalForegroundGuaranteeStartedDetails");
+            string traceBuilderSource = ReadAppSource("TaskPaneForegroundGuaranteeTraceBuilder.cs");
+            string method = ReadMethod(traceBuilderSource, "internal TaskPaneForegroundGuaranteeTracePayload BuildStartedTrace");
+            return Slice(method, "string details =", "string message =");
         }
 
         private static string ReadFinalForegroundCompletedObservationDetailsSource(string source)
         {
-            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
-            return ReadMethod(decisionServiceSource, "internal string BuildFinalForegroundGuaranteeCompletedDetails");
+            string traceBuilderSource = ReadAppSource("TaskPaneForegroundGuaranteeTraceBuilder.cs");
+            string method = ReadMethod(traceBuilderSource, "internal TaskPaneForegroundGuaranteeTracePayload BuildCompletedTrace");
+            return Slice(method, "bool recovered =", "string message =");
         }
 
         private static string ReadForegroundExecutionClassificationSource(string source)
@@ -1243,7 +1262,18 @@ namespace CaseInfoSystem.Tests
                 return helperSource;
             }
 
-            return ReadMethod(source, "private static CreatedCaseDisplayCompletionDecision EvaluateCreatedCaseDisplayCompletionDecision");
+            string completionDecisionSource = ReadAppSource("TaskPaneRefreshCompletionDecisionService.cs");
+            helperSource =
+                ReadOptionalMethod(completionDecisionSource, "internal static bool IsForegroundDisplayCompletableTerminalInput")
+                + ReadOptionalMethod(completionDecisionSource, "private static bool HasForegroundDisplayCompletableTerminalInput")
+                + ReadOptionalMethod(completionDecisionSource, "private static bool HasDisplayCompletableForegroundOutcome")
+                + ReadOptionalMethod(completionDecisionSource, "private static bool IsForegroundGuaranteeDisplayCompletableInput");
+            if (!string.IsNullOrEmpty(helperSource))
+            {
+                return helperSource;
+            }
+
+            return ReadMethod(completionDecisionSource, "internal CreatedCaseDisplayCompletionDecision DecideCreatedCaseDisplayCompletion");
         }
 
         private static void AssertContainsInOrder(string source, params string[] fragments)

@@ -25,6 +25,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly WorkbookPaneWindowResolver _workbookPaneWindowResolver;
         private readonly TaskPaneRefreshPreconditionDecisionService _preconditionDecisionService;
         private readonly TaskPaneRefreshObservationDecisionService _observationDecisionService;
+        private readonly TaskPaneRefreshCompletionDecisionService _completionDecisionService;
+        private readonly TaskPaneRefreshEmitPayloadBuilder _emitPayloadBuilder;
+        private readonly TaskPaneForegroundGuaranteeTraceBuilder _foregroundTraceBuilder;
         private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
         private readonly TaskPaneReadyShowRetryScheduler _readyShowRetryScheduler;
         private readonly WindowActivateDownstreamObservation _windowActivateDownstreamObservation;
@@ -61,6 +64,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 () => FormatActiveState());
             _preconditionDecisionService = new TaskPaneRefreshPreconditionDecisionService();
             _observationDecisionService = new TaskPaneRefreshObservationDecisionService();
+            _completionDecisionService = new TaskPaneRefreshCompletionDecisionService();
+            _emitPayloadBuilder = new TaskPaneRefreshEmitPayloadBuilder();
+            _foregroundTraceBuilder = new TaskPaneForegroundGuaranteeTraceBuilder();
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
             _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
@@ -976,43 +982,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneRefreshForegroundGuaranteeDecision decision,
             Stopwatch stopwatch)
         {
-            TaskPaneRefreshAttemptResult attemptResult = decision == null ? null : decision.AttemptResult;
             WorkbookContext context = decision == null ? null : decision.Context;
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=foreground-recovery-decision reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context)
-                + ", refreshSucceeded="
-                + (attemptResult != null && attemptResult.IsRefreshSucceeded).ToString()
-                + ", resolvedWindowPresent="
-                + (decision != null && decision.ResolvedWindow != null).ToString()
-                + ", recoveryServicePresent="
-                + (decision != null && decision.RecoveryServicePresent).ToString()
-                + ", foregroundRecoveryStarted="
-                + (decision != null && decision.ForegroundRecoveryStarted).ToString()
-                + ", foregroundRecoverySkipped="
-                + (decision == null || !decision.ForegroundRecoveryStarted).ToString()
-                + ", foregroundSkipReason="
-                + (decision == null ? string.Empty : decision.ForegroundSkipReason)
-                + ", foregroundOutcomeStatus="
-                + (decision == null || decision.Outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : decision.Outcome.Status.ToString())
-                + ", foregroundOutcomeDisplayCompletable="
-                + (decision != null && decision.Outcome != null && decision.Outcome.IsDisplayCompletable).ToString()
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
-                + FormatObservationCorrelationFields(context, workbook));
+            TaskPaneForegroundGuaranteeTracePayload trace = _foregroundTraceBuilder.BuildDecisionTrace(
+                new TaskPaneForegroundGuaranteeDecisionTraceInput(
+                    reason,
+                    decision,
+                    FormatContextDescriptor(context),
+                    stopwatch.ElapsedMilliseconds,
+                    FormatObservationCorrelationFields(context, workbook)));
+            _logger?.Info(trace.KernelTraceMessage);
             NewCaseVisibilityObservation.Log(
                 _logger,
                 _excelInteropService,
                 null,
                 context == null ? workbook : context.Workbook,
                 decision == null ? null : decision.ObservedWindow,
-                "foreground-recovery-decision",
-                "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
+                trace.ObservationAction,
+                trace.ObservationSource,
                 ResolveObservedWorkbookPath(context, workbook),
-                _observationDecisionService.BuildForegroundRecoveryDecisionDetails(reason, decision));
+                trace.Details);
         }
 
         private void LogFinalForegroundGuaranteeStarted(
@@ -1022,25 +1010,23 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Stopwatch stopwatch)
         {
             WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=final-foreground-guarantee-start reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context)
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
-                + FormatObservationCorrelationFields(context, workbook));
+            TaskPaneForegroundGuaranteeTracePayload trace = _foregroundTraceBuilder.BuildStartedTrace(
+                new TaskPaneForegroundGuaranteeStartedTraceInput(
+                    reason,
+                    FormatContextDescriptor(context),
+                    stopwatch.ElapsedMilliseconds,
+                    FormatObservationCorrelationFields(context, workbook)));
+            _logger?.Info(trace.KernelTraceMessage);
             NewCaseVisibilityObservation.Log(
                 _logger,
                 _excelInteropService,
                 null,
                 context == null ? workbook : context.Workbook,
                 context == null ? null : context.Window,
-                "final-foreground-guarantee-started",
-                "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
+                trace.ObservationAction,
+                trace.ObservationSource,
                 ResolveObservedWorkbookPath(context, workbook),
-                _observationDecisionService.BuildFinalForegroundGuaranteeStartedDetails(reason));
+                trace.Details);
         }
 
         private void LogFinalForegroundGuaranteeCompleted(
@@ -1051,27 +1037,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Stopwatch stopwatch)
         {
             WorkbookContext context = attemptResult == null ? null : attemptResult.ForegroundContext;
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=final-foreground-guarantee-end reason="
-                + (reason ?? string.Empty)
-                + ", context="
-                + FormatContextDescriptor(context)
-                + ", recovered="
-                + (executionResult != null && executionResult.Recovered).ToString()
-                + ", elapsedMs="
-                + stopwatch.ElapsedMilliseconds.ToString()
-                + FormatObservationCorrelationFields(context, workbook));
+            TaskPaneForegroundGuaranteeTracePayload trace = _foregroundTraceBuilder.BuildCompletedTrace(
+                new TaskPaneForegroundGuaranteeCompletedTraceInput(
+                    reason,
+                    executionResult,
+                    FormatContextDescriptor(context),
+                    stopwatch.ElapsedMilliseconds,
+                    FormatObservationCorrelationFields(context, workbook)));
+            _logger?.Info(trace.KernelTraceMessage);
             NewCaseVisibilityObservation.Log(
                 _logger,
                 _excelInteropService,
                 null,
                 context == null ? workbook : context.Workbook,
                 context == null ? null : context.Window,
-                "final-foreground-guarantee-completed",
-                "TaskPaneRefreshOrchestrationService.CompleteForegroundGuaranteeOutcome",
+                trace.ObservationAction,
+                trace.ObservationSource,
                 ResolveObservedWorkbookPath(context, workbook),
-                _observationDecisionService.BuildFinalForegroundGuaranteeCompletedDetails(reason, executionResult));
+                trace.Details);
         }
 
         private CreatedCaseDisplaySession BeginCreatedCaseDisplaySession(Excel.Workbook workbook, string reason)
@@ -1178,7 +1161,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneDisplayRequest displayRequest = null)
         {
             CreatedCaseDisplayCompletionDecision completionDecision =
-                EvaluateCreatedCaseDisplayCompletionDecision(reason, attemptResult);
+                _completionDecisionService.DecideCreatedCaseDisplayCompletion(
+                    new TaskPaneRefreshCompletionDecisionInput(
+                        IsCreatedCaseDisplayReason(reason),
+                        attemptResult));
             if (!completionDecision.CanComplete)
             {
                 return;
@@ -1195,36 +1181,29 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            string details = BuildCaseDisplayCompletedDetailsPayload(
-                reason,
-                resolvedSession,
-                attemptResult,
-                completionSource,
-                attemptNumber,
-                displayRequest);
+            CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(
+                new CaseDisplayCompletedPayloadInput(
+                    reason,
+                    resolvedSession.SessionId,
+                    resolvedSession.WorkbookFullName,
+                    attemptResult,
+                    completionSource,
+                    attemptNumber,
+                    displayRequest,
+                    FormatWorkbookDescriptor(workbook),
+                    FormatWindowDescriptor(window)));
 
-            _logger?.Info(
-                KernelFlickerTracePrefix
-                + " source=TaskPaneRefreshOrchestrationService action=case-display-completed sessionId="
-                + resolvedSession.SessionId
-                + ", reason="
-                + (reason ?? string.Empty)
-                + ", workbook="
-                + FormatWorkbookDescriptor(workbook)
-                + ", window="
-                + FormatWindowDescriptor(window)
-                + ", completion="
-                + attemptResult.CompletionBasis);
+            _logger?.Info(payload.KernelTraceMessage);
             NewCaseVisibilityObservation.Log(
                 _logger,
                 _excelInteropService,
                 null,
                 workbook,
                 window,
-                "case-display-completed",
-                "TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession",
-                resolvedSession.WorkbookFullName,
-                details);
+                payload.ObservationAction,
+                payload.ObservationSource,
+                payload.WorkbookFullName,
+                payload.Details);
             NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
         }
 
@@ -1242,107 +1221,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return shouldEmit;
-        }
-
-        private static string BuildCaseDisplayCompletedDetailsPayload(
-            string reason,
-            CreatedCaseDisplaySession resolvedSession,
-            TaskPaneRefreshAttemptResult attemptResult,
-            string completionSource,
-            int? attemptNumber,
-            TaskPaneDisplayRequest displayRequest)
-        {
-            string details =
-                "reason=" + (reason ?? string.Empty)
-                + ",sessionId=" + resolvedSession.SessionId
-                + ",completionSource=" + (completionSource ?? string.Empty)
-                + ",completion=" + attemptResult.CompletionBasis
-                + ",paneVisible=" + attemptResult.IsPaneVisible.ToString()
-                + ",visibilityRecoveryStatus=" + attemptResult.VisibilityRecoveryOutcome.Status.ToString()
-                + ",visibilityRecoveryDisplayCompletable=" + attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable.ToString()
-                + ",visibilityRecoveryPaneVisible=" + attemptResult.VisibilityRecoveryOutcome.IsPaneVisible.ToString()
-                + ",visibilityRecoveryTargetKind=" + attemptResult.VisibilityRecoveryOutcome.TargetKind.ToString()
-                + ",visibilityPaneVisibleSource=" + attemptResult.VisibilityRecoveryOutcome.PaneVisibleSource.ToString()
-                + ",visibilityRecoveryReason=" + attemptResult.VisibilityRecoveryOutcome.Reason
-                + ",visibilityRecoveryDegradedReason=" + attemptResult.VisibilityRecoveryOutcome.DegradedReason
-                + ",refreshSourceStatus=" + attemptResult.RefreshSourceSelectionOutcome.Status.ToString()
-                + ",refreshSourceSelectedSource=" + attemptResult.RefreshSourceSelectionOutcome.SelectedSource.ToString()
-                + ",refreshSourceSelectionReason=" + attemptResult.RefreshSourceSelectionOutcome.SelectionReason
-                + ",refreshSourceFallbackReasons=" + attemptResult.RefreshSourceSelectionOutcome.FallbackReasons
-                + ",refreshSourceCacheFallback=" + attemptResult.RefreshSourceSelectionOutcome.IsCacheFallback.ToString()
-                + ",refreshSourceRebuildRequired=" + attemptResult.RefreshSourceSelectionOutcome.IsRebuildRequired.ToString()
-                + ",refreshSourceCanContinue=" + attemptResult.RefreshSourceSelectionOutcome.CanContinueRefresh.ToString()
-                + ",refreshSourceFailureReason=" + attemptResult.RefreshSourceSelectionOutcome.FailureReason
-                + ",refreshSourceDegradedReason=" + attemptResult.RefreshSourceSelectionOutcome.DegradedReason
-                + ",rebuildFallbackStatus=" + attemptResult.RebuildFallbackOutcome.Status.ToString()
-                + ",rebuildFallbackRequired=" + attemptResult.RebuildFallbackOutcome.IsRequired.ToString()
-                + ",rebuildFallbackCanContinue=" + attemptResult.RebuildFallbackOutcome.CanContinueRefresh.ToString()
-                + ",rebuildFallbackSnapshotSource=" + attemptResult.RebuildFallbackOutcome.SnapshotSource.ToString()
-                + ",rebuildFallbackReasons=" + attemptResult.RebuildFallbackOutcome.FallbackReasons
-                + ",rebuildFallbackFailureReason=" + attemptResult.RebuildFallbackOutcome.FailureReason
-                + ",rebuildFallbackDegradedReason=" + attemptResult.RebuildFallbackOutcome.DegradedReason
-                + ",refreshCompleted=" + attemptResult.IsRefreshCompleted.ToString()
-                + ",foregroundGuaranteeTerminal=" + attemptResult.IsForegroundGuaranteeTerminal.ToString()
-                + ",foregroundGuaranteeRequired=" + attemptResult.WasForegroundGuaranteeRequired.ToString()
-                + ",foregroundGuaranteeStatus=" + attemptResult.ForegroundGuaranteeOutcome.Status.ToString()
-                + ",foregroundGuaranteeDisplayCompletable=" + attemptResult.ForegroundGuaranteeOutcome.IsDisplayCompletable.ToString()
-                + ",foregroundGuaranteeExecutionAttempted=" + attemptResult.ForegroundGuaranteeOutcome.WasExecutionAttempted.ToString()
-                + ",foregroundGuaranteeTargetKind=" + attemptResult.ForegroundGuaranteeOutcome.TargetKind.ToString()
-                + ",foregroundRecoverySucceeded="
-                + (attemptResult.ForegroundGuaranteeOutcome.RecoverySucceeded.HasValue
-                    ? attemptResult.ForegroundGuaranteeOutcome.RecoverySucceeded.Value.ToString()
-                    : string.Empty)
-                + ",foregroundOutcomeReason=" + attemptResult.ForegroundGuaranteeOutcome.Reason
-                + WindowActivateDownstreamObservation.FormatDisplayRequestTraceFields(displayRequest);
-            if (attemptNumber.HasValue)
-            {
-                details += ",attempt=" + attemptNumber.Value.ToString(CultureInfo.InvariantCulture);
-            }
-
-            return details;
-        }
-
-        private CreatedCaseDisplayCompletionDecision EvaluateCreatedCaseDisplayCompletionDecision(
-            string reason,
-            TaskPaneRefreshAttemptResult attemptResult)
-        {
-            if (!IsCreatedCaseDisplayReason(reason)
-                || attemptResult == null)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (!attemptResult.IsRefreshSucceeded)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (!attemptResult.IsPaneVisible)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (attemptResult.VisibilityRecoveryOutcome == null)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (!attemptResult.VisibilityRecoveryOutcome.IsTerminal)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable)
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            if (!_observationDecisionService.IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome))
-            {
-                return CreatedCaseDisplayCompletionDecision.Blocked();
-            }
-
-            return CreatedCaseDisplayCompletionDecision.Allowed();
         }
 
         private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)
@@ -1468,26 +1346,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal string Reason { get; }
 
             internal bool IsCompleted { get; set; }
-        }
-
-        private struct CreatedCaseDisplayCompletionDecision
-        {
-            private CreatedCaseDisplayCompletionDecision(bool canComplete)
-            {
-                CanComplete = canComplete;
-            }
-
-            internal bool CanComplete { get; }
-
-            internal static CreatedCaseDisplayCompletionDecision Allowed()
-            {
-                return new CreatedCaseDisplayCompletionDecision(true);
-            }
-
-            internal static CreatedCaseDisplayCompletionDecision Blocked()
-            {
-                return new CreatedCaseDisplayCompletionDecision(false);
-            }
         }
 
         private static class RefreshDispatchShell

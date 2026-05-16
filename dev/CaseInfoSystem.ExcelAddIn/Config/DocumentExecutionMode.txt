@@ -8,5 +8,6 @@
 #   PilotOnly         -> WarmupEnabledProfileA
 #   AllowlistedOnly   -> WarmupEnabledProfileB
 #
-# Keep Disabled until VBA parity review is complete.
+# Current operation uses WarmupEnabledProfileB.
+# Disabled is one Word warm-up control value, not an emergency stop for document execution itself.
 WarmupEnabledProfileB

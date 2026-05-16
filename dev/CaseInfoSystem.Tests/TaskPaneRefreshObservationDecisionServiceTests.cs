@@ -74,9 +74,15 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(ForegroundGuaranteeTargetKind.ExplicitWorkbookWindow, decision.TargetKind);
             Assert.Same(context, decision.Context);
             Assert.Same(window, decision.ResolvedWindow);
-            Assert.Contains(
-                "foregroundRecoveryStarted=True",
-                service.BuildForegroundRecoveryDecisionDetails("ready-show", decision));
+            var traceBuilder = new TaskPaneForegroundGuaranteeTraceBuilder();
+            TaskPaneForegroundGuaranteeTracePayload trace = traceBuilder.BuildDecisionTrace(
+                new TaskPaneForegroundGuaranteeDecisionTraceInput(
+                    "ready-show",
+                    decision,
+                    "context",
+                    elapsedMilliseconds: 0,
+                    correlationFields: string.Empty));
+            Assert.Contains("foregroundRecoveryStarted=True", trace.Details);
         }
 
         [Fact]

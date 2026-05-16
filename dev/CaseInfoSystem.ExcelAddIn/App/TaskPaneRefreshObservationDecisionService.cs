@@ -120,43 +120,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 : ForegroundGuaranteeOutcome.RequiredDegraded(targetKind, "foregroundRecoveryReturnedFalse");
         }
 
-        internal string BuildForegroundRecoveryDecisionDetails(
-            string reason,
-            TaskPaneRefreshForegroundGuaranteeDecision decision)
-        {
-            bool foregroundRecoveryStarted = decision != null && decision.ForegroundRecoveryStarted;
-            string foregroundSkipReason = decision == null ? string.Empty : decision.ForegroundSkipReason;
-            ForegroundGuaranteeOutcome outcome = decision == null ? null : decision.Outcome;
-            return "reason=" + (reason ?? string.Empty)
-                + ",foregroundRecoveryStarted=" + foregroundRecoveryStarted.ToString()
-                + ",foregroundSkipReason=" + (foregroundSkipReason ?? string.Empty)
-                + ",foregroundOutcomeStatus=" + (outcome == null ? ForegroundGuaranteeOutcomeStatus.Unknown.ToString() : outcome.Status.ToString());
-        }
-
-        internal string BuildFinalForegroundGuaranteeStartedDetails(string reason)
-        {
-            return "reason=" + (reason ?? string.Empty);
-        }
-
-        internal string BuildFinalForegroundGuaranteeCompletedDetails(
-            string reason,
-            ForegroundGuaranteeExecutionResult executionResult)
-        {
-            return "reason=" + (reason ?? string.Empty)
-                + ",recovered=" + (executionResult != null && executionResult.Recovered).ToString()
-                + ",foregroundOutcomeStatus="
-                + (executionResult != null && executionResult.Recovered
-                    ? ForegroundGuaranteeOutcomeStatus.RequiredSucceeded.ToString()
-                    : ForegroundGuaranteeOutcomeStatus.RequiredDegraded.ToString());
-        }
-
-        internal bool IsForegroundDisplayCompletableTerminalInput(ForegroundGuaranteeOutcome outcome)
-        {
-            return outcome != null
-                && outcome.IsTerminal
-                && outcome.IsDisplayCompletable;
-        }
-
         private static string ResolveForegroundSkipReason(TaskPaneRefreshAttemptResult attemptResult)
         {
             if (!attemptResult.IsRefreshCompleted)

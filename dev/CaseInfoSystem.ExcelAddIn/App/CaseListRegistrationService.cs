@@ -68,8 +68,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					Message = "案件情報シートを取得できません。"
 				};
 			}
-			bool openedNow;
-			Workbook workbook = _kernelWorkbookResolverService.ResolveOrOpen (caseWorkbook, out openedNow);
+			KernelWorkbookAccessResult kernelAccess = _kernelWorkbookResolverService.ResolveOrOpen (caseWorkbook);
+			Workbook workbook = kernelAccess.Workbook;
 			if (workbook == null) {
 				return new CaseListRegistrationResult {
 					Success = false,
@@ -103,7 +103,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			_excelInteropService.SetDocumentProperty (caseWorkbook, "TASKPANE_SNAPSHOT_CACHE_COUNT", "0");
 			_taskPaneSnapshotCacheService.ClearCaseSnapshotCacheChunks (caseWorkbook);
 			_logger.Info ("Case workbook task pane snapshot cache invalidated after case-list registration. caseListRegistered=1, caseListRow=" + nextCaseListRow);
-			if (!openedNow) {
+			if (kernelAccess.WorkbookWasAlreadyOpen) {
 				_logger.Info ("Case list registration reused open kernel workbook.");
 			}
 			return new CaseListRegistrationResult {

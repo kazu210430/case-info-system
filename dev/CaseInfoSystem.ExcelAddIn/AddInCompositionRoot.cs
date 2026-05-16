@@ -131,7 +131,7 @@ namespace CaseInfoSystem.ExcelAddIn
             var caseListFieldDefinitionRepository = new CaseListFieldDefinitionRepository(ExcelInteropService);
             var caseListHeaderRepository = new CaseListHeaderRepository(ExcelInteropService);
             var caseListMappingRepository = new CaseListMappingRepository(ExcelInteropService);
-            var kernelWorkbookResolverService = new KernelWorkbookResolverService(_application, ExcelInteropService, pathCompatibilityService);
+            var kernelWorkbookResolverService = new KernelWorkbookResolverService(_application, ExcelInteropService, pathCompatibilityService, _logger);
             var caseDataSnapshotFactory = new CaseDataSnapshotFactory(ExcelInteropService, kernelWorkbookResolverService, caseListFieldDefinitionRepository, _logger);
             var transientPaneSuppressionService = new TransientPaneSuppressionService(ExcelInteropService, pathCompatibilityService, _logger);
             WorkbookRoleResolver = new WorkbookRoleResolver(ExcelInteropService, pathCompatibilityService);

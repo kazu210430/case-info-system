@@ -297,8 +297,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (caseWorkbook == null || homeWorksheet == null) {
 				return null;
 			}
-			bool openedNow;
-			Workbook workbook = _kernelWorkbookResolverService.ResolveOrOpenReadOnly (caseWorkbook, out openedNow);
+			KernelWorkbookAccessResult kernelAccess = _kernelWorkbookResolverService.ResolveOrOpenReadOnly (caseWorkbook);
+			Workbook workbook = kernelAccess.Workbook;
 			if (workbook == null) {
 				return null;
 			}
@@ -310,15 +310,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				readOnlyDictionary.TryGetValue ("顧客_よみ", out var value);
 				return _excelInteropService.ResolveFieldRange (caseWorkbook, homeWorksheet, value);
 			} finally {
-				if (openedNow && workbook != null) {
-					try {
-						WorkbookCloseInteropHelper.CloseReadOnlyWithoutSave (
-							workbook,
-							_logger,
-							"KernelCasePresentationService.ResolveInitialCursorRange");
-					} catch (Exception exception) {
-						_logger.Error ("ResolveInitialCursorRange temporary kernel close failed.", exception);
-					}
+				try {
+					kernelAccess.CloseIfOwned ("KernelCasePresentationService.ResolveInitialCursorRange");
+				} catch (Exception exception) {
+					_logger.Error ("ResolveInitialCursorRange temporary kernel close failed.", exception);
 				}
 			}
 		}

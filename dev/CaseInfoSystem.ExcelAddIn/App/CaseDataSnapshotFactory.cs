@@ -30,30 +30,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		internal CaseDataSnapshot Create (Workbook caseWorkbook)
 		{
-			bool openedNow;
-			Workbook workbook = _kernelWorkbookResolverService.ResolveOrOpenReadOnly (caseWorkbook, out openedNow);
+			KernelWorkbookAccessResult kernelAccess = _kernelWorkbookResolverService.ResolveOrOpenReadOnly (caseWorkbook);
+			Workbook workbook = kernelAccess.Workbook;
 			try {
 				return Create (caseWorkbook, workbook);
 			} finally {
-				if (openedNow && workbook != null) {
-					bool enableEvents = true;
-					Application application = null;
-					try {
-						application = workbook.Application;
-						if (application != null) {
-							enableEvents = application.EnableEvents;
-							application.EnableEvents = false;
-						}
-						WorkbookCloseInteropHelper.CloseReadOnlyWithoutSave (
-							workbook,
-							_logger,
-							"CaseDataSnapshotFactory.CloseOpenedKernelWorkbook");
-					} finally {
-						if (application != null) {
-							application.EnableEvents = enableEvents;
-						}
-					}
-				}
+				kernelAccess.CloseIfOwned (
+					"CaseDataSnapshotFactory.CloseOpenedKernelWorkbook",
+					suppressEventsDuringClose: true);
 			}
 		}
 

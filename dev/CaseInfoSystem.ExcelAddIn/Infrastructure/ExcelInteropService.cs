@@ -83,6 +83,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			object obj2 = null;
 			try {
 				obj = workbook.CustomDocumentProperties;
+				if (TryGetDictionaryDocumentProperty (obj, propertyName, out string dictionaryValue)) {
+					return dictionaryValue;
+				}
 				dynamic val = obj;
 				obj2 = val [propertyName];
 				dynamic val2 = obj2;
@@ -94,6 +97,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				ComObjectReleaseService.FinalRelease (obj2);
 				ComObjectReleaseService.FinalRelease (obj);
 			}
+		}
+
+		private static bool TryGetDictionaryDocumentProperty (object documentProperties, string propertyName, out string value)
+		{
+			value = string.Empty;
+			if (documentProperties is IDictionary<string, string> stringProperties && stringProperties.TryGetValue (propertyName, out string stringValue)) {
+				value = stringValue ?? string.Empty;
+				return true;
+			}
+			if (documentProperties is IDictionary<string, object> objectProperties && objectProperties.TryGetValue (propertyName, out object objectValue)) {
+				value = Convert.ToString (objectValue) ?? string.Empty;
+				return true;
+			}
+			return false;
 		}
 
 		internal void SetDocumentProperty (Workbook workbook, string propertyName, string value)

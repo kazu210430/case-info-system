@@ -56,6 +56,18 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain("form.CloseByCode", source);
         }
 
+        [Fact]
+        public void ImportService_TreatsMissingPaymentHistoryAsUserFacingException()
+        {
+            string source = ReadAppSource("AccountingPaymentHistoryImportService.cs");
+
+            Assert.Contains("private const string PaymentHistoryRequiredMessage = \"お支払い履歴を先に作成してください。\";", source);
+            Assert.Contains("CreatePaymentHistoryRequiredException (\"NoPaymentHistoryRows\"", source);
+            Assert.Contains("CreatePaymentHistoryRequiredException (\"LatestRoundBeforeStartRound\"", source);
+            Assert.Contains("new UserFacingException (PaymentHistoryRequiredMessage, diagnostic)", source);
+            Assert.DoesNotContain("throw new InvalidOperationException (\"お支払い履歴を先に作成してください。\")", source);
+        }
+
         private static string ReadAppSource(string appFileName)
         {
             string repoRoot = FindRepositoryRoot();

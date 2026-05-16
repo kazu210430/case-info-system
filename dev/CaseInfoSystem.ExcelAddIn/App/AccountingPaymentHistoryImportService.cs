@@ -26,6 +26,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private const string CloseThroughFormMessage = "フォームの「Excelを閉じる」ボタンから閉じてください。";
 
+		private const string PaymentHistoryRequiredMessage = "お支払い履歴を先に作成してください。";
+
 		private const string ImportPromptFormKind = "PaymentHistoryImportPrompt";
 
 		private readonly AccountingWorkbookService _accountingWorkbookService;
@@ -69,7 +71,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			int startRound = ResolveFirstImportRound (worksheet2);
 			int endRound = ResolveLatestRound (worksheet2);
 			if (endRound < startRound) {
-				throw new InvalidOperationException ("お支払い履歴を先に作成してください。");
+				throw CreatePaymentHistoryRequiredException ("LatestRoundBeforeStartRound", startRound, endRound);
 			}
 			ShowPrompt (context, workbook, worksheet, worksheet2, selectedTargetAddress, startRound, endRound);
 		}
@@ -138,8 +140,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				throw new InvalidOperationException ("お支払い履歴シートが見つかりません。");
 			}
 			if (!HasAnyPaymentHistoryRow (paymentHistoryWorksheet)) {
-				throw new InvalidOperationException ("お支払い履歴を先に作成してください。");
+				throw CreatePaymentHistoryRequiredException ("NoPaymentHistoryRows", null, null);
 			}
+		}
+
+		private static UserFacingException CreatePaymentHistoryRequiredException (string reason, int? startRound, int? endRound)
+		{
+			string diagnostic =
+				"AccountingPaymentHistoryImportService.Execute precondition failed." +
+				Environment.NewLine +
+				"procedure=AccountingControl_ActionInvoked" +
+				Environment.NewLine +
+				"actionId=import-payment-history-to-request" +
+				Environment.NewLine +
+				"reason=" + (reason ?? string.Empty) +
+				Environment.NewLine +
+				"paymentHistoryDataRows=A14:J73" +
+				Environment.NewLine +
+				"startRound=" + FormatNullableInt (startRound) +
+				Environment.NewLine +
+				"endRound=" + FormatNullableInt (endRound);
+			return new UserFacingException (PaymentHistoryRequiredMessage, diagnostic);
+		}
+
+		private static string FormatNullableInt (int? value)
+		{
+			return value.HasValue ? value.Value.ToString (CultureInfo.InvariantCulture) : "(unavailable)";
 		}
 
 		private int ResolvePaymentHistoryBaseRowOffset (Worksheet paymentHistoryWorksheet)

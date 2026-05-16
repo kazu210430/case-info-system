@@ -106,6 +106,7 @@
     <Compile Include="TaskPaneDisplayRetryCoordinatorTests.cs" />
     <Compile Include="TaskPaneReadyShowRetrySchedulerTests.cs" />
     <Compile Include="TaskPaneRetryTimerLifecycleTests.cs" />
+    <Compile Include="TaskPaneRefreshFailClosedOutcomeTests.cs" />
     <Compile Include="WorkbookWindowVisibilityServiceTests.cs" />
     <Compile Include="WorkbookTaskPaneReadyShowAttemptWorkerTests.cs" />
     <Compile Include="RebuildFallbackOutcomeTests.cs" />
@@ -191,6 +192,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneDisplayRetryCoordinator.cs" Link="Source\App\TaskPaneDisplayRetryCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneReadyShowRetryScheduler.cs" Link="Source\App\TaskPaneReadyShowRetryScheduler.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRetryTimerLifecycle.cs" Link="Source\App\TaskPaneRetryTimerLifecycle.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshFailClosedOutcome.cs" Link="Source\App\TaskPaneRefreshFailClosedOutcome.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneNormalizedOutcomeMapper.cs" Link="Source\App\TaskPaneNormalizedOutcomeMapper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRefreshAttemptResult.cs" Link="Source\App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\WorkbookCaseTaskPaneRefreshCommandNotificationPolicy.cs" Link="Source\App\WorkbookCaseTaskPaneRefreshCommandNotificationPolicy.cs" />

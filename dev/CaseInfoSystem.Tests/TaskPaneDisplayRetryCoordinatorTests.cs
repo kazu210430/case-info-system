@@ -429,12 +429,13 @@ namespace CaseInfoSystem.Tests
                 orchestrationSource);
             AssertContainsInOrder(
                 failClosedReturn,
-                "TaskPaneRefreshFailClosedResultHandoff failClosedHandoff = BuildFailClosedTaskPaneRefreshResultHandoff(preconditionDecision);",
+                "TaskPaneRefreshFailClosedOutcome failClosedOutcome =",
+                "TaskPaneRefreshFailClosedOutcome.FromPreconditionDecision(preconditionDecision);",
                 "TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(",
-                "failClosedHandoff.AttemptResult,",
-                "failClosedHandoff.SkipActionName,",
+                "failClosedOutcome.AttemptResult,",
+                "failClosedOutcome.SkipActionName,",
                 "_windowActivateDownstreamObservation.LogOutcome(",
-                "failClosedHandoff.SkipActionName);",
+                "failClosedOutcome.SkipActionName);",
                 "return skippedResult;");
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionSkipPath);
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", failClosedReturn);

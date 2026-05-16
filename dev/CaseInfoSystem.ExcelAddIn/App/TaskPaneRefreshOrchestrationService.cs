@@ -214,14 +214,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             TaskPaneRefreshPreconditionDecision preconditionDecision,
             TaskPaneRefreshAttemptStartObservation attemptObservation)
         {
-            TaskPaneRefreshFailClosedResultHandoff failClosedHandoff = BuildFailClosedTaskPaneRefreshResultHandoff(preconditionDecision);
+            TaskPaneRefreshFailClosedOutcome failClosedOutcome =
+                TaskPaneRefreshFailClosedOutcome.FromPreconditionDecision(preconditionDecision);
             TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,
                 window,
-                failClosedHandoff.AttemptResult,
+                failClosedOutcome.AttemptResult,
                 attemptObservation.Stopwatch,
-                failClosedHandoff.SkipActionName,
+                failClosedOutcome.SkipActionName,
                 null,
                 null);
             _windowActivateDownstreamObservation.LogOutcome(
@@ -230,29 +231,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 skippedResult,
                 attemptObservation.Stopwatch,
                 attemptObservation.RefreshAttemptId,
-                failClosedHandoff.SkipActionName);
+                failClosedOutcome.SkipActionName);
             return skippedResult;
-        }
-
-        private static TaskPaneRefreshFailClosedResultHandoff BuildFailClosedTaskPaneRefreshResultHandoff(
-            TaskPaneRefreshPreconditionDecision preconditionDecision)
-        {
-            return new TaskPaneRefreshFailClosedResultHandoff(
-                TaskPaneRefreshAttemptResult.Skipped(preconditionDecision.SkipActionName),
-                preconditionDecision.SkipActionName);
-        }
-
-        private readonly struct TaskPaneRefreshFailClosedResultHandoff
-        {
-            internal TaskPaneRefreshFailClosedResultHandoff(TaskPaneRefreshAttemptResult attemptResult, string skipActionName)
-            {
-                AttemptResult = attemptResult;
-                SkipActionName = skipActionName;
-            }
-
-            internal TaskPaneRefreshAttemptResult AttemptResult { get; }
-
-            internal string SkipActionName { get; }
         }
 
         private RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute(

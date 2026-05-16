@@ -71,6 +71,7 @@
 - `RefreshDispatchShell` により coordinator 呼び出し shell が整理済みです。
 - `PendingPaneRefreshRetryState` により pending retry state が整理済みです。
 - `WorkbookPaneWindowResolver` により window resolver が整理済みです。
+- fail-closed precondition の skip result / skip action は `TaskPaneRefreshFailClosedOutcome` として小さな outcome 型に分けています。これは結果表現の明確化であり、retry / timer / route / callback / completion owner は `TaskPaneRefreshOrchestrationService` 側に残します。
 - `TaskPaneRefreshPreconditionPolicy` は `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` の shared skip policy 正本です。
 - TaskPane refresh handoff 系の closure は `docs/taskpane-display-recovery-current-state.md` の `TaskPane refresh handoff closure note` を正本とします。
 

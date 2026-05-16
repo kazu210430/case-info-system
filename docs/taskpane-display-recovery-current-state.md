@@ -323,6 +323,7 @@ main 正本化済みの到達点:
 - callback raw facts は safety tests と private naming 整理が main 正本化済みです。
 - `TryRefreshTaskPaneCore(...)` は、start observation -> precondition / fail-closed -> route dispatch -> post-dispatch convergence の orchestration skeleton として読める状態です。
 - route dispatch、post-dispatch convergence、precondition / fail-closed boundary、fail-closed result handoff、refresh attempt start observation は、同一 class 内 private boundary として整理済みです。
+- fail-closed result handoff の値表現は `TaskPaneRefreshFailClosedOutcome` として外出し済みです。これは skip result / skip action の outcome 表現であり、owner / lifecycle / retry / completion / emit / callback の移動ではありません。
 - active refresh / workbook fallback / pending retry start の流れは `RunTaskPaneRefreshHandoffFlow(...)` と `TaskPaneRefreshHandoffFlowInput` を中心に、handoff orchestration として一本化済みです。
 - active branch / workbook fallback branch / input naming は、active path と workbook fallback path の違いが読めるように整理済みです。
 - handoff flow helper 群は、entry -> shared handoff flow -> branch -> branch helper -> data-only input の読み順に寄せています。

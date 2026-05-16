@@ -14,7 +14,7 @@
 
 この文書は TaskPaneManager 側の追加整理を扱いません。lifecycle 側の安定到達点だけを明文化します。
 
-今回この文書で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` の安定化到達点だけです。全 workbook close 経路の一般ルールではありません。`KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などの読み取り専用 / 一時 workbook close は今回の確定範囲に含めません。
+今回この文書で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` の安定化到達点だけです。全 workbook close 経路の一般ルールではありません。`KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などの読み取り専用 / 一時 workbook close は別 owner の境界として扱い、この文書の確定範囲には含めません。現コードではこれらの owned close は `WorkbookCloseInteropHelper` 経由ですが、会計フォーム / import prompt など業務 UI owner の直接 close 経路は別途棚卸し対象として残します。
 
 ## 現在の構成
 
@@ -116,6 +116,6 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 - `CaseWorkbookLifecycleService` は分割後も orchestration hub のままで、close 順序依存と CASE HOME 表示補正が同居しています。
 - `PostCloseFollowUpScheduler` の visible workbook 判定、Excel busy retry、Excel 終了判定は lifecycle 安定性に直結するため、TaskPaneManager 整理とは切り離して扱うほうが安全です。
 - direct `MessageBox.Show` は `CaseClosePromptService` と `CaseWorkbookLifecycleService` の一部に残っています。詳細は `docs/technical-debt.md` を参照してください。
-- helper 非経由 close が `KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などに残っています。
+- 現コードでは `KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` の owned close は `WorkbookCloseInteropHelper` 経由です。helper 非経由 close の残課題としては、会計フォーム / import prompt の「Excelを閉じる」ボタン系など、業務 UI owner が直接 `workbook.Close()` を呼ぶ経路を別途棚卸し対象として扱います。
 - `WorkbookPromptSuppressionHelper` の `Workbook.Saved` 操作は今回対象外です。
 - これらは別途棚卸し対象であり、今回 docs の確定範囲外です。

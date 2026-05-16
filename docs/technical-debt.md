@@ -51,7 +51,7 @@
 
 ## Kernel workbook 選択境界
 
-### KernelCommandService.cs:57 / KernelTemplateSyncService.cs:129 / KernelWorkbookResolverService.cs:22
+### Kernel command / template sync / ResolveOrOpen residual boundary
 
 * 内容: 旧 `GetOpenKernelWorkbook()` 依存は解消済みであり、同 API は削除済みです。雛形登録・更新は `KernelCommandService.Execute(context, actionId)` の `reflect-template` 分岐から `WorkbookContext` を保持したまま進み、`KernelTemplateSyncService.Execute(context)` は `ResolveKernelWorkbook(context)` で対象 Kernel workbook を確定します。
 * 現状: 文脈なしで `Workbook` を返す API は廃止済みです。残っているのは startup 判定用の bool-only probe `HasAnyOpenKernelWorkbook()` と、文脈付き解決 `ResolveKernelWorkbook(context)` / `ResolveKernelWorkbook(systemRoot)` です。
@@ -124,7 +124,9 @@
 
 ## MessageBox.Show 直書き
 
-### AccountingFormHelperService.cs:374
+この節の会計系項目は、行番号ではなく service / method / 責務名を anchor とする。行番号は refactor でずれやすいため、必要な場合は現コードを grep して確認する。
+
+### AccountingFormHelperService / EnsurePaymentHistoryInputVisible
 
 * 内容: `EnsurePaymentHistoryInputVisible` で、お支払い履歴クリア確認のダイアログを直接表示している。
 * 呼び出し箇所の役割: 支払履歴入力 UI を開く前の確認処理。
@@ -132,7 +134,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:199
+### AccountingInstallmentScheduleCommandService / Reset
 
 * 内容: `Reset` で、分割払い予定表を全消去する確認ダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表リセット前の確認。
@@ -140,7 +142,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:240
+### AccountingInstallmentScheduleCommandService / TryValidateCreateRequest / zero billing amount
 
 * 内容: `TryValidateCreateRequest` で、請求額 0 円を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の作成前バリデーション。
@@ -148,7 +150,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:244
+### AccountingInstallmentScheduleCommandService / TryValidateCreateRequest / first due date
 
 * 内容: `TryValidateCreateRequest` で、1 回目期限の日付不正を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の作成前バリデーション。
@@ -156,7 +158,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:248
+### AccountingInstallmentScheduleCommandService / TryValidateCreateRequest / installment amount
 
 * 内容: `TryValidateCreateRequest` で、分割払い額未入力を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の作成前バリデーション。
@@ -164,7 +166,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:252
+### AccountingInstallmentScheduleCommandService / TryValidateCreateRequest / round limit
 
 * 内容: `TryValidateCreateRequest` で、分割回数上限超過を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の作成前バリデーション。
@@ -172,7 +174,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:267
+### AccountingInstallmentScheduleCommandService / TryValidateChangeRequest / zero billing amount
 
 * 内容: `TryValidateChangeRequest` で、請求額 0 円を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の途中変更前バリデーション。
@@ -180,7 +182,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:271
+### AccountingInstallmentScheduleCommandService / TryValidateChangeRequest / change round missing
 
 * 内容: `TryValidateChangeRequest` で、変更回未入力を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の途中変更前バリデーション。
@@ -188,7 +190,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:275
+### AccountingInstallmentScheduleCommandService / TryValidateChangeRequest / change round range
 
 * 内容: `TryValidateChangeRequest` で、変更回の入力範囲不正を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の途中変更前バリデーション。
@@ -196,7 +198,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:279
+### AccountingInstallmentScheduleCommandService / TryValidateChangeRequest / changed installment amount
 
 * 内容: `TryValidateChangeRequest` で、変更後の分割払い額未入力を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の途中変更前バリデーション。
@@ -204,7 +206,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:288
+### AccountingInstallmentScheduleCommandService / TryValidateChangeRequest / completed round
 
 * 内容: `TryValidateChangeRequest` で、対象回が既に完済済みであることを通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の途中変更前バリデーション。
@@ -212,7 +214,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:293
+### AccountingInstallmentScheduleCommandService / TryValidateChangeRequest / round limit
 
 * 内容: `TryValidateChangeRequest` で、分割回数上限超過を通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い予定表の途中変更前バリデーション。
@@ -220,7 +222,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleCommandService.cs:525
+### AccountingInstallmentScheduleCommandService / ShowLoadFormStateNumericReadWarning
 
 * 内容: `ShowLoadFormStateNumericReadWarning` で、数値読取失敗項目の警告ダイアログを直接表示している。
 * 呼び出し箇所の役割: フォーム状態読み込み時の警告表示。
@@ -228,7 +230,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInternalCommandService.cs:81
+### AccountingInternalCommandService / ShowPendingMessage
 
 * 内容: `ShowPendingMessage` で、対象外フローを後回しにしている旨のダイアログを直接表示している。
 * 呼び出し箇所の役割: 内部コマンドの未対応フロー通知。
@@ -236,7 +238,7 @@
 * 危険度: 中
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingPaymentHistoryCommandService.cs:634
+### AccountingPaymentHistoryCommandService / ShowLoadFormStateNumericReadWarning
 
 * 内容: `ShowLoadFormStateNumericReadWarning` で、数値読取失敗項目の警告ダイアログを直接表示している。
 * 呼び出し箇所の役割: 支払履歴フォーム状態読み込み時の警告表示。
@@ -244,7 +246,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingPaymentHistoryCommandService.cs:639
+### AccountingPaymentHistoryCommandService / ShowInformationMessage
 
 * 内容: `ShowInformationMessage` で、任意メッセージの情報ダイアログを直接表示している。
 * 呼び出し箇所の役割: 支払履歴操作時の情報通知。
@@ -252,7 +254,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingSaveAsService.cs:123
+### AccountingSaveAsService / Execute
 
 * 内容: `Execute` で、保存先パスを含む保存完了ダイアログを直接表示している。
 * 呼び出し箇所の役割: 会計系 Save As 実行後の完了通知。
@@ -260,7 +262,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingSetCreateService.cs:117
+### AccountingSetCreateService / Execute
 
 * 内容: `Execute` で、入力できなかった代理人がいることを通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 会計書類セット生成時の部分失敗通知。
@@ -268,7 +270,7 @@
 * 危険度: 中
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingSheetCommandService.cs:57
+### AccountingSheetCommandService / ResetSheet
 
 * 内容: `ResetSheet` で、対象シートのリセット確認ダイアログを直接表示している。
 * 呼び出し箇所の役割: 会計シートリセット前の確認。
@@ -276,7 +278,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingSheetControlService.cs:373
+### AccountingSheetControlService / ApplyBaseAmountHighlight
 
 * 内容: `ApplyBaseAmountHighlight` で、経済的利益額入力を促すダイアログを直接表示している。
 * 呼び出し箇所の役割: チェックボックス連動時の入力促し。
@@ -548,7 +550,7 @@
 * 危険度: 中
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingImportRangePromptForm.cs:163
+### AccountingImportRangePromptForm / BtnConfirm_Click / numeric range
 
 * 内容: `BtnConfirm_Click` で、対象範囲を数字で指定するよう求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 取込範囲入力フォームのバリデーション。
@@ -556,7 +558,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingImportRangePromptForm.cs:165
+### AccountingImportRangePromptForm / BtnConfirm_Click / max round
 
 * 内容: `BtnConfirm_Click` で、60 回目までの範囲指定を求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 取込範囲入力フォームのバリデーション。
@@ -564,7 +566,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingImportRangePromptForm.cs:167
+### AccountingImportRangePromptForm / BtnConfirm_Click / range order
 
 * 内容: `BtnConfirm_Click` で、終期は始期以上にするよう求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 取込範囲入力フォームのバリデーション。
@@ -572,7 +574,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingImportRangePromptForm.cs:181
+### AccountingImportRangePromptForm / OnFormClosing
 
 * 内容: `OnFormClosing` で、ボタンで閉じるよう求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 取込範囲入力フォームのクローズ制御。
@@ -580,7 +582,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingInstallmentScheduleInputForm.cs:119
+### AccountingInstallmentScheduleInputForm / ShowInvoiceEditRestrictedMessage
 
 * 内容: `ShowInvoiceEditRestrictedMessage` で、入力フォームからは変更できないことを通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 分割払い入力フォームの編集制限通知。
@@ -588,7 +590,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingPaymentHistoryInputForm.cs:167
+### AccountingPaymentHistoryInputForm / ShowInvoiceEditRestrictedMessage
 
 * 内容: `ShowInvoiceEditRestrictedMessage` で、入力フォームからは変更できないことを通知するダイアログを直接表示している。
 * 呼び出し箇所の役割: 支払履歴入力フォームの編集制限通知。
@@ -596,7 +598,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingReverseGoalSeekForm.cs:140
+### AccountingReverseGoalSeekForm / BtnCalculate_Click
 
 * 内容: `BtnCalculate_Click` で、目標金額を数字で入力するよう求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 逆算フォームの入力バリデーション。
@@ -604,7 +606,7 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingReverseGoalSeekForm.cs:170
+### AccountingReverseGoalSeekForm / OnFormClosing
 
 * 内容: `OnFormClosing` で、ボタンで閉じるよう求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 逆算フォームのクローズ制御。

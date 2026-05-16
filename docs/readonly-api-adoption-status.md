@@ -9,6 +9,13 @@
 - `DocumentTemplateResolver` 周り
   - `a92834c` で `DocumentTemplateLookupService` に `IDocumentTemplateLookupReader` を追加した。
   - consumer 側は `DocumentTemplateResolver` から `DocumentTemplateLookupService` 直接依存を外し、`IDocumentTemplateLookupReader` 経由へ差し替えた。
+- `DocumentNamePromptService` 周り
+  - 現行 `main` では `DocumentNamePromptService` は `ICaseCacheDocumentTemplateReader` に依存している。
+  - prompt 初期値は `DocumentTemplateLookupService.TryResolveFromCaseCache(...)` 経由の CASE cache-only lookup で取得する。
+  - CASE cache miss 時に master catalog へ fallback しない契約は維持されている。
+- `DocumentTemplateLookupService` 周り
+  - 現行 `main` では `DocumentTemplateLookupService` が `ICaseCacheDocumentTemplateReader` と `IDocumentTemplateLookupReader` の両方を実装する。
+  - `TryResolveFromCaseCache(...)` は CASE cache-only、`TryResolveWithMasterFallback(...)` は CASE cache 優先 + master fallback の実行側 lookup として分かれている。
 - `TaskPaneManager` 周り
   - `91d0777` で `TaskPaneSnapshotBuilderService` に `ICaseTaskPaneSnapshotReader` を追加した。
   - consumer 側は `TaskPaneManager` から `TaskPaneSnapshotBuilderService` 直接依存を外し、`ICaseTaskPaneSnapshotReader` 経由へ差し替えた。
@@ -53,14 +60,14 @@
 - fallback の意味を変えない。
 - snapshot を正本化しない。
 
-## 4. 今回やらなかったこと（重要）
+## 4. まだ完了扱いしないこと（重要）
 
-- prompt 系の変更
-- 文書実行系の変更
-- `TemplatePath` 解決の変更
-- snapshot 再構築ロジックの変更
-- 新規テスト追加
-- 大規模リファクタリング
+- `TaskPaneSnapshotBuilderService` の snapshot rebuild / Base fallback / CASE cache 更新を pure read-only API へ寄せること。
+- `TaskPaneSnapshotCacheService` の promote / clear / compatibility 判定を read-only lookup から完全分離すること。
+- prompt / lookup 系 consumer 全件が `DocumentNamePromptService` と `DocumentTemplateResolver` だけで十分かの全量保証。
+- `TemplatePath` 解決責務を `DocumentTemplateResolver` から外すこと。
+- 実機での TaskPane 表示、CASE 切替、snapshot 更新、表示内容差分なしの確認。
+- 大規模リファクタリング。
 
 ## 5. 今後の進め方
 

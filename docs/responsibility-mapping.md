@@ -72,7 +72,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | CASE 作成 | create plan / path resolve / name rule 解決 | `KernelCaseCreationService` | hidden session route 選択、save 前 window 正規化 | pure orchestration, context-sensitive | 比較的安全に切り出せる | `SYSTEM_ROOT` と出力先が揃わなければ進めない fail-closed 境界。 |
 | CASE 作成 | hidden create session open / close mechanics | `CaseWorkbookOpenStrategy` | retained hidden app-cache、route 名ごとの差異、session cleanup | COM-sensitive, ordering-sensitive | COM lifecycle に密着している | hidden session は一般手段ではなく CASE 作成専用の例外。 |
-| CASE 作成 | save 前の workbook window 正規化 | `KernelCaseCreationService` | hidden create route、interactive / batch 差分 | window-sensitive, ordering-sensitive | runtime-sensitive のため後回し | `visible + normal` への正規化は保存状態正規化であり、表示完了ではない。 |
+| CASE 作成 | save 前の workbook window 正規化 | `KernelCaseCreationService` | hidden create route、interactive / batch 差分 | window-sensitive, ordering-sensitive | runtime-sensitive のため後回し | interactive は `Visible=true` 禁止で、必要なら `WindowState=xlNormal` のみ整え、表示責務は `KernelCasePresentationService` へ遅延する。batch は save 前に `visible + normal` を許容する。 |
 | CASE 作成 | interactive route の shared app handoff | `KernelCasePresentationService` | wait UI、visibility recovery、ready-show、foreground promotion | ordering-sensitive, window-sensitive | ordering 固定後でないと危険 | hidden create session close 後にだけ表示責務が移る。 |
 
 ### 1.4 CASE 表示

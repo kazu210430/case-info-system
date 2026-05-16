@@ -190,8 +190,8 @@
 2. Base を物理コピーして CASE workbook を作成する。
 3. 現行 `main` では `ShouldUseHiddenCreateSession() == true` のため、全モードが hidden create route を通る。
 4. `CaseWorkbookOpenStrategy.OpenHiddenWorkbook(...)` が `app-cache`、`legacy-isolated`、`experimental-isolated-inner-save` のいずれかを選ぶ。
-5. interactive route (`NewCaseDefault` / `CreateCaseSingle`) は hidden create session 内で visible create 初期化を行い、save 前に workbook window を `visible + normal` へ正規化してから save / hidden session close を完了する。
-6. batch route (`CreateCaseBatch`) も save 前に workbook window を `visible + normal` へ正規化するが、表示経路へ昇格させず reopen もしない。
+5. interactive route (`NewCaseDefault` / `CreateCaseSingle`) は hidden create session 内で visible create 初期化を行うが、save 前に owned workbook window を `Visible=true` へ戻さない。`NormalizeInteractiveWorkbookWindowStateBeforeSave(...)` は `save-window-visible-deferred` として表示責務を `KernelCasePresentationService` へ遅延し、必要なら `WindowState=xlNormal` だけを整えて save / hidden session close を完了する。
+6. batch route (`CreateCaseBatch`) は save 前に workbook window を `visible + normal` へ正規化するが、表示経路へ昇格させず reopen もしない。
 7. interactive route では hidden session close 後に `KernelCasePresentationService` が shared/current app 側の reopen と表示責務を引き継ぐ。
 8. CASE 作成中の Kernel HOME close は `KernelWorkbookCloseService` / `KernelHomeSessionDisplayPolicy` が display restore を skip し、CASE より前に Kernel を戻さない。
 
@@ -212,7 +212,7 @@
 
 - CASE 作成 1 本の業務フローが、creation owner、hidden open owner、retained cache owner、interactive 表示 owner、HOME close owner にまたがる。
 - hidden create session の owner は `KernelCaseCreationService` だが、open/close mechanics は `CaseWorkbookOpenStrategy` にあり、interactive handoff は `KernelCasePresentationService` に移る。
-- creation 自体は非表示作業だが、保存状態正規化のために workbook window を `visible + normal` へ触る。
+- creation 自体は非表示作業であり、保存状態正規化の扱いは interactive / batch で分かれる。interactive は `Visible=true` を戻さず `WindowState=xlNormal` だけを許容し、batch は save 前に `visible + normal` へ正規化する。
 
 ### 危険領域
 

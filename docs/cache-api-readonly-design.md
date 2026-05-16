@@ -141,13 +141,15 @@
 ### 第2段階: read-only API 追加
 
 - `ICaseCacheDocumentTemplateReader`
-- 最小実装では `ICaseCacheDocumentTemplateReader` だけを先行追加し、`DocumentNamePromptService` の依存を cache-only reader に限定する。
-- fallback ありの統合 reader は今回は追加せず、`DocumentTemplateResolver` は既存の `DocumentTemplateLookupService` を維持する。
+  - 現行 `main` では導入済み。`DocumentNamePromptService` はこの cache-only reader に依存し、CASE cache miss 時に master fallback しない。
 - `IDocumentTemplateLookupReader`
+  - 現行 `main` では導入済み。`DocumentTemplateResolver` はこの reader に依存し、`DocumentTemplateLookupService.TryResolveWithMasterFallback(...)` 経由で CASE cache 優先 + master fallback を維持する。
+- `DocumentTemplateLookupService`
+  - 現行 `main` では `ICaseCacheDocumentTemplateReader` と `IDocumentTemplateLookupReader` の両方を実装し、prompt 用 cache-only lookup と文書実行用 fallback lookup を分けている。
 - `IMasterTemplateCatalogReader`
 - `ICaseSnapshotStorageReader`
 
-この段階では既存サービスの内部置換は行わず、現行サービスの横に追加するだけに留める。
+現行 `main` で導入済みの reader は consumer 依存の分離に留め、`TaskPaneSnapshotCacheService` の promote / clear / compatibility 判定や `TaskPaneSnapshotBuilderService` の rebuild / Base fallback / CASE cache 更新は完了扱いにしない。
 
 ### 第3段階: 既存処理との同値確認
 
@@ -162,10 +164,10 @@
 
 優先度は次の順とする。
 
-1. `MasterTemplateCatalogService` を直接使う read-only 参照の集約
-2. CASE cache の raw 読取集約
-3. `DocumentTemplateLookupService` 内部での reader 利用
-4. `DocumentNamePromptService` と `DocumentTemplateResolver` の依存差し替え
+1. `DocumentNamePromptService` と `DocumentTemplateResolver` の consumer 依存差し替え（現行 `main` で実施済み）
+2. `DocumentTemplateLookupService` 内部での reader 利用
+3. CASE cache の raw 読取集約
+4. `MasterTemplateCatalogService` を直接使う read-only 参照の集約
 
 `TaskPaneSnapshotBuilderService` の差し替えは後回しにする。表示系は CASE cache 更新、副作用つき Base fallback、dynamic special button override を含むため、低リスクとは扱わない。
 

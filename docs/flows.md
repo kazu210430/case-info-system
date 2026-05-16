@@ -385,7 +385,7 @@ white Excel prevention / recovery の current-state、`targetWorkbookStillOpen` 
 
 ### 既知の残課題
 
-- helper 非経由 close が `MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などに残っています。
+- 現コードでは `MasterWorkbookReadAccessService` と `CaseWorkbookOpenStrategy` の owned close は `WorkbookCloseInteropHelper` 経由です。helper 非経由 close の残課題としては、会計フォーム / import prompt の「Excelを閉じる」ボタン系など、業務 UI owner が直接 `workbook.Close()` を呼ぶ経路を別途棚卸し対象として扱います。
 - `KernelUserDataReflectionService` の未 open Base / Accounting 反映は、上記の `managed hidden reflection session` として明文化した例外です。
 - `WorkbookPromptSuppressionHelper` の `Workbook.Saved` 操作は今回対象外です。
 - これらは別途棚卸し対象であり、今回 docs の確定範囲外です。
@@ -509,7 +509,7 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 補足:
 
 - 現在の実装では、この `openKernelWorkbook` は `ResolveKernelWorkbook(context)` によって要求元の `SYSTEM_ROOT` 文脈へ閉じた workbook として選ばれます。
-- したがって cache invalidate の境界は root 単位に改善済みですが、その upstream にある Kernel workbook 選択境界は将来課題として残ります。
+- したがって cache invalidate と雛形登録・更新の Kernel workbook 選択境界は root 単位に整理済みです。将来課題として残るのは `KernelWorkbookResolverService.ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` 系の open 内包責務であり、CASE 作成入口や雛形登録・更新が `GetOpenKernelWorkbook()` のような文脈なし再検索に依存しているという意味ではありません。
 - `MasterTemplateCatalogService` と `TaskPaneSnapshotBuilderService` は、どちらも `MasterWorkbookReadAccessService` を共有して Master path 解決と read-only open を揃えています。
 
 #### 新規 CASE 作成時の流れ

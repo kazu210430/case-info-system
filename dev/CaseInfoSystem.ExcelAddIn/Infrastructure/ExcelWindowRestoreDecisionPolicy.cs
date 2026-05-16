@@ -70,17 +70,20 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return RestoreRequired("restore-required:minimized");
             }
 
-            if (IsPlacementMaximized(showCmd))
-            {
-                return RestoreRequired("restore-required:maximized");
-            }
-
             if (showCmd == SwShowNormal)
             {
                 return new ExcelWindowRestoreDecision(
                     shouldRestore: false,
                     restoreSkipped: true,
                     restoreSkipReason: "visible-shownormal-not-minimized-not-maximized");
+            }
+
+            if (IsPlacementMaximized(showCmd))
+            {
+                return new ExcelWindowRestoreDecision(
+                    shouldRestore: false,
+                    restoreSkipped: true,
+                    restoreSkipReason: "visible-showmaximized-not-minimized");
             }
 
             return RestoreRequired("restore-required:showCmd=" + ResolveShowCmdName(showCmd));

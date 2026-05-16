@@ -40,7 +40,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void Decide_WhenWindowIsMaximized_Restores()
+        public void Decide_WhenWindowIsVisibleAndMaximized_SkipsRestore()
         {
             ExcelWindowRestoreDecision result = ExcelWindowRestoreDecisionPolicy.Decide(
                 windowResolved: true,
@@ -49,9 +49,9 @@ namespace CaseInfoSystem.Tests
                 placementReadSucceeded: true,
                 showCmd: ExcelWindowRestoreDecisionPolicy.SwShowMaximized);
 
-            Assert.True(result.ShouldRestore);
-            Assert.Equal("False", result.RestoreSkipped);
-            Assert.Equal("restore-required:maximized", result.RestoreSkipReason);
+            Assert.False(result.ShouldRestore);
+            Assert.Equal("True", result.RestoreSkipped);
+            Assert.Equal("visible-showmaximized-not-minimized", result.RestoreSkipReason);
         }
 
         [Theory]

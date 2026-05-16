@@ -260,7 +260,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				RefreshPaymentTotal (workbook);
 				_logger.Info ("Payment history future balance output completed.");
 			} catch (Exception exception) {
-				_userErrorService.ShowUserError ("AccountingPaymentHistory.OutputFutureBalance", exception);
+				Exception userErrorException = AccountingPaymentOverflowUserMessage.IsPaymentHistoryOutputOverflow (exception)
+					? AccountingPaymentOverflowUserMessage.CreatePaymentHistoryOutputOverflowException (exception)
+					: exception;
+				_userErrorService.ShowUserError ("AccountingPaymentHistory.OutputFutureBalance", userErrorException);
 			} finally {
 				ProtectSheetSafely (workbook, "Payment history future balance reprotect failed.");
 			}

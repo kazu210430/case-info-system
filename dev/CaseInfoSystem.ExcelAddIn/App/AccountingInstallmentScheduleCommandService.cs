@@ -401,7 +401,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 				row++;
 				if (row > AccountingInstallmentSchedulePlanPolicy.LastScheduleRow) {
-					throw new InvalidOperationException ("分割払い予定表が A12:J73 のテーブル範囲を超えます。分割金を増額してください。");
+					throw AccountingPaymentOverflowUserMessage.CreateInstallmentScheduleOverflowException (
+						row,
+						AccountingInstallmentSchedulePlanPolicy.LastScheduleRow,
+						TableRangeAddress);
 				}
 			}
 		}

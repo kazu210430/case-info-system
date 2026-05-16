@@ -244,6 +244,8 @@ foreground display-completable mapping は引き続き次の通りです。
 
 Phase 5 runtime は、foreground display-completable helper 化後の時点で一度区切ります。
 
+その後の safety-preserving shrink として、refresh 実行前の precondition / fail-closed decision と fail-closed outcome assembly は `TaskPaneRefreshPreconditionDecisionService` に分離します。これは owner / lifecycle の移動ではありません。retry timer、ready-show callback、completion / emit / session owner、WindowActivate observation 発火 owner、TaskPane 表示命令は `TaskPaneRefreshOrchestrationService` 側に残します。
+
 ここまでで safe に切れる private / pure / local helper は現時点で概ね取り切りました。残る runtime 候補は、completion owner、display session lifecycle、callback meaning、route semantics、trace contract に近く、ここから先を runtime 実装として進めると protocol-preserving refactor ではなく semantics rewrite になりやすい領域です。
 
 Phase 5 runtime 完了済み helper:

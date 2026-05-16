@@ -403,8 +403,9 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
-            string preconditionBoundary = ReadMethod(orchestrationSource, "private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary");
+            string preconditionBoundary = ReadMethod(orchestrationSource, "private TaskPaneRefreshPreconditionDecisionResult EvaluateTaskPaneRefreshPreconditionBoundary");
             string failClosedReturn = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult ReturnFailClosedTaskPaneRefreshResult");
+            string preconditionServiceSource = ReadAppSource("TaskPaneRefreshPreconditionDecisionService.cs");
             string preconditionSkipPath = Slice(
                 coreMethod,
                 "if (!preconditionDecision.CanRefresh)",
@@ -413,29 +414,33 @@ namespace CaseInfoSystem.Tests
             AssertContainsInOrder(
                 coreMethod,
                 "TaskPaneRefreshAttemptStartObservation attemptObservation = StartTaskPaneRefreshAttemptObservation(",
-                "TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(",
+                "TaskPaneRefreshPreconditionDecisionResult preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(",
                 "if (!preconditionDecision.CanRefresh)",
                 "return ReturnFailClosedTaskPaneRefreshResult(",
                 "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(");
             AssertContainsInOrder(
                 preconditionBoundary,
-                "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
+                "_preconditionDecisionService.Decide(",
                 "if (!preconditionDecision.CanRefresh)",
                 "_logger?.Info(",
                 "return preconditionDecision;");
+            AssertContainsInOrder(
+                preconditionServiceSource,
+                "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
+                "if (preconditionDecision.CanRefresh)",
+                "return TaskPaneRefreshPreconditionDecisionResult.Continue(preconditionDecision);",
+                "TaskPaneRefreshFailClosedOutcome.FromPreconditionDecision(preconditionDecision)");
             AssertNormalizedOutcomeChainBefore(
                 failClosedReturn,
                 "_windowActivateDownstreamObservation.LogOutcome(",
                 orchestrationSource);
             AssertContainsInOrder(
                 failClosedReturn,
-                "TaskPaneRefreshFailClosedOutcome failClosedOutcome =",
-                "TaskPaneRefreshFailClosedOutcome.FromPreconditionDecision(preconditionDecision);",
                 "TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(",
-                "failClosedOutcome.AttemptResult,",
-                "failClosedOutcome.SkipActionName,",
+                "preconditionDecision.NormalizedOutcomeAttemptResult,",
+                "preconditionDecision.NormalizedOutcomeActionName,",
                 "_windowActivateDownstreamObservation.LogOutcome(",
-                "failClosedOutcome.SkipActionName);",
+                "preconditionDecision.SkipActionName);",
                 "return skippedResult;");
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", preconditionSkipPath);
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", failClosedReturn);
@@ -464,7 +469,7 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string coreMethod = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult TryRefreshTaskPaneCore");
-            string preconditionBoundary = ReadMethod(orchestrationSource, "private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary");
+            string preconditionBoundary = ReadMethod(orchestrationSource, "private TaskPaneRefreshPreconditionDecisionResult EvaluateTaskPaneRefreshPreconditionBoundary");
             string routeDispatch = ReadMethod(orchestrationSource, "private RefreshDispatchExecutionResult DispatchTaskPaneRefreshRoute");
             string postDispatchConvergence = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult ContinuePostDispatchRefreshConvergence");
             string dispatchShell = ReadMethod(orchestrationSource, "internal static RefreshDispatchExecutionResult Dispatch");
@@ -472,14 +477,14 @@ namespace CaseInfoSystem.Tests
             AssertContainsInOrder(
                 coreMethod,
                 "TaskPaneRefreshAttemptStartObservation attemptObservation = StartTaskPaneRefreshAttemptObservation(",
-                "TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(",
+                "TaskPaneRefreshPreconditionDecisionResult preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(",
                 "if (!preconditionDecision.CanRefresh)",
                 "return ReturnFailClosedTaskPaneRefreshResult(",
                 "RefreshDispatchExecutionResult routeDispatchExecutionResult = DispatchTaskPaneRefreshRoute(",
                 "return ContinuePostDispatchRefreshConvergence(");
             AssertContainsInOrder(
                 preconditionBoundary,
-                "TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(",
+                "_preconditionDecisionService.Decide(",
                 "return preconditionDecision;");
             AssertContainsInOrder(
                 routeDispatch,

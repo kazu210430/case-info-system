@@ -23,6 +23,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneRefreshCoordinator _taskPaneRefreshCoordinator;
         private readonly WorkbookTaskPaneReadyShowAttemptWorker _workbookTaskPaneReadyShowAttemptWorker;
         private readonly WorkbookPaneWindowResolver _workbookPaneWindowResolver;
+        private readonly TaskPaneRefreshPreconditionDecisionService _preconditionDecisionService;
         private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
         private readonly TaskPaneReadyShowRetryScheduler _readyShowRetryScheduler;
         private readonly WindowActivateDownstreamObservation _windowActivateDownstreamObservation;
@@ -57,6 +58,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook => FormatWorkbookDescriptor(workbook),
                 window => FormatWindowDescriptor(window),
                 () => FormatActiveState());
+            _preconditionDecisionService = new TaskPaneRefreshPreconditionDecisionService();
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
             _casePaneHostBridge = casePaneHostBridge ?? throw new ArgumentNullException(nameof(casePaneHostBridge));
@@ -106,7 +108,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook,
                 window,
                 displayRequest);
-            TaskPaneRefreshPreconditionDecision preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(
+            TaskPaneRefreshPreconditionDecisionResult preconditionDecision = EvaluateTaskPaneRefreshPreconditionBoundary(
                 reason,
                 workbook,
                 window,
@@ -174,13 +176,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
             internal int RefreshAttemptId { get; }
         }
 
-        private TaskPaneRefreshPreconditionDecision EvaluateTaskPaneRefreshPreconditionBoundary(
+        private TaskPaneRefreshPreconditionDecisionResult EvaluateTaskPaneRefreshPreconditionBoundary(
             string reason,
             Excel.Workbook workbook,
             Excel.Window window,
             int refreshAttemptId)
         {
-            TaskPaneRefreshPreconditionDecision preconditionDecision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
+            TaskPaneRefreshPreconditionDecisionResult preconditionDecision = _preconditionDecisionService.Decide(
                 reason,
                 workbook,
                 window,
@@ -211,18 +213,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             Excel.Workbook workbook,
             Excel.Window window,
             TaskPaneDisplayRequest displayRequest,
-            TaskPaneRefreshPreconditionDecision preconditionDecision,
+            TaskPaneRefreshPreconditionDecisionResult preconditionDecision,
             TaskPaneRefreshAttemptStartObservation attemptObservation)
         {
-            TaskPaneRefreshFailClosedOutcome failClosedOutcome =
-                TaskPaneRefreshFailClosedOutcome.FromPreconditionDecision(preconditionDecision);
             TaskPaneRefreshAttemptResult skippedResult = CompleteNormalizedOutcomeChain(
                 reason,
                 workbook,
                 window,
-                failClosedOutcome.AttemptResult,
+                preconditionDecision.NormalizedOutcomeAttemptResult,
                 attemptObservation.Stopwatch,
-                failClosedOutcome.SkipActionName,
+                preconditionDecision.NormalizedOutcomeActionName,
                 null,
                 null);
             _windowActivateDownstreamObservation.LogOutcome(
@@ -231,7 +231,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 skippedResult,
                 attemptObservation.Stopwatch,
                 attemptObservation.RefreshAttemptId,
-                failClosedOutcome.SkipActionName);
+                preconditionDecision.SkipActionName);
             return skippedResult;
         }
 

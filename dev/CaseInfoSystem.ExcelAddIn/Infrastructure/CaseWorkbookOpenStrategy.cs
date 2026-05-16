@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.App;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -17,6 +16,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private readonly Logger _logger;
         private readonly CaseWorkbookOpenRouteDecisionService _routeDecisionService;
         private readonly CaseWorkbookOpenCleanupOutcomeService _cleanupOutcomeService;
+        private readonly CaseWorkbookPresentationHandoffService _presentationHandoffService;
         private readonly Func<Excel.Application> _hiddenApplicationFactory;
         private readonly Action<object> _releaseComObject;
         private readonly object _hiddenApplicationCacheSync = new object();
@@ -35,6 +35,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _routeDecisionService = new CaseWorkbookOpenRouteDecisionService();
             _cleanupOutcomeService = new CaseWorkbookOpenCleanupOutcomeService(_routeDecisionService);
+            _presentationHandoffService = new CaseWorkbookPresentationHandoffService();
             _hiddenApplicationFactory = hiddenApplicationFactory ?? (() => new Excel.Application());
             _releaseComObject = releaseComObject;
         }
@@ -71,13 +72,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     Excel.Workbook workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
                     _logger.Info("Case workbook visible open completed. path=" + (caseWorkbookPath ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString());
-                    LogOpenVisibleWorkbookWindowState("after-open", workbook);
+                    _logger.Info(_presentationHandoffService.BuildVisibleOpenWindowFactsMessage("after-open", _application, workbook));
                     _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
-                    LogOpenVisibleWorkbookWindowState("before-hide", workbook);
+                    _logger.Info(_presentationHandoffService.BuildVisibleOpenWindowFactsMessage("before-hide", _application, workbook));
                     HideOpenedWorkbookWindow(workbook);
-                    LogOpenVisibleWorkbookWindowState("after-hide", workbook);
+                    _logger.Info(_presentationHandoffService.BuildVisibleOpenWindowFactsMessage("after-hide", _application, workbook));
                     RestorePreviousWindow(previousActiveWindow);
-                    LogOpenVisibleWorkbookWindowState("after-restore-previous-window", workbook);
+                    _logger.Info(_presentationHandoffService.BuildVisibleOpenWindowFactsMessage("after-restore-previous-window", _application, workbook));
                     _logger.Info("Case workbook visible open post-processing completed. path=" + (caseWorkbookPath ?? string.Empty) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds.ToString());
                     return workbook;
                 }
@@ -146,7 +147,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     {
                         _logger.Warn(
                             "hidden-app-cache unhealthy. reason=acquire-health-check-failed, appHwnd="
-                            + SafeApplicationHwnd(_cachedHiddenApplication.Application));
+                            + _presentationHandoffService.CaptureApplicationHwnd(_cachedHiddenApplication.Application));
                         DisposeCachedHiddenApplicationSlotUnlocked("acquire-unhealthy");
                     }
                     else
@@ -200,7 +201,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 + ", route="
                 + CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName
                 + ", appHwnd="
-                + SafeApplicationHwnd(hiddenApplication)
+                + _presentationHandoffService.CaptureApplicationHwnd(hiddenApplication)
                 + ", elapsedMs="
                 + stopwatch.ElapsedMilliseconds.ToString());
             NewCaseVisibilityObservation.Log(
@@ -237,7 +238,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + ", route="
                     + CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName
                     + ", appHwnd="
-                    + SafeApplicationHwnd(hiddenApplication)
+                    + _presentationHandoffService.CaptureApplicationHwnd(hiddenApplication)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
                 return new HiddenCaseWorkbookSession(
@@ -291,42 +292,31 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             _logger.Info("Case workbook hidden-for-display requested. path=" + (caseWorkbookPath ?? string.Empty));
             CaseWorkbookOpenRouteDecision routeDecision = _routeDecisionService.DecideCreatedCaseDisplayRoute();
             Stopwatch stopwatch = Stopwatch.StartNew();
-            Excel.Window previousActiveWindow = null;
+            CaseWorkbookPresentationHandoffPlan handoffPlan = null;
             Excel.Workbook workbook = null;
-            bool previousApplicationVisible = SafeApplicationVisible(_application);
+            bool previousApplicationVisible = _presentationHandoffService.CaptureApplicationVisible(_application);
             bool previousScreenUpdating = _application.ScreenUpdating;
             bool previousEnableEvents = _application.EnableEvents;
             bool previousDisplayAlerts = _application.DisplayAlerts;
             try
             {
-                previousActiveWindow = _application.ActiveWindow;
-                _logger.Info(
-                    "Case workbook hidden-for-display Excel state captured. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + routeDecision.RouteName
-                    + ", "
-                    + routeDecision.ApplicationOwnerFacts
-                    + ", screenUpdating="
-                    + previousScreenUpdating.ToString()
-                    + ", enableEvents="
-                    + previousEnableEvents.ToString()
-                    + ", displayAlerts="
-                    + previousDisplayAlerts.ToString()
-                    + ", elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
+                handoffPlan = _presentationHandoffService.CreateHiddenForDisplayPlan(
+                    caseWorkbookPath,
+                    routeDecision,
+                    _application.ActiveWindow,
+                    previousApplicationVisible,
+                    previousScreenUpdating,
+                    previousEnableEvents,
+                    previousDisplayAlerts);
+                _logger.Info(_presentationHandoffService.BuildHiddenForDisplayStateCapturedMessage(
+                    handoffPlan,
+                    stopwatch.ElapsedMilliseconds));
                 _application.ScreenUpdating = false;
                 _application.EnableEvents = false;
                 _application.DisplayAlerts = false;
-	                _logger.Info(
-	                    "Case workbook hidden-for-display Excel state applied. path="
-	                    + (caseWorkbookPath ?? string.Empty)
-	                    + ", route="
-	                    + routeDecision.RouteName
-	                    + ", "
-	                    + routeDecision.ApplicationOwnerFacts
-	                    + ", screenUpdating=false, enableEvents=false, displayAlerts=false, elapsedMs="
-	                    + stopwatch.ElapsedMilliseconds.ToString());
+                _logger.Info(_presentationHandoffService.BuildHiddenForDisplayStateAppliedMessage(
+                    handoffPlan,
+                    stopwatch.ElapsedMilliseconds));
                 NewCaseVisibilityObservation.Log(
                     _logger,
                     null,
@@ -336,62 +326,51 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     "shared-display-state-applied",
                     "CaseWorkbookOpenStrategy.OpenHiddenForCaseDisplay",
                     caseWorkbookPath,
-                    "route=" + routeDecision.RouteName
-                    + "," + routeDecision.ApplicationOwnerFacts);
-	                Stopwatch stopwatch2 = Stopwatch.StartNew();
-	                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
-	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "workbooksOpen", stopwatch2.ElapsedMilliseconds, "route=" + routeDecision.RouteName);
-	                _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
-	                stopwatch2 = Stopwatch.StartNew();
-	                HideOpenedWorkbookWindow(workbook);
-	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "hideOpenedWorkbookWindow", stopwatch2.ElapsedMilliseconds, "route=" + routeDecision.RouteName);
-	                stopwatch2 = Stopwatch.StartNew();
-	                RestorePreviousWindowForHiddenDisplay(previousActiveWindow, previousApplicationVisible, caseWorkbookPath, routeDecision.RouteName, stopwatch);
-	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "restorePreviousWindow", stopwatch2.ElapsedMilliseconds, "route=" + routeDecision.RouteName);
-	                _logger.Info(
-                    "Case workbook hidden-for-display open completed. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + routeDecision.RouteName
-                    + ", appHwnd="
-                    + SafeApplicationHwnd(_application)
-                    + ", elapsedMs="
-                    + stopwatch.ElapsedMilliseconds.ToString());
+                    _presentationHandoffService.BuildSharedDisplayStateAppliedObservationDetails(handoffPlan));
+                Stopwatch stopwatch2 = Stopwatch.StartNew();
+                workbook = _application.Workbooks.Open(caseWorkbookPath, ReadOnly: false, UpdateLinks: 0);
+                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "workbooksOpen", stopwatch2.ElapsedMilliseconds, "route=" + routeDecision.RouteName);
+                _workbookRoleResolver.RegisterKnownCaseWorkbook(workbook);
+                stopwatch2 = Stopwatch.StartNew();
+                HideOpenedWorkbookWindow(workbook);
+                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "hideOpenedWorkbookWindow", stopwatch2.ElapsedMilliseconds, "route=" + routeDecision.RouteName);
+                stopwatch2 = Stopwatch.StartNew();
+                RestorePreviousWindowForHiddenDisplay(handoffPlan, stopwatch);
+                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "hiddenOpenToWindowVisible", "restorePreviousWindow", stopwatch2.ElapsedMilliseconds, "route=" + routeDecision.RouteName);
+                _logger.Info(_presentationHandoffService.BuildHiddenForDisplayOpenCompletedMessage(
+                    handoffPlan,
+                    _presentationHandoffService.CaptureApplicationHwnd(_application),
+                    stopwatch.ElapsedMilliseconds));
                 return workbook;
             }
             catch
             {
                 TryCloseWorkbookWithoutSaving(workbook);
-                RestorePreviousWindowForHiddenDisplay(previousActiveWindow, previousApplicationVisible, caseWorkbookPath, routeDecision.RouteName, stopwatch);
+                RestorePreviousWindowForHiddenDisplay(handoffPlan, stopwatch);
                 throw;
             }
             finally
             {
-                RestoreSharedApplicationState(
-                    caseWorkbookPath,
-                    routeDecision.RouteName,
-                    stopwatch,
-                    previousScreenUpdating,
-                    previousEnableEvents,
-                    previousDisplayAlerts);
+                RestoreSharedApplicationState(handoffPlan, stopwatch);
             }
         }
 
-        private void RestorePreviousWindowForHiddenDisplay(Excel.Window previousActiveWindow, bool previousApplicationVisible, string caseWorkbookPath, string routeName, Stopwatch stopwatch)
+        private void RestorePreviousWindowForHiddenDisplay(CaseWorkbookPresentationHandoffPlan handoffPlan, Stopwatch stopwatch)
         {
-            if (!previousApplicationVisible)
+            if (handoffPlan == null)
             {
-                _logger.Info(
-                    "Case workbook hidden-for-display previous window restore skipped because shared application was hidden. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + (routeName ?? string.Empty)
-                    + ", elapsedMs="
-                    + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
                 return;
             }
 
-            RestorePreviousWindow(previousActiveWindow);
+            if (!handoffPlan.PreviousWindowRestoreDecision.ShouldRestore)
+            {
+                _logger.Info(_presentationHandoffService.BuildPreviousWindowRestoreSkippedMessage(
+                    handoffPlan,
+                    stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
+                return;
+            }
+
+            RestorePreviousWindow(handoffPlan.SharedStateFacts.PreviousActiveWindow);
         }
 
         private HiddenCaseWorkbookSession OpenDedicatedHiddenWorkbookSession(string caseWorkbookPath, string routeName, bool saveBeforeClose)
@@ -446,7 +425,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     + ", route="
                     + routeName
                     + ", appHwnd="
-                    + SafeApplicationHwnd(hiddenApplication)
+                    + _presentationHandoffService.CaptureApplicationHwnd(hiddenApplication)
                     + ", elapsedMs="
                     + stopwatch.ElapsedMilliseconds.ToString());
                 return new HiddenCaseWorkbookSession(
@@ -471,28 +450,22 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private void RestoreSharedApplicationState(string caseWorkbookPath, string routeName, Stopwatch stopwatch, bool screenUpdating, bool enableEvents, bool displayAlerts)
+        private void RestoreSharedApplicationState(CaseWorkbookPresentationHandoffPlan handoffPlan, Stopwatch stopwatch)
         {
+            if (handoffPlan == null)
+            {
+                return;
+            }
+
+            CaseWorkbookSharedDisplayStateFacts facts = handoffPlan.SharedStateFacts;
             try
             {
-                _application.ScreenUpdating = screenUpdating;
-                _application.EnableEvents = enableEvents;
-                _application.DisplayAlerts = displayAlerts;
-                _logger.Info(
-                    "Case workbook hidden Excel state restored. path="
-                    + (caseWorkbookPath ?? string.Empty)
-                    + ", route="
-                    + (routeName ?? string.Empty)
-                    + ", "
-                    + _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    + ", screenUpdating="
-                    + screenUpdating.ToString()
-                    + ", enableEvents="
-                    + enableEvents.ToString()
-                    + ", displayAlerts="
-                    + displayAlerts.ToString()
-                    + ", elapsedMs="
-                    + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                _application.ScreenUpdating = facts.PreviousScreenUpdating;
+                _application.EnableEvents = facts.PreviousEnableEvents;
+                _application.DisplayAlerts = facts.PreviousDisplayAlerts;
+                _logger.Info(_presentationHandoffService.BuildSharedDisplayStateRestoredMessage(
+                    handoffPlan,
+                    stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                 NewCaseVisibilityObservation.Log(
                     _logger,
                     null,
@@ -501,9 +474,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     null,
                     "shared-display-state-restored",
                     "CaseWorkbookOpenStrategy.RestoreSharedApplicationState",
-                    caseWorkbookPath,
-                    "route=" + (routeName ?? string.Empty)
-                    + "," + _routeDecisionService.BuildApplicationOwnerFacts(routeName));
+                    handoffPlan.CaseWorkbookPath,
+                    _presentationHandoffService.BuildSharedDisplayStateRestoredObservationDetails(handoffPlan));
             }
             catch (Exception ex)
             {
@@ -809,7 +781,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
                 if (!_routeDecisionService.IsHiddenApplicationCacheEnabled())
                 {
-                    _logger.Info("hidden-app-cache disabled before return-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application));
+                    _logger.Info("hidden-app-cache disabled before return-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(application));
                     _cachedHiddenApplication.IsPoisoned = true;
                     return false;
                 }
@@ -828,14 +800,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 if (!IsCachedHiddenApplicationHealthyUnlocked(_cachedHiddenApplication))
                 {
                     _cachedHiddenApplication.IsPoisoned = true;
-                    _logger.Warn("hidden-app-cache unhealthy. reason=return-to-idle-health-check-failed, appHwnd=" + SafeApplicationHwnd(application));
+                    _logger.Warn("hidden-app-cache unhealthy. reason=return-to-idle-health-check-failed, appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(application));
                     return false;
                 }
 
                 _cachedHiddenApplication.IsInUse = false;
                 _cachedHiddenApplication.IdleSinceUtc = DateTime.UtcNow;
                 ScheduleHiddenApplicationIdleTimerUnlocked();
-                _logger.Info("hidden-app-cache returned-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application) + ", idleTimeoutSeconds=" + _routeDecisionService.ResolveHiddenApplicationCacheIdleSeconds().ToString() + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                _logger.Info("hidden-app-cache returned-to-idle. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(application) + ", idleTimeoutSeconds=" + _routeDecisionService.ResolveHiddenApplicationCacheIdleSeconds().ToString() + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
                 NewCaseVisibilityObservation.Log(
                     _logger,
                     null,
@@ -858,7 +830,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 if (_cachedHiddenApplication != null && ReferenceEquals(_cachedHiddenApplication.Application, application))
                 {
                     _cachedHiddenApplication.IsPoisoned = true;
-                    _logger.Warn("hidden-app-cache poisoned. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(application) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
+                    _logger.Warn("hidden-app-cache poisoned. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(application) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
                     slotToDispose = _cachedHiddenApplication;
                     _cachedHiddenApplication = null;
                     StopHiddenApplicationIdleTimerUnlocked();
@@ -1006,7 +978,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             CachedHiddenApplicationSlot expiredSlot = _cachedHiddenApplication;
             _cachedHiddenApplication = null;
             StopHiddenApplicationIdleTimerUnlocked();
-            _logger.Info("hidden-app-cache timed-out. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(expiredSlot.Application));
+            _logger.Info("hidden-app-cache timed-out. reason=" + (reason ?? string.Empty) + ", appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(expiredSlot.Application));
             return expiredSlot;
         }
 
@@ -1019,10 +991,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             if (!slot.IsOwnedByCache)
             {
-                _logger.Warn("hidden-app-cache cleanup skipped because slot is not cache-owned. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(slot.Application));
+                _logger.Warn("hidden-app-cache cleanup skipped because slot is not cache-owned. reason=" + (reason ?? string.Empty) + ", appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(slot.Application));
                 LogRetainedInstanceCleanupOutcome(_cleanupOutcomeService.CreateRetainedInstanceCleanupOutcome(
                     reason,
-                    SafeApplicationHwnd(slot.Application),
+                    _presentationHandoffService.CaptureApplicationHwnd(slot.Application),
                     retainedInstancePresent: slot.Application != null,
                     isOwnedByCache: false,
                     quitAttempted: false,
@@ -1034,12 +1006,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             ReleaseComObject(slot.Application);
             LogRetainedInstanceCleanupOutcome(_cleanupOutcomeService.CreateRetainedInstanceCleanupOutcome(
                 reason,
-                SafeApplicationHwnd(slot.Application),
+                _presentationHandoffService.CaptureApplicationHwnd(slot.Application),
                 retainedInstancePresent: slot.Application != null,
                 isOwnedByCache: true,
                 quitAttempted: slot.Application != null,
                 quitCompleted: quitCompleted));
-            _logger.Info("hidden-app-cache discarded. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(slot.Application));
+            _logger.Info("hidden-app-cache discarded. reason=" + (reason ?? string.Empty) + ", appHwnd=" + _presentationHandoffService.CaptureApplicationHwnd(slot.Application));
         }
 
         private void DisposeCachedHiddenApplicationSlotUnlocked(string reason)
@@ -1140,155 +1112,6 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 comObject,
                 _logger,
                 nameof(CaseWorkbookOpenStrategy) + "." + (callerMemberName ?? nameof(ReleaseComObject)));
-        }
-
-        private static string SafeApplicationHwnd(Excel.Application application)
-        {
-            try
-            {
-                return application == null ? string.Empty : Convert.ToString(application.Hwnd) ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private void LogOpenVisibleWorkbookWindowState(string stage, Excel.Workbook openedWorkbook)
-        {
-            _logger.Info(
-                "Case workbook open visible state. stage="
-                + (stage ?? string.Empty)
-                + ", appHwnd="
-                + SafeApplicationHwnd(_application)
-                + ", workbooksCount="
-                + SafeWorkbooksCount(_application)
-                + ", activeWorkbookName="
-                + SafeWorkbookName(_application == null ? null : _application.ActiveWorkbook)
-                + ", activeWindowCaption="
-                + SafeWindowCaption(_application == null ? null : _application.ActiveWindow)
-                + ", openedWorkbookWindows="
-                + DescribeWorkbookWindows(openedWorkbook));
-        }
-
-        private static string SafeWorkbooksCount(Excel.Application application)
-        {
-            try
-            {
-                return application == null || application.Workbooks == null
-                    ? string.Empty
-                    : application.Workbooks.Count.ToString();
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static bool SafeApplicationVisible(Excel.Application application)
-        {
-            try
-            {
-                return application != null && application.Visible;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static string SafeWorkbookName(Excel.Workbook workbook)
-        {
-            try
-            {
-                return workbook == null ? string.Empty : workbook.Name ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string SafeWindowCaption(Excel.Window window)
-        {
-            try
-            {
-                if (window == null)
-                {
-                    return string.Empty;
-                }
-
-                dynamic lateBoundWindow = window;
-                return Convert.ToString(lateBoundWindow.Caption) ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string SafeWindowHwnd(Excel.Window window)
-        {
-            try
-            {
-                return window == null ? string.Empty : Convert.ToString(window.Hwnd) ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string SafeWindowVisible(Excel.Window window)
-        {
-            try
-            {
-                return window == null ? string.Empty : window.Visible.ToString();
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string DescribeWorkbookWindows(Excel.Workbook workbook)
-        {
-            if (workbook == null)
-            {
-                return "count=0";
-            }
-
-            try
-            {
-                int count = workbook.Windows == null ? 0 : workbook.Windows.Count;
-                string result = "count=" + count.ToString();
-                for (int index = 1; index <= count; index++)
-                {
-                    Excel.Window window = null;
-                    try
-                    {
-                        window = workbook.Windows[index];
-                        result += ";index="
-                            + index.ToString()
-                            + ",visible="
-                            + SafeWindowVisible(window)
-                            + ",caption="
-                            + SafeWindowCaption(window)
-                            + ",hwnd="
-                            + SafeWindowHwnd(window);
-                    }
-                    catch
-                    {
-                        result += ";index=" + index.ToString() + ",error=window-state-unavailable";
-                    }
-                }
-
-                return result;
-            }
-            catch
-            {
-                return "count=";
-            }
         }
 
         private void HideOpenedWorkbookWindow(Excel.Workbook workbook)

@@ -105,6 +105,13 @@ A-G 完了後の current-state docs は、次の関係で読む。
 - `CaseWorkbookOpenCleanupOutcomeService` は cleanup 実行後の raw facts から hidden cleanup outcome、isolated app outcome、retained instance outcome、reason、diagnostic / trace details を値として組み立てるだけを担当します。
 - 目的は大型の open strategy class から cleanup 分類責務を減らし、cleanup / retained app-cache outcome の変更影響範囲を小さくすることです。
 
+### presentation handoff service boundary
+
+- CASE workbook open 後の display recovery / presentation handoff の判断・材料組み立ては `CaseWorkbookPresentationHandoffService` に分離しています。
+- これは表示操作 owner / lifecycle の移動ではありません。`Application.Visible`、`WindowState`、workbook / window activate、CASE 表示 recovery 実行 owner、presentation handoff 実行 owner は引き続き `CaseWorkbookOpenStrategy` と既存 presentation / recovery service 側に残ります。
+- `CaseWorkbookPresentationHandoffService` は hidden-for-display の shared app state facts、previous window restore decision、handoff diagnostic details、visible-open 時の application / workbook / window visibility facts を値として組み立てるだけを担当します。
+- 目的は大型の open strategy class から表示復旧判断・材料整理の責務を減らし、hidden route から visible presentation へ渡す直前の変更影響範囲を小さくすることです。
+
 ## instance lifecycle 整理
 
 ```mermaid

@@ -36,6 +36,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			internal bool IsDepositRow { get; private set; }
 		}
 
+		private sealed class PaymentHistorySortResult
+		{
+			internal PaymentHistorySortResult (int lastDataRow, int trackedTargetRow)
+			{
+				LastDataRow = lastDataRow;
+				TrackedTargetRow = trackedTargetRow;
+			}
+
+			internal int LastDataRow { get; private set; }
+
+			internal int TrackedTargetRow { get; private set; }
+		}
+
 		private const string SheetName = "お支払い履歴";
 
 		private const string InvoiceSheetName = "請求書";
@@ -167,6 +180,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				CalculateWorkbook (workbook);
 
 				int lastDataRow = SortPaymentHistoryRows (workbook);
+				int trackedAppendRow = 0;
 				if (lastDataRow < AccountingPaymentHistoryPlanPolicy.FirstDataRow) {
 					if (depositAmount != 0) {
 						if (!TryWriteCalculatedRow (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow, 0, AccountingPaymentHistoryPlanPolicy.DepositAppliedText, depositAmount, "お預かり金額")) {
@@ -186,10 +200,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					if (!TryWriteCalculatedRow (workbook, nextAppendRow, ResolveNextRoundNumber (workbook, nextAppendRow), receiptDate, receiptAmount, "領収額")) {
 						return LoadFormState (workbook);
 					}
+					trackedAppendRow = nextAppendRow;
 				}
 
-				lastDataRow = SortPaymentHistoryRows (workbook);
-				if (!TryRecalculateAfterSortIfNeeded (workbook, lastDataRow)) {
+				PaymentHistorySortResult sortResult = SortPaymentHistoryRows (workbook, trackedAppendRow);
+				lastDataRow = sortResult.LastDataRow;
+				if (!TryRecalculateAfterSortIfNeeded (workbook, lastDataRow, trackedAppendRow, sortResult.TrackedTargetRow)) {
 					return LoadFormState (workbook);
 				}
 				ClearRowsFrom (workbook, lastDataRow + 1);
@@ -450,14 +466,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			UserErrorService.ShowOkNotification (AccountingGoalSeekResidualPolicy.CreateResidualNoticeUserMessage (current, targetAmount), "案件情報System", MessageBoxIcon.Warning);
 		}
 
-		private bool TryRecalculateAfterSortIfNeeded (Workbook workbook, int lastDataRow)
+		private bool TryRecalculateAfterSortIfNeeded (Workbook workbook, int lastDataRow, int appendedRow, int sortedInsertedRow)
 		{
-			if (lastDataRow < AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow + 1) {
+			if (lastDataRow < AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow) {
 				return true;
 			}
 
-			List<double> expenseCharges = ReadExpenseChargesForRecalculation (workbook, lastDataRow);
-			if (!AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (expenseCharges)) {
+			if (!ShouldRecalculateInsertedRow (workbook, appendedRow, sortedInsertedRow)) {
 				return true;
 			}
 
@@ -483,13 +498,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			return true;
 		}
 
-		private List<double> ReadExpenseChargesForRecalculation (Workbook workbook, int lastDataRow)
+		private bool ShouldRecalculateInsertedRow (Workbook workbook, int appendedRow, int sortedInsertedRow)
 		{
-			List<double> expenseCharges = new List<double> ();
-			for (int row = AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow; row <= lastDataRow; row++) {
-				expenseCharges.Add (ReadRequiredDouble (workbook, SheetName, Address ("H", row), "実費等への充当額", "AccountingPaymentHistory.ReadExpenseChargesForRecalculation"));
+			if (!AccountingPaymentHistoryRecalculationPolicy.IsInsertedRowInRecalculationRange (appendedRow, sortedInsertedRow)) {
+				return false;
 			}
-			return expenseCharges;
+
+			int previousRow = AccountingPaymentHistoryPlanPolicy.GetPreviousBalanceRowForDataRow (sortedInsertedRow);
+			double previousExpenseBalance = ReadRequiredDouble (workbook, SheetName, Address ("J", previousRow), "割り込み行の前回実費残高", "AccountingPaymentHistory.ShouldRecalculateInsertedRow");
+			return AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateInsertedRow (appendedRow, sortedInsertedRow, previousExpenseBalance);
 		}
 
 		private Dictionary<int, double> CaptureRecalculationTargetReceiptAmounts (Workbook workbook, int lastDataRow)
@@ -514,6 +531,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 		private int SortPaymentHistoryRows (Workbook workbook)
 		{
+			return SortPaymentHistoryRows (workbook, 0).LastDataRow;
+		}
+
+		private PaymentHistorySortResult SortPaymentHistoryRows (Workbook workbook, int trackedOriginalRow)
+		{
 			List<PaymentHistoryEditableRow> rows = ReadEditableRows (workbook);
 			PaymentHistoryEditableRow depositRow = null;
 			List<PaymentHistoryEditableRow> receiptRows = new List<PaymentHistoryEditableRow> ();
@@ -532,17 +554,24 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			ClearRowsFrom (workbook, AccountingPaymentHistoryPlanPolicy.FirstDataRow);
 			int targetRow = AccountingPaymentHistoryPlanPolicy.FirstDataRow;
 			int roundNumber = 1;
+			int trackedTargetRow = 0;
 			if (depositRow != null) {
 				WriteEditableRowValues (workbook, targetRow, 0, AccountingPaymentHistoryPlanPolicy.DepositAppliedText, depositRow.TaxBaseValue, depositRow.ExpenseChargeValue);
+				if (depositRow.OriginalRow == trackedOriginalRow) {
+					trackedTargetRow = targetRow;
+				}
 				targetRow++;
 			}
 			foreach (PaymentHistoryEditableRow row in receiptRows) {
 				WriteEditableRowValues (workbook, targetRow, roundNumber, row.DateValue, row.TaxBaseValue, row.ExpenseChargeValue);
+				if (row.OriginalRow == trackedOriginalRow) {
+					trackedTargetRow = targetRow;
+				}
 				targetRow++;
 				roundNumber++;
 			}
 			CalculateWorkbook (workbook);
-			return targetRow - 1;
+			return new PaymentHistorySortResult (targetRow - 1, trackedTargetRow);
 		}
 
 		private List<PaymentHistoryEditableRow> ReadEditableRows (Workbook workbook)

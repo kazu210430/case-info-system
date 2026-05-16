@@ -1,25 +1,20 @@
-using System;
-using System.Collections.Generic;
-
 namespace CaseInfoSystem.ExcelAddIn.App
 {
 	internal static class AccountingPaymentHistoryRecalculationPolicy
 	{
 		internal const int FirstRecalculationRow = 15;
 
-		internal static bool ShouldRecalculateAfterSort (IList<double> expenseCharges)
+		internal static bool IsInsertedRowInRecalculationRange (int appendedRow, int sortedInsertedRow)
 		{
-			if (expenseCharges == null) {
-				throw new ArgumentNullException ("expenseCharges");
-			}
+			return appendedRow >= FirstRecalculationRow
+				&& sortedInsertedRow >= FirstRecalculationRow
+				&& sortedInsertedRow < appendedRow;
+		}
 
-			for (int index = 1; index < expenseCharges.Count; index++) {
-				if (expenseCharges[index - 1] < expenseCharges[index]) {
-					return true;
-				}
-			}
-
-			return false;
+		internal static bool ShouldRecalculateInsertedRow (int appendedRow, int sortedInsertedRow, double previousExpenseBalance)
+		{
+			return IsInsertedRowInRecalculationRange (appendedRow, sortedInsertedRow)
+				&& previousExpenseBalance > 0;
 		}
 	}
 }

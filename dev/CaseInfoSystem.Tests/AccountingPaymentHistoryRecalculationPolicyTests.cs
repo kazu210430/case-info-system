@@ -15,18 +15,22 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
-		public void ShouldRecalculateAfterSort_ReturnsFalse_WhenExpenseChargesDoNotIncrease()
+		public void IsInsertedRowInRecalculationRange_ReturnsTrueOnlyWhenAppendedRowMovedInto15OrLater()
 		{
-			Assert.False (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (new double[0]));
-			Assert.False (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (new double[] { 1000 }));
-			Assert.False (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (new double[] { 1000, 1000, 500, 0 }));
+			Assert.True (AccountingPaymentHistoryRecalculationPolicy.IsInsertedRowInRecalculationRange (19, 15));
+			Assert.True (AccountingPaymentHistoryRecalculationPolicy.IsInsertedRowInRecalculationRange (16, 15));
+			Assert.False (AccountingPaymentHistoryRecalculationPolicy.IsInsertedRowInRecalculationRange (15, 15));
+			Assert.False (AccountingPaymentHistoryRecalculationPolicy.IsInsertedRowInRecalculationRange (19, 14));
+			Assert.False (AccountingPaymentHistoryRecalculationPolicy.IsInsertedRowInRecalculationRange (0, 15));
 		}
 
 		[Fact]
-		public void ShouldRecalculateAfterSort_ReturnsTrue_WhenLaterExpenseChargeIsGreater()
+		public void ShouldRecalculateInsertedRow_RequiresPreviousExpenseBalance()
 		{
-			Assert.True (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (new double[] { 1000, 1001 }));
-			Assert.True (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateAfterSort (new double[] { 1000, 500, 750 }));
+			Assert.True (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateInsertedRow (16, 15, 150000));
+			Assert.False (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateInsertedRow (16, 15, 0));
+			Assert.False (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateInsertedRow (16, 16, 150000));
+			Assert.False (AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateInsertedRow (16, 14, 150000));
 		}
 
 		[Fact]
@@ -45,6 +49,10 @@ namespace CaseInfoSystem.Tests
 			Assert.True (goalSeekIndex >= 0, "退避済みC列値をGoalSeek目標にする呼び出しが見つかりません。");
 			Assert.True (captureIndex < clearIndex, "C列目標値はH列クリア前に退避してください。");
 			Assert.True (targetIndex < goalSeekIndex, "GoalSeek目標値は退避済みC列値から取得してください。");
+			Assert.Contains ("for (int row = AccountingPaymentHistoryRecalculationPolicy.FirstRecalculationRow; row <= lastDataRow; row++)", source);
+			Assert.Contains ("PaymentHistorySortResult sortResult = SortPaymentHistoryRows (workbook, trackedAppendRow);", source);
+			Assert.Contains ("double previousExpenseBalance = ReadRequiredDouble (workbook, SheetName, Address (\"J\", previousRow)", source);
+			Assert.Contains ("return AccountingPaymentHistoryRecalculationPolicy.ShouldRecalculateInsertedRow (appendedRow, sortedInsertedRow, previousExpenseBalance);", source);
 		}
 
 		private static string ReadAppSource (string appFileName)

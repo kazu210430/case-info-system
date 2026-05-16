@@ -77,6 +77,29 @@
 - `TaskPaneRefreshPreconditionPolicy` は `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` の shared skip policy 正本です。
 - TaskPane refresh handoff 系の closure は `docs/taskpane-display-recovery-current-state.md` の `TaskPane refresh handoff closure note` を正本とします。
 
+#### Large class refactor boundary freeze
+
+今回の分割は責務統合ではなく、判断・分類・facts / trace 組み立ての collaborator 化です。`TaskPaneRefreshOrchestrationService` は小さくなりましたが、owner / lifecycle / callback / completion は安易に移動していません。
+
+`TaskPaneRefreshOrchestrationService` に残る owner:
+
+- retry timer
+- ready-show callback
+- pending retry lifecycle
+- completion / emit
+- created-case session
+- TaskPane 表示命令
+- foreground 実行
+
+collaborator に移った責務:
+
+- `TaskPaneRefreshFailClosedOutcome`: fail-closed outcome の値表現
+- `TaskPaneRefreshPreconditionDecisionService`: precondition / fail-closed decision と fail-closed outcome assembly
+- `TaskPaneRefreshObservationDecisionService`: observation 後の normalized outcome chain 接続、foreground 実行要否、diagnostic details 組み立て
+- `TaskPaneRefreshRetryContinuationDecisionService`: pending retry tick の継続 / 停止 / active context fallback 判断
+
+次候補は completion / emit 境界の整理です。ただし `case-display-completed` one-time emit、created-case session lifecycle、ready-show callback meaning、retry sequencing、foreground outcome semantics は同一 diff で不用意に動かしません。
+
 ### 2. TaskPane 周辺で完了済みとして扱う bridge / 境界整理
 
 `docs/a-priority-service-responsibility-inventory.md` を基準に、現行 `main` で完了済みとして扱うのは次です。

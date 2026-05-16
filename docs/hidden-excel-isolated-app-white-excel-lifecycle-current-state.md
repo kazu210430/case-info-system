@@ -119,6 +119,32 @@ A-G 完了後の current-state docs は、次の関係で読む。
 - `CaseWorkbookHiddenAppLifecycleSupportService` は cached `Application` の raw visibility / health facts、reuse block reason、expiration classification、retained cache trace details を値として組み立てるだけを担当します。
 - 目的は大型の open strategy class から hidden app lifecycle 周辺の補助責務を減らし、retained app-cache 条件や trace vocabulary を変更する場合の影響範囲を小さくすることです。
 
+### CaseWorkbookOpenStrategy large class boundary freeze
+
+今回の分割は責務統合ではなく、判断・分類・facts / trace 組み立ての collaborator 化です。owner / lifecycle / close / app quit / COM release は `CaseWorkbookOpenStrategy` から安易に移動していません。
+
+`CaseWorkbookOpenStrategy` に残る owner:
+
+- Excel application 作成
+- workbook open / close
+- hidden session owner
+- isolated app lifecycle
+- shared app handoff
+- retained app-cache owner
+- cleanup 実行
+- app quit
+- COM release
+- CASE 表示 recovery
+
+collaborator に移った責務:
+
+- `CaseWorkbookOpenRouteDecisionService`: route decision、環境変数・暫定 switch の解釈、selected route、application owner facts、route trace details
+- `CaseWorkbookOpenCleanupOutcomeService`: cleanup outcome 分類、hidden cleanup outcome、isolated app outcome、retained instance outcome、reason、diagnostic / trace details
+- `CaseWorkbookPresentationHandoffService`: presentation handoff facts、shared app state facts、previous window restore decision、visible-open visibility facts
+- `CaseWorkbookHiddenAppLifecycleSupportService`: hidden app lifecycle support facts / reason / trace、reuse block reason、expiration classification、retained cache trace details
+
+次に追加削減を行う場合も、owner / lifecycle を動かさず切れる場合に限ります。実機安定化済みの hidden Excel / white Excel / Book1 / close lifecycle / TaskPane lifecycle は不用意に変更しません。
+
 ## instance lifecycle 整理
 
 ```mermaid

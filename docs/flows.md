@@ -38,7 +38,7 @@
 ### CASE新規作成専用 managed hidden create session
 
 1. `KernelCaseCreationService.CreateSavedCase(...)` は現コードで `ShouldUseHiddenCreateSession() == true` のため、全モードで `CreateSavedCaseWithoutShowing(...)` を通します。
-2. `CaseWorkbookOpenStrategy.OpenHiddenWorkbook(...)` が hidden create route を選びます。優先順は `app-cache`、未使用時は `legacy-isolated`、環境変数 `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` 指定時だけ `experimental-isolated-inner-save` です。
+2. `CaseWorkbookOpenStrategy.OpenHiddenWorkbook(...)` が hidden create route を選びます。route decision は `CaseWorkbookOpenRouteDecisionService` が値として組み立て、優先順は `app-cache`、未使用時は `legacy-isolated`、環境変数 `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` 指定時だけ `experimental-isolated-inner-save` です。
 3. `NewCaseDefault` / `CreateCaseSingle` は hidden create session で `InitializeForVisibleCreate(...)` を実行し、`NormalizeInteractiveWorkbookWindowStateBeforeSave(...)` では save 前に workbook window を `Visible=true` へ戻さず、必要なら `WindowState=xlNormal` だけを整えて save / hidden session close を完了します。
 4. interactive 表示開始後は `KernelHomeForm.CloseKernelAfterCaseCreation()` と `KernelWorkbookCloseService` が Kernel HOME close を完了します。CASE 作成フロー中は `KernelHomeSessionDisplayPolicy.ShouldSkipDisplayRestoreForCaseCreation(...)` により Kernel を前景へ戻しません。
 5. interactive route の hidden session close 後は、`KernelCasePresentationService` が shared app の `OpenHiddenForCaseDisplay(...)` で CASE を reopen し、表示責務を shared/current app 側へ渡します。
@@ -51,6 +51,7 @@
 - `experimental-isolated-inner-save` は route 名どおり、current/shared app ではなく dedicated hidden `Application` を生成し、close 時の inner save を含む経路です。
 - 互換のため旧環境変数 `CASEINFO_EXPERIMENT_SHARED_HIDDEN_EXCEL` でも同 route に到達しますが、契約上の正本は `CASEINFO_EXPERIMENT_DEDICATED_HIDDEN_INNER_SAVE` です。
 - `app-cache` は one-shot isolated session ではなく、`CaseWorkbookOpenStrategy` が所有する retained hidden app-cache の例外です。
+- cleanup outcome 分類は `CaseWorkbookOpenCleanupOutcomeService`、presentation handoff facts は `CaseWorkbookPresentationHandoffService`、hidden app lifecycle support facts / reason / trace は `CaseWorkbookHiddenAppLifecycleSupportService` が組み立てます。これは判断・分類・facts / trace 組み立ての collaborator 化であり、Excel application 作成、workbook open / close、hidden session owner、isolated app lifecycle、shared app handoff、retained app-cache owner、cleanup 実行、app quit、COM release、CASE 表示 recovery owner は `CaseWorkbookOpenStrategy` 側に残します。
 - hidden Excel / isolated app / retained hidden app-cache / white Excel lifecycle の current-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`、target-state は `docs/hidden-excel-isolated-app-white-excel-lifecycle-target-state.md`、lifecycle / outcome / trace / owner vocabulary は `docs/hidden-excel-lifecycle-outcome-vocabulary.md`、white Excel prevention / recovery の current-state と target boundary は `docs/white-excel-prevention-boundary-current-state.md` を参照します。この節は新規 CASE 作成フローの順序、同文書は instance / visibility / cleanup owner の正本です。
 
 ### 不明点
@@ -422,6 +423,15 @@ white Excel prevention / recovery の current-state、`targetWorkbookStillOpen` 
 - `PostCloseFollowUpScheduler`
   - close 後 follow-up、Excel busy retry、no visible workbook 時の Excel 終了判定を担当します。
 
+## Add-in startup / execution boundary
+
+`ThisAddIn_Startup(...)` は VSTO Startup entry と composition root 呼び出し、Application event wiring を保持し、hook 後の startup HOME decision / startup refresh handoff / managed-close startup guard は `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()` を経由します。
+
+- `AddInStartupBoundaryCoordinator` は startup guard facts、empty startup quit decision、`DisplayAlerts` quit bridge を扱います。VSTO event ownership、Application event subscription ownership、CustomTaskPane create/remove、hidden Excel lifecycle、workbook close、COM release の owner ではありません。
+- `AddInExecutionBoundaryCoordinator` は document-action の `ScreenUpdating` execution bridge と TaskPane refresh suppression count の entry / exit を扱います。`ScreenUpdating` を変更した場合は coordinator 内で復元します。
+- `AddInRuntimeExecutionDiagnosticsService` は runtime diagnostics の detail building と trace を扱います。
+- `ThisAddIn` 側には VSTO Startup / Shutdown 入口、composition root 呼び出し、Application event handler 入口、CustomTaskPane create / remove、shutdown cleanup 呼び出しを残します。
+
 ## TaskPane 更新
 
 TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingService`、`TaskPaneRefreshOrchestrationService` を起点として処理されます。
@@ -453,6 +463,7 @@ TaskPane 更新は `WorkbookLifecycleCoordinator`、`WindowActivatePaneHandlingS
 - `TaskPaneRefreshPreconditionPolicy.ShouldSkipWorkbookOpenWindowDependentRefresh(...)` が `WorkbookOpen` 直後の window-dependent refresh skip 境界を定義します。
 - `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` はこの policy を利用する側であり、skip 条件を個別に重複保持しません。
 - `TaskPaneRefreshOrchestrationService` は `RefreshPreconditionEvaluator`、`RefreshDispatchShell`、`PendingPaneRefreshRetryState`、`WorkbookPaneWindowResolver` に helper split 済みで、現在は順序調停寄りに整理されています。
+- precondition / fail-closed decision と fail-closed outcome assembly は `TaskPaneRefreshPreconditionDecisionService`、observation 後 decision は `TaskPaneRefreshObservationDecisionService`、retry continuation decision は `TaskPaneRefreshRetryContinuationDecisionService` が collaborator として扱います。retry timer、ready-show callback、pending retry lifecycle、completion / emit、created-case session、TaskPane 表示命令、foreground 実行 owner は `TaskPaneRefreshOrchestrationService` 側に残します。
 - `TaskPaneRefreshCoordinator` は `KernelFlickerTrace` の structured trace を維持し、`04150a7` で obsolete route に付随していた duplicate plain log を削除済みです。
 
 - 特別ボタン

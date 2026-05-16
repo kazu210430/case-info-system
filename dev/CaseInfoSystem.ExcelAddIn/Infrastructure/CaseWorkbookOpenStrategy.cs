@@ -12,23 +12,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
     /// <summary>
     internal sealed class CaseWorkbookOpenStrategy
     {
-        private const string HiddenExcelCleanupCompleted = "HiddenExcelCleanupCompleted";
-        private const string HiddenExcelCleanupNotRequired = "HiddenExcelCleanupNotRequired";
-        private const string HiddenExcelCleanupDegraded = "HiddenExcelCleanupDegraded";
-        private const string HiddenExcelCleanupFailed = "HiddenExcelCleanupFailed";
-        private const string IsolatedAppReleased = "IsolatedAppReleased";
-        private const string IsolatedAppReleaseNotRequired = "IsolatedAppReleaseNotRequired";
-        private const string IsolatedAppReleaseDegraded = "IsolatedAppReleaseDegraded";
-        private const string IsolatedAppReleaseFailed = "IsolatedAppReleaseFailed";
-        private const string RetainedInstanceReturnedToIdle = "RetainedInstanceReturnedToIdle";
-        private const string RetainedInstancePoisoned = "RetainedInstancePoisoned";
-        private const string RetainedInstanceCleanupCompleted = "RetainedInstanceCleanupCompleted";
-        private const string RetainedInstanceCleanupSkipped = "RetainedInstanceCleanupSkipped";
-        private const string RetainedInstanceCleanupDegraded = "RetainedInstanceCleanupDegraded";
         private readonly Excel.Application _application;
         private readonly WorkbookRoleResolver _workbookRoleResolver;
         private readonly Logger _logger;
         private readonly CaseWorkbookOpenRouteDecisionService _routeDecisionService;
+        private readonly CaseWorkbookOpenCleanupOutcomeService _cleanupOutcomeService;
         private readonly Func<Excel.Application> _hiddenApplicationFactory;
         private readonly Action<object> _releaseComObject;
         private readonly object _hiddenApplicationCacheSync = new object();
@@ -46,6 +34,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             _workbookRoleResolver = workbookRoleResolver ?? throw new ArgumentNullException(nameof(workbookRoleResolver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _routeDecisionService = new CaseWorkbookOpenRouteDecisionService();
+            _cleanupOutcomeService = new CaseWorkbookOpenCleanupOutcomeService(_routeDecisionService);
             _hiddenApplicationFactory = hiddenApplicationFactory ?? (() => new Excel.Application());
             _releaseComObject = releaseComObject;
         }
@@ -693,22 +682,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 	                Stopwatch stopwatch3 = Stopwatch.StartNew();
 	                ReleaseComObject(workbook);
 	                ReleaseComObject(application);
-                    LogHiddenCleanupOutcome(
+                    LogHiddenCleanupOutcome(_cleanupOutcomeService.CreateDedicatedHiddenSessionOutcome(
                         "CaseWorkbookOpenStrategy.CleanupDedicatedHiddenSession",
                         caseWorkbookPath,
                         routeName,
-                        ResolveDedicatedHiddenCleanupOutcome(workbookPresent, workbookCloseCompleted, appPresent, appQuitCompleted, cleanupFailed),
-                        ResolveIsolatedAppReleaseOutcome(appPresent, appQuitAttempted, appQuitCompleted),
-                        string.Empty,
-                        workbookPresent,
-                        workbookCloseAttempted,
-                        workbookCloseCompleted,
-                        appPresent,
-                        appQuitAttempted,
-                        appQuitCompleted,
-                        cacheReturnedToIdle: false,
-                        cachePoisoned: false,
-                        reason: cleanupFailed ? "cleanupException" : "dedicatedSessionFinalized");
+                        new CaseWorkbookOpenCleanupFacts(
+                            workbookPresent,
+                            workbookCloseAttempted,
+                            workbookCloseCompleted,
+                            appPresent,
+                            appQuitAttempted,
+                            appQuitCompleted),
+                        cleanupFailed));
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "comRelease", stopwatch3.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty));
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty));
 	                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
@@ -759,22 +744,18 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 	            if (markPoisoned || closeFailed)
 	            {
 	                MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
-                    LogHiddenCleanupOutcome(
+                    LogHiddenCleanupOutcome(_cleanupOutcomeService.CreateCachedHiddenSessionPoisonedOutcome(
                         "CaseWorkbookOpenStrategy.CleanupCachedHiddenSession",
                         caseWorkbookPath,
                         routeName,
-                        ResolveCachedHiddenCleanupOutcome(workbookPresent, workbookCloseCompleted),
-                        string.Empty,
-                        RetainedInstancePoisoned,
-                        workbookPresent,
-                        workbookCloseAttempted,
-                        workbookCloseCompleted,
-                        appPresent: application != null,
-                        appQuitAttempted: false,
-                        appQuitCompleted: false,
-                        cacheReturnedToIdle: false,
-                        cachePoisoned: true,
-                        reason: closeFailed ? "workbookCloseFailed" : "markPoisoned");
+                        new CaseWorkbookOpenCleanupFacts(
+                            workbookPresent,
+                            workbookCloseAttempted,
+                            workbookCloseCompleted,
+                            application != null,
+                            appQuitAttempted: false,
+                            appQuitCompleted: false),
+                        closeFailed ? "workbookCloseFailed" : "markPoisoned"));
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty) + ", cached=False");
 	                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
 	                return;
@@ -782,44 +763,35 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 	            if (TryReturnCachedHiddenApplicationToIdle(application, caseWorkbookPath, routeName, stopwatch))
 	            {
-                    LogHiddenCleanupOutcome(
+                    LogHiddenCleanupOutcome(_cleanupOutcomeService.CreateCachedHiddenSessionReturnedToIdleOutcome(
                         "CaseWorkbookOpenStrategy.CleanupCachedHiddenSession",
                         caseWorkbookPath,
                         routeName,
-                        HiddenExcelCleanupCompleted,
-                        string.Empty,
-                        RetainedInstanceReturnedToIdle,
-                        workbookPresent,
-                        workbookCloseAttempted,
-                        workbookCloseCompleted,
-                        appPresent: application != null,
-                        appQuitAttempted: false,
-                        appQuitCompleted: false,
-                        cacheReturnedToIdle: true,
-                        cachePoisoned: false,
-                        reason: "returnedToIdle");
+                        new CaseWorkbookOpenCleanupFacts(
+                            workbookPresent,
+                            workbookCloseAttempted,
+                            workbookCloseCompleted,
+                            application != null,
+                            appQuitAttempted: false,
+                            appQuitCompleted: false)));
 	                NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty) + ", cached=True");
 	                _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=True, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
 	                return;
 	            }
 
 	            MarkCachedHiddenApplicationPoisoned(application, caseWorkbookPath, routeName, stopwatch);
-                LogHiddenCleanupOutcome(
+                LogHiddenCleanupOutcome(_cleanupOutcomeService.CreateCachedHiddenSessionPoisonedOutcome(
                     "CaseWorkbookOpenStrategy.CleanupCachedHiddenSession",
                     caseWorkbookPath,
                     routeName,
-                    ResolveCachedHiddenCleanupOutcome(workbookPresent, workbookCloseCompleted),
-                    string.Empty,
-                    RetainedInstancePoisoned,
-                    workbookPresent,
-                    workbookCloseAttempted,
-                    workbookCloseCompleted,
-                    appPresent: application != null,
-                    appQuitAttempted: false,
-                    appQuitCompleted: false,
-                    cacheReturnedToIdle: false,
-                    cachePoisoned: true,
-                    reason: "returnToIdleFailed");
+                    new CaseWorkbookOpenCleanupFacts(
+                        workbookPresent,
+                        workbookCloseAttempted,
+                        workbookCloseCompleted,
+                        application != null,
+                        appQuitAttempted: false,
+                        appQuitCompleted: false),
+                    "returnToIdleFailed"));
 	            NewCaseDefaultTimingLogHelper.LogDetail(_logger, caseWorkbookPath, "waitUiShownToCaseCreated", "hiddenSessionClose", stopwatch2.ElapsedMilliseconds, "route=" + (routeName ?? string.Empty) + ", cached=False");
 	            _logger.Info("Case workbook hidden session close finalized. path=" + (caseWorkbookPath ?? string.Empty) + ", route=" + (routeName ?? string.Empty) + ", cached=False, elapsedMs=" + ((stopwatch == null) ? string.Empty : stopwatch.ElapsedMilliseconds.ToString()));
 	        }
@@ -937,46 +909,14 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
         }
 
-        private void LogHiddenCleanupOutcome(
-            string owner,
-            string caseWorkbookPath,
-            string routeName,
-            string hiddenCleanupOutcome,
-            string isolatedAppOutcome,
-            string retainedInstanceOutcome,
-            bool workbookPresent,
-            bool workbookCloseAttempted,
-            bool workbookCloseCompleted,
-            bool appPresent,
-            bool appQuitAttempted,
-            bool appQuitCompleted,
-            bool cacheReturnedToIdle,
-            bool cachePoisoned,
-            string reason)
+        private void LogHiddenCleanupOutcome(CaseWorkbookOpenHiddenCleanupOutcome outcome)
         {
-            string safeOwner = owner ?? string.Empty;
-            string details = "scope=hidden-cleanup"
-                + ",route=" + (routeName ?? string.Empty)
-                + "," + _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                + ",hiddenCleanupOutcome=" + (hiddenCleanupOutcome ?? string.Empty)
-                + ",isolatedAppOutcome=" + (isolatedAppOutcome ?? string.Empty)
-                + ",retainedInstanceOutcome=" + (retainedInstanceOutcome ?? string.Empty)
-                + ",workbookPresent=" + workbookPresent.ToString()
-                + ",workbookCloseAttempted=" + workbookCloseAttempted.ToString()
-                + ",workbookCloseCompleted=" + workbookCloseCompleted.ToString()
-                + ",appPresent=" + appPresent.ToString()
-                + ",appQuitAttempted=" + appQuitAttempted.ToString()
-                + ",appQuitCompleted=" + appQuitCompleted.ToString()
-                + ",cacheReturnedToIdle=" + cacheReturnedToIdle.ToString()
-                + ",cachePoisoned=" + cachePoisoned.ToString()
-                + ",outcomeReason=" + (reason ?? string.Empty);
-            _logger.Info(
-                "[KernelFlickerTrace] source="
-                + safeOwner
-                + " action=hidden-excel-cleanup-outcome path="
-                + (caseWorkbookPath ?? string.Empty)
-                + ", "
-                + details);
+            if (outcome == null)
+            {
+                return;
+            }
+
+            _logger.Info(outcome.KernelFlickerTraceMessage);
             NewCaseVisibilityObservation.Log(
                 _logger,
                 null,
@@ -984,81 +924,19 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 null,
                 null,
                 "hidden-excel-cleanup-outcome",
-                safeOwner,
-                caseWorkbookPath,
-                details);
+                outcome.Owner,
+                outcome.CaseWorkbookPath,
+                outcome.Details);
         }
 
-        private void LogRetainedInstanceCleanupOutcome(
-            string reason,
-            Excel.Application application,
-            string retainedInstanceOutcome,
-            bool quitAttempted,
-            bool quitCompleted)
+        private void LogRetainedInstanceCleanupOutcome(CaseWorkbookOpenRetainedCleanupOutcome outcome)
         {
-            _logger.Info(
-                "[KernelFlickerTrace] source=CaseWorkbookOpenStrategy.DisposeCachedHiddenApplicationSlot"
-                + " action=retained-instance-cleanup-outcome"
-                + " " + _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-                + ", retainedInstanceOutcome=" + (retainedInstanceOutcome ?? string.Empty)
-                + ", cleanupReason=" + (reason ?? string.Empty)
-                + ", appHwnd=" + SafeApplicationHwnd(application)
-                + ", appQuitAttempted=" + quitAttempted.ToString()
-                + ", appQuitCompleted=" + quitCompleted.ToString());
-        }
-
-        private static string ResolveDedicatedHiddenCleanupOutcome(
-            bool workbookPresent,
-            bool workbookCloseCompleted,
-            bool appPresent,
-            bool appQuitCompleted,
-            bool cleanupFailed)
-        {
-            if (!workbookPresent && !appPresent)
+            if (outcome == null)
             {
-                return HiddenExcelCleanupNotRequired;
+                return;
             }
 
-            if (cleanupFailed || (workbookPresent && !workbookCloseCompleted))
-            {
-                return HiddenExcelCleanupFailed;
-            }
-
-            if (appPresent && !appQuitCompleted)
-            {
-                return HiddenExcelCleanupDegraded;
-            }
-
-            return HiddenExcelCleanupCompleted;
-        }
-
-        private static string ResolveCachedHiddenCleanupOutcome(bool workbookPresent, bool workbookCloseCompleted)
-        {
-            if (!workbookPresent)
-            {
-                return HiddenExcelCleanupNotRequired;
-            }
-
-            return workbookCloseCompleted
-                ? HiddenExcelCleanupCompleted
-                : HiddenExcelCleanupDegraded;
-        }
-
-        private static string ResolveIsolatedAppReleaseOutcome(bool appPresent, bool appQuitAttempted, bool appQuitCompleted)
-        {
-            if (!appPresent)
-            {
-                return IsolatedAppReleaseNotRequired;
-            }
-
-            if (appQuitCompleted)
-            {
-                return IsolatedAppReleased;
-            }
-
-            return appQuitAttempted
-                ? IsolatedAppReleaseFailed
-                : IsolatedAppReleaseDegraded;
+            _logger.Info(outcome.KernelFlickerTraceMessage);
         }
 
         private void HiddenApplicationIdleTimer_Tick(object sender, EventArgs e)
@@ -1142,25 +1020,25 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             if (!slot.IsOwnedByCache)
             {
                 _logger.Warn("hidden-app-cache cleanup skipped because slot is not cache-owned. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(slot.Application));
-                LogRetainedInstanceCleanupOutcome(
+                LogRetainedInstanceCleanupOutcome(_cleanupOutcomeService.CreateRetainedInstanceCleanupOutcome(
                     reason,
-                    slot.Application,
-                    RetainedInstanceCleanupSkipped,
+                    SafeApplicationHwnd(slot.Application),
+                    retainedInstancePresent: slot.Application != null,
+                    isOwnedByCache: false,
                     quitAttempted: false,
-                    quitCompleted: false);
+                    quitCompleted: false));
                 return;
             }
 
             bool quitCompleted = TryQuitApplication(slot.Application);
             ReleaseComObject(slot.Application);
-            LogRetainedInstanceCleanupOutcome(
+            LogRetainedInstanceCleanupOutcome(_cleanupOutcomeService.CreateRetainedInstanceCleanupOutcome(
                 reason,
-                slot.Application,
-                quitCompleted
-                    ? RetainedInstanceCleanupCompleted
-                    : RetainedInstanceCleanupDegraded,
+                SafeApplicationHwnd(slot.Application),
+                retainedInstancePresent: slot.Application != null,
+                isOwnedByCache: true,
                 quitAttempted: slot.Application != null,
-                quitCompleted: quitCompleted);
+                quitCompleted: quitCompleted));
             _logger.Info("hidden-app-cache discarded. reason=" + (reason ?? string.Empty) + ", appHwnd=" + SafeApplicationHwnd(slot.Application));
         }
 

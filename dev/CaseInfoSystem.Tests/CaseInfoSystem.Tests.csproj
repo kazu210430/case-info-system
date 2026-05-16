@@ -269,6 +269,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\ExcelApplicationStateScope.cs" Link="Source\Infrastructure\ExcelApplicationStateScope.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookCloseInteropHelper.cs" Link="Source\Infrastructure\WorkbookCloseInteropHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\KernelWorkbookResolverService.cs" Link="Source\Infrastructure\KernelWorkbookResolverService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookOpenCleanupOutcomeService.cs" Link="Source\Infrastructure\CaseWorkbookOpenCleanupOutcomeService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookOpenRouteDecisionService.cs" Link="Source\Infrastructure\CaseWorkbookOpenRouteDecisionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookOpenStrategy.cs" Link="Source\Infrastructure\CaseWorkbookOpenStrategy.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\NewCaseVisibilityObservation.cs" Link="Source\Infrastructure\NewCaseVisibilityObservation.cs" />
@@ -295,6 +296,7 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\UI\DocumentButtonsControl.cs" Link="Source\UI\DocumentButtonsControl.cs" />
     <Compile Include="..\CaseInfoSystem.WordAddIn\Services\ContentControlBatchReplaceService.cs" Link="Source\Word\Services\ContentControlBatchReplaceService.cs" />
     <Compile Include="..\CaseInfoSystem.WordAddIn\Services\ContentControlFolderBatchReplaceService.cs" Link="Source\Word\Services\ContentControlFolderBatchReplaceService.cs" />
+    <Compile Include="CaseWorkbookOpenCleanupOutcomeServiceTests.cs" />
     <Compile Include="CaseWorkbookOpenRouteDecisionServiceTests.cs" />
     <Compile Include="CaseWorkbookOpenStrategyTests.cs" />
     <Compile Include="Fakes\TestDoubles.cs" />

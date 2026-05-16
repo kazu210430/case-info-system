@@ -98,6 +98,13 @@ A-G 完了後の current-state docs は、次の関係で読む。
 - `CaseWorkbookOpenRouteDecisionService` は環境変数・暫定 switch の解釈、selected route、save-before-close、fallback、application owner facts、route trace details の値化だけを担当します。
 - 目的は大型の open strategy class から route 判断責務を減らし、CASE workbook open route 変更時の影響範囲を小さくすることです。
 
+### cleanup outcome service boundary
+
+- CASE workbook open の cleanup / retained app-cache outcome 分類は `CaseWorkbookOpenCleanupOutcomeService` に分離しています。
+- これは cleanup owner / lifecycle の移動ではありません。Excel app lifecycle、hidden session owner、workbook close owner、cleanup 実行 owner、retained app-cache owner、COM release owner は引き続き `CaseWorkbookOpenStrategy` 側に残ります。
+- `CaseWorkbookOpenCleanupOutcomeService` は cleanup 実行後の raw facts から hidden cleanup outcome、isolated app outcome、retained instance outcome、reason、diagnostic / trace details を値として組み立てるだけを担当します。
+- 目的は大型の open strategy class から cleanup 分類責務を減らし、cleanup / retained app-cache outcome の変更影響範囲を小さくすることです。
+
 ## instance lifecycle 整理
 
 ```mermaid

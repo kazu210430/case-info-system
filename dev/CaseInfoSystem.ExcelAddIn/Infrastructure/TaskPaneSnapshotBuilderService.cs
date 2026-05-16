@@ -417,7 +417,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 					_logger.Info ("Task pane snapshot MasterListRebuild started. rebuildFallback=" + rebuildFallback + ", caseListCaption=" + caseListCaption + ", latestMasterVersion=" + latestMasterVersion + ", resolvedMasterPath=" + resolvedMasterPath + FormatObservationContext (workbook));
 					readAccess = _masterWorkbookReadAccessService.OpenReadOnly (
 						resolvedMasterPath,
-						MasterWorkbookOpenSearchMode.FullPathOrFileName,
+						MasterWorkbookOpenSearchMode.StrictFullPathOnly,
 						path => new FileNotFoundException ("Masterブックが見つかりません。", path));
 				}
 				Worksheet masterListWorksheet = GetMasterListWorksheet (readAccess.Workbook);
@@ -483,7 +483,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 				if (string.IsNullOrWhiteSpace (text) || !_pathCompatibilityService.FileExistsSafe (text)) {
 					return false;
 				}
-				Workbook workbook = _masterWorkbookReadAccessService.FindOpenMasterWorkbook (text, MasterWorkbookOpenSearchMode.FullPathOrFileName);
+				Workbook workbook = _masterWorkbookReadAccessService.FindOpenMasterWorkbook (text, MasterWorkbookOpenSearchMode.StrictFullPathOnly);
 				if (workbook != null) {
 					masterVersion = GetDocumentPropertyLong (workbook, "TASKPANE_MASTER_VERSION", 0L);
 					return true;

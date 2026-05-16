@@ -153,6 +153,12 @@ namespace Microsoft.Office.Interop.Excel
 
         public Func<string, object, bool, Workbook> OpenBehavior { get; set; }
 
+        public new Workbook this[int index]
+        {
+            get => base[index - 1];
+            set => base[index - 1] = value;
+        }
+
         public new void Add(Workbook workbook)
         {
             if (workbook == null)

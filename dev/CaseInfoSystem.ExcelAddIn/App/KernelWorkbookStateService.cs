@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -76,17 +75,39 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _hasOtherVisibleWorkbookOverride(workbookToIgnore);
             }
 
-            foreach (Excel.Workbook workbook in _application.Workbooks)
+            Excel.Workbooks workbooks = null;
+            try
             {
-                if (workbookToIgnore != null && ReferenceEquals(workbook, workbookToIgnore))
+                workbooks = _application == null ? null : _application.Workbooks;
+                int workbookCount = workbooks == null ? 0 : workbooks.Count;
+                for (int index = 1; index <= workbookCount; index++)
                 {
-                    continue;
-                }
+                    Excel.Workbook workbook = null;
+                    try
+                    {
+                        workbook = workbooks[index];
+                        if (workbookToIgnore != null && ReferenceEquals(workbook, workbookToIgnore))
+                        {
+                            continue;
+                        }
 
-                if (workbook.Windows.Count > 0 && workbook.Windows.Cast<Excel.Window>().Any(window => window.Visible))
-                {
-                    return true;
+                        if (HasVisibleWindow(workbook))
+                        {
+                            return true;
+                        }
+                    }
+                    finally
+                    {
+                        if (!ReferenceEquals(workbook, workbookToIgnore))
+                        {
+                            ComObjectReleaseService.Release(workbook, _logger);
+                        }
+                    }
                 }
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(workbooks, _logger);
             }
 
             return false;
@@ -99,14 +120,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return _hasOtherWorkbookOverride(workbookToIgnore);
             }
 
-            foreach (Excel.Workbook workbook in _application.Workbooks)
+            Excel.Workbooks workbooks = null;
+            try
             {
-                if (workbookToIgnore != null && ReferenceEquals(workbook, workbookToIgnore))
+                workbooks = _application == null ? null : _application.Workbooks;
+                int workbookCount = workbooks == null ? 0 : workbooks.Count;
+                for (int index = 1; index <= workbookCount; index++)
                 {
-                    continue;
-                }
+                    Excel.Workbook workbook = null;
+                    try
+                    {
+                        workbook = workbooks[index];
+                        if (workbookToIgnore != null && ReferenceEquals(workbook, workbookToIgnore))
+                        {
+                            continue;
+                        }
 
-                return true;
+                        return true;
+                    }
+                    finally
+                    {
+                        if (!ReferenceEquals(workbook, workbookToIgnore))
+                        {
+                            ComObjectReleaseService.Release(workbook, _logger);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(workbooks, _logger);
             }
 
             return false;
@@ -114,17 +157,73 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal bool HasVisibleNonKernelWorkbook()
         {
-            foreach (Excel.Workbook workbook in _application.Workbooks)
+            Excel.Workbooks workbooks = null;
+            try
             {
-                if (IsKernelWorkbook(workbook))
+                workbooks = _application == null ? null : _application.Workbooks;
+                int workbookCount = workbooks == null ? 0 : workbooks.Count;
+                for (int index = 1; index <= workbookCount; index++)
                 {
-                    continue;
-                }
+                    Excel.Workbook workbook = null;
+                    try
+                    {
+                        workbook = workbooks[index];
+                        if (IsKernelWorkbook(workbook))
+                        {
+                            continue;
+                        }
 
-                if (workbook.Windows.Count > 0 && workbook.Windows.Cast<Excel.Window>().Any(window => window.Visible))
-                {
-                    return true;
+                        if (HasVisibleWindow(workbook))
+                        {
+                            return true;
+                        }
+                    }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(workbook, _logger);
+                    }
                 }
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(workbooks, _logger);
+            }
+
+            return false;
+        }
+
+        private bool HasVisibleWindow(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return false;
+            }
+
+            Excel.Windows windows = null;
+            try
+            {
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
+                for (int index = 1; index <= windowCount; index++)
+                {
+                    Excel.Window window = null;
+                    try
+                    {
+                        window = windows[index];
+                        if (window != null && window.Visible)
+                        {
+                            return true;
+                        }
+                    }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
+                    }
+                }
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
             }
 
             return false;

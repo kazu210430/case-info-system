@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
+using Excel = Microsoft.Office.Interop.Excel;
 using Xunit;
 
 namespace CaseInfoSystem.SnapshotRegressionTests
@@ -119,6 +120,69 @@ namespace CaseInfoSystem.SnapshotRegressionTests
         }
 
         [Fact]
+        public void BuildSnapshotText_WhenOnlySameFileNameMasterFromDifferentRootIsOpen_FailsClosedWithoutReadingIt()
+        {
+            string expectedRoot = @"C:\SnapshotRegression\StrictRootA";
+            string expectedMasterPath = Path.Combine(expectedRoot, "案件情報System_Kernel.xlsx");
+            string otherRoot = @"C:\SnapshotRegression\StrictRootB";
+            string otherMasterPath = Path.Combine(otherRoot, "案件情報System_Kernel.xlsx");
+            DeleteFileIfExists(expectedMasterPath);
+            using var scenario = SnapshotBuilderScenario.Create(
+                CreateRows(),
+                masterVersion: 42,
+                caseListRegistered: false,
+                systemRoot: expectedRoot,
+                caseWorkbookPath: @"C:\SnapshotRegression\StrictCases\案件情報_山田.xlsx",
+                masterWorkbookPath: expectedMasterPath);
+            scenario.MasterWorkbook.FullName = otherMasterPath;
+            scenario.MasterWorkbook.Path = otherRoot;
+
+            TaskPaneSnapshotBuilderService.TaskPaneBuildResult result = scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+
+            Assert.False(result.UpdatedCaseSnapshotCache);
+            Assert.Equal(TaskPaneSnapshotBuilderService.TaskPaneSnapshotSource.MasterListRebuild, result.SnapshotSource);
+            Assert.True(result.MasterListRebuildAttempted);
+            Assert.False(result.MasterListRebuildSucceeded);
+            Assert.Equal("SnapshotBuildException", result.FailureReason);
+            Assert.DoesNotContain("委任状", result.SnapshotText);
+            Assert.NotEqual("42", scenario.GetCaseProperty("TASKPANE_MASTER_VERSION"));
+        }
+
+        [Fact]
+        public void FindOpenMasterWorkbook_StrictFullPathOnly_ReadsMatchingFullPath()
+        {
+            var application = new Excel.Application();
+            MasterWorkbookReadAccessService service = CreateReadAccessService(application);
+            Excel.Workbook expectedWorkbook = CreateWorkbook(@"C:\SnapshotRegression\RootA\案件情報System_Kernel.xlsx");
+            application.Workbooks.Add(expectedWorkbook);
+
+            Excel.Workbook result = service.FindOpenMasterWorkbook(
+                @"C:\SnapshotRegression\RootA\案件情報System_Kernel.xlsx",
+                MasterWorkbookOpenSearchMode.StrictFullPathOnly);
+
+            Assert.Same(expectedWorkbook, result);
+        }
+
+        [Fact]
+        public void FindOpenMasterWorkbook_StrictFullPathOnly_DoesNotUseSameFileNameFallback()
+        {
+            var application = new Excel.Application();
+            MasterWorkbookReadAccessService service = CreateReadAccessService(application);
+            Excel.Workbook otherRootWorkbook = CreateWorkbook(@"C:\SnapshotRegression\RootB\案件情報System_Kernel.xlsx");
+            application.Workbooks.Add(otherRootWorkbook);
+
+            Excel.Workbook strictResult = service.FindOpenMasterWorkbook(
+                @"C:\SnapshotRegression\RootA\案件情報System_Kernel.xlsx",
+                MasterWorkbookOpenSearchMode.StrictFullPathOnly);
+            Excel.Workbook fallbackResult = service.FindOpenMasterWorkbook(
+                @"C:\SnapshotRegression\RootA\案件情報System_Kernel.xlsx",
+                MasterWorkbookOpenSearchMode.FullPathOrFileName);
+
+            Assert.Null(strictResult);
+            Assert.Same(otherRootWorkbook, fallbackResult);
+        }
+
+        [Fact]
         public void BuildSnapshotText_WhenMasterWorkbookOpenedForRead_HidesOnlyOpenedWorkbook()
         {
             using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
@@ -205,6 +269,32 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             {
                 File.WriteAllText(path, string.Empty);
             }
+        }
+
+        private static void DeleteFileIfExists(string path)
+        {
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+
+        private static MasterWorkbookReadAccessService CreateReadAccessService(Excel.Application application)
+        {
+            var logger = new Logger(_ => { });
+            var pathCompatibilityService = new PathCompatibilityService();
+            var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
+            return new MasterWorkbookReadAccessService(application, excelInteropService, pathCompatibilityService, logger);
+        }
+
+        private static Excel.Workbook CreateWorkbook(string fullName)
+        {
+            return new Excel.Workbook
+            {
+                FullName = fullName,
+                Name = Path.GetFileName(fullName),
+                Path = Path.GetDirectoryName(fullName) ?? string.Empty
+            };
         }
     }
 }

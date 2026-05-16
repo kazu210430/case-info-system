@@ -163,15 +163,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            Excel.Windows windows = null;
             try
             {
                 _excelWindowRecoveryService.EnsureApplicationVisible("KernelWorkbookService.ShowKernelWorkbookWindows", _bindingService.GetWorkbookFullName(workbook));
-                foreach (Excel.Window window in workbook.Windows)
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
+                for (int index = 1; index <= windowCount; index++)
                 {
-                    if (window != null)
+                    Excel.Window window = null;
+                    try
                     {
-                        window.Visible = true;
-                        window.WindowState = Excel.XlWindowState.xlNormal;
+                        window = windows[index];
+                        if (window != null)
+                        {
+                            window.Visible = true;
+                            window.WindowState = Excel.XlWindowState.xlNormal;
+                        }
+                    }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
                     }
                 }
 
@@ -186,6 +198,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch (Exception ex)
             {
                 _logger.Error("ShowKernelWorkbookWindows failed.", ex);
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
             }
         }
 
@@ -247,33 +263,71 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             List<string> descriptors = new List<string>();
+            Excel.Workbooks workbooks = null;
             try
             {
-                foreach (Excel.Workbook workbook in _application.Workbooks)
+                workbooks = _application.Workbooks;
+                int workbookCount = workbooks == null ? 0 : workbooks.Count;
+                for (int workbookIndex = 1; workbookIndex <= workbookCount; workbookIndex++)
                 {
-                    if (workbook == null || ReferenceEquals(workbook, workbookToIgnore))
+                    Excel.Workbook workbook = null;
+                    try
                     {
-                        continue;
-                    }
-
-                    List<string> visibleWindows = new List<string>();
-                    foreach (Excel.Window window in workbook.Windows)
-                    {
-                        if (SafeWindowVisibleValue(window))
+                        workbook = workbooks[workbookIndex];
+                        if (workbook == null || ReferenceEquals(workbook, workbookToIgnore))
                         {
-                            visibleWindows.Add(FormatWindowDescriptor(window));
+                            continue;
+                        }
+
+                        List<string> visibleWindows = new List<string>();
+                        Excel.Windows windowsForWorkbook = null;
+                        try
+                        {
+                            windowsForWorkbook = workbook.Windows;
+                            int windowCount = windowsForWorkbook == null ? 0 : windowsForWorkbook.Count;
+                            for (int windowIndex = 1; windowIndex <= windowCount; windowIndex++)
+                            {
+                                Excel.Window window = null;
+                                try
+                                {
+                                    window = windowsForWorkbook[windowIndex];
+                                    if (SafeWindowVisibleValue(window))
+                                    {
+                                        visibleWindows.Add(FormatWindowDescriptor(window));
+                                    }
+                                }
+                                finally
+                                {
+                                    ComObjectReleaseService.Release(window, _logger);
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            ComObjectReleaseService.Release(windowsForWorkbook, _logger);
+                        }
+
+                        if (visibleWindows.Count > 0)
+                        {
+                            descriptors.Add(FormatWorkbookDescriptor(workbook) + " windows=[" + string.Join(" | ", visibleWindows) + "]");
                         }
                     }
-
-                    if (visibleWindows.Count > 0)
+                    finally
                     {
-                        descriptors.Add(FormatWorkbookDescriptor(workbook) + " windows=[" + string.Join(" | ", visibleWindows) + "]");
+                        if (!ReferenceEquals(workbook, workbookToIgnore))
+                        {
+                            ComObjectReleaseService.Release(workbook, _logger);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
                 return "enumeration-failed:" + ex.GetType().Name;
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(workbooks, _logger);
             }
 
             return descriptors.Count == 0 ? "none" : string.Join(" || ", descriptors);
@@ -550,23 +604,26 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private int CountVisibleWorkbooksSafe()
         {
+            Excel.Workbooks workbooks = null;
             try
             {
                 int count = 0;
-                foreach (Excel.Workbook workbook in _application.Workbooks)
+                workbooks = _application == null ? null : _application.Workbooks;
+                int workbookCount = workbooks == null ? 0 : workbooks.Count;
+                for (int index = 1; index <= workbookCount; index++)
                 {
-                    if (workbook == null || workbook.Windows == null)
+                    Excel.Workbook workbook = null;
+                    try
                     {
-                        continue;
-                    }
-
-                    foreach (Excel.Window window in workbook.Windows)
-                    {
-                        if (window != null && window.Visible)
+                        workbook = workbooks[index];
+                        if (WorkbookHasVisibleWindow(workbook))
                         {
                             count++;
-                            break;
                         }
+                    }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(workbook, _logger);
                     }
                 }
 
@@ -576,6 +633,47 @@ namespace CaseInfoSystem.ExcelAddIn.App
             {
                 return -1;
             }
+            finally
+            {
+                ComObjectReleaseService.Release(workbooks, _logger);
+            }
+        }
+
+        private bool WorkbookHasVisibleWindow(Excel.Workbook workbook)
+        {
+            if (workbook == null)
+            {
+                return false;
+            }
+
+            Excel.Windows windows = null;
+            try
+            {
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
+                for (int index = 1; index <= windowCount; index++)
+                {
+                    Excel.Window window = null;
+                    try
+                    {
+                        window = windows[index];
+                        if (window != null && window.Visible)
+                        {
+                            return true;
+                        }
+                    }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
+                    }
+                }
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
+            }
+
+            return false;
         }
 
         private void HideKernelWorkbookWindows(Excel.Workbook workbook)
@@ -603,9 +701,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            Excel.Windows windows = null;
             try
             {
-                int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
                 int minimizedCount = 0;
                 int failedCount = 0;
                 for (int index = 1; index <= windowCount; index++)
@@ -613,7 +713,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     Excel.Window window = null;
                     try
                     {
-                        window = workbook.Windows[index];
+                        window = windows[index];
                         string beforeState = FormatWindowDescriptor(window);
                         LogKernelFlickerTrace(
                             "source=KernelWorkbookService action=minimize-window-start trigger="
@@ -682,6 +782,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                             + (ex.Message ?? string.Empty));
                         _logger.Error("HideKernelWorkbookWindows window minimize failed. index=" + index.ToString(), ex);
                     }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
+                    }
                 }
 
                 LogKernelFlickerTrace(
@@ -708,6 +812,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     + ", exceptionMessage="
                     + (ex.Message ?? string.Empty));
                 _logger.Error("HideKernelWorkbookWindows failed.", ex);
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
             }
         }
 
@@ -763,15 +871,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            Excel.Windows windows = null;
             try
             {
-                int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
                 for (int index = 1; index <= windowCount; index++)
                 {
                     Excel.Window window = null;
                     try
                     {
-                        window = workbook.Windows[index];
+                        window = windows[index];
                         if (window == null)
                         {
                             continue;
@@ -787,11 +897,19 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     {
                         _logger.Error("ConcealKernelWorkbookWindowsForHomeDisplay window conceal failed. index=" + index.ToString(), ex);
                     }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error("ConcealKernelWorkbookWindowsForHomeDisplay failed.", ex);
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
             }
         }
 
@@ -802,15 +920,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
+            Excel.Windows windows = null;
             try
             {
-                int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
                 for (int index = 1; index <= windowCount; index++)
                 {
                     Excel.Window window = null;
                     try
                     {
-                        window = workbook.Windows[index];
+                        window = windows[index];
                         if (window == null)
                         {
                             continue;
@@ -826,6 +946,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     {
                         _logger.Error("ConcealKernelWorkbookWindowsForCaseCreationClose window conceal failed. index=" + index.ToString(), ex);
                     }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
+                    }
                 }
 
                 _logger.Info("ConcealKernelWorkbookWindowsForCaseCreationClose completed. workbook=" + _bindingService.GetWorkbookFullName(workbook));
@@ -833,6 +957,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch (Exception ex)
             {
                 _logger.Error("ConcealKernelWorkbookWindowsForCaseCreationClose failed.", ex);
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
             }
         }
 
@@ -914,33 +1042,68 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             List<string> descriptors = new List<string>();
+            Excel.Workbooks workbooks = null;
             try
             {
-                foreach (Excel.Workbook workbook in _application.Workbooks)
+                workbooks = _application.Workbooks;
+                int workbookCount = workbooks == null ? 0 : workbooks.Count;
+                for (int workbookIndex = 1; workbookIndex <= workbookCount; workbookIndex++)
                 {
-                    if (workbook == null || _bindingService.IsKernelWorkbook(workbook))
+                    Excel.Workbook workbook = null;
+                    try
                     {
-                        continue;
-                    }
-
-                    List<string> visibleWindows = new List<string>();
-                    foreach (Excel.Window window in workbook.Windows)
-                    {
-                        if (SafeWindowVisibleValue(window))
+                        workbook = workbooks[workbookIndex];
+                        if (workbook == null || _bindingService.IsKernelWorkbook(workbook))
                         {
-                            visibleWindows.Add(FormatWindowDescriptor(window));
+                            continue;
+                        }
+
+                        List<string> visibleWindows = new List<string>();
+                        Excel.Windows windows = null;
+                        try
+                        {
+                            windows = workbook.Windows;
+                            int windowCount = windows == null ? 0 : windows.Count;
+                            for (int windowIndex = 1; windowIndex <= windowCount; windowIndex++)
+                            {
+                                Excel.Window window = null;
+                                try
+                                {
+                                    window = windows[windowIndex];
+                                    if (SafeWindowVisibleValue(window))
+                                    {
+                                        visibleWindows.Add(FormatWindowDescriptor(window));
+                                    }
+                                }
+                                finally
+                                {
+                                    ComObjectReleaseService.Release(window, _logger);
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            ComObjectReleaseService.Release(windows, _logger);
+                        }
+
+                        if (visibleWindows.Count > 0)
+                        {
+                            descriptors.Add(FormatWorkbookDescriptor(workbook) + " windows=[" + string.Join(" | ", visibleWindows) + "]");
                         }
                     }
-
-                    if (visibleWindows.Count > 0)
+                    finally
                     {
-                        descriptors.Add(FormatWorkbookDescriptor(workbook) + " windows=[" + string.Join(" | ", visibleWindows) + "]");
+                        ComObjectReleaseService.Release(workbook, _logger);
                     }
                 }
             }
             catch (Exception ex)
             {
                 return "enumeration-failed:" + ex.GetType().Name;
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(workbooks, _logger);
             }
 
             return descriptors.Count == 0 ? "none" : string.Join(" || ", descriptors);
@@ -954,18 +1117,32 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             List<string> descriptors = new List<string>();
+            Excel.Windows windows = null;
             try
             {
-                int windowCount = workbook.Windows == null ? 0 : workbook.Windows.Count;
+                windows = workbook.Windows;
+                int windowCount = windows == null ? 0 : windows.Count;
                 for (int index = 1; index <= windowCount; index++)
                 {
-                    Excel.Window window = workbook.Windows[index];
-                    descriptors.Add("index=" + index.ToString() + "," + FormatWindowDescriptor(window));
+                    Excel.Window window = null;
+                    try
+                    {
+                        window = windows[index];
+                        descriptors.Add("index=" + index.ToString() + "," + FormatWindowDescriptor(window));
+                    }
+                    finally
+                    {
+                        ComObjectReleaseService.Release(window, _logger);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 return "enumeration-failed:" + ex.GetType().Name;
+            }
+            finally
+            {
+                ComObjectReleaseService.Release(windows, _logger);
             }
 
             return descriptors.Count == 0 ? "none" : string.Join(" | ", descriptors);

@@ -465,6 +465,7 @@
   - `KernelWorkbookCloseService`
   - `KernelUserDataReflectionService`
   - `docs/case-workbook-lifecycle-current-state.md`
+  - `docs/accounting-close-lifecycle-current-state.md`
 - context:
   - workbook role
   - dirty state
@@ -475,7 +476,7 @@
   - close 後の対象 workbook 再参照をしない
   - cleanup failure が元例外を上書きしない
 - 不明:
-  - helper 非経由 close 全件の整理はこの文書では完了していない
+  - helper 非経由 close 全件の一般整理はこの文書では完了していない。ただし、会計フォーム / import prompt の「Excelを閉じる」直 `workbook.Close()` は `docs/accounting-close-lifecycle-current-state.md` で安定化済み契約として固定済みであり、残課題扱いしない。
 
 ### 時系列フロー
 
@@ -486,7 +487,8 @@
 5. managed close 実行中は `ManagedCloseState` スコープで prompt を抑止し、`WorkbookCloseInteropHelper.CloseWithoutSave(workbook)` を使って named argument を避けた close を行う。
 6. `PostCloseFollowUpScheduler` は visible workbook 不在時だけ `Quit` を試み、成功後は終了中 `Application` を restore しない。
 7. hidden reflection session では `CloseWorkbookQuietly(...)` が `CloseWithoutSave -> FinalRelease(workbook)`、`QuitApplicationQuietly(...)` が `Quit -> FinalRelease(application)` の順を持つ。
-8. temporary COM object は owner 側で局所解放する。例として `MoveInitialCursorToHomeCell(...)` の `Range`、`ApplyBaseHomeKeyValues(...)` の `Range`、`AccountingSetKernelSyncService` の owned workbook がある。
+8. 会計フォーム / import prompt の「Excelを閉じる」経路では、form / prompt の `Close()` / `Dispose()` と黄色セル cleanup を先に行い、その後に直 `workbook.Close()` を呼ぶ。`Workbooks.Count == 0` の場合だけ `Application.Quit()` へ進む。
+9. temporary COM object は owner 側で局所解放する。例として `MoveInitialCursorToHomeCell(...)` の `Range`、`ApplyBaseHomeKeyValues(...)` の `Range`、`AccountingSetKernelSyncService` の owned workbook がある。
 
 ### 責務境界
 

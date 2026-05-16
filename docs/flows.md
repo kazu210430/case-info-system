@@ -282,7 +282,7 @@ Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` 
 - `AccountingSetCreateService.Execute()` は `AccountingTemplateResolver`・`DocumentOutputService`・`AccountingSetNamingService` で template path / output folder / output path を決めてから `File.Copy(...)` に進む。
 - `File.Copy(...)` が最初の実副作用ポイントで、その後に `SuppressPath(...)`・workbook open・failure cleanup delete が接続されるため、副作用境界として扱う。
 - Kernel 側から会計関連の同期フローに入る分岐もあります。
-- 会計補助フォームや支払履歴取込などの関連機能は存在しますが、詳細仕様はこの文書では扱いません。
+- 会計補助フォームや支払履歴取込などの関連機能のうち、close / Excelを閉じる / import prompt lifecycle は `docs/accounting-close-lifecycle-current-state.md` を正本とします。
 - `AccountingWorkbookService.BeginInitializationScope()` は、初期化中だけ `Application.ScreenUpdating` と `Application.EnableEvents` の現在値を退避し、両方を `false` に設定する。
 - 同 scope は `AccountingSetCreateService` では `using` で使われ、DocProperty 設定、初期セル反映、代理人反映の範囲だけを囲う。
 - scope 終了時は `ApplicationStateScope.Dispose()` により、退避した `ScreenUpdating` と `EnableEvents` を元値へ戻す。
@@ -294,6 +294,25 @@ Kernel ユーザー情報反映は `KernelUserDataRegistrationExecutionService` 
 - `AccountingWorkbookService` の cell write / range 操作には、`WriteCell`、`WriteSameValueToSheets`、range copy、named range write / clear、print area / alignment / sort などが含まれる。
 - 現行テストで呼び出し観測が確認できる会計 workbook 書込は、`AccountingSetCreateService` と `AccountingSetKernelSyncService` が使う `WriteCell` と `WriteSameValueToSheets` が中心である。
 - named range / copy / clear / format / print area / sort 系の操作は、現行テストから直接の観測点を確認できない。
+
+### 会計書類セット close / Excelを閉じる の安定化契約
+
+会計書類セットの close 系は、現コードと実機安定化済みの順序を正とします。この領域は今後の helper 化、共通化、close 経路再整理の対象にしません。
+
+1. `WorkbookLifecycleCoordinator.OnWorkbookBeforeClose(...)` は、会計 workbook の active form / import prompt guard を `AccountingWorkbookLifecycleService.TryCancelWorkbookBeforeCloseForActiveAccountingForm(...)` へ委譲します。
+2. Excel の × 印 close では、対象 workbook に active な会計フォームまたは import prompt があれば、フォームボタン close の allow flag が無い限り cancel します。
+3. フォーム上の「Excelを閉じる」ボタン経路では、`AccountingFormHelperService` または `AccountingPaymentHistoryImportService` が workbook key / form kind の allow flag を立てます。
+4. フォームボタン経路では、先に active form / prompt を `Close()` / `Dispose()` し、handlers / references / 黄色セルを片付けてから、直 `workbook.Close()` を呼びます。
+5. `workbook.Close()` 後に同じ `Application` の `Workbooks.Count` を読み、0 の場合だけ `Application.Quit()` を呼びます。
+6. allow flag は finally で必ず clear します。
+
+固定する内容:
+
+- 直 `workbook.Close()` があることだけを理由に、未整理、残課題、helper 化予定、将来改善候補へ分類しません。
+- Excel の × 印 close とフォームボタン経由 close を同一視しません。
+- フォームボタン経由 close では、フォーム lifecycle を workbook close より先に閉じる順序を維持します。
+- import prompt の会計依頼書 `F15:F20` 黄色セル解除、逆算ツールの `F17:F20` 黄色セル解除は close lifecycle と一体で扱います。
+- `WorkbookCloseInteropHelper` は service-owned / owned workbook cleanup 用の境界であり、このフォームボタン直 close 経路へ寄せる対象ではありません。
 
 ### Kernel からの会計書類セット同期（`AccountingSetKernelSyncService`）
 
@@ -342,7 +361,7 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 
 ## Kernel HOME close / managed close / post-close quit
 
-この節で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` だけです。全 workbook close 経路の一般ルールではありません。他の helper 非経由 close は別途棚卸し対象として扱います。
+この節で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` だけです。全 workbook close 経路の一般ルールではありません。会計フォーム / import prompt の「Excelを閉じる」直 close は `docs/accounting-close-lifecycle-current-state.md` の安定化済み契約として別に固定します。
 
 ### Kernel HOME close
 
@@ -385,10 +404,10 @@ white Excel prevention / recovery の current-state、`targetWorkbookStillOpen` 
 
 ### 既知の残課題
 
-- 現コードでは `MasterWorkbookReadAccessService` と `CaseWorkbookOpenStrategy` の owned close は `WorkbookCloseInteropHelper` 経由です。helper 非経由 close の残課題としては、会計フォーム / import prompt の「Excelを閉じる」ボタン系など、業務 UI owner が直接 `workbook.Close()` を呼ぶ経路を別途棚卸し対象として扱います。
+- 現コードでは `MasterWorkbookReadAccessService` と `CaseWorkbookOpenStrategy` の owned close は `WorkbookCloseInteropHelper` 経由です。会計フォーム / import prompt の「Excelを閉じる」ボタン系は直 `workbook.Close()` を呼びますが、これは `docs/accounting-close-lifecycle-current-state.md` の安定化済み契約であり、helper 非経由 close の残課題として扱いません。
 - `KernelUserDataReflectionService` の未 open Base / Accounting 反映は、上記の `managed hidden reflection session` として明文化した例外です。
 - `WorkbookPromptSuppressionHelper` の `Workbook.Saved` 操作は今回対象外です。
-- これらは別途棚卸し対象であり、今回 docs の確定範囲外です。
+- 会計 close lifecycle 以外の helper 非経由 close が見つかった場合は別途棚卸し対象ですが、会計フォーム / import prompt の直 close はその対象から除外します。
 
 ### 補助サービス
 

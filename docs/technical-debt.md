@@ -4,6 +4,15 @@
 
 確認時点のコードでは、指定の `FolderWindowService.cs (line 80)` は `WaitForFolderWindow` の開始位置で、`Thread.Sleep` 自体は line 88 にあります。指定の `WorkbookClipboardPreservationService.cs (line 144)` は retry ループの開始位置で、`Thread.Sleep` 自体は line 156 にあります。
 
+## 技術的負債から除外する固定契約
+
+### 会計書類セット close / Excelを閉じる
+
+- 会計フォーム / import prompt の close lifecycle は `docs/accounting-close-lifecycle-current-state.md` を正本とする安定化済み契約です。
+- `AccountingFormHelperService` と `AccountingPaymentHistoryImportService` のフォームボタン経由の直 `workbook.Close()` は、フォーム `Close()` / `Dispose()`、黄色セル cleanup、allow flag、必要時の `Application.Quit()` と一体の現行契約です。
+- この直 close 経路は、未整理、残課題、helper 化予定、将来共通化候補として扱いません。
+- `AccountingImportRangePromptForm` と `AccountingReverseGoalSeekForm` には、現コード上 `CloseByCode` や Form class 自身の `OnFormClosing` override はありません。close cleanup は service 側の `FormClosing` / `FormClosed` handler の責務です。
+
 ## Kernel 文脈寄せフェーズ（完了）
 
 今回までの整理で、Kernel 文脈寄せフェーズは完了扱いとする。
@@ -574,14 +583,6 @@
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応
 
-### AccountingImportRangePromptForm / OnFormClosing
-
-* 内容: `OnFormClosing` で、ボタンで閉じるよう求めるダイアログを直接表示している。
-* 呼び出し箇所の役割: 取込範囲入力フォームのクローズ制御。
-* 影響範囲: UI
-* 危険度: 低
-* 現状: 実機では安定動作しているため未対応
-
 ### AccountingInstallmentScheduleInputForm / ShowInvoiceEditRestrictedMessage
 
 * 内容: `ShowInvoiceEditRestrictedMessage` で、入力フォームからは変更できないことを通知するダイアログを直接表示している。
@@ -602,14 +603,6 @@
 
 * 内容: `BtnCalculate_Click` で、目標金額を数字で入力するよう求めるダイアログを直接表示している。
 * 呼び出し箇所の役割: 逆算フォームの入力バリデーション。
-* 影響範囲: UI
-* 危険度: 低
-* 現状: 実機では安定動作しているため未対応
-
-### AccountingReverseGoalSeekForm / OnFormClosing
-
-* 内容: `OnFormClosing` で、ボタンで閉じるよう求めるダイアログを直接表示している。
-* 呼び出し箇所の役割: 逆算フォームのクローズ制御。
 * 影響範囲: UI
 * 危険度: 低
 * 現状: 実機では安定動作しているため未対応

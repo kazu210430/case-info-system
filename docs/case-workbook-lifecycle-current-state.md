@@ -9,12 +9,13 @@
 - UI 制御の前提: `docs/ui-policy.md`
 - hidden Excel / isolated app / white Excel lifecycle の前提: `docs/hidden-excel-isolated-app-white-excel-lifecycle-current-state.md`
 - WorkbookClose / reopen protocol の current mapping: `docs/workbook-close-reopen-protocol-current-mapping.md`
+- 会計 close lifecycle の current-state: `docs/accounting-close-lifecycle-current-state.md`
 - TaskPane 側の現在地: `docs/taskpane-refactor-current-state.md`
 - 残課題: `docs/technical-debt.md`
 
 この文書は TaskPaneManager 側の追加整理を扱いません。lifecycle 側の安定到達点だけを明文化します。
 
-今回この文書で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` の安定化到達点だけです。全 workbook close 経路の一般ルールではありません。`KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などの読み取り専用 / 一時 workbook close は別 owner の境界として扱い、この文書の確定範囲には含めません。現コードではこれらの owned close は `WorkbookCloseInteropHelper` 経由ですが、会計フォーム / import prompt など業務 UI owner の直接 close 経路は別途棚卸し対象として残します。
+今回この文書で固定するのは、close / quit のうち `Kernel HOME close`、`Kernel managed close`、`CASE managed close`、`post-close quit` の安定化到達点だけです。全 workbook close 経路の一般ルールではありません。`KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` などの読み取り専用 / 一時 workbook close は別 owner の境界として扱い、この文書の確定範囲には含めません。会計フォーム / import prompt など業務 UI owner の直接 close 経路は、`docs/accounting-close-lifecycle-current-state.md` で安定化済み契約として別に固定します。
 
 ## 現在の構成
 
@@ -116,6 +117,6 @@ dirty path の大まかな順序は `before-close -> dirty prompt -> folder offe
 - `CaseWorkbookLifecycleService` は分割後も orchestration hub のままで、close 順序依存と CASE HOME 表示補正が同居しています。
 - `PostCloseFollowUpScheduler` の visible workbook 判定、Excel busy retry、Excel 終了判定は lifecycle 安定性に直結するため、TaskPaneManager 整理とは切り離して扱うほうが安全です。
 - direct `MessageBox.Show` は `CaseClosePromptService` と `CaseWorkbookLifecycleService` の一部に残っています。詳細は `docs/technical-debt.md` を参照してください。
-- 現コードでは `KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` の owned close は `WorkbookCloseInteropHelper` 経由です。helper 非経由 close の残課題としては、会計フォーム / import prompt の「Excelを閉じる」ボタン系など、業務 UI owner が直接 `workbook.Close()` を呼ぶ経路を別途棚卸し対象として扱います。
+- 現コードでは `KernelUserDataReflectionService`、`MasterWorkbookReadAccessService`、`CaseWorkbookOpenStrategy` の owned close は `WorkbookCloseInteropHelper` 経由です。会計フォーム / import prompt の「Excelを閉じる」ボタン系は業務 UI owner が直接 `workbook.Close()` を呼びますが、これは `docs/accounting-close-lifecycle-current-state.md` の固定済み契約であり、helper 非経由 close の残課題には分類しません。
 - `WorkbookPromptSuppressionHelper` の `Workbook.Saved` 操作は今回対象外です。
-- これらは別途棚卸し対象であり、今回 docs の確定範囲外です。
+- 会計 close lifecycle 以外の helper 非経由 close が見つかった場合は別途棚卸し対象ですが、会計フォーム / import prompt の直 close はその対象から除外します。

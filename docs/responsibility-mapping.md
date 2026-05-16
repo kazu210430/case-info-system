@@ -45,7 +45,7 @@
 - 不明として残す事項:
   - `80ms` / `400ms` retry や `5秒` protection の正式な業務根拠
   - final foreground 安定化の正式 UX 完了条件
-  - helper 非経由 close 全件の完全棚卸し
+  - helper 非経由 close 全件の完全棚卸し。ただし、会計フォーム / import prompt の「Excelを閉じる」直 `workbook.Close()` は `docs/accounting-close-lifecycle-current-state.md` の安定化済み契約として棚卸し対象から除外する。
 
 ## 1. Responsibility Mapping Table
 
@@ -112,6 +112,7 @@
 | Workbook close / COM release timing | dirty prompt / managed close orchestration | `CaseWorkbookLifecycleService` | session dirty、folder offer pending、CASE HOME 表示補正 | ordering-sensitive, fail-closed-sensitive | ordering 固定後でないと危険 | `before-close -> dirty prompt -> folder offer -> managed close -> post-close follow-up` を崩さない。 |
 | Workbook close / COM release timing | no visible workbook 時の post-close quit | `PostCloseFollowUpScheduler` | Excel busy retry、visible workbook 判定、`Quit` | COM-sensitive, ordering-sensitive | COM lifecycle に密着している | CASE close 後の白 Excel 防止が目的。 |
 | Workbook close / COM release timing | hidden session owned cleanup | `KernelUserDataReflectionService` | owned workbook close、owned application quit、quiet mode restore | COM-sensitive | COM lifecycle に密着している | `CloseWorkbookQuietly -> QuitApplicationQuietly -> FinalRelease` を owner 内で閉じる。 |
+| Workbook close / COM release timing | 会計フォーム / import prompt の Excel close button lifecycle | `AccountingFormHelperService` + `AccountingPaymentHistoryImportService` + `AccountingWorkbookLifecycleService` | form close / dispose、yellow highlight cleanup、allow flag、直 `workbook.Close()`、必要時 `Application.Quit()` | COM-sensitive, ordering-sensitive, UI-sensitive | 実機安定化済みのため再整理しない | Excel の × 印 close とフォームボタン close を同一視しない。直 `workbook.Close()` は固定済み契約であり helper 化候補にしない。 |
 | Workbook close / COM release timing | temporary COM object local release | `KernelCasePresentationService` + `KernelUserDataReflectionService` + `AccountingSetKernelSyncService` など各 owner | business action 本線 | COM-sensitive | COM lifecycle に密着している | COM release timing は 1 箇所に集約されず、owner ごとの finally に分散している。 |
 
 ### 1.8 Accounting workbook open / sync

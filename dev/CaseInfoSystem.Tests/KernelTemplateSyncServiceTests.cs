@@ -157,6 +157,58 @@ namespace CaseInfoSystem.Tests
 		}
 
 		[Fact]
+		public void SaveSnapshotToBaseWorkbook_WhenSnapshotIsWritten_CommitsCountAndVersionAfterChunks ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_COUNT"] = "3";
+				List<string> basePropertyWrites = new List<string> ();
+				harness.ExcelInteropService.OnSetDocumentProperty = (workbook, propertyName, value) =>
+				{
+					if (ReferenceEquals (workbook, harness.BaseWorkbook)) {
+						basePropertyWrites.Add (propertyName);
+					}
+				};
+
+				InvokeSaveSnapshotToBaseWorkbook (harness, new string ('A', 240) + "B", 12);
+
+				Assert.Equal (new[] {
+					"TASKPANE_BASE_SNAPSHOT_01",
+					"TASKPANE_BASE_SNAPSHOT_02",
+					"TASKPANE_BASE_SNAPSHOT_03",
+					"TASKPANE_MASTER_VERSION",
+					"TASKPANE_BASE_MASTER_VERSION",
+					"TASKPANE_BASE_SNAPSHOT_COUNT"
+				}, basePropertyWrites);
+			}
+		}
+
+		[Fact]
+		public void SaveSnapshotToBaseWorkbook_WhenChunkWriteFails_DoesNotAdvanceCommitMarkers ()
+		{
+			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {
+				harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_COUNT"] = "1";
+				harness.BaseProperties["TASKPANE_BASE_MASTER_VERSION"] = "3";
+				harness.BaseProperties["TASKPANE_MASTER_VERSION"] = "3";
+				harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_01"] = "old";
+				harness.ExcelInteropService.OnSetDocumentProperty = (workbook, propertyName, value) =>
+				{
+					if (ReferenceEquals (workbook, harness.BaseWorkbook)
+						&& string.Equals (propertyName, "TASKPANE_BASE_SNAPSHOT_02", StringComparison.OrdinalIgnoreCase)) {
+						throw new InvalidOperationException ("chunk write failed");
+					}
+				};
+
+				TargetInvocationException exception = Assert.Throws<TargetInvocationException> (
+					() => InvokeSaveSnapshotToBaseWorkbook (harness, new string ('A', 240) + "B", 12));
+
+				Assert.IsType<InvalidOperationException> (exception.InnerException);
+				Assert.Equal ("1", harness.BaseProperties["TASKPANE_BASE_SNAPSHOT_COUNT"]);
+				Assert.Equal ("3", harness.BaseProperties["TASKPANE_BASE_MASTER_VERSION"]);
+				Assert.Equal ("3", harness.BaseProperties["TASKPANE_MASTER_VERSION"]);
+			}
+		}
+
+		[Fact]
 		public void SaveSnapshotToBaseWorkbook_WhenNewSnapshotIsShorter_ClearsStaleChunks ()
 		{
 			using (TestHarness harness = TestHarness.Create (includeDefinedTags: false, createValidTemplate: false, createBaseFile: false)) {

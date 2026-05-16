@@ -234,17 +234,18 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					string s = excelInteropService.TryGetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp);
 					int result;
 					int num = (int.TryParse (s, out result) ? result : 0);
+					string masterVersionText = masterVersion.ToString (CultureInfo.InvariantCulture);
 					if (string.IsNullOrEmpty (snapshotText)) {
 						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, "0");
-						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString (CultureInfo.InvariantCulture));
+						excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersionText);
 						return;
 					}
 					int num2 = CalculateChunkCount (snapshotText);
-					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, num2.ToString ());
-					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersion.ToString (CultureInfo.InvariantCulture));
-					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneMasterVersionProp, masterVersion.ToString (CultureInfo.InvariantCulture));
+					// Base snapshot sync failure remains warning-only; Kernel publication is not rolled back.
+					// Write payload first and commit count/version markers last without full in-memory rollback.
 					WriteSnapshotChunks (excelInteropService, baseWorkbook, snapshotText, num2);
 					ClearStaleSnapshotChunks (excelInteropService, baseWorkbook, num2 + 1, num);
+					CommitSnapshotMarkers (excelInteropService, baseWorkbook, num2, masterVersionText);
 				}
 
 				private static int CalculateChunkCount (string snapshotText)
@@ -266,6 +267,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					for (int i = firstStaleChunkIndex; i <= previousChunkCount; i++) {
 						excelInteropService.SetDocumentProperty (baseWorkbook, BuildChunkPropertyName (i), string.Empty);
 					}
+				}
+
+				private static void CommitSnapshotMarkers (ExcelInteropService excelInteropService, Workbook baseWorkbook, int chunkCount, string masterVersionText)
+				{
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneMasterVersionProp, masterVersionText);
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseMasterVersionProp, masterVersionText);
+					excelInteropService.SetDocumentProperty (baseWorkbook, TaskPaneBaseCacheCountProp, chunkCount.ToString (CultureInfo.InvariantCulture));
 				}
 
 				private static string BuildChunkPropertyName (int chunkIndex)

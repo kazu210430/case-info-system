@@ -340,18 +340,20 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 lookupMethod,
-                "if (!IsCreatedCaseDisplayReason(reason))",
-                "return null;",
                 "string workbookFullName = SafeWorkbookFullName(workbook);",
                 "lock (_createdCaseDisplaySessionSyncRoot)",
-                "_createdCaseDisplaySessions.TryGetValue(workbookFullName, out CreatedCaseDisplaySession session)",
+                "_createdCaseDisplaySessionStateReader.ResolveForCompletion(",
+                "new CreatedCaseDisplaySessionResolutionInput(",
+                "IsCreatedCaseDisplayReason(reason)",
+                "workbookFullName",
+                "SnapshotCreatedCaseDisplaySessions()",
+                "if (resolvedSnapshot != null",
+                "_createdCaseDisplaySessions.TryGetValue(resolvedSnapshot.WorkbookFullName, out CreatedCaseDisplaySession session)",
                 "return session;",
-                "if (_createdCaseDisplaySessions.Count == 1)",
-                "return activeSession;",
                 "return null;");
             Assert.DoesNotContain("case-display-completed", lookupMethod);
             Assert.DoesNotContain("NewCaseVisibilityObservation", lookupMethod);
-            Assert.DoesNotContain("IsCompleted", lookupMethod);
+            Assert.DoesNotContain("IsCompleted =", lookupMethod);
             Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", lookupMethod);
             Assert.DoesNotContain("BuildCaseDisplayCompleted", lookupMethod);
         }

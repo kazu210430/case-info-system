@@ -26,6 +26,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly TaskPaneRefreshObservationDecisionService _observationDecisionService;
         private readonly TaskPaneRefreshCompletionDecisionService _completionDecisionService;
         private readonly TaskPaneRefreshEmitPayloadBuilder _emitPayloadBuilder;
+        private readonly CreatedCaseDisplaySessionStateReader _createdCaseDisplaySessionStateReader;
         private readonly TaskPaneForegroundGuaranteeTraceBuilder _foregroundTraceBuilder;
         private readonly TaskPaneRetryTimerLifecycle _retryTimerLifecycle;
         private readonly TaskPaneReadyShowRetryScheduler _readyShowRetryScheduler;
@@ -65,6 +66,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _observationDecisionService = new TaskPaneRefreshObservationDecisionService();
             _completionDecisionService = new TaskPaneRefreshCompletionDecisionService();
             _emitPayloadBuilder = new TaskPaneRefreshEmitPayloadBuilder();
+            _createdCaseDisplaySessionStateReader = new CreatedCaseDisplaySessionStateReader();
             _foregroundTraceBuilder = new TaskPaneForegroundGuaranteeTraceBuilder();
             _getKernelHomeForm = getKernelHomeForm;
             _getTaskPaneRefreshSuppressionCount = getTaskPaneRefreshSuppressionCount;
@@ -1058,13 +1060,17 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private CreatedCaseDisplaySession BeginCreatedCaseDisplaySession(Excel.Workbook workbook, string reason)
         {
-            if (!IsCreatedCaseDisplayReason(reason) || workbook == null)
+            if (workbook == null)
             {
                 return null;
             }
 
             string workbookFullName = SafeWorkbookFullName(workbook);
-            if (string.IsNullOrWhiteSpace(workbookFullName))
+            CreatedCaseDisplaySessionStartDecision startDecision = _createdCaseDisplaySessionStateReader.DecideStart(
+                new CreatedCaseDisplaySessionStartInput(
+                    IsCreatedCaseDisplayReason(reason),
+                    workbookFullName));
+            if (!startDecision.ShouldStart)
             {
                 return null;
             }
@@ -1183,8 +1189,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(
                 new CaseDisplayCompletedPayloadInput(
                     reason,
-                    resolvedSession.SessionId,
-                    resolvedSession.WorkbookFullName,
+                    resolvedSession.ToSnapshot(),
                     attemptResult,
                     completionSource,
                     attemptNumber,
@@ -1224,30 +1229,36 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)
         {
-            if (!IsCreatedCaseDisplayReason(reason))
-            {
-                return null;
-            }
-
             string workbookFullName = SafeWorkbookFullName(workbook);
             lock (_createdCaseDisplaySessionSyncRoot)
             {
-                if (!string.IsNullOrWhiteSpace(workbookFullName)
-                    && _createdCaseDisplaySessions.TryGetValue(workbookFullName, out CreatedCaseDisplaySession session))
+                CreatedCaseDisplaySessionSnapshot resolvedSnapshot =
+                    _createdCaseDisplaySessionStateReader.ResolveForCompletion(
+                        new CreatedCaseDisplaySessionResolutionInput(
+                            IsCreatedCaseDisplayReason(reason),
+                            workbookFullName,
+                            SnapshotCreatedCaseDisplaySessions()));
+                if (resolvedSnapshot != null
+                    && _createdCaseDisplaySessions.TryGetValue(resolvedSnapshot.WorkbookFullName, out CreatedCaseDisplaySession session))
                 {
                     return session;
-                }
-
-                if (_createdCaseDisplaySessions.Count == 1)
-                {
-                    foreach (CreatedCaseDisplaySession activeSession in _createdCaseDisplaySessions.Values)
-                    {
-                        return activeSession;
-                    }
                 }
             }
 
             return null;
+        }
+
+        private CreatedCaseDisplaySessionSnapshot[] SnapshotCreatedCaseDisplaySessions()
+        {
+            CreatedCaseDisplaySessionSnapshot[] snapshots =
+                new CreatedCaseDisplaySessionSnapshot[_createdCaseDisplaySessions.Count];
+            int index = 0;
+            foreach (CreatedCaseDisplaySession session in _createdCaseDisplaySessions.Values)
+            {
+                snapshots[index++] = session.ToSnapshot();
+            }
+
+            return snapshots;
         }
 
         private static bool IsCreatedCaseDisplayReason(string reason)
@@ -1327,24 +1338,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private string SafeWorkbookFullName(Excel.Workbook workbook)
         {
             return _excelInteropService == null ? string.Empty : _excelInteropService.GetWorkbookFullName(workbook);
-        }
-
-        private sealed class CreatedCaseDisplaySession
-        {
-            internal CreatedCaseDisplaySession(string sessionId, string workbookFullName, string reason)
-            {
-                SessionId = sessionId ?? string.Empty;
-                WorkbookFullName = workbookFullName ?? string.Empty;
-                Reason = reason ?? string.Empty;
-            }
-
-            internal string SessionId { get; }
-
-            internal string WorkbookFullName { get; }
-
-            internal string Reason { get; }
-
-            internal bool IsCompleted { get; set; }
         }
 
         private static class RefreshDispatchShell

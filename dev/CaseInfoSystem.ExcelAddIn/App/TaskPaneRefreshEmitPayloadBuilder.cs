@@ -86,6 +86,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
     {
         internal CaseDisplayCompletedPayloadInput(
             string reason,
+            CreatedCaseDisplaySessionSnapshot sessionSnapshot,
+            TaskPaneRefreshAttemptResult attemptResult,
+            string completionSource,
+            int? attemptNumber,
+            TaskPaneDisplayRequest displayRequest,
+            string formattedWorkbook,
+            string formattedWindow)
+            : this(
+                reason,
+                sessionSnapshot == null ? string.Empty : sessionSnapshot.SessionId,
+                sessionSnapshot == null ? string.Empty : sessionSnapshot.WorkbookFullName,
+                attemptResult,
+                completionSource,
+                attemptNumber,
+                displayRequest,
+                formattedWorkbook,
+                formattedWindow)
+        {
+        }
+
+        internal CaseDisplayCompletedPayloadInput(
+            string reason,
             string sessionId,
             string workbookFullName,
             TaskPaneRefreshAttemptResult attemptResult,

@@ -40,6 +40,8 @@
 
 - `TaskPaneRefreshOrchestrationService` は、現在の `main` では refresh 本線の順序調停に寄っており、`TaskPaneRefreshPreconditionDecisionService`、`RefreshDispatchShell`、`PendingPaneRefreshRetryService`、`WorkbookPaneWindowResolver` への helper / collaborator split が main に反映済みです。
 - `TaskPaneRefreshPreconditionDecisionService` は refresh 実行前の continue / fail-closed skip decision と `TaskPaneRefreshFailClosedOutcome` の組み立てだけを担います。retry timer、callback、completion / emit / session owner、WindowActivate observation 発火、TaskPane 表示命令は持ちません。
+- `TaskPaneRefreshObservationDecisionService` は observation 後の normalized outcome chain 接続、foreground 実行要否、診断 details 組み立てだけを担います。foreground 実行、completion / emit / session owner、WindowActivate observation 発火、TaskPane 表示命令は持ちません。
+- `TaskPaneRefreshRetryContinuationDecisionService` は pending retry tick の継続 / 停止 / active context fallback 判断だけを担います。retry timer start / stop、refresh 実行、callback、completion / emit は持ちません。
 - ready-show attempt 本体は `WorkbookTaskPaneReadyShowAttemptWorker` に分離済みで、`TaskPaneRefreshOrchestrationService` へ戻さない前提で読むべきです。
 - workbook window visible ensure は `WorkbookWindowVisibilityService` に分離済みで、ready-show / protection / event flow の判定から切り離されています。
 - protection / visible pane 判定 / ready-show 要求に関わる case-pane 系 `ThisAddIn` 依存は `ICasePaneHostBridge` 経由へ整理済みです。

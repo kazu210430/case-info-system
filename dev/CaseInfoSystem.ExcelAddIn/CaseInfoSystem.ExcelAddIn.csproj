@@ -291,6 +291,8 @@
     <Compile Include="App\TaskPaneDisplayRetryCoordinator.cs" />
     <Compile Include="App\TaskPaneRefreshFailClosedOutcome.cs" />
     <Compile Include="App\TaskPaneRefreshPreconditionDecisionService.cs" />
+    <Compile Include="App\TaskPaneRefreshObservationDecisionService.cs" />
+    <Compile Include="App\TaskPaneRefreshRetryContinuationDecisionService.cs" />
     <Compile Include="App\TaskPaneNormalizedOutcomeMapper.cs" />
     <Compile Include="App\TaskPaneRefreshAttemptResult.cs" />
     <Compile Include="App\TaskPaneRefreshCoordinator.cs" />

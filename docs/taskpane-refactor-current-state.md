@@ -73,6 +73,7 @@
 - `WorkbookPaneWindowResolver` により window resolver が整理済みです。
 - fail-closed precondition の skip result / skip action は `TaskPaneRefreshFailClosedOutcome` として小さな outcome 型に分けています。これは結果表現の明確化であり、retry / timer / route / callback / completion owner は `TaskPaneRefreshOrchestrationService` 側に残します。
 - precondition / fail-closed decision と fail-closed outcome assembly は `TaskPaneRefreshPreconditionDecisionService` に分離済みです。これは判定責務を減らすための collaborator 分離であり、retry timer、ready-show callback、completion / emit / session owner、WindowActivate observation 発火 owner、TaskPane 表示命令は `TaskPaneRefreshOrchestrationService` 側に残します。
+- observation / retry continuation decision は `TaskPaneRefreshObservationDecisionService` と `TaskPaneRefreshRetryContinuationDecisionService` に分離済みです。これは normalized outcome chain 接続、foreground 実行要否、retry 継続 / 停止の判断責務を減らすための collaborator 分離であり、retry timer、WindowActivate event owner、ready-show callback、completion / emit / created-case session owner、TaskPane 表示命令は移動していません。
 - `TaskPaneRefreshPreconditionPolicy` は `TaskPaneRefreshOrchestrationService` と `TaskPaneRefreshCoordinator` の shared skip policy 正本です。
 - TaskPane refresh handoff 系の closure は `docs/taskpane-display-recovery-current-state.md` の `TaskPane refresh handoff closure note` を正本とします。
 

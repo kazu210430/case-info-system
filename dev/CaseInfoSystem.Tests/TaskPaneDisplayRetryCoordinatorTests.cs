@@ -169,7 +169,7 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsTerminal", orchestrationSource);
             Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable", orchestrationSource);
             Assert.Contains(
-                "!IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome)",
+                "!_observationDecisionService.IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome)",
                 orchestrationSource);
 
             string foregroundInputSource = ReadOptionalForegroundDisplayCompletableDecisionSource(orchestrationSource);
@@ -186,7 +186,7 @@ namespace CaseInfoSystem.Tests
             string payloadHelper = Slice(
                 orchestrationSource,
                 "private static string BuildCaseDisplayCompletedDetailsPayload",
-                "private static CreatedCaseDisplayCompletionDecision");
+                "private CreatedCaseDisplayCompletionDecision");
 
             AssertContainsInOrder(
                 completionMethod,
@@ -694,15 +694,14 @@ namespace CaseInfoSystem.Tests
         public void NormalizedOutcomeChainMethods_DoNotOwnCompletionSessionOrOneTimeEmit()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
             string normalizedOutcomeChainSource =
-                ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteVisibilityRecoveryOutcome")
+                ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteNormalizedOutcomeChain")
                 + ReadMethod(orchestrationSource, "private void LogVisibilityRecoveryOutcome")
-                + ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteRefreshSourceSelectionOutcome")
                 + ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionOutcome")
                 + ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionTrace")
-                + ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteRebuildFallbackOutcome")
                 + ReadMethod(orchestrationSource, "private void LogRebuildFallbackOutcome")
-                + ReadOptionalMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteNormalizedOutcomeChain");
+                + ReadMethod(decisionServiceSource, "internal TaskPaneRefreshObservationDecision CompleteNormalizedOutcomeChain");
 
             Assert.DoesNotContain("case-display-completed", normalizedOutcomeChainSource);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Complete", normalizedOutcomeChainSource);
@@ -717,10 +716,14 @@ namespace CaseInfoSystem.Tests
         public void NormalizedOutcomeTraceActionsAndSources_RemainR10R11R12Specific()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
             string visibilityTrace = ReadMethod(orchestrationSource, "private void LogVisibilityRecoveryOutcome");
+            visibilityTrace = ReadMethod(decisionServiceSource, "internal static TaskPaneRefreshVisibilityObservationDecision Create") + visibilityTrace;
             string refreshSourceTrace = ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionOutcome")
                 + ReadMethod(orchestrationSource, "private void LogRefreshSourceSelectionTrace");
+            refreshSourceTrace = ReadMethod(decisionServiceSource, "internal static TaskPaneRefreshSourceObservationDecision Create") + refreshSourceTrace;
             string rebuildFallbackTrace = ReadMethod(orchestrationSource, "private void LogRebuildFallbackOutcome");
+            rebuildFallbackTrace = ReadMethod(decisionServiceSource, "internal static TaskPaneRefreshRebuildFallbackObservationDecision Create") + rebuildFallbackTrace;
 
             AssertContainsInOrder(
                 visibilityTrace,
@@ -739,9 +742,9 @@ namespace CaseInfoSystem.Tests
             AssertContainsInOrder(
                 rebuildFallbackTrace,
                 "TaskPaneNormalizedOutcomeMapper.FormatRebuildFallbackDetails(",
+                "string statusAction = \"rebuild-fallback-\" + outcome.Status.ToString().ToLowerInvariant()",
                 "\"rebuild-fallback-required\"",
                 "\"TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome\"",
-                "string statusAction = \"rebuild-fallback-\" + outcome.Status.ToString().ToLowerInvariant()",
                 "\"TaskPaneRefreshOrchestrationService.CompleteRebuildFallbackOutcome\"");
         }
 
@@ -910,22 +913,20 @@ namespace CaseInfoSystem.Tests
         public void PendingRetryAndActiveFallbackRefreshSuccessStopRetryWithoutCompletionOwnership()
         {
             string pendingSource = ReadAppSource("PendingPaneRefreshRetryService.cs");
-            string workbookTargetRetry = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingWorkbookTarget");
-            string activeContextFallback = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingActiveContextFallback");
+            string workbookTargetRetry = ReadMethod(pendingSource, "private TaskPaneRefreshRetryContinuationDecision TryRefreshPendingWorkbookTarget");
+            string activeContextFallback = ReadMethod(pendingSource, "private TaskPaneRefreshRetryContinuationDecision TryRefreshPendingActiveContextFallback");
             string retryContinuation = ReadMethod(pendingSource, "private void ResolvePendingRetryContinuation");
 
             AssertContainsInOrder(
                 workbookTargetRetry,
                 "action=defer-retry-end",
                 "refreshed=",
-                "? PendingRetryTickResult.StopRetrySequence()",
-                ": PendingRetryTickResult.ContinueRetrySequence();");
+                "return _retryContinuationDecisionService.DecideAfterRefresh(refreshed);");
             AssertContainsInOrder(
                 activeContextFallback,
                 "action=defer-active-context-fallback-end",
                 "refreshed=",
-                "? PendingRetryTickResult.StopRetrySequence()",
-                ": PendingRetryTickResult.ContinueRetrySequence();");
+                "return _retryContinuationDecisionService.DecideAfterRefresh(fallbackRefreshed);");
             AssertContainsInOrder(
                 retryContinuation,
                 "if (tickResult.ShouldStopTimer)",
@@ -1012,8 +1013,8 @@ namespace CaseInfoSystem.Tests
             string schedulerSchedule = ReadMethod(schedulerSource, "internal void Schedule");
             string pendingBeginRetry = ReadMethod(pendingSource, "internal int BeginRetrySequence");
             string pendingTick = ReadMethod(pendingSource, "private void PendingPaneRefreshTimer_Tick");
-            string pendingWorkbookTargetRetry = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingWorkbookTarget");
-            string pendingActiveContextFallback = ReadMethod(pendingSource, "private PendingRetryTickResult TryRefreshPendingActiveContextFallback");
+            string pendingWorkbookTargetRetry = ReadMethod(pendingSource, "private TaskPaneRefreshRetryContinuationDecision TryRefreshPendingWorkbookTarget");
+            string pendingActiveContextFallback = ReadMethod(pendingSource, "private TaskPaneRefreshRetryContinuationDecision TryRefreshPendingActiveContextFallback");
             string pendingRetryContinuation = ReadMethod(pendingSource, "private void ResolvePendingRetryContinuation");
 
             Assert.Contains("internal const int ReadyShowMaxAttempts = 2;", workerSource);
@@ -1077,27 +1078,31 @@ namespace CaseInfoSystem.Tests
                 "PendingPaneRefreshTimer_Tick);");
             AssertContainsInOrder(
                 pendingTick,
-                "if (!_retryState.HasAttemptsRemaining)",
-                "ResolvePendingRetryContinuation(PendingRetryTickResult.StopRetrySequence());",
-                "PendingRetryTickResult tickResult = TryRefreshPendingWorkbookTarget();",
+                "TaskPaneRefreshRetryContinuationDecision startDecision =",
+                "_retryContinuationDecisionService.DecideBeforeTick(_retryState.HasAttemptsRemaining);",
+                "if (startDecision.ShouldStopTimer)",
+                "ResolvePendingRetryContinuation(startDecision);",
+                "TaskPaneRefreshRetryContinuationDecision tickResult = TryRefreshPendingWorkbookTarget();",
                 "if (!tickResult.Handled)",
                 "tickResult = TryRefreshPendingActiveContextFallback();",
                 "ResolvePendingRetryContinuation(tickResult);");
             AssertContainsInOrder(
                 pendingWorkbookTargetRetry,
                 "ResolvePendingPaneRefreshWorkbook()",
-                "return PendingRetryTickResult.ContinueToActiveContextFallback();",
+                "_retryContinuationDecisionService.DecideAfterWorkbookTargetResolution(targetWorkbook != null);",
+                "if (!targetDecision.Handled)",
+                "return targetDecision;",
                 "_resolveWorkbookPaneWindow(targetWorkbook, _retryState.Reason, true);",
                 "_tryRefreshTaskPane(_retryState.Reason, targetWorkbook, workbookWindow)",
-                "? PendingRetryTickResult.StopRetrySequence()",
-                ": PendingRetryTickResult.ContinueRetrySequence();");
+                "return _retryContinuationDecisionService.DecideAfterRefresh(refreshed);");
             AssertContainsInOrder(
                 pendingActiveContextFallback,
                 "WorkbookContext context =",
-                "return PendingRetryTickResult.StopRetrySequence();",
+                "_retryContinuationDecisionService.DecideActiveContextFallback(context);",
+                "if (!contextDecision.ShouldAttemptActiveContextFallback)",
+                "return contextDecision;",
                 "bool fallbackRefreshed = _tryRefreshTaskPane(_retryState.Reason, null, null).IsRefreshSucceeded;",
-                "? PendingRetryTickResult.StopRetrySequence()",
-                ": PendingRetryTickResult.ContinueRetrySequence();");
+                "return _retryContinuationDecisionService.DecideAfterRefresh(fallbackRefreshed);");
             AssertContainsInOrder(
                 pendingRetryContinuation,
                 "if (tickResult.ShouldStopTimer)",
@@ -1176,50 +1181,20 @@ namespace CaseInfoSystem.Tests
 
         private static string ReadForegroundDecisionObservationDetailsSource(string source)
         {
-            string helperSource = ReadOptionalMethod(source, "private static string BuildForegroundRecoveryDecisionDetails")
-                + ReadOptionalMethod(source, "private static string BuildForegroundRecoveryDecisionObservationDetails");
-            if (!string.IsNullOrEmpty(helperSource))
-            {
-                return helperSource;
-            }
-
-            string methodSource = ReadMethod(source, "private void LogForegroundGuaranteeDecision");
-            return Slice(
-                methodSource,
-                "\"reason=\" + (reason ?? string.Empty)",
-                ");");
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
+            return ReadMethod(decisionServiceSource, "internal string BuildForegroundRecoveryDecisionDetails");
         }
 
         private static string ReadFinalForegroundStartedObservationDetailsSource(string source)
         {
-            string helperSource = ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeStartedDetails")
-                + ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeStartedObservationDetails");
-            if (!string.IsNullOrEmpty(helperSource))
-            {
-                return helperSource;
-            }
-
-            string methodSource = ReadMethod(source, "private void LogFinalForegroundGuaranteeStarted");
-            return Slice(
-                methodSource,
-                "\"reason=\" + (reason ?? string.Empty)",
-                ");");
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
+            return ReadMethod(decisionServiceSource, "internal string BuildFinalForegroundGuaranteeStartedDetails");
         }
 
         private static string ReadFinalForegroundCompletedObservationDetailsSource(string source)
         {
-            string helperSource = ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeCompletedDetails")
-                + ReadOptionalMethod(source, "private static string BuildFinalForegroundGuaranteeCompletedObservationDetails");
-            if (!string.IsNullOrEmpty(helperSource))
-            {
-                return helperSource;
-            }
-
-            string methodSource = ReadMethod(source, "private void LogFinalForegroundGuaranteeCompleted");
-            return Slice(
-                methodSource,
-                "\"reason=\" + (reason ?? string.Empty)",
-                ");");
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
+            return ReadMethod(decisionServiceSource, "internal string BuildFinalForegroundGuaranteeCompletedDetails");
         }
 
         private static string ReadForegroundExecutionClassificationSource(string source)
@@ -1229,6 +1204,11 @@ namespace CaseInfoSystem.Tests
             const string degradedFactory = "ForegroundGuaranteeOutcome.RequiredDegraded";
 
             int start = source.IndexOf(predicate, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                source = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
+                start = source.IndexOf(predicate, StringComparison.Ordinal);
+            }
             Assert.True(start >= 0, "Expected foreground classification predicate was not found.");
             int succeeded = source.IndexOf(succeededFactory, start, StringComparison.Ordinal);
             Assert.True(succeeded > start, "Expected RequiredSucceeded classification branch was not found.");
@@ -1247,6 +1227,17 @@ namespace CaseInfoSystem.Tests
                 + ReadOptionalMethod(source, "private static bool HasForegroundDisplayCompletableTerminalInput")
                 + ReadOptionalMethod(source, "private static bool HasDisplayCompletableForegroundOutcome")
                 + ReadOptionalMethod(source, "private static bool IsForegroundGuaranteeDisplayCompletableInput");
+            if (!string.IsNullOrEmpty(helperSource))
+            {
+                return helperSource;
+            }
+
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
+            helperSource =
+                ReadOptionalMethod(decisionServiceSource, "internal bool IsForegroundDisplayCompletableTerminalInput")
+                + ReadOptionalMethod(decisionServiceSource, "private static bool HasForegroundDisplayCompletableTerminalInput")
+                + ReadOptionalMethod(decisionServiceSource, "private static bool HasDisplayCompletableForegroundOutcome")
+                + ReadOptionalMethod(decisionServiceSource, "private static bool IsForegroundGuaranteeDisplayCompletableInput");
             if (!string.IsNullOrEmpty(helperSource))
             {
                 return helperSource;
@@ -1292,11 +1283,18 @@ namespace CaseInfoSystem.Tests
                 chainHelperIndex >= 0 && chainHelperIndex < boundaryIndex,
                 "Expected R10/R11/R12 direct chain or CompleteNormalizedOutcomeChain before " + boundaryFragment + ".");
             string helperSource = ReadMethod(orchestrationSource, "private TaskPaneRefreshAttemptResult CompleteNormalizedOutcomeChain");
+            string decisionServiceSource = ReadAppSource("TaskPaneRefreshObservationDecisionService.cs");
             AssertContainsInOrder(
                 helperSource,
-                "CompleteVisibilityRecoveryOutcome(",
-                "CompleteRefreshSourceSelectionOutcome(",
-                "CompleteRebuildFallbackOutcome(");
+                "_observationDecisionService.CompleteNormalizedOutcomeChain(",
+                "LogVisibilityRecoveryOutcome(",
+                "LogRefreshSourceSelectionOutcome(",
+                "LogRebuildFallbackOutcome(");
+            AssertContainsInOrder(
+                decisionServiceSource,
+                "TaskPaneNormalizedOutcomeMapper.BuildVisibilityRecoveryOutcome(",
+                "TaskPaneNormalizedOutcomeMapper.BuildRefreshSourceSelectionOutcome(",
+                "TaskPaneNormalizedOutcomeMapper.BuildRebuildFallbackOutcome(");
             Assert.DoesNotContain("CompleteForegroundGuaranteeOutcome(", helperSource);
             Assert.DoesNotContain("TryCompleteCreatedCaseDisplaySession(", helperSource);
         }

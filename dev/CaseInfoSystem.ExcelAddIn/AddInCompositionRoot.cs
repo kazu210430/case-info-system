@@ -12,6 +12,8 @@ namespace CaseInfoSystem.ExcelAddIn
         private readonly ThisAddIn _addIn;
         private readonly Excel.Application _application;
         private readonly Logger _logger;
+        private readonly IScreenUpdatingExecutionBridge _screenUpdatingExecutionBridge;
+        private readonly ITaskPaneRefreshSuppressionBridge _taskPaneRefreshSuppressionBridge;
         private readonly Func<Excel.Workbook, string, bool, Excel.Window> _resolveWorkbookPaneWindow;
         private readonly Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> _tryRefreshTaskPane;
         private readonly Func<string, Excel.Workbook, Excel.Window, bool> _isTaskPaneRefreshSucceeded;
@@ -33,6 +35,8 @@ namespace CaseInfoSystem.ExcelAddIn
             ThisAddIn addIn,
             Excel.Application application,
             Logger logger,
+            IScreenUpdatingExecutionBridge screenUpdatingExecutionBridge,
+            ITaskPaneRefreshSuppressionBridge taskPaneRefreshSuppressionBridge,
             Func<Excel.Workbook, string, bool, Excel.Window> resolveWorkbookPaneWindow,
             Func<string, Excel.Workbook, Excel.Window, TaskPaneRefreshAttemptResult> tryRefreshTaskPane,
             Func<string, Excel.Workbook, Excel.Window, bool> isTaskPaneRefreshSucceeded,
@@ -53,6 +57,8 @@ namespace CaseInfoSystem.ExcelAddIn
             _addIn = addIn;
             _application = application;
             _logger = logger;
+            _screenUpdatingExecutionBridge = screenUpdatingExecutionBridge;
+            _taskPaneRefreshSuppressionBridge = taskPaneRefreshSuppressionBridge;
             _resolveWorkbookPaneWindow = resolveWorkbookPaneWindow;
             _tryRefreshTaskPane = tryRefreshTaskPane;
             _isTaskPaneRefreshSucceeded = isTaskPaneRefreshSucceeded;
@@ -238,7 +244,11 @@ namespace CaseInfoSystem.ExcelAddIn
                 taskPaneSnapshotCacheService,
                 _logger);
             // Document boundary: bundle Word/document execution services and diagnostics.
-            var documentComposition = new AddInDocumentCompositionFactory(_addIn, _logger)
+            var documentComposition = new AddInDocumentCompositionFactory(
+                _addIn,
+                _logger,
+                _screenUpdatingExecutionBridge,
+                _taskPaneRefreshSuppressionBridge)
                 .Compose(
                     pathCompatibilityService,
                     ExcelInteropService,
@@ -404,11 +414,19 @@ namespace CaseInfoSystem.ExcelAddIn
     {
         private readonly ThisAddIn _addIn;
         private readonly Logger _logger;
+        private readonly IScreenUpdatingExecutionBridge _screenUpdatingExecutionBridge;
+        private readonly ITaskPaneRefreshSuppressionBridge _taskPaneRefreshSuppressionBridge;
 
-        internal AddInDocumentCompositionFactory(ThisAddIn addIn, Logger logger)
+        internal AddInDocumentCompositionFactory(
+            ThisAddIn addIn,
+            Logger logger,
+            IScreenUpdatingExecutionBridge screenUpdatingExecutionBridge,
+            ITaskPaneRefreshSuppressionBridge taskPaneRefreshSuppressionBridge)
         {
             _addIn = addIn;
             _logger = logger;
+            _screenUpdatingExecutionBridge = screenUpdatingExecutionBridge ?? throw new ArgumentNullException(nameof(screenUpdatingExecutionBridge));
+            _taskPaneRefreshSuppressionBridge = taskPaneRefreshSuppressionBridge ?? throw new ArgumentNullException(nameof(taskPaneRefreshSuppressionBridge));
         }
 
         internal AddInDocumentComposition Compose(
@@ -458,13 +476,11 @@ namespace CaseInfoSystem.ExcelAddIn
                 documentPresentationWaitService,
                 documentCreateHostBridge,
                 _logger);
-            var screenUpdatingExecutionBridge = new ThisAddInScreenUpdatingExecutionBridge(_addIn);
-            var taskPaneRefreshSuppressionBridge = new ThisAddInTaskPaneRefreshSuppressionBridge(_addIn);
             var activeTaskPaneRefreshBridge = new ThisAddInActiveTaskPaneRefreshBridge(_addIn);
             var kernelSheetPaneRefreshBridge = new ThisAddInKernelSheetPaneRefreshBridge(_addIn);
             var documentCommandService = new DocumentCommandService(
-                screenUpdatingExecutionBridge,
-                taskPaneRefreshSuppressionBridge,
+                _screenUpdatingExecutionBridge,
+                _taskPaneRefreshSuppressionBridge,
                 activeTaskPaneRefreshBridge,
                 kernelSheetPaneRefreshBridge,
                 documentExecutionModeService,

@@ -27,36 +27,6 @@ namespace CaseInfoSystem.ExcelAddIn.App
         bool ShowKernelSheetAndRefreshPane(WorkbookContext context, string sheetCodeName, string reason);
     }
 
-    internal sealed class ThisAddInScreenUpdatingExecutionBridge : IScreenUpdatingExecutionBridge
-    {
-        private readonly ThisAddIn _addIn;
-
-        internal ThisAddInScreenUpdatingExecutionBridge(ThisAddIn addIn)
-        {
-            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
-        }
-
-        public void Execute(Action action)
-        {
-            _addIn.RunWithScreenUpdatingSuspended(action);
-        }
-    }
-
-    internal sealed class ThisAddInTaskPaneRefreshSuppressionBridge : ITaskPaneRefreshSuppressionBridge
-    {
-        private readonly ThisAddIn _addIn;
-
-        internal ThisAddInTaskPaneRefreshSuppressionBridge(ThisAddIn addIn)
-        {
-            _addIn = addIn ?? throw new ArgumentNullException(nameof(addIn));
-        }
-
-        public IDisposable Enter(string reason)
-        {
-            return _addIn.SuppressTaskPaneRefresh(reason);
-        }
-    }
-
     internal sealed class ThisAddInActiveTaskPaneRefreshBridge : IActiveTaskPaneRefreshBridge
     {
         private readonly ThisAddIn _addIn;

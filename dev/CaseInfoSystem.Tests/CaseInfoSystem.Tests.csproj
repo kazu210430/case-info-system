@@ -36,6 +36,9 @@
     <Compile Include="CasePaneCacheRefreshNotificationServiceTests.cs" />
     <Compile Include="CasePaneSnapshotRenderServiceTests.cs" />
     <Compile Include="TaskPaneRenderStateEvaluatorTests.cs" />
+    <Compile Include="AddInExecutionBoundaryCoordinatorTests.cs" />
+    <Compile Include="AddInStartupBoundaryCoordinatorTests.cs" />
+    <Compile Include="ThisAddInStartupBoundarySourceTests.cs" />
     <Compile Include="DocumentCommandServiceTests.cs" />
     <Compile Include="DocumentExecutionModeServiceTests.cs" />
     <Compile Include="WordInteropServiceTests.cs" />
@@ -174,6 +177,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManager.RuntimeBootstrapAccess.cs" Link="Source\App\TaskPaneManager.RuntimeBootstrapAccess.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneManagerRuntimeGraph.cs" Link="Source\App\TaskPaneManagerRuntimeGraph.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\TaskPaneRenderStateEvaluator.cs" Link="Source\App\TaskPaneRenderStateEvaluator.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AddInExecutionBoundaryCoordinator.cs" Link="Source\App\AddInExecutionBoundaryCoordinator.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\AddInStartupBoundaryCoordinator.cs" Link="Source\App\AddInStartupBoundaryCoordinator.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentCommandService.cs" Link="Source\App\DocumentCommandService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentExecutionModeService.cs" Link="Source\App\DocumentExecutionModeService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\App\DocumentMergeService.cs" Link="Source\App\DocumentMergeService.cs" />

@@ -187,6 +187,8 @@
     <Compile Include="App\ApplicationEventSubscriptionService.cs" />
     <Compile Include="App\EventBoundaryGuard.cs" />
     <Compile Include="App\CasePaneCacheRefreshNotificationPolicy.cs" />
+    <Compile Include="App\AddInExecutionBoundaryCoordinator.cs" />
+    <Compile Include="App\AddInStartupBoundaryCoordinator.cs" />
     <Compile Include="App\CaseListRegistrationService.cs" />
     <Compile Include="App\CaseListManagedKeyNormalizer.cs" />
     <Compile Include="App\CaseWorkbookBeforeClosePolicy.cs" />
@@ -362,6 +364,7 @@
     <Compile Include="Infrastructure\AccountingTemplateResolver.cs" />
     <Compile Include="Infrastructure\AccountingWorkbookService.cs" />
     <Compile Include="Infrastructure\AddInDeploymentDiagnosticsTracer.cs" />
+    <Compile Include="Infrastructure\AddInRuntimeExecutionDiagnosticsService.cs" />
     <Compile Include="Infrastructure\CaseTemplateSnapshotService.cs" />
     <Compile Include="Infrastructure\CaseListFieldDefinitionRepository.cs" />
     <Compile Include="Infrastructure\CaseListHeaderRepository.cs" />

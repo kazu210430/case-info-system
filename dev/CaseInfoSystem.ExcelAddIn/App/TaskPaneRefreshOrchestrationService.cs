@@ -1169,18 +1169,20 @@ namespace CaseInfoSystem.ExcelAddIn.App
             int? attemptNumber = null,
             TaskPaneDisplayRequest displayRequest = null)
         {
-            CreatedCaseDisplayCompletionDecision completionDecision =
-                _completionDecisionService.DecideCreatedCaseDisplayCompletion(
-                    new TaskPaneRefreshCompletionDecisionInput(
-                        IsCreatedCaseDisplayReason(reason),
-                        attemptResult));
-            if (!completionDecision.CanComplete)
-            {
-                return;
-            }
-
-            CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);
-            if (resolvedSession == null)
+            TaskPaneRefreshCompletionContext completionContext = TaskPaneRefreshCompletionContext.FromInput(
+                new TaskPaneRefreshCompletionContextInput(
+                    reason,
+                    IsCreatedCaseDisplayReason(reason),
+                    attemptResult,
+                    completionSource,
+                    attemptNumber,
+                    displayRequest,
+                    workbook,
+                    window));
+            CreatedCaseDisplaySession resolvedSession;
+            TaskPaneRefreshCompletionResult completionResult =
+                EvaluateCreatedCaseDisplayCompletionResult(completionContext, session, out resolvedSession);
+            if (!completionResult.CanEmit)
             {
                 return;
             }
@@ -1191,15 +1193,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             TaskPaneRefreshEmitContext emitContext = _emitContextBuilder.Build(
-                TaskPaneRefreshEmitContextInput.ForCompletedSession(
-                    reason,
-                    resolvedSession,
-                    attemptResult,
-                    completionSource,
-                    attemptNumber,
-                    displayRequest,
-                    workbook,
-                    window));
+                TaskPaneRefreshEmitContextInput.ForCompletionResult(completionResult));
             CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(emitContext);
 
             _logger?.Info(payload.KernelTraceMessage);
@@ -1213,7 +1207,30 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 payload.ObservationSource,
                 payload.WorkbookFullName,
                 payload.Details);
-            NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);
+            NewCaseVisibilityObservation.Complete(completionResult.WorkbookFullName);
+        }
+
+        private TaskPaneRefreshCompletionResult EvaluateCreatedCaseDisplayCompletionResult(
+            TaskPaneRefreshCompletionContext completionContext,
+            CreatedCaseDisplaySession candidateSession,
+            out CreatedCaseDisplaySession resolvedSession)
+        {
+            resolvedSession = null;
+            CreatedCaseDisplayCompletionDecision completionDecision =
+                _completionDecisionService.DecideCreatedCaseDisplayCompletion(completionContext);
+            if (!completionDecision.ShouldResolveSession)
+            {
+                return _completionDecisionService.ClassifyCreatedCaseDisplayCompletionResult(
+                    completionContext,
+                    completionDecision,
+                    sessionSnapshot: null);
+            }
+
+            resolvedSession = candidateSession ?? ResolveCreatedCaseDisplaySession(completionContext);
+            return _completionDecisionService.ClassifyCreatedCaseDisplayCompletionResult(
+                completionContext,
+                completionDecision,
+                resolvedSession == null ? null : resolvedSession.ToSnapshot());
         }
 
         private bool TryMarkCreatedCaseDisplaySessionCompletedForEmit(CreatedCaseDisplaySession resolvedSession)
@@ -1232,15 +1249,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             return shouldEmit;
         }
 
-        private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(string reason, Excel.Workbook workbook)
+        private CreatedCaseDisplaySession ResolveCreatedCaseDisplaySession(TaskPaneRefreshCompletionContext completionContext)
         {
-            string workbookFullName = SafeWorkbookFullName(workbook);
+            string workbookFullName = SafeWorkbookFullName(completionContext == null ? null : completionContext.Workbook);
             lock (_createdCaseDisplaySessionSyncRoot)
             {
                 CreatedCaseDisplaySessionSnapshot resolvedSnapshot =
                     _createdCaseDisplaySessionStateReader.ResolveForCompletion(
                         new CreatedCaseDisplaySessionResolutionInput(
-                            IsCreatedCaseDisplayReason(reason),
+                            completionContext != null && completionContext.IsCreatedCaseDisplayReason,
                             workbookFullName,
                             SnapshotCreatedCaseDisplaySessions()));
                 if (resolvedSnapshot != null

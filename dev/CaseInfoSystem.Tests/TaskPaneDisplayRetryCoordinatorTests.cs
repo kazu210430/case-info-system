@@ -131,7 +131,7 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("action=case-display-completed", payloadBuilderSource);
             Assert.Contains("\"case-display-completed\"", payloadBuilderSource);
             Assert.Contains("\"TaskPaneRefreshOrchestrationService.CompleteCreatedCaseDisplaySession\"", payloadBuilderSource);
-            Assert.Contains("NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);", orchestrationSource);
+            Assert.Contains("NewCaseVisibilityObservation.Complete(completionResult.WorkbookFullName);", orchestrationSource);
             AssertContainsInOrder(
                 completionMethod,
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
@@ -166,14 +166,15 @@ namespace CaseInfoSystem.Tests
 
             Assert.Contains("IsCreatedCaseDisplayReason(reason)", orchestrationSource);
             Assert.Contains("_completionDecisionService.DecideCreatedCaseDisplayCompletion(", orchestrationSource);
-            Assert.Contains("attemptResult == null", completionDecisionSource);
-            Assert.Contains("!attemptResult.IsRefreshSucceeded", completionDecisionSource);
-            Assert.Contains("!attemptResult.IsPaneVisible", completionDecisionSource);
-            Assert.Contains("attemptResult.VisibilityRecoveryOutcome == null", completionDecisionSource);
-            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsTerminal", completionDecisionSource);
-            Assert.Contains("!attemptResult.VisibilityRecoveryOutcome.IsDisplayCompletable", completionDecisionSource);
+            Assert.Contains("TaskPaneRefreshCompletionMaterial.FromContext", completionDecisionSource);
+            Assert.Contains("!material.HasAttemptResult", completionDecisionSource);
+            Assert.Contains("!material.IsRefreshSucceeded", completionDecisionSource);
+            Assert.Contains("!material.IsPaneVisible", completionDecisionSource);
+            Assert.Contains("!material.HasVisibilityRecoveryOutcome", completionDecisionSource);
+            Assert.Contains("!material.IsVisibilityRecoveryTerminal", completionDecisionSource);
+            Assert.Contains("!material.IsVisibilityRecoveryDisplayCompletable", completionDecisionSource);
             Assert.Contains(
-                "!IsForegroundDisplayCompletableTerminalInput(attemptResult.ForegroundGuaranteeOutcome)",
+                "!material.IsForegroundDisplayCompletableTerminalInput",
                 completionDecisionSource);
 
             string foregroundInputSource = ReadOptionalForegroundDisplayCompletableDecisionSource(orchestrationSource);
@@ -195,16 +196,18 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 completionMethod,
-                "if (!completionDecision.CanComplete)",
-                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
+                "TaskPaneRefreshCompletionContext completionContext =",
+                "TaskPaneRefreshCompletionResult completionResult =",
+                "if (!completionResult.CanEmit)",
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
                 "return;",
-                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(",
+                "TaskPaneRefreshEmitContextInput.ForCompletionResult(completionResult)",
+                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(emitContext);",
                 "_logger?.Info(payload.KernelTraceMessage);",
                 "payload.ObservationAction",
                 "payload.ObservationSource",
                 "payload.Details);",
-                "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
+                "NewCaseVisibilityObservation.Complete(completionResult.WorkbookFullName);");
             AssertContainsInOrder(
                 payloadHelper,
                 "string details =",
@@ -263,20 +266,19 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 completionMethod,
-                "CreatedCaseDisplayCompletionDecision completionDecision =",
-                "if (!completionDecision.CanComplete)",
-                "return;",
-                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
-                "if (resolvedSession == null)",
+                "TaskPaneRefreshCompletionContext completionContext =",
+                "TaskPaneRefreshCompletionResult completionResult =",
+                "if (!completionResult.CanEmit)",
                 "return;",
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
                 "return;",
-                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(",
+                "TaskPaneRefreshEmitContextInput.ForCompletionResult(completionResult)",
+                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(emitContext);",
                 "_logger?.Info(payload.KernelTraceMessage);",
                 "NewCaseVisibilityObservation.Log(",
                 "payload.ObservationAction",
                 "payload.ObservationSource",
-                "NewCaseVisibilityObservation.Complete(resolvedSession.WorkbookFullName);");
+                "NewCaseVisibilityObservation.Complete(completionResult.WorkbookFullName);");
             AssertContainsInOrder(
                 markMethod,
                 "bool shouldEmit = false;",
@@ -290,7 +292,7 @@ namespace CaseInfoSystem.Tests
             string beforePayloadBuild = Slice(
                 completionMethod,
                 "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))",
-                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(");
+                "CaseDisplayCompletedPayload payload = _emitPayloadBuilder.BuildCaseDisplayCompleted(emitContext);");
             Assert.DoesNotContain("action=case-display-completed", beforePayloadBuild);
             Assert.DoesNotContain("\"case-display-completed\"", beforePayloadBuild);
             Assert.DoesNotContain("NewCaseVisibilityObservation.Log", beforePayloadBuild);
@@ -313,16 +315,21 @@ namespace CaseInfoSystem.Tests
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
             string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string completionEvaluation = ReadMethod(orchestrationSource, "private TaskPaneRefreshCompletionResult EvaluateCreatedCaseDisplayCompletionResult");
             string missingSessionGate = Slice(
-                completionMethod,
-                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
-                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))");
+                completionEvaluation,
+                "resolvedSession = candidateSession ?? ResolveCreatedCaseDisplaySession(completionContext);",
+                "return _completionDecisionService.ClassifyCreatedCaseDisplayCompletionResult(");
 
             AssertContainsInOrder(
                 missingSessionGate,
-                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);",
-                "if (resolvedSession == null)",
-                "return;");
+                "resolvedSession = candidateSession ?? ResolveCreatedCaseDisplaySession(completionContext);");
+            AssertContainsInOrder(
+                completionMethod,
+                "TaskPaneRefreshCompletionResult completionResult =",
+                "if (!completionResult.CanEmit)",
+                "return;",
+                "if (!TryMarkCreatedCaseDisplaySessionCompletedForEmit(resolvedSession))");
             Assert.DoesNotContain("resolvedSession.IsCompleted", missingSessionGate);
             Assert.DoesNotContain("_createdCaseDisplaySessions.Remove", missingSessionGate);
             Assert.DoesNotContain("TryMarkCreatedCaseDisplaySessionCompletedForEmit", missingSessionGate);
@@ -340,11 +347,11 @@ namespace CaseInfoSystem.Tests
 
             AssertContainsInOrder(
                 lookupMethod,
-                "string workbookFullName = SafeWorkbookFullName(workbook);",
+                "string workbookFullName = SafeWorkbookFullName(completionContext == null ? null : completionContext.Workbook);",
                 "lock (_createdCaseDisplaySessionSyncRoot)",
                 "_createdCaseDisplaySessionStateReader.ResolveForCompletion(",
                 "new CreatedCaseDisplaySessionResolutionInput(",
-                "IsCreatedCaseDisplayReason(reason)",
+                "completionContext != null && completionContext.IsCreatedCaseDisplayReason",
                 "workbookFullName",
                 "SnapshotCreatedCaseDisplaySessions()",
                 "if (resolvedSnapshot != null",
@@ -362,18 +369,18 @@ namespace CaseInfoSystem.Tests
         public void CaseDisplayCompletionHardGateBlocksBeforeSessionLookupMutationEmitAndComplete()
         {
             string orchestrationSource = ReadAppSource("TaskPaneRefreshOrchestrationService.cs");
-            string completionMethod = ReadMethod(orchestrationSource, "private void TryCompleteCreatedCaseDisplaySession");
+            string completionEvaluation = ReadMethod(orchestrationSource, "private TaskPaneRefreshCompletionResult EvaluateCreatedCaseDisplayCompletionResult");
             string hardGateBlock = Slice(
-                completionMethod,
+                completionEvaluation,
                 "CreatedCaseDisplayCompletionDecision completionDecision =",
-                "CreatedCaseDisplaySession resolvedSession = session ?? ResolveCreatedCaseDisplaySession(reason, workbook);");
+                "resolvedSession = candidateSession ?? ResolveCreatedCaseDisplaySession(completionContext);");
 
             AssertContainsInOrder(
                 hardGateBlock,
                 "CreatedCaseDisplayCompletionDecision completionDecision =",
                 "_completionDecisionService.DecideCreatedCaseDisplayCompletion(",
-                "if (!completionDecision.CanComplete)",
-                "return;");
+                "if (!completionDecision.ShouldResolveSession)",
+                "return _completionDecisionService.ClassifyCreatedCaseDisplayCompletionResult(");
             Assert.DoesNotContain("ResolveCreatedCaseDisplaySession", hardGateBlock);
             Assert.DoesNotContain("_createdCaseDisplaySessions", hardGateBlock);
             Assert.DoesNotContain("IsCompleted", hardGateBlock);

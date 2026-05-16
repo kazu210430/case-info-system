@@ -95,6 +95,25 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 workbook,
                 window);
         }
+
+        internal static TaskPaneRefreshEmitContextInput ForCompletionResult(
+            TaskPaneRefreshCompletionResult completionResult)
+        {
+            if (completionResult == null)
+            {
+                throw new ArgumentNullException(nameof(completionResult));
+            }
+
+            return new TaskPaneRefreshEmitContextInput(
+                completionResult.Reason,
+                completionResult.SessionSnapshot,
+                completionResult.AttemptResult,
+                completionResult.CompletionSource,
+                completionResult.AttemptNumber,
+                completionResult.DisplayRequest,
+                completionResult.Workbook,
+                completionResult.Window);
+        }
     }
 
     internal sealed class TaskPaneRefreshEmitContext

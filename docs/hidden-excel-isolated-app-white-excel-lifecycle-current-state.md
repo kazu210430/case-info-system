@@ -91,6 +91,13 @@ A-G 完了後の current-state docs は、次の関係で読む。
 - `WorkbookActivate` / `WindowActivate` は display / refresh trigger です。hidden session cleanup、retained instance cleanup、white Excel cleanup、foreground guarantee owner ではありません。
 - white Excel prevention / recovery の G-0 current-state と target boundary は `docs/white-excel-prevention-boundary-current-state.md` を参照します。
 
+### route decision service boundary
+
+- CASE workbook open の route / hidden route decision は `CaseWorkbookOpenRouteDecisionService` に分離しています。
+- これは owner / lifecycle の移動ではありません。Excel app lifecycle、hidden session owner、workbook close owner、retained app-cache cleanup owner、COM release owner は引き続き `CaseWorkbookOpenStrategy` 側に残ります。
+- `CaseWorkbookOpenRouteDecisionService` は環境変数・暫定 switch の解釈、selected route、save-before-close、fallback、application owner facts、route trace details の値化だけを担当します。
+- 目的は大型の open strategy class から route 判断責務を減らし、CASE workbook open route 変更時の影響範囲を小さくすることです。
+
 ## instance lifecycle 整理
 
 ```mermaid

@@ -424,6 +424,46 @@ namespace CaseInfoSystem.Tests
             }
         }
 
+        [Fact]
+        public void Source_KeepsHiddenSessionLifecycleOwnersInStrategyAndDelegatesRouteDecisionOnly()
+        {
+            string strategySource = ReadInfrastructureSource("CaseWorkbookOpenStrategy.cs");
+            string routeDecisionSource = ReadInfrastructureSource("CaseWorkbookOpenRouteDecisionService.cs");
+
+            Assert.Contains("new CaseWorkbookOpenRouteDecisionService()", strategySource);
+            Assert.Contains("_routeDecisionService.DecideHiddenCreateRoute()", strategySource);
+            Assert.Contains("_routeDecisionService.DecideHiddenApplicationCacheAcquisition", strategySource);
+            Assert.Contains("_routeDecisionService.DecideCreatedCaseDisplayRoute()", strategySource);
+            Assert.Contains("OpenDedicatedHiddenWorkbookSession(", strategySource);
+            Assert.Contains("OpenHiddenWorkbookWithApplicationCache(", strategySource);
+            Assert.Contains("CreateDedicatedHiddenApplication(", strategySource);
+            Assert.Contains("_hiddenApplicationFactory()", strategySource);
+            Assert.Contains("hiddenApplication.Workbooks.Open", strategySource);
+            Assert.Contains("_application.Workbooks.Open", strategySource);
+            Assert.Contains("WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave", strategySource);
+            Assert.Contains("TryQuitApplication(", strategySource);
+            Assert.Contains("ReleaseComObject(", strategySource);
+            Assert.Contains("CleanupDedicatedHiddenSession(", strategySource);
+            Assert.Contains("CleanupCachedHiddenSession(", strategySource);
+            Assert.Contains("ShutdownHiddenApplicationCache", strategySource);
+            Assert.Contains("RestoreSharedApplicationState(", strategySource);
+            Assert.Contains("RestorePreviousWindowForHiddenDisplay(", strategySource);
+
+            Assert.DoesNotContain("Microsoft.Office.Interop.Excel", routeDecisionSource);
+            Assert.DoesNotContain("Workbooks.Open", routeDecisionSource);
+            Assert.DoesNotContain("WorkbookCloseInteropHelper", routeDecisionSource);
+            Assert.DoesNotContain("CloseOwnedWorkbook", routeDecisionSource);
+            Assert.DoesNotContain(".Close(", routeDecisionSource);
+            Assert.DoesNotContain(".Quit(", routeDecisionSource);
+            Assert.DoesNotContain("TryQuitApplication", routeDecisionSource);
+            Assert.DoesNotContain("ReleaseComObject", routeDecisionSource);
+            Assert.DoesNotContain("HideOpenedWorkbookWindow", routeDecisionSource);
+            Assert.DoesNotContain("RestoreSharedApplicationState", routeDecisionSource);
+            Assert.DoesNotContain("Cleanup", routeDecisionSource);
+            Assert.DoesNotContain("Visible =", routeDecisionSource);
+            Assert.DoesNotContain("WindowState", routeDecisionSource);
+        }
+
         private static CaseWorkbookOpenStrategy CreateStrategy(List<string> logs, List<object> releasedObjects, params Excel.Application[] hiddenApplications)
         {
             return CreateStrategy(logs, releasedObjects, new Queue<Excel.Application>(hiddenApplications));
@@ -477,6 +517,29 @@ namespace CaseInfoSystem.Tests
                 return workbook;
             };
             return application;
+        }
+
+        private static string ReadInfrastructureSource(string infrastructureFileName)
+        {
+            string repoRoot = FindRepositoryRoot();
+            return File.ReadAllText(Path.Combine(repoRoot, "dev", "CaseInfoSystem.ExcelAddIn", "Infrastructure", infrastructureFileName));
+        }
+
+        private static string FindRepositoryRoot()
+        {
+            DirectoryInfo current = new DirectoryInfo(Directory.GetCurrentDirectory());
+            while (current != null)
+            {
+                if (File.Exists(Path.Combine(current.FullName, "build.ps1"))
+                    && Directory.Exists(Path.Combine(current.FullName, "dev", "CaseInfoSystem.ExcelAddIn")))
+                {
+                    return current.FullName;
+                }
+
+                current = current.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Repository root was not found.");
         }
 
         private sealed class HiddenRouteEnvironmentScope : IDisposable

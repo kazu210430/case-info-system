@@ -366,6 +366,7 @@
     <Compile Include="Infrastructure\CaseListHeaderRepository.cs" />
     <Compile Include="Infrastructure\CaseListMappingRepository.cs" />
     <Compile Include="Infrastructure\CaseWorkbookInitializer.cs" />
+    <Compile Include="Infrastructure\CaseWorkbookOpenRouteDecisionService.cs" />
     <Compile Include="Infrastructure\CaseWorkbookOpenStrategy.cs" />
     <Compile Include="Infrastructure\NewCaseVisibilityObservation.cs" />
     <Compile Include="Infrastructure\ComObjectReleaseService.cs" />

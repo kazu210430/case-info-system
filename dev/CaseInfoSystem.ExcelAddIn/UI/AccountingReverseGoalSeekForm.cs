@@ -31,12 +31,13 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.ShowInTaskbar = false;
 			base.StartPosition = FormStartPosition.CenterParent;
 			_btnExcelClose = new Button {
+				BackColor = Color.MistyRose,
 				Location = new Point (332, 10),
 				Name = "btnExcelClose",
 				Size = new Size (120, 32),
 				TabIndex = 3,
 				Text = "Excelを閉じる",
-				UseVisualStyleBackColor = true
+				UseVisualStyleBackColor = false
 			};
 			_btnExcelClose.Click += BtnExcelClose_Click;
 			Text = "逆算ツール";

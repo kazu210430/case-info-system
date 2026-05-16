@@ -147,7 +147,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.ShowInTaskbar = false;
 			base.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
 			this.Text = "分割払い予定表入力フォーム";
-			this.btnExcelClose = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateButton ("Excelを閉じる", new System.Drawing.Point (379, 10), new System.Drawing.Size (120, 32), new System.EventHandler (BtnExcelClose_Click));
+			this.btnExcelClose = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateButton ("Excelを閉じる", new System.Drawing.Point (379, 10), new System.Drawing.Size (120, 32), new System.EventHandler (BtnExcelClose_Click), System.Drawing.Color.MistyRose, System.Drawing.SystemColors.ControlText);
 			System.Windows.Forms.GroupBox groupBox = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("請求書の読込内容", new System.Drawing.Point (24, 54), new System.Drawing.Size (475, 150));
 			groupBox.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("請求額", new System.Drawing.Point (24, 28), new System.Drawing.Size (72, 20)));
 			this.txtBillingAmount = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateReadOnlyTextBox (new System.Drawing.Point (32, 55), new System.Drawing.Size (120, 25));

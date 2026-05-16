@@ -282,12 +282,13 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			base.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
 			this.Text = "お支払い履歴入力フォーム";
 			this.btnExcelClose = new System.Windows.Forms.Button ();
+			this.btnExcelClose.BackColor = System.Drawing.Color.MistyRose;
 			this.btnExcelClose.Location = new System.Drawing.Point (379, 10);
 			this.btnExcelClose.Name = "btnExcelClose";
 			this.btnExcelClose.Size = new System.Drawing.Size (120, 32);
 			this.btnExcelClose.TabIndex = 2;
 			this.btnExcelClose.Text = "Excelを閉じる";
-			this.btnExcelClose.UseVisualStyleBackColor = true;
+			this.btnExcelClose.UseVisualStyleBackColor = false;
 			this.btnExcelClose.Click += new System.EventHandler (BtnExcelClose_Click);
 			this.frame請求書の記載内容 = new CaseInfoSystem.ExcelAddIn.UI.VbaFramePanel ();
 			this.frame請求書の記載内容.BackColor = this.BackColor;

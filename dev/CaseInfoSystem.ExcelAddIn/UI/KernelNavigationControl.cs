@@ -102,7 +102,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			}
 		}
 
-		private static readonly Color PaneBackColor = Color.FromArgb (242, 242, 242);
+		private static readonly Color PaneBackColor = Color.MintCream;
 
 		private static readonly Color DefaultButtonColor = ColorTranslator.FromHtml ("#FFFCF5");
 

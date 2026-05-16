@@ -27,7 +27,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
-			BackColor = SystemColors.Menu;
+			BackColor = Color.MintCream;
 			base.ClientSize = new Size (508, 320);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;

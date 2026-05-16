@@ -137,7 +137,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-			this.BackColor = System.Drawing.SystemColors.Menu;
+			this.BackColor = System.Drawing.Color.MintCream;
 			base.ClientSize = new System.Drawing.Size (525, 482);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -209,7 +209,8 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			return new SilverGroupBox {
 				Text = text,
 				Location = location,
-				Size = size
+				Size = size,
+				BackColor = Color.MintCream
 			};
 		}
 
@@ -231,7 +232,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Size = size,
 				BorderStyle = BorderStyle.FixedSingle,
 				ReadOnly = true,
-				BackColor = SystemColors.Menu,
+				BackColor = Color.MintCream,
 				TextAlign = HorizontalAlignment.Right
 			};
 		}

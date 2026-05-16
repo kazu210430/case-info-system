@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Windows.Forms;
 using CaseInfoSystem.ExcelAddIn.App;
 
@@ -15,6 +16,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal DocumentButtonsControl()
         {
             Dock = DockStyle.Fill;
+            BackColor = Color.MintCream;
             _innerControl = new DocTaskPaneControl
             {
                 Dock = DockStyle.Fill

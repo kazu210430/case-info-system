@@ -157,7 +157,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // grpDateRule
             // 
-            this.grpDateRule.BackColor = System.Drawing.SystemColors.Menu;
+            this.grpDateRule.BackColor = System.Drawing.Color.MintCream;
             this.grpDateRule.Controls.Add(this.optDateNone);
             this.grpDateRule.Controls.Add(this.optDateYY);
             this.grpDateRule.Controls.Add(this.optDateYYYY);
@@ -212,7 +212,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // grpNameRule
             // 
-            this.grpNameRule.BackColor = System.Drawing.SystemColors.Menu;
+            this.grpNameRule.BackColor = System.Drawing.Color.MintCream;
             this.grpNameRule.Controls.Add(this.optNameCustDoc);
             this.grpNameRule.Controls.Add(this.optNameDocCust);
             this.grpNameRule.Controls.Add(this.optNameDoc);
@@ -267,7 +267,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // grpScreenSwitch
             // 
-            this.grpScreenSwitch.BackColor = System.Drawing.SystemColors.Menu;
+            this.grpScreenSwitch.BackColor = System.Drawing.Color.MintCream;
             this.grpScreenSwitch.Controls.Add(this.btnOpenCaseList);
             this.grpScreenSwitch.Controls.Add(this.btnOpenTemplate);
             this.grpScreenSwitch.Controls.Add(this.btnOpenUserData);
@@ -491,7 +491,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // pnlExistingCaseTree
             // 
-            this.pnlExistingCaseTree.BackColor = System.Drawing.SystemColors.Menu;
+            this.pnlExistingCaseTree.BackColor = System.Drawing.Color.MintCream;
             this.pnlExistingCaseTree.Controls.Add(this.label2);
             this.pnlExistingCaseTree.Controls.Add(this.lblExistingTreeDocName);
             this.pnlExistingCaseTree.Controls.Add(this.lblExistingTreeCaseName);
@@ -652,7 +652,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             // pnlNewCaseTree
             // 
-            this.pnlNewCaseTree.BackColor = System.Drawing.SystemColors.Menu;
+            this.pnlNewCaseTree.BackColor = System.Drawing.Color.MintCream;
             this.pnlNewCaseTree.Controls.Add(this.label5);
             this.pnlNewCaseTree.Controls.Add(this.label1);
             this.pnlNewCaseTree.Controls.Add(this.label4);
@@ -684,7 +684,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
-            this.BackColor = System.Drawing.SystemColors.Menu;
+            this.BackColor = System.Drawing.Color.MintCream;
             this.ClientSize = new System.Drawing.Size(731, 769);
             this.Controls.Add(this.pnlExistingCaseTree);
             this.Controls.Add(this.btnCreateCaseBatch);

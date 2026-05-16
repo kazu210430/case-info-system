@@ -288,6 +288,7 @@
     <Compile Include="App\TaskPaneHostPreparationPolicy.cs" />
     <Compile Include="App\TaskPaneHostReusePolicy.cs" />
     <Compile Include="App\PaneDisplayPolicy.cs" />
+    <Compile Include="App\ControlFlowReasons.cs" />
     <Compile Include="App\SheetEventCoordinator.cs" />
     <Compile Include="App\TaskPaneDisplayRequest.cs" />
     <Compile Include="App\TaskPanePostActionRefreshPolicy.cs" />

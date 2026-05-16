@@ -9,6 +9,16 @@ namespace CaseInfoSystem.Tests
     public class TaskPaneManagerOrchestrationPolicyTests
     {
         [Fact]
+        public void ControlFlowReasons_PreserveControlBoundaryValues()
+        {
+            Assert.Equal("WorkbookOpen", ControlFlowReasons.WorkbookOpen);
+            Assert.Equal("WorkbookActivate", ControlFlowReasons.WorkbookActivate);
+            Assert.Equal("WindowActivate", ControlFlowReasons.WindowActivate);
+            Assert.Equal("KernelHomeForm.FormClosed", ControlFlowReasons.KernelHomeFormClosed);
+            Assert.Equal("KernelCasePresentationService.ShowCreatedCase.PostRelease", ControlFlowReasons.CreatedCasePostRelease);
+        }
+
+        [Fact]
         public void DecideHostFlowPrecondition_ReturnsHideAllAndSkipForUnknownRole()
         {
             TaskPaneHostFlowPreconditionDecision result = TaskPaneRefreshPreconditionPolicy.DecideHostFlowPrecondition(
@@ -129,7 +139,7 @@ namespace CaseInfoSystem.Tests
             Excel.Workbook workbook = new Excel.Workbook();
 
             TaskPaneRefreshPreconditionDecision decision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
-                "WorkbookOpen",
+                ControlFlowReasons.WorkbookOpen,
                 workbook,
                 window: null,
                 shouldIgnoreDuringProtection: () =>
@@ -149,7 +159,7 @@ namespace CaseInfoSystem.Tests
             Excel.Workbook workbook = new Excel.Workbook();
 
             TaskPaneRefreshPreconditionDecision decision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
-                "WorkbookActivate",
+                ControlFlowReasons.WorkbookActivate,
                 workbook,
                 window: null,
                 shouldIgnoreDuringProtection: () => true);
@@ -164,7 +174,7 @@ namespace CaseInfoSystem.Tests
             Excel.Workbook workbook = new Excel.Workbook();
 
             TaskPaneRefreshPreconditionDecision decision = TaskPaneRefreshPreconditionPolicy.DecideRefreshPrecondition(
-                "WorkbookActivate",
+                ControlFlowReasons.WorkbookActivate,
                 workbook,
                 new Excel.Window { Hwnd = 101 },
                 shouldIgnoreDuringProtection: () => false);

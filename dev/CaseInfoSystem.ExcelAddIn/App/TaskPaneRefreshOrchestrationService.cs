@@ -1253,7 +1253,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         private static bool IsCreatedCaseDisplayReason(string reason)
         {
-            return string.Equals(reason, NewCaseDefaultTimingLogHelper.PostReleaseReason, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(reason, ControlFlowReasons.CreatedCasePostRelease, StringComparison.OrdinalIgnoreCase);
         }
 
         private static ReadyShowCallbackFacts BuildReadyShowCallbackFacts(WorkbookTaskPaneReadyShowAttemptOutcome outcome)

@@ -61,7 +61,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             if (Source == TaskPaneDisplaySource.WindowActivate)
             {
-                return "WindowActivate";
+                return ControlFlowReasons.WindowActivate;
             }
 
             return string.IsNullOrWhiteSpace(Detail)

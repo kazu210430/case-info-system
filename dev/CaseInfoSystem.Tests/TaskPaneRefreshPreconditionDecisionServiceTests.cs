@@ -16,7 +16,7 @@ namespace CaseInfoSystem.Tests
             Excel.Window window = new Excel.Window { Hwnd = 101 };
 
             TaskPaneRefreshPreconditionDecisionResult result = service.Decide(
-                "WorkbookActivate",
+                ControlFlowReasons.WorkbookActivate,
                 workbook,
                 window,
                 shouldIgnoreDuringProtection: () => false);
@@ -38,7 +38,7 @@ namespace CaseInfoSystem.Tests
             Excel.Workbook workbook = new Excel.Workbook();
 
             TaskPaneRefreshPreconditionDecisionResult result = service.Decide(
-                "WorkbookOpen",
+                ControlFlowReasons.WorkbookOpen,
                 workbook,
                 window: null,
                 shouldIgnoreDuringProtection: () =>
@@ -68,7 +68,7 @@ namespace CaseInfoSystem.Tests
             Excel.Window window = new Excel.Window { Hwnd = 202 };
 
             TaskPaneRefreshPreconditionDecisionResult result = service.Decide(
-                "WindowActivate",
+                ControlFlowReasons.WindowActivate,
                 workbook,
                 window,
                 shouldIgnoreDuringProtection: () => true);

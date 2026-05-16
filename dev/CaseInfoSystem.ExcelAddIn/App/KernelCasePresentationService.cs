@@ -229,11 +229,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
 					WorkbookWindowVisibilityEnsureResult readyShowVisibilityResult = EnsureWorkbookWindowVisibleBeforeReadyShow (workbook, stopwatch);
 					MarkVisibilityDegradationIfNeeded (presentationResult, "ReadyShowVisibility", readyShowVisibilityResult);
 					NewCaseDefaultTimingLogHelper.LogDetail (_logger, _excelInteropService.GetWorkbookFullName (workbook), "hiddenOpenToWindowVisible", "ensureWorkbookWindowVisibleBeforeReadyShow", stopwatch2.ElapsedMilliseconds);
-					_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), "KernelCasePresentationService.ShowCreatedCase.PostRelease");
+					_casePaneHostBridge.SuppressUpcomingCasePaneActivationRefresh (_excelInteropService.GetWorkbookFullName (workbook), ControlFlowReasons.CreatedCasePostRelease);
 				_logger.Info ("ShowCreatedCase post-release activation suppression prepared. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "post-release-suppression-prepared", "KernelCasePresentationService.ExecuteDeferredPresentationEnhancements", _excelInteropService.GetWorkbookFullName (workbook));
 				NewCaseDefaultTimingLogHelper.StartTaskPaneReadyWait (_excelInteropService.GetWorkbookFullName (workbook));
-				_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady (workbook, "KernelCasePresentationService.ShowCreatedCase.PostRelease");
+				_casePaneHostBridge.ShowWorkbookTaskPaneWhenReady (workbook, ControlFlowReasons.CreatedCasePostRelease);
 				_logger.Info ("[KernelFlickerTrace] source=KernelCasePresentationService action=display-stability-point phase=ReadyShowRequested, workbook=" + _excelInteropService.GetWorkbookFullName (workbook) + ", elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				_logger.Info ("ShowCreatedCase task pane ready-show requested. elapsedMs=" + stopwatch.ElapsedMilliseconds);
 				NewCaseVisibilityObservation.Log (_logger, _excelInteropService, null, workbook, null, "ready-show-requested", "KernelCasePresentationService.ExecuteDeferredPresentationEnhancements", _excelInteropService.GetWorkbookFullName (workbook));
@@ -469,7 +469,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
 	internal static class NewCaseDefaultTimingLogHelper
 	{
-		internal const string PostReleaseReason = "KernelCasePresentationService.ShowCreatedCase.PostRelease";
+		internal const string PostReleaseReason = ControlFlowReasons.CreatedCasePostRelease;
 
 		private static readonly object SyncRoot = new object ();
 

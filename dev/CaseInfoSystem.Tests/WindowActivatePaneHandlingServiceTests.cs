@@ -33,7 +33,7 @@ namespace CaseInfoSystem.Tests
             Assert.Same(window, dispatchedWindow);
             Assert.NotNull(dispatchedRequest);
             Assert.True(dispatchedRequest.IsWindowActivateTrigger);
-            Assert.Equal("WindowActivate", dispatchedRequest.ToReasonString());
+            Assert.Equal(ControlFlowReasons.WindowActivate, dispatchedRequest.ToReasonString());
             Assert.Same(facts, dispatchedRequest.WindowActivateTriggerFacts);
             Assert.Equal(WindowActivateDispatchOutcomeStatus.Dispatched, outcome.Status);
             Assert.True(outcome.IsTerminal);

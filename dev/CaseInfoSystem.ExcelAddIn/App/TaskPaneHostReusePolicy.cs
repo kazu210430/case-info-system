@@ -22,9 +22,9 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            return string.Equals(reason, "WorkbookActivate", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(reason, "WindowActivate", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(reason, "KernelHomeForm.FormClosed", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(reason, ControlFlowReasons.WorkbookActivate, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(reason, ControlFlowReasons.WindowActivate, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(reason, ControlFlowReasons.KernelHomeFormClosed, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

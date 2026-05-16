@@ -11,7 +11,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            return string.Equals(eventName, "WorkbookOpen", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(eventName, ControlFlowReasons.WorkbookOpen, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

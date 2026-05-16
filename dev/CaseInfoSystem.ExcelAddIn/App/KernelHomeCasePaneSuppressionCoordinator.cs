@@ -78,7 +78,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            if (string.Equals(eventName, "WorkbookOpen", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(eventName, ControlFlowReasons.WorkbookOpen, StringComparison.OrdinalIgnoreCase))
             {
                 if (_suppressKernelHomeOnOpenCount > 0)
                 {
@@ -98,7 +98,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            if (string.Equals(eventName, "WorkbookActivate", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(eventName, ControlFlowReasons.WorkbookActivate, StringComparison.OrdinalIgnoreCase))
             {
                 if (_suppressKernelHomeOnActivateCount > 0)
                 {
@@ -118,7 +118,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            if (string.Equals(eventName, "WindowActivate", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(eventName, ControlFlowReasons.WindowActivate, StringComparison.OrdinalIgnoreCase))
             {
                 if (_suppressKernelHomeOnActivateCount > 0)
                 {
@@ -337,12 +337,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            if (string.Equals(eventName, "WorkbookActivate", StringComparison.OrdinalIgnoreCase)
+            if (string.Equals(eventName, ControlFlowReasons.WorkbookActivate, StringComparison.OrdinalIgnoreCase)
                 && _suppressCasePaneOnWorkbookActivateCount > 0)
             {
                 _suppressCasePaneOnWorkbookActivateCount--;
             }
-            else if (string.Equals(eventName, "WindowActivate", StringComparison.OrdinalIgnoreCase)
+            else if (string.Equals(eventName, ControlFlowReasons.WindowActivate, StringComparison.OrdinalIgnoreCase)
                 && _suppressCasePaneOnWindowActivateCount > 0)
             {
                 _suppressCasePaneOnWindowActivateCount--;
@@ -376,12 +376,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return false;
             }
 
-            if (string.Equals(eventName, "WorkbookActivate", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(eventName, ControlFlowReasons.WorkbookActivate, StringComparison.OrdinalIgnoreCase))
             {
                 return _suppressCasePaneOnWorkbookActivateCount > 0;
             }
 
-            if (string.Equals(eventName, "WindowActivate", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(eventName, ControlFlowReasons.WindowActivate, StringComparison.OrdinalIgnoreCase))
             {
                 return _suppressCasePaneOnWindowActivateCount > 0;
             }

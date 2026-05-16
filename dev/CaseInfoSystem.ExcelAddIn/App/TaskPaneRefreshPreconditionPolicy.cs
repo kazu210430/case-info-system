@@ -62,7 +62,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
         internal static bool ShouldSkipWorkbookOpenWindowDependentRefresh(string reason, Excel.Workbook workbook, Excel.Window window)
         {
-            return string.Equals(reason, "WorkbookOpen", StringComparison.Ordinal)
+            return string.Equals(reason, ControlFlowReasons.WorkbookOpen, StringComparison.Ordinal)
                 && workbook != null
                 && window == null;
         }

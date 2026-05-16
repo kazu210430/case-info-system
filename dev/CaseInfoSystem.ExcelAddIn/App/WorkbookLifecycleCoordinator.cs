@@ -80,12 +80,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 + SafeWindowHwnd(_excelInteropService == null ? null : _excelInteropService.GetActiveWindow()));
             NewCaseVisibilityObservation.Log(_logger, _excelInteropService, null, workbook, null, "WorkbookOpen-event", "WorkbookLifecycleCoordinator.OnWorkbookOpen");
 
-            _handleExternalWorkbookDetected?.Invoke(workbook, "WorkbookOpen");
+            _handleExternalWorkbookDetected?.Invoke(workbook, ControlFlowReasons.WorkbookOpen);
             _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook, AccountingInitialSheetSyncPolicy.WorkbookOpenEventName);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable("WorkbookOpen", workbook);
+            _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable(ControlFlowReasons.WorkbookOpen, workbook);
         }
 
         internal void OnWorkbookActivate(Excel.Workbook workbook)
@@ -126,13 +126,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            _handleExternalWorkbookDetected?.Invoke(workbook, "WorkbookActivate");
+            _handleExternalWorkbookDetected?.Invoke(workbook, ControlFlowReasons.WorkbookActivate);
             _kernelWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
             _accountingWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook, AccountingInitialSheetSyncPolicy.WorkbookActivateEventName);
             _accountingSheetControlService?.EnsureVstoManagedControls(workbook);
             _caseWorkbookLifecycleService?.HandleWorkbookOpenedOrActivated(workbook);
-            _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable("WorkbookActivate", workbook);
-            if (_shouldSuppressCasePaneRefresh != null && _shouldSuppressCasePaneRefresh("WorkbookActivate", workbook))
+            _kernelHomeCoordinator?.HandleKernelWorkbookBecameAvailable(ControlFlowReasons.WorkbookActivate, workbook);
+            if (_shouldSuppressCasePaneRefresh != null && _shouldSuppressCasePaneRefresh(ControlFlowReasons.WorkbookActivate, workbook))
             {
                 _logger?.Info(
                     KernelFlickerTracePrefix
@@ -143,7 +143,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return;
             }
 
-            _refreshTaskPane?.Invoke("WorkbookActivate", workbook, null);
+            _refreshTaskPane?.Invoke(ControlFlowReasons.WorkbookActivate, workbook, null);
         }
 
         internal void OnWorkbookBeforeClose(Excel.Workbook workbook, ref bool cancel)

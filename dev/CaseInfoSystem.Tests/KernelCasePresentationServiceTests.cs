@@ -30,7 +30,8 @@ namespace CaseInfoSystem.Tests
             Assert.NotNull(opened.CreatedWorkbook);
             Assert.True(opened.CreatedWorkbook.Windows[1].Visible);
             Assert.Same(opened.CreatedWorkbook, bridge.ReadyShowWorkbook);
-            Assert.Equal("KernelCasePresentationService.ShowCreatedCase.PostRelease", bridge.ReadyShowReason);
+            Assert.Equal(ControlFlowReasons.CreatedCasePostRelease, bridge.SuppressionReason);
+            Assert.Equal(ControlFlowReasons.CreatedCasePostRelease, bridge.ReadyShowReason);
             Assert.True(waitSession.ClosedForSuccessfulPresentation);
             Assert.False(waitSession.ClosedAndRestoredOwner);
             Assert.Contains(logs, message => message.IndexOf("presentationOutcome=Completed", StringComparison.OrdinalIgnoreCase) >= 0);
@@ -151,8 +152,11 @@ namespace CaseInfoSystem.Tests
 
             internal string ReadyShowReason { get; private set; }
 
+            internal string SuppressionReason { get; private set; }
+
             public void SuppressUpcomingCasePaneActivationRefresh(string workbookFullName, string reason)
             {
+                SuppressionReason = reason ?? string.Empty;
             }
 
             public void ShowWorkbookTaskPaneWhenReady(Excel.Workbook workbook, string reason)

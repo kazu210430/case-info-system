@@ -137,7 +137,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-			this.BackColor = System.Drawing.Color.MintCream;
+			this.BackColor = System.Drawing.Color.Snow;
 			base.ClientSize = new System.Drawing.Size (525, 482);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -180,7 +180,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.txtInstallmentAmount.Leave += new System.EventHandler (CurrencyTextBox_Leave);
 			groupBox2.Controls.Add (this.txtInstallmentAmount);
 			groupBox2.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("円", new System.Drawing.Point (160, 59), new System.Drawing.Size (24, 20)));
-			this.btnCreateSchedule = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateButton ("この分割払い額で\r\n予定表を作成", new System.Drawing.Point (271, 20), new System.Drawing.Size (184, 56), new System.EventHandler (BtnCreateSchedule_Click), System.Drawing.Color.PowderBlue, System.Drawing.Color.Black);
+			this.btnCreateSchedule = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateButton ("この分割払い額で\r\n予定表を作成", new System.Drawing.Point (271, 20), new System.Drawing.Size (184, 56), new System.EventHandler (BtnCreateSchedule_Click), System.Drawing.Color.Cyan, System.Drawing.Color.Black);
 			groupBox2.Controls.Add (this.btnCreateSchedule);
 			System.Windows.Forms.GroupBox groupBox3 = CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateGroupBox ("分割払い額の途中変更", new System.Drawing.Point (24, 320), new System.Drawing.Size (475, 144));
 			groupBox3.Controls.Add (CaseInfoSystem.ExcelAddIn.UI.AccountingInstallmentScheduleInputForm.CreateLabel ("分割払い額を変更する回", new System.Drawing.Point (24, 26), new System.Drawing.Size (170, 20)));
@@ -210,7 +210,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Text = text,
 				Location = location,
 				Size = size,
-				BackColor = Color.MintCream
+				BackColor = Color.Snow
 			};
 		}
 
@@ -232,7 +232,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Size = size,
 				BorderStyle = BorderStyle.FixedSingle,
 				ReadOnly = true,
-				BackColor = Color.MintCream,
+				BackColor = Color.Snow,
 				TextAlign = HorizontalAlignment.Right
 			};
 		}

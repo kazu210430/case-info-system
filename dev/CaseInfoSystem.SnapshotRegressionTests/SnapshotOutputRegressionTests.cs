@@ -101,7 +101,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             SnapshotProjection projection = SnapshotProjection.FromSnapshotText(result.SnapshotText);
 
             Assert.Equal(
-                "{\"exportVersion\":\"2\",\"masterVersion\":\"42\",\"workbookName\":\"案件情報_山田.xlsx\",\"workbookPath\":\"C:\\\\SnapshotRegression\\\\Cases\\\\案件情報_山田.xlsx\",\"preferredPaneWidth\":420,\"specialButtons\":[\"btnCaseList|案件一覧登録（未了）|caselist||18|16|128|32|14803448\",\"btnAccounting|会計書類セット|accounting||18|64|128|32|14348250\"],\"tabs\":[\"1|申請手続|2222\",\"2|その他|0\",\"3|契約確認|7777\",\"4|全て|16777215\"],\"docs\":[\"btnDoc_01|01|委任状|doc|申請手続|1|1111|01_委任状.docx\",\"btnDoc_02|02|見積書|doc|その他|1|3333|02_見積書.dotx\",\"btnDoc_10|10|報告書|doc|申請手続|2|4444|10_報告書.dotm\",\"btnDoc_11|11|不完全行|doc|契約確認|1|6666|\",\"btnDoc_12|12|請求書|doc|契約確認|2|8888|12_請求書.docx\"]}",
+                "{\"exportVersion\":\"2\",\"masterVersion\":\"42\",\"workbookName\":\"案件情報_山田.xlsx\",\"workbookPath\":\"C:\\\\SnapshotRegression\\\\Cases\\\\案件情報_山田.xlsx\",\"preferredPaneWidth\":420,\"specialButtons\":[\"btnCaseList|案件一覧登録（未了）|caselist||18|16|128|32|14803448\",\"btnAccounting|会計書類セット|accounting||18|64|128|32|16449525\"],\"tabs\":[\"1|申請手続|2222\",\"2|その他|0\",\"3|契約確認|7777\",\"4|全て|16777215\"],\"docs\":[\"btnDoc_01|01|委任状|doc|申請手続|1|1111|01_委任状.docx\",\"btnDoc_02|02|見積書|doc|その他|1|3333|02_見積書.dotx\",\"btnDoc_10|10|報告書|doc|申請手続|2|4444|10_報告書.dotm\",\"btnDoc_11|11|不完全行|doc|契約確認|1|6666|\",\"btnDoc_12|12|請求書|doc|契約確認|2|8888|12_請求書.docx\"]}",
                 projection.ToJson());
         }
 

@@ -9,9 +9,9 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 {
 	internal sealed class AccountingNavigationControl : UserControl, ITaskPaneView
 	{
-		private static readonly Color PaneBackColor = Color.MintCream;
+		private static readonly Color PaneBackColor = Color.Snow;
 
-		private static readonly Color DefaultButtonColor = ColorTranslator.FromHtml ("#FFFCF5");
+		private static readonly Color DefaultButtonColor = Color.MintCream;
 
 		private static readonly Color HoverButtonColor = ColorTranslator.FromHtml ("#BFEDF8");
 

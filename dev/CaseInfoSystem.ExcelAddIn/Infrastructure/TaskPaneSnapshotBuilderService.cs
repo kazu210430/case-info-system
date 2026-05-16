@@ -221,7 +221,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		private const int CaseListButtonBackColorRegistered = 12566463;
 
-		private const int AccountingButtonBackColor = 14348250;
+		private const int AccountingButtonBackColor = 16449525;
 
 		private const int DefaultAllTabBackColor = 16777215;
 
@@ -543,7 +543,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			string caseListCaption = GetCaseListCaption (workbook);
 			string text = GetCaseListBackColor (workbook).ToString ();
 			lines.Add (JoinFields ("SPECIAL", "btnCaseList", caseListCaption, "caselist", string.Empty, "18", "16", "128", "32", text));
-			lines.Add (JoinFields ("SPECIAL", "btnAccounting", "会計書類セット", "accounting", string.Empty, "18", "64", "128", "32", 14348250.ToString ()));
+			lines.Add (JoinFields ("SPECIAL", "btnAccounting", "会計書類セット", "accounting", string.Empty, "18", "64", "128", "32", AccountingButtonBackColor.ToString ()));
 		}
 
 		private void AppendTemplateDefinitions (List<string> lines, Dictionary<string, int> tabOrder, Dictionary<string, int> rowMap, Worksheet masterWorksheet)
@@ -693,7 +693,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			string caseListCaption = GetCaseListCaption (workbook);
 			string text = GetCaseListBackColor (workbook).ToString ();
-			string text2 = 14348250.ToString ();
+			string text2 = AccountingButtonBackColor.ToString ();
 			string[] array = snapshotText.Replace ("\r\n", "\n").Split ('\n');
 			bool flag = false;
 			bool flag2 = false;

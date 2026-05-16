@@ -271,7 +271,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			base.SuspendLayout ();
 			base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-			this.BackColor = System.Drawing.Color.MintCream;
+			this.BackColor = System.Drawing.Color.Snow;
 			base.ClientSize = new System.Drawing.Size (525, 394);
 			this.Font = new System.Drawing.Font ("Yu Gothic UI", 10f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 128);
 			base.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -459,7 +459,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 			this.lbl領収額円.TabIndex = 7;
 			this.lbl領収額円.Text = "円";
 			this.btn履歴を入力 = new System.Windows.Forms.Button ();
-			this.btn履歴を入力.BackColor = System.Drawing.Color.PowderBlue;
+			this.btn履歴を入力.BackColor = System.Drawing.Color.Cyan;
 			this.btn履歴を入力.ForeColor = System.Drawing.Color.Black;
 			this.btn履歴を入力.Location = new System.Drawing.Point (251, 29);
 			this.btn履歴を入力.Name = "btn履歴を入力";

@@ -5,7 +5,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 {
 	internal static class AccountingFormButtonAppearanceHelper
 	{
-		private static readonly Color TaskPaneDefaultButtonColor = ColorTranslator.FromHtml ("#FFFCF5");
+		private static readonly Color TaskPaneDefaultButtonColor = Color.MintCream;
 
 		private static readonly Color TaskPaneHoverButtonColor = ColorTranslator.FromHtml ("#BFEDF8");
 

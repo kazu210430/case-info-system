@@ -16,7 +16,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
         internal DocumentButtonsControl()
         {
             Dock = DockStyle.Fill;
-            BackColor = Color.MintCream;
+            BackColor = Color.Snow;
             _innerControl = new DocTaskPaneControl
             {
                 Dock = DockStyle.Fill

@@ -22,7 +22,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
-			BackColor = Color.MintCream;
+			BackColor = Color.Snow;
 			base.ClientSize = new Size (474, 412);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -99,7 +99,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Text = "→ ⑵で選択したセルに計算結果が表示されます\r\n   それと連動して “④請求金額” が⑴の金額になります"
 			};
 			_btnCalculate = new Button {
-				BackColor = Color.PowderBlue,
+				BackColor = Color.Cyan,
 				ForeColor = Color.Black,
 				Location = new Point (56, 352),
 				Name = "btnCalculate",

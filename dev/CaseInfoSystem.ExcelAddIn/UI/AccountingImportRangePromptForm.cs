@@ -27,7 +27,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 		{
 			SuspendLayout ();
 			base.AutoScaleMode = AutoScaleMode.None;
-			BackColor = Color.MintCream;
+			BackColor = Color.Snow;
 			base.ClientSize = new Size (508, 320);
 			Font = new Font ("Yu Gothic UI", 10f, FontStyle.Regular, GraphicsUnit.Point, 128);
 			base.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -115,7 +115,7 @@ namespace CaseInfoSystem.ExcelAddIn.UI
 				Text = "⑶\u3000決定ボタンをクリック（費用項目は適宜手入力してください）"
 			};
 			_btnConfirm = new Button {
-				BackColor = Color.PowderBlue,
+				BackColor = Color.Cyan,
 				ForeColor = Color.Black,
 				Location = new Point (56, 266),
 				Name = "btnConfirm",

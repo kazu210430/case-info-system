@@ -225,7 +225,7 @@ namespace CaseInfoSystem.SnapshotRegressionTests
                     "64",
                     "128",
                     "32",
-                    "14348250")
+                    "16449525")
             };
 
             Dictionary<string, int> tabOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

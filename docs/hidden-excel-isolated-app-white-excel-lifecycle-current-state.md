@@ -112,6 +112,13 @@ A-G 完了後の current-state docs は、次の関係で読む。
 - `CaseWorkbookPresentationHandoffService` は hidden-for-display の shared app state facts、previous window restore decision、handoff diagnostic details、visible-open 時の application / workbook / window visibility facts を値として組み立てるだけを担当します。
 - 目的は大型の open strategy class から表示復旧判断・材料整理の責務を減らし、hidden route から visible presentation へ渡す直前の変更影響範囲を小さくすることです。
 
+### hidden app lifecycle support service boundary
+
+- retained hidden app-cache 周辺の reusable facts、idle expiration decision、return-to-idle / poison / timeout / shutdown cleanup の reason / diagnostic / trace message 組み立ては `CaseWorkbookHiddenAppLifecycleSupportService` に分離しています。
+- これは hidden app lifecycle owner の移動ではありません。retained app-cache owner、idle timer owner、poison owner、shutdown cleanup owner、workbook close owner、`Application.Quit` owner、COM release owner は引き続き `CaseWorkbookOpenStrategy` 側に残ります。
+- `CaseWorkbookHiddenAppLifecycleSupportService` は cached `Application` の raw visibility / health facts、reuse block reason、expiration classification、retained cache trace details を値として組み立てるだけを担当します。
+- 目的は大型の open strategy class から hidden app lifecycle 周辺の補助責務を減らし、retained app-cache 条件や trace vocabulary を変更する場合の影響範囲を小さくすることです。
+
 ## instance lifecycle 整理
 
 ```mermaid

@@ -368,6 +368,7 @@
     <Compile Include="Infrastructure\CaseListMappingRepository.cs" />
     <Compile Include="Infrastructure\CaseWorkbookInitializer.cs" />
     <Compile Include="Infrastructure\CaseWorkbookOpenCleanupOutcomeService.cs" />
+    <Compile Include="Infrastructure\CaseWorkbookHiddenAppLifecycleSupportService.cs" />
     <Compile Include="Infrastructure\CaseWorkbookPresentationHandoffService.cs" />
     <Compile Include="Infrastructure\CaseWorkbookOpenRouteDecisionService.cs" />
     <Compile Include="Infrastructure\CaseWorkbookOpenStrategy.cs" />

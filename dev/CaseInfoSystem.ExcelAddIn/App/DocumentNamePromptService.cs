@@ -70,7 +70,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 return string.Empty;
             }
 
-            return _caseCacheDocumentTemplateReader.TryResolveFromCaseCache(workbook, key, out Domain.DocumentTemplateLookupResult lookupResult)
+            return _caseCacheDocumentTemplateReader.TryEnsurePromotedCaseCacheThenResolve(workbook, key, out Domain.DocumentTemplateLookupResult lookupResult)
                 ? lookupResult.DocumentName
                 : string.Empty;
         }

@@ -22,7 +22,7 @@
 | 対象 | 現在の参照経路 | 主サービス | 事実 |
 | --- | --- | --- | --- |
 | TaskPane 表示 | `CASE cache -> Base 埋込 snapshot -> Kernel 雛形一覧再構築` | `TaskPaneSnapshotBuilderService` | `BuildSnapshotText` がこの優先順で読取し、必要時に CASE cache を更新する |
-| prompt 初期値 | `CASE cache only` | `TaskPaneManager` -> `DocumentNamePromptService` -> `ICaseCacheDocumentTemplateReader` -> `DocumentTemplateLookupService.TryResolveFromCaseCache` | CASE cache miss 時は空欄で prompt を開く。master fallback はしない |
+| prompt 初期値 | `CASE cache only` | `TaskPaneManager` -> `DocumentNamePromptService` -> `ICaseCacheDocumentTemplateReader` -> `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` | CASE cache miss 時は空欄で prompt を開く。master fallback はしない。ただし lookup 前の promotion により CASE DocProperty が更新される場合がある |
 | 文書実行時 metadata 解決 | `CASE cache -> master catalog fallback` | `DocumentExecutionEligibilityService` -> `DocumentTemplateResolver` -> `DocumentTemplateLookupService.TryResolveWithMasterFallback` | CASE cache miss 時のみ `MasterTemplateCatalogService` を読む |
 | `TemplatePath` 解決 | `WORD_TEMPLATE_DIR` 優先、未設定なら `SYSTEM_ROOT\雛形` | `DocumentTemplateResolver` | `TemplatePath` は保存されず、resolver が都度導出する |
 | 文書作成時の最終文書名 | `templateSpec.DocumentName` を既定値とし、prompt override があれば上書き | `DocumentCreateService` | prompt の入力値は `TASKPANE_DOC_NAME_OVERRIDE_*` 経由で一時反映される |
@@ -42,7 +42,7 @@
 追加の取得元メモ:
 
 - Master sheet の A:F 解釈は `MasterTemplateSheetReader` に集約済み
-- CASE cache の `caption/file/key` 解釈は `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` に集約済み
+- CASE cache の `caption/file/key` 解釈は `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` に集約済み
 - 文書実行用の `caption/file/key/source` 解釈は `DocumentTemplateLookupService` が調停している
 
 ## 3. read-only API に差し替えてよい候補
@@ -54,8 +54,8 @@
 | prompt 系の新規参照 | CASE cache を直接読む実装を今後増やす余地がある | `ICaseCacheDocumentTemplateReader` | 低 | 既に `DocumentNamePromptService` が採用済みで、cache-only 仕様を表現できている |
 | 文書実行系の新規 metadata 参照 | `MasterTemplateCatalogService` 直接呼び出しを増やすと CASE cache 優先順を壊しやすい | `DocumentTemplateLookupService.TryResolveWithMasterFallback` | 低 | 既に `DocumentTemplateResolver` が採用済みで、CASE cache 優先 + master fallback を保持している |
 | Master sheet A:F の新規 read-only 参照 | 個別サービスが worksheet を独自解釈すると列意味の重複が増える | `MasterTemplateSheetReader` | 低 | 既に 3 サービスで使用中。既存責務を壊さず読取だけ共通化できる |
-| CASE cache から `caption/file/key/source` を取得する read-only 参照 | `TaskPaneSnapshotParser` を各所で再利用すると snapshot 依存が広がる | `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` または `ICaseCacheDocumentTemplateReader` | 低 | 既存の CASE cache reader に結果型がある |
-| 旧 `TryGetDocInfoFromCache` の利用拡大抑止 | 文字列 out 2本の旧 API | `DocumentTemplateLookupResult` ベース API へ寄せる | 低 | 現行 tree 上では未使用。今後の増殖を止めやすい |
+| CASE cache から `caption/file/key/source` を取得する promotion-aware 参照 | `TaskPaneSnapshotParser` を各所で再利用すると snapshot 依存が広がる | `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` または `ICaseCacheDocumentTemplateReader` | 低 | 既存の CASE cache reader に結果型がある。pure read ではない |
+| 旧 `TryEnsurePromotedCaseCacheThenGetDocInfo` の利用拡大抑止 | 文字列 out 2本の旧 API | `DocumentTemplateLookupResult` ベース API へ寄せる | 低 | 現行 tree 上では未使用。今後の増殖を止めやすい |
 
 ## 4. 差し替えを禁止または保留すべき箇所
 
@@ -79,13 +79,14 @@
 - `TaskPaneManager.ExecuteCaseAction`
   - `ActionKind=doc` のときだけ `DocumentNamePromptService.TryPrepare` を先に呼ぶ
 - `DocumentNamePromptService`
-  - `FindDocumentCaptionByKey` は `ICaseCacheDocumentTemplateReader.TryResolveFromCaseCache` だけを呼ぶ
+  - `FindDocumentCaptionByKey` は `ICaseCacheDocumentTemplateReader.TryEnsurePromotedCaseCacheThenResolve` だけを呼ぶ
 - `ICaseCacheDocumentTemplateReader`
   - interface 自体が `CASE cache だけを読み取り` と明記している
-- `DocumentTemplateLookupService.TryResolveFromCaseCache`
-  - `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` への薄い委譲
-- `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache`
+- `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve`
+  - `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` への薄い委譲
+- `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup`
   - CASE cache / Base 昇格後の snapshot から `DocumentName` と `TemplateFileName` を返す
+  - Base 昇格時に CASE cache chunk と `TASKPANE_MASTER_VERSION` を DocProperty に書き戻す
 - `DocumentNameOverrideScope`
   - prompt 入力値を一時 DocProperty に保存
 - `DocumentCreateService.ResolveDocumentName`
@@ -106,7 +107,7 @@
 - `DocumentTemplateResolver.Resolve`
   - `DocumentTemplateLookupService.TryResolveWithMasterFallback` を呼ぶ
 - `DocumentTemplateLookupService.TryResolveWithMasterFallback`
-  - 先に `TryResolveFromCaseCache`
+  - 先に `TryEnsurePromotedCaseCacheThenResolve`
   - miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey`
 - `MasterTemplateCatalogService`
   - `SYSTEM_ROOT` を基点に Master を read-only で開き、`雛形一覧` を読む
@@ -209,7 +210,7 @@
 - `DocumentTemplateResolver`
   - CASE cache stale または空のとき、master fallback しても `TemplatePath` 解決責務が resolver に留まること
 - `TaskPaneSnapshotCacheService`
-  - Base 昇格後の `TryGetDocumentTemplateLookupFromCache` が `DocumentTemplateLookupResult` を安定して返すこと
+  - Base 昇格後の `TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` が `DocumentTemplateLookupResult` を安定して返し、CASE cache / version DocProperty 更新を維持すること
 - `CaseListRegistrationService` + snapshot
   - `CASELIST_REGISTERED=1` 後に CASE cache が無効化され、再構築時に special button だけが動的反映されること
 - `MasterTemplateSheetReader`

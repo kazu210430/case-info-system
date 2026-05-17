@@ -103,7 +103,8 @@
 ### 2.6 文書名入力 lookup policy
 
 - `DocumentNamePromptService` は文書名入力ダイアログの初期値を決める補助サービスであり、文書実行可否判定や実体テンプレート解決の正本ではない。
-- `DocumentNamePromptService` は `DocumentTemplateLookupService.TryResolveFromCaseCache` を使い、CASE cache から `caption` を引けた場合だけ prompt 初期値へ反映する。
+- `DocumentNamePromptService` は `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` を使い、CASE cache から `caption` を引けた場合だけ prompt 初期値へ反映する。
+- この CASE cache lookup は promotion-aware であり、Base 埋込 snapshot を CASE cache へ昇格して `TASKPANE_SNAPSHOT_CACHE_*` と `TASKPANE_MASTER_VERSION` を DocProperty に書き戻す場合がある。cache-only は master fallback しないという意味であり、pure read を意味しない。
 - CASE cache に対象 key が存在しない場合、文書名入力側では master catalog にフォールバックしない。
 - master fallback は `DocumentTemplateResolver` が担う実行時解決責務であり、`key -> file / caption -> TemplatePath` を解決する。
 - この分離により、文書名入力 UI は現在の CASE 表示状態に従い、文書実行側は実体テンプレート解決を担う。
@@ -310,7 +311,7 @@
 
 ### 6.4 `key -> caption/file` 解決経路が複数ある
 
-- `TaskPaneSnapshotCacheService.TryGetDocInfoFromCache`
+- `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocInfo`
 - `MasterTemplateCatalogService.TryGetTemplateByKey`
 - `DocumentTemplateResolver.Resolve`
 - `DocumentNamePromptService.FindDocumentCaptionByKey`
@@ -452,8 +453,8 @@
 
 - 文書名入力 prompt:
   - `DocumentNamePromptService`
-  - `DocumentTemplateLookupService.TryResolveFromCaseCache`
-  - `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache`
+  - `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve`
+  - `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup`
 - 文書実行時 template 解決:
   - `DocumentExecutionEligibilityService`
   - `DocumentTemplateResolver`
@@ -558,6 +559,7 @@
 - `DocumentNamePromptService` の確定済み仕様は変更しない
   - CASE cache hit 時だけ caption を prompt 初期値に使う
   - CASE cache miss 時は master fallback せず空欄のまま開く
+  - CASE cache lookup 前の Base snapshot promotion と DocProperty 更新は現行仕様として維持する
 - snapshot は表示用断面であり、正本ではない
 - cache は参照補助であり、保存・生成・実行判断の正本ではない
 - 開いている CASE が後から行われた雛形登録・更新に追随しないことは現行仕様として維持する

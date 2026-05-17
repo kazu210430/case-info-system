@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-この文書は、CASE cache 参照経路に Base 埋込 snapshot からの昇格副作用が混在している現状を、コード変更前の設計メモとして固定するためのものです。
+この文書は、CASE cache 参照経路に Base 埋込 snapshot からの昇格副作用が混在している現状を、名前・docs・テスト名で誤解しないよう固定するためのものです。
 
 - 対象:
   - `ICaseCacheDocumentTemplateReader`
@@ -20,19 +20,18 @@
   - [ui-policy.md](C:\Users\kazu2\Documents\案件情報System\開発用\docs\ui-policy.md)
   - [template-metadata-inventory.md](C:\Users\kazu2\Documents\案件情報System\開発用\docs\template-metadata-inventory.md)
 
-この文書は現状整理と将来方針の固定を目的とし、実装変更は含みません。
+この文書は現状整理と将来方針の固定を目的とします。今回の整理は挙動変更ではなく、promotion-aware な現行契約の明文化です。
 
 ## 2. 現状の問題整理
 
-### 2.1 read-only と実際の副作用のズレ
+### 2.1 read-only に見える経路と実際の副作用のズレ
 
-- [ICaseCacheDocumentTemplateReader.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\ICaseCacheDocumentTemplateReader.cs:7) は「CASE cache だけを読み取り、文書テンプレート metadata を返す read-only API」と説明している。
-- [IDocumentTemplateLookupReader.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\IDocumentTemplateLookupReader.cs:7) は「CASE cache を優先しつつ、必要時のみ master catalog へフォールバックする read-only 参照口」と説明している。
-- しかし実装先の [DocumentTemplateLookupService.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs:22) は、[TaskPaneSnapshotCacheService.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:87) を経由して lookup を行う。
-- [TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:87) は、lookup 前に [PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:30) を実行する。
-- [PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:70) は CASE cache chunk と `TASKPANE_MASTER_VERSION` を DocProperty に書き戻す。
+- 現行の [ICaseCacheDocumentTemplateReader.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\ICaseCacheDocumentTemplateReader.cs:10) と [IDocumentTemplateLookupReader.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\IDocumentTemplateLookupReader.cs:10) は、CASE cache lookup が promotion-aware で pure read ではないことを明記する。
+- 実装先の [DocumentTemplateLookupService.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs:25) は、[TaskPaneSnapshotCacheService.cs](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:91) を経由して lookup を行う。
+- [TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:91) は、lookup 前に [PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:34) を実行する。
+- [PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:77) は CASE cache chunk と `TASKPANE_MASTER_VERSION` を DocProperty に書き戻す。
 
-このため、read-only と説明されている interface の利用が、実際には CASE workbook の DocProperty 更新を伴う場合があります。
+このため、CASE cache-only / CASE cache 優先という契約は fallback 範囲の話であり、pure read を意味しません。実際には CASE workbook の DocProperty 更新を伴う場合があります。
 
 ### 2.2 責務混在
 
@@ -41,12 +40,12 @@
 - `promotion`
   - Base 埋込 snapshot を CASE cache へ昇格する責務
 
-現状はこの 2 つが [TaskPaneSnapshotCacheService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:12) に同居し、そのサービスを [DocumentTemplateLookupService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs:9) が read 系 interface の実装として公開しています。
+現状はこの 2 つが [TaskPaneSnapshotCacheService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:16) に同居し、そのサービスを [DocumentTemplateLookupService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs:12) が read 系 interface の実装として公開しています。
 
 ### 2.3 類似責務の重複
 
 - 新規 CASE 初期化では [CaseTemplateSnapshotService.PromoteEmbeddedSnapshotToCaseCache](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseTemplateSnapshotService.cs:32) が Base 埋込 snapshot を CASE cache へ昇格する。
-- 表示中や lookup 時には [TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:30) が同系統の昇格を行う。
+- 表示中や lookup 時には [TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:34) が同系統の昇格を行う。
 
 Base から CASE への昇格責務は 1 箇所に集約されていません。
 
@@ -54,8 +53,8 @@ Base から CASE への昇格責務は 1 箇所に集約されていません。
 
 ### 3.1 prompt
 
-- [DocumentNamePromptService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs:8) は [ICaseCacheDocumentTemplateReader](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\ICaseCacheDocumentTemplateReader.cs:9) に依存する。
-- [FindDocumentCaptionByKey](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs:64) は [TryResolveFromCaseCache](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs:73) を呼ぶ。
+- [DocumentNamePromptService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs:9) は [ICaseCacheDocumentTemplateReader](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\ICaseCacheDocumentTemplateReader.cs:10) に依存する。
+- [FindDocumentCaptionByKey](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs:66) は [TryEnsurePromotedCaseCacheThenResolve](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentNamePromptService.cs:73) を呼ぶ。
 - その実装は前述のとおり CASE cache 昇格を含み得る。
 
 影響として確認できる事実:
@@ -105,11 +104,11 @@ Base から CASE への昇格責務は 1 箇所に集約されていません。
 
 ### 4.2 CASE cache lookup 時
 
-- [DocumentTemplateLookupService.TryResolveFromCaseCache](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs:22)
+- [DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\App\DocumentTemplateLookupService.cs:25)
 - 実体:
-  - [TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:87)
+  - [TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:91)
 - 事前呼出:
-  - [PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:96)
+  - [PromoteBaseSnapshotToCaseCacheIfNeeded](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:102)
 
 ### 4.3 TaskPane snapshot build 時
 
@@ -125,19 +124,20 @@ Base から CASE への昇格責務は 1 箇所に集約されていません。
 
 ## 5. 設計案
 
-### 5.1 A案: 最小修正
+### 5.1 今回の到達点: 最小明文化
 
 内容:
 
-- interface 名は維持する。
-- `read-only` という説明を、実装実態に合わせて修正する。
+- method 名を promotion-aware な名前へ寄せる。
+- `read-only` と誤読される説明を、実装実態に合わせて修正する。
 - `CASE cache lookup は Base 埋込 snapshot の CASE cache 昇格を伴うことがある` と明記する。
+- docs とテスト名で、文書名 prompt は CASE cache-only、文書実行は CASE cache 優先 + master fallback であることを固定する。
 
 特徴:
 
 - 実装差し替えなし
 - 呼出し順序変更なし
-- 設計上のズレは残る
+- promotion の所有者分離は将来課題として残る
 
 ### 5.2 B案: interface 分離
 
@@ -164,27 +164,26 @@ Base から CASE への昇格責務は 1 箇所に集約されていません。
 特徴:
 
 - `lookup` と `promotion` の責務境界が最も明確になる
-- [CaseTemplateSnapshotService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseTemplateSnapshotService.cs:7) と [TaskPaneSnapshotCacheService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:12) の重複責務整理にもつながる
+- [CaseTemplateSnapshotService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseTemplateSnapshotService.cs:7) と [TaskPaneSnapshotCacheService](C:\Users\kazu2\Documents\案件情報System\開発用\dev\CaseInfoSystem.ExcelAddIn\Infrastructure\TaskPaneSnapshotCacheService.cs:16) の重複責務整理にもつながる
 - 実装時の影響範囲は最も広い
 
 ## 6. 推奨方針
 
 現時点の推奨方針は次のとおりです。
 
-- 今は実装しない
-- まずこの問題を文書として固定する
+- 今回は挙動を変更しない
+- まずこの問題を名前・docs・テスト名として固定する
 - 将来の設計変更目標は C案とする
 
 根拠:
 
-- 現状の問題は単なる interface 名の違和感ではなく、read-only と説明される経路に CASE cache 昇格副作用が混在している設計上のズレである
-- prompt / document execution にも影響し得るため、low-risk な interface 差し替えとは扱わない
+- 現状の問題は単なる interface 名の違和感ではなく、read-only に見える経路に CASE cache 昇格副作用が混在している設計上のズレである
+- prompt / document execution にも影響し得るため、promotion の分離や再配線は low-risk な差し替えとは扱わない
 - C案が最も責務境界を明確にできる
 
 ただし、現時点では次の事項は未実施とする。
 
 - interface 追加
-- interface 改名
 - interface 削除
 - 実装差し替え
 - 昇格責務の再配線

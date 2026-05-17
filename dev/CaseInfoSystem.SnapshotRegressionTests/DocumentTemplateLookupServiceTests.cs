@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -184,17 +185,49 @@ namespace CaseInfoSystem.SnapshotRegressionTests
         }
 
         [Fact]
-        public void CaseCacheReader_WhenCaseCacheMissing_DoesNotFallbackToMasterCatalog()
+        public void PromotedCaseCacheReader_WhenCaseCacheMissing_DoesNotFallbackToMasterCatalog()
         {
             using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
             EnsureMasterWorkbookFileExists(scenario.MasterWorkbook.FullName);
 
             TestServices services = CreateServices(scenario.Application);
 
-            bool resolved = services.CaseCacheReader.TryResolveFromCaseCache(scenario.CaseWorkbook, "1", out DocumentTemplateLookupResult lookupResult);
+            bool resolved = services.CaseCacheReader.TryEnsurePromotedCaseCacheThenResolve(scenario.CaseWorkbook, "1", out DocumentTemplateLookupResult lookupResult);
 
             Assert.False(resolved);
             Assert.Null(lookupResult);
+        }
+
+        [Fact]
+        public void PromotedCaseCacheReader_WhenBaseSnapshotExists_PromotesCaseCacheAndUpdatesDocPropertiesBeforeResolve()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            string embeddedSnapshot = SnapshotLegacySerializer.Serialize(
+                scenario.CaseWorkbook,
+                42,
+                scenario.Values,
+                scenario.FillColors,
+                scenario.TabBackColors);
+
+            TestServices services = CreateServices(scenario.Application);
+            SetSnapshot(
+                services.ExcelInteropService,
+                scenario.CaseWorkbook,
+                "TASKPANE_BASE_SNAPSHOT_COUNT",
+                "TASKPANE_BASE_SNAPSHOT_",
+                embeddedSnapshot);
+            services.ExcelInteropService.SetDocumentProperty(scenario.CaseWorkbook, "TASKPANE_BASE_MASTER_VERSION", "42");
+
+            bool resolved = services.CaseCacheReader.TryEnsurePromotedCaseCacheThenResolve(scenario.CaseWorkbook, "1", out DocumentTemplateLookupResult lookupResult);
+
+            Assert.True(resolved);
+            Assert.NotNull(lookupResult);
+            Assert.Equal("01", lookupResult.Key);
+            Assert.Equal("委任状", lookupResult.DocumentName);
+            Assert.Equal("01_委任状.docx", lookupResult.TemplateFileName);
+            Assert.Equal(DocumentTemplateResolutionSource.SnapshotCache, lookupResult.ResolutionSource);
+            Assert.Equal(embeddedSnapshot, scenario.LoadCaseCacheSnapshot());
+            Assert.Equal("42", scenario.GetCaseProperty("TASKPANE_MASTER_VERSION"));
         }
 
         [Fact]
@@ -383,6 +416,29 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             if (!File.Exists(path))
             {
                 File.WriteAllText(path, string.Empty);
+            }
+        }
+
+        private static void SetSnapshot(
+            ExcelInteropService excelInteropService,
+            Excel.Workbook workbook,
+            string countPropertyName,
+            string partPropertyPrefix,
+            string snapshotText)
+        {
+            const int ChunkSize = 240;
+            string safeSnapshot = snapshotText ?? string.Empty;
+            int partCount = safeSnapshot.Length == 0 ? 0 : ((safeSnapshot.Length - 1) / ChunkSize) + 1;
+            excelInteropService.SetDocumentProperty(workbook, countPropertyName, partCount.ToString(CultureInfo.InvariantCulture));
+
+            for (int index = 1; index <= partCount; index++)
+            {
+                int startIndex = (index - 1) * ChunkSize;
+                int length = System.Math.Min(ChunkSize, safeSnapshot.Length - startIndex);
+                excelInteropService.SetDocumentProperty(
+                    workbook,
+                    partPropertyPrefix + index.ToString("00", CultureInfo.InvariantCulture),
+                    safeSnapshot.Substring(startIndex, length));
             }
         }
 

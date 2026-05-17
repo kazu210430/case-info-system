@@ -1,10 +1,18 @@
-本ファイルは現時点では修正対象ではなく、安定状態維持のための記録である。
+本ファイルは安定状態維持のための記録である。修正する場合は、現行契約を固定する最小追記に限定する。
 
 # 技術的負債メモ
 
 確認時点のコードでは、指定の `FolderWindowService.cs (line 80)` は `WaitForFolderWindow` の開始位置で、`Thread.Sleep` 自体は line 88 にあります。指定の `WorkbookClipboardPreservationService.cs (line 144)` は retry ループの開始位置で、`Thread.Sleep` 自体は line 156 にあります。
 
 ## 技術的負債から除外する固定契約
+
+### Document template lookup の CASE cache promotion 境界
+
+- `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` と `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` は pure read ではありません。
+- この経路では、必要に応じて Base 埋込 snapshot を CASE cache へ昇格し、CASE の `TASKPANE_SNAPSHOT_CACHE_*` と `TASKPANE_MASTER_VERSION` を DocProperty に書き戻します。
+- 文書名 prompt は CASE cache-only のままです。CASE cache miss 時に master catalog へフォールバックしません。
+- 文書実行は CASE cache 優先 + master fallback のままです。fallback は CASE cache lookup が失敗した場合だけ `DocumentTemplateResolver` 側で行います。
+- 今回の整理は名前・docs・テスト名による境界明文化であり、CASE cache promotion、DocProperty 更新、TaskPane snapshot/cache/version、UI、文書生成可否判定、master fallback の有無・順序は変更しません。
 
 ### 会計書類セット close / Excelを閉じる
 

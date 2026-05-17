@@ -115,7 +115,7 @@
 ### 4.3 `DocumentTemplateResolver` が参照する正本
 
 - まず `DocumentTemplateLookupService.TryResolveWithMasterFallback`
-  - `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache`
+  - `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup`
   - miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey`
 - その後 `DocumentTemplateResolver` が `TemplatePath` を導出
   - `WORD_TEMPLATE_DIR` 優先
@@ -133,7 +133,7 @@
 | 出力 | `DocumentTemplateSpec` または `null`。補助 API として `TemplateExists`、`IsSupportedWordTemplate` を持ち、`DocumentExecutionEligibilityService` が後段判定に使う |
 | 直接依存 | `ExcelInteropService`、`PathCompatibilityService`、`IDocumentTemplateLookupReader`、`Logger` |
 | 参照 metadata | `DocumentTemplateLookupResult.Key` / `DocumentName` / `TemplateFileName` / `ResolutionSource`、CASE DocProperty `WORD_TEMPLATE_DIR` / `SYSTEM_ROOT` |
-| 情報源 | 1) `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache`、2) miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey`、3) path 部分は resolver 自身が DocProperty から導出 |
+| 情報源 | 1) `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup`、2) miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey`、3) path 部分は resolver 自身が DocProperty から導出 |
 | lookup service 使用状況 | `AddInCompositionRoot` が `DocumentTemplateLookupService` を `IDocumentTemplateLookupReader` として注入し、現在の consumer は `DocumentExecutionEligibilityService -> DocumentTemplateResolver` |
 | CASE cache 優先の実装上の意味 | `TryResolveWithMasterFallback` は先に CASE cache-only lookup を実行し、成功したらその `DocumentName` / `TemplateFileName` をそのまま採用する。resolver 自身は global master version の新旧比較を行わないため、開いている CASE の表示中 Pane と同じ cache 系 metadata を実行側でも使う |
 | master fallback の実装上の意味 | fallback は CASE cache lookup が `false` を返した時だけ発火する。対象には cache 空、snapshot 互換性不一致による clear 後、key 不一致、`TemplateFileName` 空で lookup 不成立になったケースが含まれる |
@@ -155,14 +155,14 @@
 | 入力 | `Excel.Workbook`、文書 `key` |
 | 出力 | `DocumentTemplateLookupResult` または `false` |
 | 直接依存 | `TaskPaneSnapshotCacheService`、`MasterTemplateCatalogService` |
-| CASE cache-only 経路 | `TryResolveFromCaseCache` はそのまま `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` へ委譲する |
+| CASE cache-only 経路 | `TryEnsurePromotedCaseCacheThenResolve` は `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` へ委譲する。名前どおり promotion-aware であり、pure read ではない |
 | master fallback 経路 | `TryResolveWithMasterFallback` は CASE cache hit なら即 return し、miss 時だけ `MasterTemplateCatalogService.TryGetTemplateByKey` を呼ぶ。fallback 結果も `TemplateFileName` が空なら失敗扱いにする |
 | lookup service 使用状況 | 既に `DocumentNamePromptService` は `ICaseCacheDocumentTemplateReader` 経由、`DocumentTemplateResolver` は `IDocumentTemplateLookupReader` 経由で利用している。今回の調査範囲では、この 2 箇所が `DocumentTemplateLookupService` 経由化済みの consumer |
 | CASE cache 優先の意味 | prompt と resolver の双方が同じ CASE cache reader を共有しつつ、caller intent に応じて fallback 可否だけを切り分けられる |
 | master fallback の意味 | fallback の責務を `DocumentNamePromptService` ではなく `DocumentTemplateResolver` 側へ限定するための policy 境界 |
 | `TaskPaneSnapshotCacheService` / `MasterTemplateCatalogService` との境界 | cache の promote / clear / parse は `TaskPaneSnapshotCacheService`、master の open/read-only/cache は `MasterTemplateCatalogService`、caller 向けの fallback policy だけを `DocumentTemplateLookupService` が持つ |
 | 今後の安全な最小単位 | 既存 consumer 契約を保ったまま、このサービス内部の委譲先や projection を整理するのが最も狭い変更面 |
-| 変更リスク | `TryResolveFromCaseCache` に fallback を混ぜる、または `TryResolveWithMasterFallback` の hit/miss 条件を変えると、prompt と resolver の責務分離が崩れる |
+| 変更リスク | `TryEnsurePromotedCaseCacheThenResolve` に fallback を混ぜる、または `TryResolveWithMasterFallback` の hit/miss 条件を変えると、prompt と resolver の責務分離が崩れる |
 | 今は触らない理由 | `AddInCompositionRoot` の interface 配線、`DocumentNamePromptService` の cache-only policy、`DocumentTemplateResolver` の fallback policy がここを前提に成立しているため |
 
 補足:
@@ -176,7 +176,7 @@
   - 対象 CASE workbook
   - 押下された文書 `key`
 - 表示:
-  - `ICaseCacheDocumentTemplateReader.TryResolveFromCaseCache`
+  - `ICaseCacheDocumentTemplateReader.TryEnsurePromotedCaseCacheThenResolve`
   - 返った `DocumentTemplateLookupResult.DocumentName` を prompt 初期値に使用
 - 解決しないもの:
   - `TemplateFileName`
@@ -200,8 +200,8 @@
 | 間接的に参照成立に効く metadata | `TaskPaneSnapshotCacheService` 側では `TaskPaneDocDefinition.TemplateFileName` が空だと lookup 不成立になるため、prompt 側は `TemplateFileName` を直接使わないが、`file` 情報の有無に間接依存する |
 | 参照しない情報 | `TemplatePath`、master catalog、実体テンプレートファイル存在、実行可否 |
 | 情報源 | 第一経路は CASE `TASKPANE_SNAPSHOT_CACHE_*`。CASE cache 空または古い場合は `TaskPaneSnapshotCacheService.PromoteBaseSnapshotToCaseCacheIfNeeded` により Base `TASKPANE_BASE_*` が CASE cache へ昇格した後、その CASE cache を読む |
-| lookup service 使用状況 | `DocumentNamePromptService` 自身は `ICaseCacheDocumentTemplateReader` 経由。実体は `DocumentTemplateLookupService.TryResolveFromCaseCache` が `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` へ委譲する |
-| cache-only policy の実装上の意味 | `TryResolveFromCaseCache` が失敗した時点で空文字を返し、prompt 初期値を空欄のまま開く。`MasterTemplateCatalogService` への fallback 呼び出しは行わない |
+| lookup service 使用状況 | `DocumentNamePromptService` 自身は `ICaseCacheDocumentTemplateReader` 経由。実体は `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` が `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` へ委譲する |
+| cache-only policy の実装上の意味 | `TryEnsurePromotedCaseCacheThenResolve` が失敗した時点で空文字を返し、prompt 初期値を空欄のまま開く。`MasterTemplateCatalogService` への fallback 呼び出しは行わない。ただし lookup 前に Base snapshot promotion と CASE DocProperty 更新が起きうる |
 | master fallback を追加しない理由 | `docs/flows.md` が、文書名入力 UI は表示中 Pane と整合する CASE cache 表示状態に従い、master fallback は `DocumentTemplateResolver` 側の実行時解決責務と定義しているため |
 | `DocumentTemplateResolver` との違い | `DocumentNamePromptService` は prompt 初期値だけを扱う補助 UI。`DocumentTemplateResolver` は `IDocumentTemplateLookupReader` 経由で CASE cache 優先・master fallback ありの metadata 解決を行い、さらに `TemplatePath` を導出する実行側サービス |
 | `TaskPaneSnapshotCacheService` との関係 | prompt 側の cache-only lookup は最終的に `TaskPaneSnapshotCacheService` が返す `DocumentTemplateLookupResult` に依存する。Base promote、snapshot compatibility 判定、CASE cache clear の影響を受ける |
@@ -270,11 +270,11 @@ helper が持たない責務:
 | サービス名 | `TaskPaneSnapshotCacheService` |
 | 現在の責務 | helper で CASE/Base chunk を読み書きしつつ、CASE cache lookup、on-demand Base -> CASE promote、compatibility clear、key 正規化、`DocumentTemplateLookupResult` 生成を担う |
 | 入力 | `Excel.Workbook`、文書 `key` |
-| 出力 | `DocumentTemplateLookupResult` または `false`。補助 API として `TryGetDocInfoFromCache`、`ClearCaseSnapshotCacheChunks` を持つ |
+| 出力 | `DocumentTemplateLookupResult` または `false`。補助 API として `TryEnsurePromotedCaseCacheThenGetDocInfo`、`ClearCaseSnapshotCacheChunks` を持つ |
 | 直接依存 | `ExcelInteropService`、`Logger` |
 | 読取対象 | CASE `TASKPANE_SNAPSHOT_CACHE_COUNT` / `TASKPANE_SNAPSHOT_CACHE_XX`、Base `TASKPANE_BASE_SNAPSHOT_COUNT` / `TASKPANE_BASE_SNAPSHOT_XX`、CASE `TASKPANE_MASTER_VERSION`、`TASKPANE_BASE_MASTER_VERSION` |
 | write path | `PromoteBaseSnapshotToCaseCacheIfNeeded` が CASE cache chunk と CASE `TASKPANE_MASTER_VERSION` を更新する。`ClearSnapshotParts` は count を `0` にし、既存 chunk prop へ空文字を書き戻す。`ClearCaseSnapshotCacheChunks` は `TASKPANE_SNAPSHOT_CACHE_XX` だけを Delete する |
-| read path | `DocumentTemplateLookupService.TryResolveFromCaseCache` から呼ばれ、`DocumentNamePromptService` と `DocumentTemplateResolver` の CASE cache lookup 入口になる |
+| read path | `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` から呼ばれ、`DocumentNamePromptService` と `DocumentTemplateResolver` の CASE cache lookup 入口になる。promotion-aware なので、この行でいう read path は pure read を意味しない |
 | promote 条件 | `PromoteBaseSnapshotToCaseCacheIfNeeded` は、1) Base snapshot が存在し互換、かつ 2) CASE cache が空、または 3) `TASKPANE_BASE_MASTER_VERSION > TASKPANE_MASTER_VERSION`、または 4) CASE 側 version 未設定かつ Base 側 version が正値、のときに Base snapshot を CASE cache へ昇格する |
 | compatibility / clear 条件 | CASE cache snapshot text が非互換なら CASE cache count を `0` にし chunk を空文字化。Base snapshot text が非互換なら Base snapshot count を `0` にし chunk を空文字化。lookup 対象 CASE cache が非互換なら lookup 前に CASE cache を clear して `false` を返す |
 | しないこと | latest master version の読取や global stale 判定はしない。`TemplateFileName` が空の `DOC` 行を成功扱いしない |
@@ -387,7 +387,7 @@ helper が持たない責務:
 
 `TaskPaneSnapshotBuilderService` は `key` と `caption` があれば `DOC` 行を生成します。`TemplateFileName` が空でも表示上の文書ボタンは作られます。一方で:
 
-- `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` は `TemplateFileName` 空を不成立扱いする
+- `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` は `TemplateFileName` 空を不成立扱いする
 - `MasterTemplateCatalogService` も `key` または `TemplateFileName` が空の行を無視する
 
 したがって、表示できるが実行解決できない行があり得ます。これは現状の事実であり、read-only adapter 化でも安易に均してはいけません。

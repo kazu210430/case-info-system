@@ -6,6 +6,9 @@ using Excel = Microsoft.Office.Interop.Excel;
 namespace CaseInfoSystem.ExcelAddIn.App
 {
     /// <summary>
+    /// prompt 用の CASE cache-only lookup と、文書実行用の master fallback lookup を分ける。
+    /// CASE cache leg は Base snapshot promotion を含み得るため pure read ではない。
+    /// </summary>
     internal sealed class DocumentTemplateLookupService : ICaseCacheDocumentTemplateReader, IDocumentTemplateLookupReader
     {
         private readonly TaskPaneSnapshotCacheService _taskPaneSnapshotCacheService;
@@ -19,16 +22,16 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _masterTemplateCatalogReader = masterTemplateCatalogReader ?? throw new ArgumentNullException(nameof(masterTemplateCatalogReader));
         }
 
-        public bool TryResolveFromCaseCache(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
+        public bool TryEnsurePromotedCaseCacheThenResolve(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
         {
-            return _taskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache(workbook, key, out result);
+            return _taskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup(workbook, key, out result);
         }
 
         public bool TryResolveWithMasterFallback(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
         {
             result = null;
 
-            if (TryResolveFromCaseCache(workbook, key, out result))
+            if (TryEnsurePromotedCaseCacheThenResolve(workbook, key, out result))
             {
                 return true;
             }

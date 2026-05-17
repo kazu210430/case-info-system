@@ -10,6 +10,9 @@ using Excel = Microsoft.Office.Interop.Excel;
 namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 {
     /// <summary>
+    /// TaskPane snapshot cache の storage と、promotion-aware な CASE cache lookup を扱う。
+    /// lookup 名でも Base snapshot promotion と DocProperty 更新を隠さない。
+    /// </summary>
     internal sealed class TaskPaneSnapshotCacheService
     {
         private const string TaskPaneCacheCountProp = "TASKPANE_SNAPSHOT_CACHE_COUNT";
@@ -85,7 +88,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return true;
         }
 
-        internal bool TryGetDocumentTemplateLookupFromCache(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
+        internal bool TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup(Excel.Workbook workbook, string key, out DocumentTemplateLookupResult result)
         {
             result = null;
 
@@ -94,6 +97,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 return false;
             }
 
+            // Current contract: lookup first ensures the CASE cache can be promoted from the embedded Base snapshot.
+            // This may write CASE snapshot/version DocProperties before reading the cache.
             PromoteBaseSnapshotToCaseCacheIfNeeded(workbook);
             string normalizedKey = NormalizeDocButtonKey(key);
             if (normalizedKey.Length == 0)
@@ -145,12 +150,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             return false;
         }
 
-        internal bool TryGetDocInfoFromCache(Excel.Workbook workbook, string key, out string templateFileName, out string documentName)
+        internal bool TryEnsurePromotedCaseCacheThenGetDocInfo(Excel.Workbook workbook, string key, out string templateFileName, out string documentName)
         {
             templateFileName = string.Empty;
             documentName = string.Empty;
 
-            if (!TryGetDocumentTemplateLookupFromCache(workbook, key, out DocumentTemplateLookupResult result))
+            if (!TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup(workbook, key, out DocumentTemplateLookupResult result))
             {
                 return false;
             }

@@ -22,18 +22,19 @@
 - `DocumentNamePromptService` は CASE cache hit 時だけ caption を prompt 初期値に使い、cache miss 時に master fallback しない。
 - 文書実行は `DocumentTemplateResolver -> DocumentTemplateLookupService.TryResolveWithMasterFallback` を通り、CASE cache 優先、master fallback ありである。
 - Base snapshot は新規 CASE 初期配布と TaskPane 表示再構築の補助であり、prompt lookup や文書実行 lookup の直接正本ではない。
+- 現行の CASE cache lookup は pure read ではない。`TryEnsurePromotedCaseCacheThenResolve` / `TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` は、必要時に Base snapshot promotion と CASE DocProperty 更新を行う。
 
 ## 3. 既存の読み取り口の分類
 
 | 読み取り口 | 現在の主な呼び出し元 | 一次参照元 | fallback | 副作用 | 備考 |
 | --- | --- | --- | --- | --- | --- |
-| prompt 用 lookup | `DocumentNamePromptService` | `TaskPaneSnapshotCacheService.TryGetDocumentTemplateLookupFromCache` | 禁止 | Base snapshot promote が起きうる | `caption` だけを prompt 初期値に使う |
-| 文書実行用 lookup | `DocumentTemplateResolver` | CASE cache | `MasterTemplateCatalogService` へ fallback あり | なし | `TemplatePath` 解決は resolver の責務 |
+| prompt 用 lookup | `DocumentNamePromptService` | `TaskPaneSnapshotCacheService.TryEnsurePromotedCaseCacheThenGetDocumentTemplateLookup` | 禁止 | Base snapshot promote が起きうる | `caption` だけを prompt 初期値に使う |
+| 文書実行用 lookup | `DocumentTemplateResolver` | CASE cache | `MasterTemplateCatalogService` へ fallback あり | CASE cache leg で Base snapshot promote が起きうる | `TemplatePath` 解決は resolver の責務 |
 | TaskPane 表示用 snapshot | `TaskPaneManager` / `TaskPaneSnapshotBuilderService` | CASE cache | Base snapshot, さらに MasterList rebuild | CASE cache 更新あり | 表示用 read model を返すが read-only ではない |
 | CASE cache 参照 | `DocumentTemplateLookupService`, `TaskPaneSnapshotBuilderService` | `TASKPANE_SNAPSHOT_CACHE_*` | なし | format 非互換時 clear, promote あり | `TaskPaneSnapshotCacheService` が入口 |
 | Base snapshot 参照 | `CaseTemplateSnapshotService`, `TaskPaneSnapshotBuilderService`, `TaskPaneSnapshotCacheService` | `TASKPANE_BASE_*` | CASE cache miss 時の補助 | CASE cache へ copy あり | 新規 CASE 初期配布と stale 時 fallback 用 |
 | master fallback ありの参照 | `DocumentTemplateResolver`, `TaskPaneSnapshotBuilderService` | `MasterTemplateCatalogService` または Master workbook/package property | あり | snapshot rebuild 時は CASE cache 更新あり | 実行系と表示系で用途が異なる |
-| master fallback 禁止の参照 | `DocumentNamePromptService` | CASE cache のみ | 禁止 | なし | prompt の誤補完防止が優先 |
+| master fallback 禁止の参照 | `DocumentNamePromptService` | CASE cache のみ | 禁止 | Base snapshot promote が起きうる | prompt の誤補完防止が優先 |
 
 ## 4. API 候補
 
@@ -41,8 +42,8 @@
 
 | API候補 | 主目的 | 入力 | 戻り値 | 参照元 | fallback可否 | 利用してよいサービス | 利用禁止の場面 | 備考 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ICaseCacheDocumentTemplateReader` | CASE cache だけから `key -> caption/file` を読む | `Workbook`, `key` | `DocumentTemplateLookupResult` | `TaskPaneSnapshotCacheService` | 不可 | `DocumentNamePromptService` | `DocumentTemplateResolver`, 保存・生成・実行判断 | prompt 用 facade 候補。cache miss は空で返す |
-| `IDocumentTemplateLookupReader` | 文書実行用の metadata lookup を読む | `Workbook`, `key`, `LookupIntent` | `DocumentTemplateLookupResult` | CASE cache, 必要時 `MasterTemplateCatalogService` | intent 次第 | `DocumentTemplateResolver` | `DocumentNamePromptService` からの直接利用 | `LookupIntent.ExecutionAllowMasterFallback` のような明示が必要 |
+| `ICaseCacheDocumentTemplateReader` | CASE cache-only で `key -> caption/file` を解決する | `Workbook`, `key` | `DocumentTemplateLookupResult` | `TaskPaneSnapshotCacheService` | 不可 | `DocumentNamePromptService` | `DocumentTemplateResolver`, 保存・生成・実行判断 | prompt 用 facade 候補。cache miss は空で返す。現行実装は promotion-aware で pure read ではない |
+| `IDocumentTemplateLookupReader` | 文書実行用の metadata lookup を解決する | `Workbook`, `key`, `LookupIntent` | `DocumentTemplateLookupResult` | CASE cache, 必要時 `MasterTemplateCatalogService` | intent 次第 | `DocumentTemplateResolver` | `DocumentNamePromptService` からの直接利用 | `LookupIntent.ExecutionAllowMasterFallback` のような明示が必要。CASE cache leg は promotion-aware |
 | `IMasterTemplateCatalogReader` | Kernel `雛形一覧` の read-only 参照を閉じ込める | `Workbook`, `key` または list 要求 | `MasterTemplateRecord` / list | `MasterTemplateCatalogService` | 不可 | `IDocumentTemplateLookupReader`, snapshot rebuild 系 | prompt UI の直接利用 | `SYSTEM_ROOT` 解決と master workbook read-only open を内包 |
 | `ICaseSnapshotStorageReader` | CASE / Base の chunk storage を読み分ける | `Workbook`, `SnapshotStorageKind` | `SnapshotStorageReadResult` | DocProperty `TASKPANE_SNAPSHOT_CACHE_*`, `TASKPANE_BASE_*` | 不可 | `TaskPaneSnapshotCacheService`, `CaseTemplateSnapshotService`, 将来の snapshot reader | 実行判断、prompt caption 決定の正本扱い | raw snapshot text, count, version, compatibility を返す低レベル reader |
 | `ITaskPaneSnapshotReader` | 表示用 `TaskPaneSnapshot` を読む | `Workbook`, `SnapshotReadIntent` | `TaskPaneSnapshot` または `TaskPaneBuildResult` 相当 | CASE cache, Base snapshot, 必要時 MasterList | 読み取り intent 次第 | `TaskPaneManager` 系 | 文書実行 lookup, prompt lookup | public API 化は後段。現行 builder は CASE cache 更新を伴うため read-only 化前提の整理が必要 |

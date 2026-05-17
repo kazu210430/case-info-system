@@ -86,13 +86,13 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 
 1. `TaskPaneActionDispatcher` が CASE pane の選択ボタンから `actionKind` と文書キーを受け取ります。
 2. `TaskPaneBusinessActionLauncher` が `doc` 実行前に `DocumentNamePromptService.TryPrepare` を呼び、文書名入力ダイアログの初期値を準備します。
-3. `DocumentNamePromptService` は `DocumentTemplateLookupService.TryResolveFromCaseCache` を通して CASE cache だけを参照し、`caption` を prompt 初期値に使います。
+3. `DocumentNamePromptService` は `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` を通して CASE cache だけを参照し、`caption` を prompt 初期値に使います。この lookup は pure read ではなく、必要時に Base snapshot を CASE cache へ昇格して DocProperty を更新します。
 4. CASE cache に対象 key が無い場合、文書名入力側では master catalog へフォールバックせず、空欄のまま prompt を開きます。
 5. prompt で確定した値は `DocumentNameOverrideScope` により一時 DocProperty として保持されます。
 6. `TaskPaneBusinessActionLauncher` が `DocumentCommandService` へ文書キーを渡します。
 7. `DocumentExecutionModeService` が `DocumentExecutionMode.txt` を読み込みます。
 8. `DocumentExecutionEligibilityService` が登録済みテンプレートを前提に `DocumentTemplateResolver` で `templateSpec` を解決し、テンプレート種別、マクロ有無、出力先、CASE コンテキストを確認します。
-9. `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を使い、まず CASE cache を参照し、解決できない場合だけ CASE workbook から解決した `SYSTEM_ROOT` 文脈の `MasterTemplateCatalogService` master catalog にフォールバックします。
+9. `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を使い、まず promotion-aware な CASE cache lookup を行い、解決できない場合だけ CASE workbook から解決した `SYSTEM_ROOT` 文脈の `MasterTemplateCatalogService` master catalog にフォールバックします。
 10. `DocumentCommandService` は runtime の allowlist / review block を行わず、そのまま `DocumentCreateService` に進みます。
 11. `DocumentCreateService` が `templateSpec.DocumentName` と一時 override を使って文書名を解決し、`DocumentOutputService` が出力先を解決します。
 12. `MergeDataBuilder` が CASE データから差し込み用データを構築します。
@@ -105,6 +105,7 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 補足:
 
 - `DocumentNamePromptService` が使う snapshot / CASE cache は表示状態に合わせた補助情報であり、文書生成の正本ではありません。
+- `DocumentNamePromptService` の lookup は master fallback しませんが、CASE cache promotion と CASE DocProperty 更新を含みうる現行仕様です。
 - 保存・生成・実行判断は、`DocumentExecutionEligibilityService` と `DocumentTemplateResolver` が正本側の確認を行う前提です。
 
 ### 現在の安全モデル
@@ -579,10 +580,11 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 
 - `DocumentNamePromptService` は文書名入力 UI 用の補助情報だけを扱い、CASE cache から `caption` を引けた場合にだけ prompt 初期値へ反映します。
 - `DocumentNamePromptService` は実行可否判定や実体テンプレートファイル解決の正本ではありません。
-- `DocumentNamePromptService` は CASE cache miss 時に master fallback しません。文書名入力 UI は、表示中 Pane と整合する CASE cache 表示状態に従います。
-- `DocumentTemplateResolver` は、まず `TaskPaneSnapshotCacheService` を使って CASE cache から文書キーに対応する定義を解決します。
+- `DocumentNamePromptService` は CASE cache miss 時に master fallback しません。文書名入力 UI は、表示中 Pane と整合する CASE cache 表示状態に従います。ただしこの CASE cache 参照は pure read ではなく、Base snapshot promotion と CASE DocProperty 更新を含みうる現行仕様です。
+- `DocumentTemplateResolver` は、まず `TaskPaneSnapshotCacheService` を使って promotion-aware に CASE cache から文書キーに対応する定義を解決します。
 - CASE cache に解決対象がない場合だけ、対象 CASE workbook から解決した `SYSTEM_ROOT` 文脈の `MasterTemplateCatalogService` master catalog にフォールバックします。
 - master fallback は `DocumentTemplateResolver` 側の実行時解決責務として扱います。
+- promotion は snapshot/cache/version 整合のための副作用であり、文書名 prompt の cache-only 契約、文書実行の CASE cache 優先 + master fallback 契約、文書生成可否判定を変えるものではありません。
 - そのため、開いている CASE では表示中 Pane と整合する CASE cache を使い続けてよく、master version だけを見ると stale に見える場合でも直ちに問題扱いしません。
 - 文書名入力 UI と文書実行は責務を分離し、前者は現在の CASE 表示状態、後者は実行可能なテンプレート解決を担います。
 - 文書ボタン実行も、表示中 Pane と一致する cache を優先してよい仕様です。

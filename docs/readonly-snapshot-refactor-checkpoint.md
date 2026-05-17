@@ -30,7 +30,7 @@
 - `MasterTemplateCatalogService` は `IMasterTemplateSheetReader` 経由で Master `雛形一覧` を read-only に読む構成で固定する。
 - `TaskPaneSnapshotBuilderService` は `IMasterTemplateSheetReader` 経由で Master sheet 読取を行い、`CASE cache -> Base snapshot -> Master rebuild` の表示用 snapshot 解決順を維持する。
 - `DocumentTemplateLookupService` は prompt 用 cache-only lookup と resolver 用 master fallback lookup の調停点として扱う。
-- `DocumentNamePromptService` は CASE cache から `DocumentName` を引けた場合だけ prompt 初期値に使い、master fallback しない cache-only policy で固定する。
+- `DocumentNamePromptService` は CASE cache から `DocumentName` を引けた場合だけ prompt 初期値に使い、master fallback しない cache-only policy で固定する。この lookup は promotion-aware であり、pure read ではない。
 - `DocumentTemplateResolver` は `DocumentTemplateLookupService.TryResolveWithMasterFallback` を通じて CASE cache 優先 + master fallback で解決し、`TemplatePath` 導出責務を持つ構成で固定する。
 - metadata read path は、正本を Master `雛形一覧`、派生 cache を Base snapshot / CASE cache、表示用断面を TaskPane snapshot として区分する。
 - `TaskPaneSnapshotCacheService` には lookup 時 promote、compatibility clear、CASE cache lookup の責務が残る。
@@ -44,12 +44,13 @@
 - key -> metadata lookup の入口:
   - `DocumentTemplateLookupService` が `TaskPaneSnapshotCacheService` と `MasterTemplateCatalogService` を束ねる。
 - prompt 用 lookup:
-  - `DocumentNamePromptService` -> `ICaseCacheDocumentTemplateReader` -> `DocumentTemplateLookupService.TryResolveFromCaseCache`
+  - `DocumentNamePromptService` -> `ICaseCacheDocumentTemplateReader` -> `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve`
 - resolver 用 lookup:
   - `DocumentTemplateResolver` -> `IDocumentTemplateLookupReader` -> `DocumentTemplateLookupService.TryResolveWithMasterFallback`
 - CASE cache / Base snapshot の位置づけ:
   - CASE cache は表示中 CASE と整合する派生 cache。
   - Base snapshot は新規 CASE 初期状態の配布用 cache。
+  - lookup 時 promotion では、Base snapshot を CASE cache へ昇格し、CASE DocProperty を更新する場合がある。
   - どちらも正本ではない。
 - read helper の責務:
   - `TaskPaneSnapshotChunkReadHelper` は `COUNT` と `XX` chunk を読んで raw snapshot text を連結する。

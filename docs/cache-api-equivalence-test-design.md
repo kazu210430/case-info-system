@@ -29,9 +29,9 @@
 
 ### 3.1 prompt 用 lookup
 
-1. `DocumentNamePromptService` が `DocumentTemplateLookupService.TryResolveFromCaseCache` を呼ぶ。
+1. `DocumentNamePromptService` が `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` を呼ぶ。
 2. `TaskPaneSnapshotCacheService` が CASE cache を参照する。
-3. CASE cache が空の場合でも、互換な Base snapshot があれば CASE cache へ昇格してから参照する。
+3. CASE cache が空の場合でも、互換な Base snapshot があれば CASE cache へ昇格してから参照する。この昇格は CASE cache chunk と `TASKPANE_MASTER_VERSION` の DocProperty 更新を伴う。
 4. `caption` を取得できた場合だけ prompt 初期値に使う。
 5. CASE cache / 昇格後 CASE cache で解決できない場合、master fallback は行わない。
 
@@ -39,7 +39,7 @@
 
 1. `DocumentExecutionEligibilityService` が `DocumentTemplateResolver.Resolve` を呼ぶ。
 2. `DocumentTemplateResolver` が `DocumentTemplateLookupService.TryResolveWithMasterFallback` を呼ぶ。
-3. 先に CASE cache を参照する。
+3. 先に promotion-aware な CASE cache を参照する。
 4. CASE cache miss 時だけ `MasterTemplateCatalogService` に fallback する。
 5. 解決した `TemplateFileName` を使って、`DocumentTemplateResolver` が別責務として `TemplatePath` を導出する。
 
@@ -77,9 +77,9 @@
 
 | No | 観点 | 既存経路 | 新API候補 | 入力条件 | 期待値 | fallback | 確認対象 | 備考 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 01 | prompt: CASE cache hit | `DocumentNamePromptService -> DocumentTemplateLookupService.TryResolveFromCaseCache` | `ICaseCacheDocumentTemplateReader` | CASE cache に `key=01` の `caption/file` がある | prompt 初期値に `caption` を使う | 禁止 | `initialDocumentName`、解決元 | prompt 契約は `caption` 中心 |
+| 01 | prompt: CASE cache hit | `DocumentNamePromptService -> DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve` | `ICaseCacheDocumentTemplateReader` | CASE cache に `key=01` の `caption/file` がある | prompt 初期値に `caption` を使う | 禁止 | `initialDocumentName`、解決元 | prompt 契約は `caption` 中心 |
 | 02 | prompt: CASE cache miss | 同上 | 同上 | CASE cache なし、master には該当 key あり | prompt 初期値は空のまま | 禁止 | 空文字、master 未参照 | 文書実行 lookup と同じ期待値にしない |
-| 03 | prompt: Base snapshot 初期配布経由 | 同上 | `ICaseCacheDocumentTemplateReader` + `ICaseSnapshotStorageReader` | CASE cache 空、互換な Base snapshot あり | Base snapshot が CASE cache に昇格した後、prompt 初期値に `caption` を使う | 禁止 | CASE cache 昇格後の lookup 結果 | Base を直接正本扱いしない |
+| 03 | prompt: Base snapshot 初期配布経由 | 同上 | `ICaseCacheDocumentTemplateReader` + `ICaseSnapshotStorageReader` | CASE cache 空、互換な Base snapshot あり | Base snapshot が CASE cache に昇格した後、prompt 初期値に `caption` を使う | 禁止 | CASE cache 昇格後の lookup 結果、CASE DocProperty 更新 | Base を直接正本扱いしない |
 | 04 | prompt: cache-only guard | `DocumentNamePromptService` | `ICaseCacheDocumentTemplateReader` | CASE cache miss、master hit | master fallback しない | 禁止 | 呼出経路、解決元 | テスト名に `CacheOnly` を明示 |
 | 05 | 実行: CASE cache hit | `DocumentTemplateResolver -> TryResolveWithMasterFallback` | `IDocumentTemplateLookupReader` | CASE cache に `key/caption/file` あり | CASE cache を優先して同じ `key/caption/file` を返す | 許可だが未使用 | `DocumentTemplateLookupResult`、`ResolutionSource` | master に同 key があっても CASE cache 優先 |
 | 06 | 実行: CASE cache miss + master fallback | 同上 | 同上 | CASE cache miss、master hit | master fallback で同じ `key/caption/file` と template record を返す | 許可 | `DocumentTemplateLookupResult`、`MasterTemplateRecord` | `TemplatePath` は別テストで確認 |

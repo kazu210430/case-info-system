@@ -11,11 +11,12 @@
   - consumer 側は `DocumentTemplateResolver` から `DocumentTemplateLookupService` 直接依存を外し、`IDocumentTemplateLookupReader` 経由へ差し替えた。
 - `DocumentNamePromptService` 周り
   - 現行 `main` では `DocumentNamePromptService` は `ICaseCacheDocumentTemplateReader` に依存している。
-  - prompt 初期値は `DocumentTemplateLookupService.TryResolveFromCaseCache(...)` 経由の CASE cache-only lookup で取得する。
+  - prompt 初期値は `DocumentTemplateLookupService.TryEnsurePromotedCaseCacheThenResolve(...)` 経由の CASE cache-only lookup で取得する。
   - CASE cache miss 時に master catalog へ fallback しない契約は維持されている。
 - `DocumentTemplateLookupService` 周り
   - 現行 `main` では `DocumentTemplateLookupService` が `ICaseCacheDocumentTemplateReader` と `IDocumentTemplateLookupReader` の両方を実装する。
-  - `TryResolveFromCaseCache(...)` は CASE cache-only、`TryResolveWithMasterFallback(...)` は CASE cache 優先 + master fallback の実行側 lookup として分かれている。
+  - `TryEnsurePromotedCaseCacheThenResolve(...)` は CASE cache-only、`TryResolveWithMasterFallback(...)` は CASE cache 優先 + master fallback の実行側 lookup として分かれている。
+  - どちらの CASE cache leg も promotion-aware であり、Base snapshot promotion と CASE DocProperty 更新を伴う場合がある。ここでの read-only API adoption は consumer 依存分離の意味であり、pure read 化完了を意味しない。
 - `TaskPaneManager` 周り
   - `91d0777` で `TaskPaneSnapshotBuilderService` に `ICaseTaskPaneSnapshotReader` を追加した。
   - consumer 側は `TaskPaneManager` から `TaskPaneSnapshotBuilderService` 直接依存を外し、`ICaseTaskPaneSnapshotReader` 経由へ差し替えた。
@@ -49,6 +50,7 @@
 
 - prompt は cache-only とし、master fallback を入れない。
 - 文書実行は CASE cache 優先 + master fallback とする。
+- CASE cache lookup は promotion-aware であり、必要時の CASE cache promotion / DocProperty 更新を現行仕様として扱う。
 - `TemplatePath` は resolver 責務とする。
 - snapshot は正本ではない。
 - read-only API は参照経路の整理のみを目的とする。

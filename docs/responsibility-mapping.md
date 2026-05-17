@@ -9,6 +9,7 @@
   - `docs/architecture.md`
   - `docs/flows.md`
   - `docs/ui-policy.md`
+  - `docs/current-state-review.md`
   - `docs/taskpane-architecture.md`
   - `docs/current-flow-source-of-truth.md`
   - `docs/case-workbook-lifecycle-current-state.md`
@@ -184,7 +185,7 @@
 | Focus Area | Current mixed owners | 何が混在しているか | future task で凍結すべきもの |
 | --- | --- | --- | --- |
 | `TaskPaneManager` | `TaskPaneManager`、`TaskPaneManagerRuntimeGraphFactory`、`TaskPaneHostRegistry`、`TaskPaneHostFlowService`、`TaskPaneDisplayCoordinator`、`TaskPaneActionDispatcher` | facade entry surface、shared host state owner、manager attach surface の外にある registration orchestration、role 別 render、CASE post-action display 再入、visible pane bridge | `_hostsByWindowKey` owner、`CreateTaskPane/RemoveTaskPane` 境界、ready-show / protection / retry 本線 |
-| `ThisAddIn` | `ThisAddIn`、`ApplicationEventSubscriptionService`、`TaskPaneRefreshOrchestrationService`、`KernelWorkbookService` | VSTO lifecycle、event handler、HOME form instance、TaskPane display entry、`CustomTaskPane` create/remove adapter、automation public surface、suppression / protection predicate bridge | startup/shutdown 順序、event 順序、`WorkbookOpen -> WorkbookActivate -> WindowActivate` 前提、`ScreenUpdating` restore |
+| `ThisAddIn` | `ThisAddIn`、`VstoEventAdapter`、`ApplicationEventSubscriptionService`、`HomeTransitionAdapter`、`KernelHomeFormHost`、`TaskPaneEntryAdapter`、`TaskPaneRefreshOrchestrationService`、`KernelWorkbookService` | VSTO lifecycle、event hook / handler adapter、HOME form host、TaskPane display entry、`CustomTaskPane` create/remove adapter、automation public surface、suppression / protection predicate bridge | startup/shutdown 順序、event 順序、`WorkbookOpen -> WorkbookActivate -> WindowActivate` 前提、`ScreenUpdating` restore |
 | Workbook lifecycle 系 | `KernelWorkbookCloseService`、`CaseWorkbookLifecycleService`、`PostCloseFollowUpScheduler`、各 owner service の finally | HOME close fail-closed handshake、dirty prompt、managed close、post-close quit、temporary COM release、CASE HOME 表示補正 | close 後再参照禁止、`Quit` 成功後 restore しない、`ExcelApplicationStateScope` を managed close / quit に持ち込まない |
 | CASE create / open | `KernelCaseCreationService`、`CaseWorkbookOpenStrategy`、`KernelCasePresentationService`、`WorkbookWindowVisibilityService`、`ExcelWindowRecoveryService` | create plan、hidden session route、save 前 window 正規化、wait UI、visibility recovery、ready-show handoff、initial cursor、final foreground | hidden create sessionを一般化しない、interactive handoff 前に close し切れない限り表示へ昇格しない |
 | publication / template sync | `KernelTemplateSyncService`、`PublicationExecutor`、`KernelTemplateSyncPreflightService`、`MasterTemplateCatalogService` | preflight orchestration、application state scope、sheet protection restore、master list write、version bump、Kernel save、Base snapshot sync、invalidate | `WorkbookContext` / `SYSTEM_ROOT` 文脈、`Kernel save` commit boundary、base sync failure 時の warning semantics |

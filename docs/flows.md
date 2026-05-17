@@ -425,12 +425,12 @@ white Excel prevention / recovery の current-state、`targetWorkbookStillOpen` 
 
 ## Add-in startup / execution boundary
 
-`ThisAddIn_Startup(...)` は VSTO Startup entry と composition root 呼び出し、Application event wiring を保持し、hook 後の startup HOME decision / startup refresh handoff / managed-close startup guard は `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()` を経由します。
+`ThisAddIn_Startup(...)` は VSTO Startup entry と composition root 呼び出し、Application event hook の呼び出し位置を保持します。実際の Excel event subscription / handler 本体は `VstoEventAdapter` と `ApplicationEventSubscriptionService` 側へ寄り、hook 後の startup HOME decision / startup refresh handoff / managed-close startup guard は `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()` を経由します。
 
 - `AddInStartupBoundaryCoordinator` は startup guard facts、empty startup quit decision、`DisplayAlerts` quit bridge を扱います。VSTO event ownership、Application event subscription ownership、CustomTaskPane create/remove、hidden Excel lifecycle、workbook close、COM release の owner ではありません。
 - `AddInExecutionBoundaryCoordinator` は document-action の `ScreenUpdating` execution bridge と TaskPane refresh suppression count の entry / exit を扱います。`ScreenUpdating` を変更した場合は coordinator 内で復元します。
 - `AddInRuntimeExecutionDiagnosticsService` は runtime diagnostics の detail building と trace を扱います。
-- `ThisAddIn` 側には VSTO Startup / Shutdown 入口、composition root 呼び出し、Application event handler 入口、CustomTaskPane create / remove、shutdown cleanup 呼び出しを残します。
+- `ThisAddIn` 側には VSTO Startup / Shutdown 入口、composition root 呼び出し、Application event hook / unhook の呼び出し位置、adapter delegate surface、CustomTaskPane create / remove adapter、shutdown cleanup 呼び出しを残します。
 
 ## TaskPane 更新
 

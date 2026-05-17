@@ -13,12 +13,14 @@
   - `docs/taskpane-refresh-policy.md`
   - `docs/workbook-window-activation-notes.md`
   - `docs/thisaddin-boundary-inventory.md`
+  - `docs/current-state-review.md`
   - `docs/*current-state*.md`
   - `docs/*responsibility*.md`
 
 ## 読み方
 
 - source-of-truth は「現行 `main` の実コード順序と、それを固定済みの current-state / responsibility docs」です。
+- 行数、class size、`現行 main` hash、巨大クラス評価などの current-state 事実は固定仕様ではなく確認時点のスナップショットです。レビュー時は `docs/current-state-review.md` に沿って実装から再確認します。
 - `WorkbookOpen` と window-safe 境界を混同しません。
 - `WorkbookContext` と `SYSTEM_ROOT` が明示されている経路では、その文脈を唯一の入口として扱います。
 - hidden session は一般解ではなく、owner と cleanup が閉じた例外だけを認めます。
@@ -48,12 +50,13 @@
 
 1. `InitializeStartupDiagnostics()` が logger と起動 trace を初期化する。
 2. `CreateStartupCompositionRoot() -> Compose() -> ApplyCompositionRoot()` で service 群を組み立てる。
-3. `InitializeApplicationEventSubscriptionService()` が Excel event 購読対象を構成する。
-4. `HookApplicationEvents()` が `WorkbookOpen`、`WorkbookActivate`、`WorkbookBeforeSave`、`WorkbookBeforeClose`、`WindowActivate`、`SheetActivate`、`SheetSelectionChange`、`SheetChange`、`AfterCalculate` を購読する。
-5. `TryShowKernelHomeFormOnStartup()` が `KernelWorkbookService.ShouldShowHomeOnStartup()` を通して startup context を判定する。
-6. `shouldShow == true` のときだけ HOME binding をクリアし、`ShowKernelHomePlaceholder()` へ進む。
-7. startup の最後に `RefreshTaskPane("Startup", null, null)` を呼ぶ。
-8. shutdown では `UnhookApplicationEvents()`、pending pane refresh timer 停止、HOME form close、`TaskPaneManager.DisposeAll()`、Word warm-up timer 停止、`CaseWorkbookOpenStrategy.ShutdownHiddenApplicationCache()` の順で cleanup する。
+3. `InitializeStartupBoundaryCoordinator()` が startup HOME 判定 / 初回 refresh / managed-close startup guard の coordinator を構成する。
+4. `InitializeAdaptersAfterComposition()` が `VstoEventAdapter`、`HomeTransitionAdapter`、`TaskPaneEntryAdapter`、`ShutdownCleanupAdapter` へ composition 後の依存を接続する。
+5. `HookApplicationEvents()` が `VstoEventAdapter.SubscribeApplicationEvents()` を呼び、adapter 内の `ApplicationEventSubscriptionService` が `WorkbookOpen`、`WorkbookActivate`、`WorkbookBeforeSave`、`WorkbookBeforeClose`、`WindowActivate`、`SheetActivate`、`SheetSelectionChange`、`SheetChange`、`AfterCalculate` を購読する。
+6. `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()` が `KernelWorkbookService.ShouldShowHomeOnStartup()` を通して startup context を判定する。
+7. `shouldShow == true` のときだけ HOME binding をクリアし、`ThisAddIn.ShowKernelHomePlaceholder()` へ進む。
+8. startup の最後に `RefreshTaskPane("Startup", null, null)` を呼び、必要なら managed-close startup guard を予約する。
+9. shutdown では `ShutdownCleanupAdapter.HandleShutdown()` の中で `UnhookApplicationEvents()`、pending pane refresh timer 停止、HOME form close、`TaskPaneManager.DisposeAll()`、Word warm-up timer 停止、managed-close startup guard timer 停止、`CaseWorkbookOpenStrategy.ShutdownHiddenApplicationCache()` の順で cleanup する。
 
 ### 責務境界
 
@@ -74,8 +77,8 @@
 
 ### 現在の ownership 混在
 
-- `ThisAddIn` が VSTO lifecycle、event handler、HOME form instance、TaskPane display entry、`CustomTaskPane` create/remove adapter、automation public surface を同時保持している。
-- startup/shutdown 順序、event wiring、TaskPane display adapter が add-in 境界に近接しており、読みやすさ改善と ownership 分離がまだ一致していない。
+- `ThisAddIn` は VSTO lifecycle、adapter field、composition root delegate surface、automation public surface、hook / shutdown 呼び出し位置を保持している。HOME form instance の生成・破棄・表示は `HomeTransitionAdapter` / `KernelHomeFormHost` 側へ寄り、Excel event handler 本体は `VstoEventAdapter` 側へ寄っている。
+- startup/shutdown 順序、event hook、TaskPane display adapter が add-in 境界に近接しており、読みやすさ改善と ownership 分離がまだ一致していない。
 - `ThisAddIn` から各 coordinator へ委譲していても、最終的な VSTO 境界と UI 境界は `ThisAddIn` に残る。
 
 ### 危険領域
@@ -98,7 +101,7 @@
 ### フロー概要
 
 - 入口:
-  - `TryShowKernelHomeFormOnStartup()`
+  - `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()`
   - `ShowKernelHomeFromAutomation()`
   - `ShowKernelHomeFromKernelCommand()`
   - `ShowKernelSheetAndRefreshPaneFromHome(...)`
@@ -118,7 +121,7 @@
 
 ### 時系列フロー
 
-1. startup または明示操作が `ShowKernelHomePlaceholderWithExternalWorkbookSuppressionCore(...)` もしくは `TryShowKernelHomeFormOnStartup()` に入る。
+1. startup は `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()` から、明示操作は `HomeTransitionAdapter.ShowKernelHomePlaceholderWithExternalWorkbookSuppressionCore(...)` から HOME 表示経路に入る。
 2. 明示表示経路では `SuppressUpcomingKernelHomeDisplay(..., suppressOnOpen: false, suppressOnActivate: true)` を発行する。
 3. 必要なら既存の非表示 `KernelHomeForm` を silent dispose し、新セッション時は HOME binding をクリアしてから form を再生成する。
 4. `TaskPaneManager.HideKernelPanes()` で Kernel pane を隠し、`KernelHomeForm.ReloadSettings()` の後に `PrepareForHomeDisplayFromSheet()` と `EnsureHomeDisplayHidden(...)` を呼ぶ。
@@ -143,8 +146,8 @@
 
 ### 現在の ownership 混在
 
-- `ThisAddIn` が HOME form instance の生成・破棄・表示と suppression 発行を持ち、`KernelWorkbookService` が binding/display/close facade を持つため、HOME は UI owner と backend owner が分かれている。
-- `ShowKernelHomePlaceholder(...)` の中に form lifecycle、TaskPane hide、display preparation、WinForms 表示が同居している。
+- `HomeTransitionAdapter` / `KernelHomeFormHost` が HOME form instance の生成・破棄・表示を持ち、`ThisAddIn` は表示入口と delegate surface を残す。`KernelWorkbookService` が binding/display/close facade を持つため、HOME は UI owner と backend owner が分かれている。
+- `HomeTransitionAdapter.ShowKernelHomePlaceholder(...)` の中に form lifecycle、TaskPane hide、display preparation、WinForms 表示が同居している。
 - HOME suppression と CASE pane suppression が同じ coordinator に同居している。
 
 ### 危険領域

@@ -20,10 +20,10 @@
 1. `ThisAddIn_Startup(...)`
 2. `InitializeStartupDiagnostics()`
 3. `CreateStartupCompositionRoot()` -> `Compose()` -> `ApplyCompositionRoot()`
-4. `InitializeApplicationEventSubscriptionService()`
-5. `HookApplicationEvents()`
-6. `TryShowKernelHomeFormOnStartup()`
-7. `RefreshTaskPane("Startup", null, null)`
+4. `InitializeStartupBoundaryCoordinator()`
+5. `InitializeAdaptersAfterComposition()`
+6. `HookApplicationEvents()`
+7. `AddInStartupBoundaryCoordinator.RunAfterApplicationEventsHooked()`（startup HOME 判定、`RefreshTaskPane("Startup", null, null)`、managed-close startup guard）
 8. `WorkbookOpen -> WorkbookActivate -> WindowActivate`
 9. `ThisAddIn_Shutdown(...)`
 

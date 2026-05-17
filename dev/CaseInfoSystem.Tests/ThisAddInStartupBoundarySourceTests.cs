@@ -23,17 +23,37 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ThisAddIn_RetainsVstoEventAndApplicationWiringOwner()
+        public void ThisAddIn_DelegatesVstoEventAndApplicationWiringToAdapter()
         {
             string source = ReadAddInSource("ThisAddIn.cs");
+            string adapterSource = ReadAddInSource("App", "VstoEventAdapter.cs");
 
             Assert.Contains("private void ThisAddIn_Startup", source);
             Assert.Contains("private void ThisAddIn_Shutdown", source);
-            Assert.Contains("private void InitializeApplicationEventSubscriptionService", source);
             Assert.Contains("private void HookApplicationEvents", source);
             Assert.Contains("private void UnhookApplicationEvents", source);
-            Assert.Contains("private void Application_WorkbookOpen", source);
-            Assert.Contains("private void Application_WindowActivate", source);
+            Assert.Contains("_vstoEventAdapter?.SubscribeApplicationEvents()", source);
+            Assert.Contains("_vstoEventAdapter?.UnsubscribeApplicationEvents()", source);
+            Assert.DoesNotContain("private void Application_WorkbookOpen", source);
+            Assert.DoesNotContain("private void Application_WindowActivate", source);
+            Assert.Contains("ApplicationEventSubscriptionService", adapterSource);
+            Assert.Contains("private void Application_WorkbookOpen", adapterSource);
+            Assert.Contains("private void Application_WindowActivate", adapterSource);
+        }
+
+        [Fact]
+        public void ThisAddIn_DelegatesUiTransitionTaskPaneAutomationAndShutdownSurfaces()
+        {
+            string source = ReadAddInSource("ThisAddIn.cs");
+
+            Assert.Contains("private HomeTransitionAdapter _homeTransitionAdapter;", source);
+            Assert.Contains("private TaskPaneEntryAdapter _taskPaneEntryAdapter;", source);
+            Assert.Contains("private AutomationSurfaceAdapter _automationSurfaceAdapter;", source);
+            Assert.Contains("private ShutdownCleanupAdapter _shutdownCleanupAdapter;", source);
+            Assert.DoesNotContain("ResolveKernelReflectionContextForAutomation", source);
+            Assert.DoesNotContain("ResolveKernelCommandContextForRibbon", source);
+            Assert.DoesNotContain("RunShutdownStep", source);
+            Assert.DoesNotContain("LogTaskPaneDisplayEntryDecision", source);
         }
 
         [Fact]

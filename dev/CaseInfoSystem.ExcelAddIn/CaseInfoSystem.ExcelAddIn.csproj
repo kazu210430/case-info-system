@@ -186,6 +186,11 @@
     <Compile Include="App\CasePaneCacheRefreshNotificationService.cs" />
     <Compile Include="App\CaseDataSnapshotFactory.cs" />
     <Compile Include="App\ApplicationEventSubscriptionService.cs" />
+    <Compile Include="App\AutomationSurfaceAdapter.cs" />
+    <Compile Include="App\HomeTransitionAdapter.cs" />
+    <Compile Include="App\ShutdownCleanupAdapter.cs" />
+    <Compile Include="App\TaskPaneEntryAdapter.cs" />
+    <Compile Include="App\VstoEventAdapter.cs" />
     <Compile Include="App\EventBoundaryGuard.cs" />
     <Compile Include="App\CasePaneCacheRefreshNotificationPolicy.cs" />
     <Compile Include="App\AddInExecutionBoundaryCoordinator.cs" />

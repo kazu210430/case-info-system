@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using CaseInfoSystem.ExcelAddIn.App;
 using CaseInfoSystem.ExcelAddIn.Domain;
@@ -44,6 +45,44 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             Assert.Equal(@"C:\Templates\01_委任状.docx", templateSpec.TemplatePath);
             Assert.Equal(DocumentTemplateResolutionSource.SnapshotCache, templateSpec.ResolutionSource);
             Assert.Equal(templateSpec.DocumentName, promptedInitialName);
+        }
+
+        [Fact]
+        public void PromptAccepted_DoesNotLogDocumentNameValue()
+        {
+            using var scenario = SnapshotBuilderScenario.Create(CreateRows(), masterVersion: 42, caseListRegistered: false);
+            scenario.Builder.BuildSnapshotText(scenario.CaseWorkbook);
+            var logs = new List<string>();
+            DocumentNameOverrideScope scope = null;
+            DocumentNamePromptForm.OnTryPrompt = null;
+
+            try
+            {
+                TestServices services = CreateServices(scenario.Application, logs);
+                scenario.Application.ActiveWorkbook = scenario.CaseWorkbook;
+                scenario.Application.ActiveWindow = scenario.CaseWorkbook.Windows[1];
+                DocumentNamePromptForm.OnTryPrompt = (owner, initialDocumentName) => new DocumentNamePromptForm.PromptResult
+                {
+                    Accepted = true,
+                    DocumentName = "山田太郎_確定文書名"
+                };
+
+                bool accepted = services.PromptService.TryPrepare(scenario.CaseWorkbook, "1", out scope);
+
+                Assert.True(accepted);
+                Assert.NotNull(scope);
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "山田太郎_確定文書名"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "委任状"));
+                Assert.Contains(logs, message =>
+                    ContainsOrdinal(message, "promptResult=Accepted")
+                    && ContainsOrdinal(message, "finalDocumentNameProvided=True")
+                    && ContainsOrdinal(message, "finalDocumentNameLength="));
+            }
+            finally
+            {
+                scope?.Dispose();
+                DocumentNamePromptForm.OnTryPrompt = null;
+            }
         }
 
         [Fact]
@@ -263,9 +302,15 @@ namespace CaseInfoSystem.SnapshotRegressionTests
             Assert.Equal("01_委任状B.docx", afterInvalidateRootB.TemplateFileName);
         }
 
-        private static TestServices CreateServices(Excel.Application application)
+        private static TestServices CreateServices(Excel.Application application, List<string> logs = null)
         {
-            var logger = new Logger(_ => { });
+            var logger = new Logger(message =>
+            {
+                if (logs != null)
+                {
+                    logs.Add(message ?? string.Empty);
+                }
+            });
             var pathCompatibilityService = new PathCompatibilityService();
             var excelInteropService = new ExcelInteropService(application, logger, pathCompatibilityService);
             var taskPaneSnapshotCacheService = new TaskPaneSnapshotCacheService(excelInteropService, logger);
@@ -280,6 +325,11 @@ namespace CaseInfoSystem.SnapshotRegressionTests
                 lookupService,
                 new DocumentTemplateResolver(excelInteropService, pathCompatibilityService, lookupService, logger),
                 new DocumentNamePromptService(excelInteropService, lookupService, logger));
+        }
+
+        private static bool ContainsOrdinal(string text, string value)
+        {
+            return (text ?? string.Empty).IndexOf(value ?? string.Empty, System.StringComparison.Ordinal) >= 0;
         }
 
         private static SnapshotBuilderScenario.InputRow[] CreateRows()

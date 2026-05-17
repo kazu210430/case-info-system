@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
 
@@ -43,7 +44,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			string text2 = BuildOutputFileName (workbook, documentName, customerName);
 			string text3 = _pathCompatibilityService.BuildUniquePath (text, text2, ".docx");
-			_logger.Debug ("DocumentOutputService.BuildDocumentOutputPath", "Completed elapsed=" + FormatElapsedSeconds (stopwatch.Elapsed) + " folder=" + text + " baseName=" + text2 + " outputPath=" + text3);
+			_logger.Debug ("DocumentOutputService.BuildDocumentOutputPath", "Completed elapsed=" + FormatElapsedSeconds (stopwatch.Elapsed) + " " + BuildFolderDiagnostics ("folder", text) + ", " + BuildValueDiagnostics ("baseName", text2) + ", " + BuildPathDiagnostics ("outputPath", text3));
 			return text3;
 		}
 
@@ -90,10 +91,70 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 			string text5 = _pathCompatibilityService.ResolveToExistingLocalPath (text4);
 			if (text5.Length > 0) {
-				_logger.Info ("DocumentOutputService resolved workbook folder. source=" + text3 + " resolved=" + text5);
+				_logger.Info ("DocumentOutputService resolved workbook folder. " + BuildPathDiagnostics ("source", text3) + ", " + BuildFolderDiagnostics ("resolved", text5));
 				return text5;
 			}
 			return string.Empty;
+		}
+
+		private static string BuildValueDiagnostics (string label, string value)
+		{
+			string safeLabel = label ?? string.Empty;
+			string safeValue = value ?? string.Empty;
+			return safeLabel + "Provided=" + (!string.IsNullOrWhiteSpace (safeValue))
+				+ ", " + safeLabel + "Length=" + safeValue.Length;
+		}
+
+		private static string BuildPathDiagnostics (string label, string path)
+		{
+			string safeLabel = label ?? string.Empty;
+			string safePath = path ?? string.Empty;
+			return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace (safePath))
+				+ ", " + safeLabel + "Length=" + safePath.Length
+				+ ", " + safeLabel + "Extension=" + SafeGetExtension (safePath)
+				+ ", " + safeLabel + "Exists=" + SafeFileExists (safePath);
+		}
+
+		private static string BuildFolderDiagnostics (string label, string path)
+		{
+			string safeLabel = label ?? string.Empty;
+			string safePath = path ?? string.Empty;
+			return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace (safePath))
+				+ ", " + safeLabel + "Length=" + safePath.Length
+				+ ", " + safeLabel + "Exists=" + SafeDirectoryExists (safePath);
+		}
+
+		private static string SafeGetExtension (string path)
+		{
+			try {
+				return Path.GetExtension (path ?? string.Empty) ?? string.Empty;
+			} catch {
+				return string.Empty;
+			}
+		}
+
+		private static bool SafeFileExists (string path)
+		{
+			if (string.IsNullOrWhiteSpace (path)) {
+				return false;
+			}
+			try {
+				return File.Exists (path);
+			} catch {
+				return false;
+			}
+		}
+
+		private static bool SafeDirectoryExists (string path)
+		{
+			if (string.IsNullOrWhiteSpace (path)) {
+				return false;
+			}
+			try {
+				return Directory.Exists (path);
+			} catch {
+				return false;
+			}
 		}
 
 		private static string FormatElapsedSeconds (TimeSpan elapsed)

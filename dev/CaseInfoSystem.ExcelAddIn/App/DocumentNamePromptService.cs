@@ -44,21 +44,21 @@ namespace CaseInfoSystem.ExcelAddIn.App
             if (!accepted)
             {
                 _logger.Info(
-                    "Document name prompt cancelled. workbook="
-                    + _excelInteropService.GetWorkbookName(workbook)
-                    + ", key="
-                    + (key ?? string.Empty));
+                    "Document name prompt cancelled. key="
+                    + (key ?? string.Empty)
+                    + ", promptResult=Cancelled, "
+                    + BuildDocumentNameDiagnostics("initialDocumentName", initialDocumentName));
                 return false;
             }
 
             scope = new DocumentNameOverrideScope(_excelInteropService, workbook, _logger, finalDocumentName);
             _logger.Info(
-                "Document name prompt accepted. workbook="
-                + _excelInteropService.GetWorkbookName(workbook)
-                + ", key="
+                "Document name prompt accepted. key="
                 + (key ?? string.Empty)
-                + ", finalDocumentName="
-                + finalDocumentName);
+                + ", promptResult=Accepted, "
+                + BuildDocumentNameDiagnostics("initialDocumentName", initialDocumentName)
+                + ", "
+                + BuildDocumentNameDiagnostics("finalDocumentName", finalDocumentName));
             return true;
         }
 
@@ -92,6 +92,15 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return _excelInteropService.GetFirstVisibleWindow(workbook);
+        }
+
+        private static string BuildDocumentNameDiagnostics(string label, string documentName)
+        {
+            string safeLabel = label ?? string.Empty;
+            string safeDocumentName = documentName ?? string.Empty;
+            return safeLabel + "Provided=" + (!string.IsNullOrWhiteSpace(safeDocumentName)).ToString()
+                + ", " + safeLabel + "Length=" + safeDocumentName.Length.ToString()
+                + ", " + safeLabel + "TrimmedLength=" + safeDocumentName.Trim().Length.ToString();
         }
     }
 }

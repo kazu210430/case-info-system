@@ -65,8 +65,10 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "Completed elapsed=" + FormatElapsedSeconds(stopwatch.Elapsed)
                 + " key=" + normalizedKey
                 + " source=" + lookupResult.ResolutionSource.ToString()
-                + " templateFile=" + templateFileName
-                + " templatePath=" + templatePath);
+                + " templateFileProvided=" + (!string.IsNullOrWhiteSpace(templateFileName)).ToString()
+                + " templateFileLength=" + templateFileName.Length.ToString()
+                + " templateFileExtension=" + SafeGetExtension(templateFileName)
+                + " " + BuildPathDiagnostics("templatePath", templatePath));
 
             return new DocumentTemplateSpec
             {
@@ -107,7 +109,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
             catch (Exception ex)
             {
-                _logger.Error("DocumentTemplateResolver.TemplateExists failed.", ex);
+                _logger.Error("DocumentTemplateResolver.TemplateExists failed. exceptionType=" + ex.GetType().FullName + ", hresult=0x" + ex.HResult.ToString("X8"), null);
                 return false;
             }
         }
@@ -128,6 +130,45 @@ namespace CaseInfoSystem.ExcelAddIn.App
             }
 
             return _pathCompatibilityService.NormalizePath(_pathCompatibilityService.CombinePath(systemRoot, DefaultTemplateFolderName));
+        }
+
+        private static string BuildPathDiagnostics(string label, string path)
+        {
+            string safeLabel = label ?? string.Empty;
+            string safePath = path ?? string.Empty;
+            return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace(safePath)).ToString()
+                + " " + safeLabel + "Length=" + safePath.Length.ToString()
+                + " " + safeLabel + "Extension=" + SafeGetExtension(safePath)
+                + " " + safeLabel + "Exists=" + SafeFileExists(safePath).ToString();
+        }
+
+        private static string SafeGetExtension(string path)
+        {
+            try
+            {
+                return Path.GetExtension(path ?? string.Empty) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool SafeFileExists(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return File.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string FormatElapsedSeconds(TimeSpan elapsed)

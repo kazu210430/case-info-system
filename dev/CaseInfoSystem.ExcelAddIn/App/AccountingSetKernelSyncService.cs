@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using Microsoft.Office.Interop.Excel;
 
@@ -94,12 +95,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			string workbookFullName = _excelInteropService.GetWorkbookFullName (kernelWorkbook);
 			UserDataTransferSnapshot snapshot = ReadTransferSnapshot (worksheet, _excelInteropService.GetWorkbookFullName (kernelWorkbook));
 			AccountingSetTransferPlan transferPlan = BuildTransferPlan (snapshot);
-			_logger.Info ("Accounting set kernel sync start. kernelWorkbook=" + workbookFullName + ", template=" + text + ", localTemplate=" + text2 + ", alreadyOpen=" + flag);
+			_logger.Info ("Accounting set kernel sync start. " + BuildPathDiagnostics ("kernelWorkbook", workbookFullName) + ", " + BuildPathDiagnostics ("template", text) + ", " + BuildPathDiagnostics ("localTemplate", text2) + ", alreadyOpen=" + flag);
 			try {
 				if (flag) {
 					ApplyTransferPlan (workbook, transferPlan);
 					workbook.Save ();
-					_logger.Info ("Accounting set kernel sync completed. path=" + text2 + ", alreadyOpen=" + flag);
+					_logger.Info ("Accounting set kernel sync completed. " + BuildPathDiagnostics ("localTemplate", text2) + ", alreadyOpen=" + flag);
 					return;
 				}
 				Application application = kernelWorkbook.Application;
@@ -121,14 +122,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						_logger.Debug ("AccountingSetKernelSyncService", "Template opened in current Excel application with hidden window.");
 						ApplyTransferPlan (ownedWorkbook, transferPlan);
 						ownedWorkbook.Save ();
-						_logger.Info ("Accounting set kernel sync completed. path=" + text2 + ", alreadyOpen=" + flag);
+						_logger.Info ("Accounting set kernel sync completed. " + BuildPathDiagnostics ("localTemplate", text2) + ", alreadyOpen=" + flag);
 					} finally {
 						CloseWorkbookQuietly (ownedWorkbook);
 						_logger.Info ("Accounting set kernel sync current application fallback closed. appHwnd=" + SafeApplicationHwnd (application));
 					}
 				}
 			} catch (Exception exception) {
-				_logger.Error ("Accounting set kernel sync failed. kernelWorkbook=" + workbookFullName + ", template=" + text + ", localTemplate=" + text2 + ", alreadyOpen=" + flag, exception);
+				_logger.Error ("Accounting set kernel sync failed. " + BuildPathDiagnostics ("kernelWorkbook", workbookFullName) + ", " + BuildPathDiagnostics ("template", text) + ", " + BuildPathDiagnostics ("localTemplate", text2) + ", alreadyOpen=" + flag + ", " + BuildExceptionDiagnostics (exception), null);
 				throw;
 			} finally {
 				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (worksheet);
@@ -158,7 +159,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			if (transferPlan == null) {
 				throw new ArgumentNullException ("transferPlan");
 			}
-			_logger.Info ("Accounting set kernel transfer values. addressLine=" + transferPlan.AddressLine + ", addressLineWithBreak=" + transferPlan.AddressLineWithBreak.Replace ("\n", " / ") + ", nameLine1=" + transferPlan.NameLine1 + ", nameLine2=" + transferPlan.NameLine2);
+			_logger.Info ("Accounting set kernel transfer values. propertyKey=SOURCE_KERNEL_PATH, " + BuildPathDiagnostics ("sourceKernelPath", transferPlan.SourceKernelPath) + ", " + BuildValueDiagnostics ("addressLine", transferPlan.AddressLine) + ", " + BuildValueDiagnostics ("addressLineWithBreak", transferPlan.AddressLineWithBreak) + ", " + BuildValueDiagnostics ("nameLine1", transferPlan.NameLine1) + ", " + BuildValueDiagnostics ("nameLine2", transferPlan.NameLine2) + ", rangeWriteGroups=2, directCellWriteCount=5");
 			_excelInteropService.SetDocumentProperty (accountingWorkbook, "SOURCE_KERNEL_PATH", transferPlan.SourceKernelPath);
 			string[] sheetNames = new string[3] { "見積書", "請求書", "領収書" };
 			string[] sheetNames2 = new string[2] { "分割払い予定表", "お支払い履歴" };
@@ -223,6 +224,54 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			} catch {
 			} finally {
 				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (workbook);
+			}
+		}
+
+		private static string BuildValueDiagnostics (string label, string value)
+		{
+			string safeValue = value ?? string.Empty;
+			string safeLabel = label ?? string.Empty;
+			return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace (safeValue))
+				+ ", " + safeLabel + "Length=" + safeValue.Length;
+		}
+
+		private static string BuildPathDiagnostics (string label, string path)
+		{
+			string safePath = path ?? string.Empty;
+			string safeLabel = label ?? string.Empty;
+			return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace (safePath))
+				+ ", " + safeLabel + "Length=" + safePath.Length
+				+ ", " + safeLabel + "Extension=" + SafeGetExtension (safePath)
+				+ ", " + safeLabel + "Exists=" + SafeFileExists (safePath);
+		}
+
+		private static string BuildExceptionDiagnostics (Exception exception)
+		{
+			if (exception == null) {
+				return "exceptionType=(none)";
+			}
+			return "exceptionType=" + exception.GetType ().FullName
+				+ ", hresult=0x" + exception.HResult.ToString ("X8");
+		}
+
+		private static string SafeGetExtension (string path)
+		{
+			try {
+				return Path.GetExtension (path ?? string.Empty) ?? string.Empty;
+			} catch {
+				return string.Empty;
+			}
+		}
+
+		private static bool SafeFileExists (string path)
+		{
+			if (string.IsNullOrWhiteSpace (path)) {
+				return false;
+			}
+			try {
+				return File.Exists (path);
+			} catch {
+				return false;
 			}
 		}
 

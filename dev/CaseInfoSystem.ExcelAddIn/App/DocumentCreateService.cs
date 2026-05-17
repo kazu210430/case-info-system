@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using Microsoft.Office.Interop.Excel;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
@@ -165,7 +166,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
             _logger.Debug("DocumentCreateService.Prepare", "DocumentNameResolved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
             phaseStopwatch.Restart();
             string outputPath = _documentOutputService.BuildDocumentOutputPath(workbook, documentName, caseContext.CustomerName);
-            _logger.Debug("DocumentCreateService.Prepare", "OutputPathResolved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed) + " output=" + (outputPath ?? string.Empty));
+            _logger.Debug("DocumentCreateService.Prepare", "OutputPathResolved elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed) + " " + BuildPathDiagnostics("output", outputPath));
             phaseStopwatch.Restart();
             if (string.IsNullOrWhiteSpace(outputPath))
             {
@@ -234,7 +235,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             try
             {
-                _logger.Debug("ExecuteCreateDocument", "Start template=" + (templateSpec == null ? string.Empty : templateSpec.TemplatePath) + " output=" + (outputPath ?? string.Empty));
+                _logger.Debug("ExecuteCreateDocument", "Start " + BuildTemplateDiagnostics(templateSpec) + ", " + BuildPathDiagnostics("output", outputPath));
                 excelApplication = _documentCreateHostBridge.GetApplication();
                 previousWindowState = excelApplication.WindowState;
                 hasPreviousStatusBar = TryCaptureStatusBar(excelApplication, out previousStatusBar);
@@ -295,7 +296,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     }
                     wordDocument = saveResult.ActiveDocument;
                     savedPath = saveResult.FinalPath;
-                    _logger.Debug("ExecuteCreateDocument", "Saved path=" + (savedPath ?? string.Empty) + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
+                    _logger.Debug("ExecuteCreateDocument", "Saved " + BuildPathDiagnostics("savedPath", savedPath) + " elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
                     phaseStopwatch.Restart();
 
                     stage = "ShowDocument";
@@ -311,12 +312,12 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     restoreExcelWindowPresentation = false;
                     _logger.Debug("ExecuteCreateDocument", "ShowDocument elapsed=" + FormatElapsedSeconds(phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
                     _logger.Info(
-                        "DocumentCreateService completed. documentName="
-                        + (documentName ?? string.Empty)
-                        + ", template="
-                        + (templateSpec == null ? string.Empty : (templateSpec.TemplatePath ?? string.Empty))
-                        + ", output="
-                        + savedPath);
+                        "DocumentCreateService completed. "
+                        + BuildDocumentNameDiagnostics("documentName", documentName)
+                        + ", "
+                        + BuildTemplateDiagnostics(templateSpec)
+                        + ", "
+                        + BuildPathDiagnostics("output", savedPath));
                 }
             }
             catch (Exception ex)
@@ -326,16 +327,14 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     "DocumentCreateService.ExecuteWordCreate context."
                     + " stage=" + (stage ?? string.Empty)
                     + ", createdNewWord=" + createdNewWord.ToString()
-                    + ", template=" + (templateSpec == null ? string.Empty : (templateSpec.TemplatePath ?? string.Empty))
-                    + ", output=" + (outputPath ?? string.Empty)
-                    + ", savedPath=" + (savedPath ?? string.Empty)
+                    + ", " + BuildTemplateDiagnostics(templateSpec)
+                    + ", " + BuildPathDiagnostics("output", outputPath)
+                    + ", " + BuildPathDiagnostics("savedPath", savedPath)
                     + ", exceptionType=" + ex.GetType().FullName
-                    + ", message=" + ex.Message
                     + ", hresult=0x" + ex.HResult.ToString("X8")
                     + ", innerType=" + (innerException == null ? "(none)" : innerException.GetType().FullName)
-                    + ", innerMessage=" + (innerException == null ? "(none)" : innerException.Message)
                     + ", innerHresult=" + (innerException == null ? "(none)" : "0x" + innerException.HResult.ToString("X8")));
-                _logger.Error("DocumentCreateService.ExecuteWordCreate failed.", ex);
+                _logger.Error("DocumentCreateService.ExecuteWordCreate failed. exceptionType=" + ex.GetType().FullName + ", hresult=0x" + ex.HResult.ToString("X8"), null);
                 _wordInteropService.RestorePerformanceState(wordApplication, wordPerformanceState);
                 _wordInteropService.CloseDocumentNoSave(ref wordDocument);
                 if (createdNewWord)
@@ -426,6 +425,71 @@ namespace CaseInfoSystem.ExcelAddIn.App
             catch
             {
                 // 例外処理: ステータスバー復元失敗は致命ではないため握りつぶす。
+            }
+        }
+
+        private static string BuildDocumentNameDiagnostics(string label, string documentName)
+        {
+            string safeLabel = label ?? string.Empty;
+            string safeDocumentName = documentName ?? string.Empty;
+            return safeLabel + "Provided=" + (!string.IsNullOrWhiteSpace(safeDocumentName)).ToString()
+                + ", " + safeLabel + "Length=" + safeDocumentName.Length.ToString()
+                + ", " + safeLabel + "TrimmedLength=" + safeDocumentName.Trim().Length.ToString();
+        }
+
+        private static string BuildTemplateDiagnostics(DocumentTemplateSpec templateSpec)
+        {
+            if (templateSpec == null)
+            {
+                return "templateResolved=False";
+            }
+
+            string templateFileName = templateSpec.TemplateFileName ?? string.Empty;
+            return "templateResolved=True"
+                + ", templateKey=" + (templateSpec.Key ?? string.Empty)
+                + ", templateSource=" + templateSpec.ResolutionSource
+                + ", templateFileProvided=" + (!string.IsNullOrWhiteSpace(templateFileName)).ToString()
+                + ", templateFileLength=" + templateFileName.Length.ToString()
+                + ", templateFileExtension=" + SafeGetExtension(templateFileName)
+                + ", " + BuildPathDiagnostics("templatePath", templateSpec.TemplatePath);
+        }
+
+        private static string BuildPathDiagnostics(string label, string path)
+        {
+            string safeLabel = label ?? string.Empty;
+            string safePath = path ?? string.Empty;
+            return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace(safePath)).ToString()
+                + ", " + safeLabel + "Length=" + safePath.Length.ToString()
+                + ", " + safeLabel + "Extension=" + SafeGetExtension(safePath)
+                + ", " + safeLabel + "Exists=" + SafeFileExists(safePath).ToString();
+        }
+
+        private static string SafeGetExtension(string path)
+        {
+            try
+            {
+                return Path.GetExtension(path ?? string.Empty) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool SafeFileExists(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return File.Exists(path);
+            }
+            catch
+            {
+                return false;
             }
         }
 

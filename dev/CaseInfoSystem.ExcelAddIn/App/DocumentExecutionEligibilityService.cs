@@ -115,8 +115,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 "DocumentExecutionEligibilityService marked template eligible."
                 + " key=" + normalizedKey
                 + ", source=" + templateSpec.ResolutionSource
-                + ", template=" + (templateSpec.TemplatePath ?? string.Empty)
-                + ", outputFolder=" + outputFolder
+                + ", " + BuildPathDiagnostics("template", templateSpec.TemplatePath)
+                + ", " + BuildFolderDiagnostics("outputFolder", outputFolder)
                 + ", elapsed=" + FormatElapsedSeconds(totalStopwatch.Elapsed));
 
             return new DocumentExecutionEligibility(true, "eligible", templateSpec, caseContext);
@@ -133,6 +133,71 @@ namespace CaseInfoSystem.ExcelAddIn.App
             string extension = System.IO.Path.GetExtension(templateSpec.TemplatePath) ?? string.Empty;
             return string.Equals(extension, ".dotm", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(extension, ".docm", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildPathDiagnostics(string label, string path)
+        {
+            string safeLabel = label ?? string.Empty;
+            string safePath = path ?? string.Empty;
+            return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace(safePath)).ToString()
+                + ", " + safeLabel + "Length=" + safePath.Length.ToString()
+                + ", " + safeLabel + "Extension=" + SafeGetExtension(safePath)
+                + ", " + safeLabel + "Exists=" + SafeFileExists(safePath).ToString();
+        }
+
+        private static string BuildFolderDiagnostics(string label, string path)
+        {
+            string safeLabel = label ?? string.Empty;
+            string safePath = path ?? string.Empty;
+            return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace(safePath)).ToString()
+                + ", " + safeLabel + "Length=" + safePath.Length.ToString()
+                + ", " + safeLabel + "Exists=" + SafeDirectoryExists(safePath).ToString();
+        }
+
+        private static string SafeGetExtension(string path)
+        {
+            try
+            {
+                return System.IO.Path.GetExtension(path ?? string.Empty) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool SafeFileExists(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return System.IO.File.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool SafeDirectoryExists(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return System.IO.Directory.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string FormatElapsedSeconds(TimeSpan elapsed)

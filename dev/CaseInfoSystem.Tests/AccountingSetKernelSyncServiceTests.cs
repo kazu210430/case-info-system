@@ -77,19 +77,30 @@ namespace CaseInfoSystem.Tests
                 Assert.Contains(cellWrites, write =>
                     write.Sheet == AccountingSetSpec.InvoiceSheetName
                     && write.Address == AccountingSetSpec.InvoiceNameRow1CellAddress
-                    && write.Value == "123");
+                    && write.Value == "銀行支店ABC");
                 Assert.Contains(cellWrites, write =>
                     write.Sheet == AccountingSetSpec.InvoiceSheetName
                     && write.Address == AccountingSetSpec.InvoiceNameRow2CellAddress
-                    && write.Value == "001");
+                    && write.Value == "名義XYZ");
                 Assert.Contains(cellWrites, write =>
                     write.Sheet == AccountingSetSpec.InstallmentSheetName
                     && write.Address == AccountingSetSpec.InstallmentNameRow1CellAddress
-                    && write.Value == "123");
+                    && write.Value == "銀行支店ABC");
                 Assert.Contains(cellWrites, write =>
                     write.Sheet == AccountingSetSpec.InstallmentSheetName
                     && write.Address == AccountingSetSpec.InstallmentAddressCellAddress
                     && write.Value.Contains("\n"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "東京都"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "千代田区1-1"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "03-1111-2222"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "銀行支店ABC"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "名義XYZ"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, tempDirectory));
+                Assert.Contains(logs, message =>
+                    ContainsOrdinal(message, "addressLinePresent=True")
+                    && ContainsOrdinal(message, "addressLineLength=")
+                    && ContainsOrdinal(message, "nameLine1Present=True")
+                    && ContainsOrdinal(message, "propertyKey=SOURCE_KERNEL_PATH"));
             }
             finally
             {
@@ -325,6 +336,11 @@ namespace CaseInfoSystem.Tests
             Assert.Throws<InvalidOperationException>(() => service.Execute(CreateWorkbook(@"C:\temp\kernel.xlsx")));
         }
 
+        private static bool ContainsOrdinal(string text, string value)
+        {
+            return (text ?? string.Empty).IndexOf(value ?? string.Empty, StringComparison.Ordinal) >= 0;
+        }
+
         private static Excel.Workbook CreateWorkbook(string fullPath)
         {
             return new Excel.Workbook
@@ -346,8 +362,8 @@ namespace CaseInfoSystem.Tests
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + 1, "B", "東京都");
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + 2, "B", "千代田区1-1");
             worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + 3, "B", "03-1111-2222");
-            worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow1Offset, "B", 123);
-            worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow2Offset, "B", "001");
+            worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow1Offset, "B", "銀行支店ABC");
+            worksheet.Cells.SetValue(AccountingSetSpec.UserDataFirstDataRow + AccountingSetSpec.UserDataAccountingNameRow2Offset, "B", "名義XYZ");
             return worksheet;
         }
 

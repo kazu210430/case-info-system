@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using CaseInfoSystem.ExcelAddIn.Domain;
 using CaseInfoSystem.ExcelAddIn.Infrastructure;
 using CaseInfoSystem.ExcelAddIn.UI;
@@ -353,8 +354,28 @@ namespace CaseInfoSystem.ExcelAddIn.App
                         "Document action was handled by VSTO document flow."
                         + " mode=" + executionMode.ToString()
                         + ", key=" + (key ?? string.Empty)
-                        + ", templateFile=" + (eligibility.TemplateSpec == null ? string.Empty : (eligibility.TemplateSpec.TemplateFileName ?? string.Empty)));
+                        + ", " + BuildTemplateFileDiagnostics(eligibility.TemplateSpec));
                 });
+            }
+        }
+
+        private static string BuildTemplateFileDiagnostics(DocumentTemplateSpec templateSpec)
+        {
+            string templateFileName = templateSpec == null ? string.Empty : (templateSpec.TemplateFileName ?? string.Empty);
+            return "templateFileProvided=" + (!string.IsNullOrWhiteSpace(templateFileName)).ToString()
+                + ", templateFileLength=" + templateFileName.Length.ToString()
+                + ", templateFileExtension=" + SafeGetExtension(templateFileName);
+        }
+
+        private static string SafeGetExtension(string path)
+        {
+            try
+            {
+                return Path.GetExtension(path ?? string.Empty) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 

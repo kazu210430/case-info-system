@@ -40,13 +40,13 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			Stopwatch totalStopwatch = Stopwatch.StartNew ();
 			Stopwatch phaseStopwatch = Stopwatch.StartNew ();
 			string finalPath = PrepareSavePath (requestedFinalPath);
-			_logger.Debug ("DocumentSaveService.SaveDocument", "PrepareSavePath elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + (finalPath ?? string.Empty));
+			_logger.Debug ("DocumentSaveService.SaveDocument", "PrepareSavePath elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " " + BuildPathDiagnostics ("final", finalPath));
 			if (finalPath.Length == 0) {
 				throw new InvalidOperationException ("Save path could not be resolved.");
 			}
 
 			DocumentSaveOutcome saveOutcome = SaveViaAdjacentTempReplace (wordApplication, wordDocument, finalPath);
-			_logger.Info ("DocumentSaveService save completed. final=" + finalPath + ", totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed));
+			_logger.Info ("DocumentSaveService save completed. " + BuildPathDiagnostics ("final", finalPath) + ", totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed));
 			return new DocumentSaveResult (saveOutcome.SavedPath, finalPath, isLocalWorkCopy: false, saveOutcome.ActiveDocument);
 		}
 
@@ -89,7 +89,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			bool finalExists = FileExistsSafe (finalPath);
 			bool stagingExists = FileExistsSafe (stagingPath);
 			bool isUnderSyncRoot = _pathCompatibilityService.IsUnderSyncRoot (finalPath);
-			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveContext mode=" + FormatSaveMode (finalExists) + " location=" + FormatSaveLocation (isUnderSyncRoot) + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "SaveContext mode=" + FormatSaveMode (finalExists) + " location=" + FormatSaveLocation (isUnderSyncRoot) + " elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " " + BuildPathDiagnostics ("final", finalPath));
 			_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSavePrecheck saveCopyOnly=True, " + DescribeStagingSaveContext (finalPath, stagingPath, finalExists, stagingExists));
 			string currentStep = "SaveDocumentCopyAsDocx";
 			string stagingWorkingDocumentPath = string.Empty;
@@ -100,27 +100,27 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				if (string.IsNullOrWhiteSpace (stagingSavedPath) || !FileExistsSafe (stagingSavedPath)) {
 					throw new IOException ("Staging save failed.");
 				}
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSaved elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " saveCopyOnly=True final=" + finalPath + " staging=" + stagingSavedPath);
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "StagingSaved elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " saveCopyOnly=True " + BuildPathDiagnostics ("final", finalPath) + ", " + BuildPathDiagnostics ("staging", stagingSavedPath));
 				phaseStopwatch.Restart ();
 				currentStep = "PromoteAdjacentStagingFileSafe";
 				if (!_pathCompatibilityService.PromoteAdjacentStagingFileSafe (stagingSavedPath, finalPath)) {
 					throw new IOException ("Atomic replace failed.");
 				}
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReplaced elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReplaced elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " " + BuildPathDiagnostics ("final", finalPath));
 				phaseStopwatch.Restart ();
 				currentStep = "OpenDocument";
 				object activeDocument = OpenDocument (wordApplication, finalPath);
 				if (activeDocument == null) {
 					throw new IOException ("Reopen after save failed.");
 				}
-				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReopened elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " final=" + finalPath);
+				_logger.Debug ("DocumentSaveService.SaveDirectWithBackup", "FinalReopened elapsed=" + FormatElapsedSeconds (phaseStopwatch.Elapsed) + " totalElapsed=" + FormatElapsedSeconds (totalStopwatch.Elapsed) + " " + BuildPathDiagnostics ("final", finalPath));
 				object originalDocument = wordDocument;
 				currentStep = "CloseOriginalDocument";
 				_wordInteropService.CloseDocumentNoSave (ref originalDocument);
 				TryDeleteFileQuietly (stagingWorkingDocumentPath);
 				return new DocumentSaveOutcome (finalPath, activeDocument);
 			} catch (Exception exception) {
-				_logger.Error ("DocumentSaveService.SaveDirectWithBackup failed. step=" + currentStep + ", saveCopyOnly=True, finalPath=" + (finalPath ?? string.Empty) + ", tempPath=" + (stagingPath ?? string.Empty), exception);
+				_logger.Error ("DocumentSaveService.SaveDirectWithBackup failed. step=" + currentStep + ", saveCopyOnly=True, " + BuildPathDiagnostics ("final", finalPath) + ", " + BuildPathDiagnostics ("temp", stagingPath) + ", " + BuildExceptionDiagnostics (exception), null);
 				TryDeleteFileQuietly (stagingPath);
 				throw;
 			}
@@ -162,17 +162,34 @@ namespace CaseInfoSystem.ExcelAddIn.App
 		{
 			string parentDirectory = SafeGetDirectoryName (finalPath);
 			return
-				"finalPath=" + (finalPath ?? string.Empty) +
-				", tempPath=" + (stagingPath ?? string.Empty) +
-				", finalParentDirectory=" + parentDirectory +
+				BuildPathDiagnostics ("final", finalPath) +
+				", " + BuildPathDiagnostics ("temp", stagingPath) +
+				", finalParentDirectoryPresent=" + (!string.IsNullOrWhiteSpace (parentDirectory)) +
+				", finalParentDirectoryLength=" + SafeGetPathLength (parentDirectory) +
 				", finalParentDirectoryExists=" + SafeDirectoryExists (parentDirectory) +
 				", finalFileExists=" + finalExists +
 				", tempFileExists=" + stagingExists +
-				", finalExtension=" + SafeGetExtension (finalPath) +
-				", finalPathLength=" + SafeGetPathLength (finalPath) +
-				", tempPathLength=" + SafeGetPathLength (stagingPath) +
-				", finalFileName=" + SafeGetFileName (finalPath) +
-				", tempFileName=" + SafeGetFileName (stagingPath);
+				", finalFileNameLength=" + SafeGetFileNameLength (finalPath) +
+				", tempFileNameLength=" + SafeGetFileNameLength (stagingPath);
+		}
+
+		private static string BuildPathDiagnostics (string label, string path)
+		{
+			string safeLabel = label ?? string.Empty;
+			string safePath = path ?? string.Empty;
+			return safeLabel + "Present=" + (!string.IsNullOrWhiteSpace (safePath)) +
+				", " + safeLabel + "Length=" + SafeGetPathLength (safePath) +
+				", " + safeLabel + "Extension=" + SafeGetExtension (safePath) +
+				", " + safeLabel + "Exists=" + SafeFileExists (safePath);
+		}
+
+		private static string BuildExceptionDiagnostics (Exception exception)
+		{
+			if (exception == null) {
+				return "exceptionType=(none)";
+			}
+			return "exceptionType=" + exception.GetType ().FullName
+				+ ", hresult=0x" + exception.HResult.ToString ("X8");
 		}
 
 		private static string SafeGetDirectoryName (string path)
@@ -193,10 +210,22 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private static string SafeGetFileName (string path)
+		private static int SafeGetFileNameLength (string path)
 		{
 			try {
-				return Path.GetFileName (path) ?? string.Empty;
+				return (Path.GetFileName (path) ?? string.Empty).Length;
+			} catch {
+				return -1;
+			}
+		}
+
+		private static string SafeFileExists (string path)
+		{
+			if (string.IsNullOrWhiteSpace (path)) {
+				return "False";
+			}
+			try {
+				return File.Exists (path) ? "True" : "False";
 			} catch (Exception exception) {
 				return "Unknown(" + exception.GetType ().FullName + ")";
 			}

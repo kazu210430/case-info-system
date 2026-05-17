@@ -139,7 +139,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 }
                 else if (string.Equals(actionKind, CaseListActionKind, StringComparison.OrdinalIgnoreCase))
                 {
-                    reason = "case-list navigation should keep the existing CASE pane unchanged while Kernel navigation takes the foreground.";
+                    reason = "case-list state refresh is handled before Kernel navigation.";
                 }
                 else
                 {

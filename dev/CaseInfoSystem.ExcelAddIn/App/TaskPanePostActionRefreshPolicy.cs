@@ -25,7 +25,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             if (string.Equals(actionKind, "caselist", StringComparison.OrdinalIgnoreCase))
             {
-                return TaskPanePostActionRefreshDecision.SkipForForegroundPreservation;
+                return TaskPanePostActionRefreshDecision.DeferAndInvalidateSignature;
             }
 
             return TaskPanePostActionRefreshDecision.RefreshImmediately;

@@ -106,6 +106,19 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void NotifyCasePaneUpdatedIfNeeded_WhenCaseListStateUpdated_DoesNotFireNotification()
+        {
+            var notifications = new List<string>();
+            var service = CreateService(new List<string>(), reason => notifications.Add(reason));
+            var workbook = new Excel.Workbook();
+            var buildResult = new TaskPaneSnapshotBuilderService.TaskPaneBuildResult("snapshot", updatedCaseSnapshotCache: true);
+
+            service.NotifyCasePaneUpdatedIfNeeded(workbook, "DocumentCommandService.CaseListStateUpdated", buildResult);
+
+            Assert.Empty(notifications);
+        }
+
+        [Fact]
         public void TryGetWorkbookSavedState_WhenWorkbookIsNull_ReturnsNull()
         {
             var service = CreateService(new List<string>());

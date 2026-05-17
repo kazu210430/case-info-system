@@ -102,6 +102,7 @@ namespace CaseInfoSystem.Tests
         [InlineData(true, "WorkbookOpen", true)]
         [InlineData(true, "WorkbookActivate", true)]
         [InlineData(true, "SheetActivate", false)]
+        [InlineData(true, "DocumentCommandService.CaseListStateUpdated", false)]
         [InlineData(false, "WorkbookOpen", false)]
         public void ShouldNotify_UsesSnapshotCacheUpdateAndLifecycleReason(
             bool updatedCaseSnapshotCache,

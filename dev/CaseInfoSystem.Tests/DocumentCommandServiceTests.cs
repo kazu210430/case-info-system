@@ -145,7 +145,7 @@ namespace CaseInfoSystem.Tests
 
             Assert.Equal(1, kernelWorkbook.SaveCallCount);
             Assert.True(kernelWorkbook.Saved);
-            Assert.Equal(0, refreshCalls);
+            Assert.Equal(1, refreshCalls);
             Assert.Equal(1, showKernelSheetCalls);
             Assert.Equal(1, showNoticeCalls);
             Assert.Equal(registrationResult.Message, shownMessage);
@@ -225,7 +225,7 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(1, registeredKernelWorkbook.SaveCallCount);
             Assert.True(registeredKernelWorkbook.Saved);
             Assert.Equal(0, contextKernelWorkbook.SaveCallCount);
-            Assert.Equal(0, refreshCalls);
+            Assert.Equal(1, refreshCalls);
             Assert.Equal(1, showKernelSheetCalls);
             Assert.Equal(1, showNoticeCalls);
             Assert.NotNull(shownContext);
@@ -290,7 +290,7 @@ namespace CaseInfoSystem.Tests
             Assert.Equal(0, caseWorkbook.SaveCallCount);
             Assert.Equal(1, registeredKernelWorkbook.SaveCallCount);
             Assert.True(registeredKernelWorkbook.Saved);
-            Assert.Equal(0, refreshCalls);
+            Assert.Equal(1, refreshCalls);
             Assert.Equal(0, showKernelSheetCalls);
             Assert.Equal(0, showNoticeCalls);
         }

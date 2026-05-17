@@ -72,6 +72,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         private readonly ExcelInteropService _excelInteropService;
         private readonly IScreenUpdatingExecutionBridge _screenUpdatingExecutionBridge;
         private readonly ITaskPaneRefreshSuppressionBridge _taskPaneRefreshSuppressionBridge;
+        private readonly IActiveTaskPaneRefreshBridge _activeTaskPaneRefreshBridge;
         private readonly IKernelSheetPaneRefreshBridge _kernelSheetPaneRefreshBridge;
         private readonly Logger _logger;
 
@@ -120,11 +121,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
         {
             _screenUpdatingExecutionBridge = screenUpdatingExecutionBridge ?? throw new ArgumentNullException(nameof(screenUpdatingExecutionBridge));
             _taskPaneRefreshSuppressionBridge = taskPaneRefreshSuppressionBridge ?? throw new ArgumentNullException(nameof(taskPaneRefreshSuppressionBridge));
-            if (activeTaskPaneRefreshBridge == null)
-            {
-                throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
-            }
-
+            _activeTaskPaneRefreshBridge = activeTaskPaneRefreshBridge ?? throw new ArgumentNullException(nameof(activeTaskPaneRefreshBridge));
             _kernelSheetPaneRefreshBridge = kernelSheetPaneRefreshBridge ?? throw new ArgumentNullException(nameof(kernelSheetPaneRefreshBridge));
             _documentExecutionModeService = documentExecutionModeService ?? throw new ArgumentNullException(nameof(documentExecutionModeService));
             _documentExecutionEligibilityService = documentExecutionEligibilityService ?? throw new ArgumentNullException(nameof(documentExecutionEligibilityService));
@@ -166,6 +163,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 
             CaseListRegistrationResult completedRegistrationResult = null;
             WorkbookContext kernelSheetTransitionContext = null;
+            bool shouldRefreshCaseListState = false;
             bool shouldShowKernelCaseList = false;
             _screenUpdatingExecutionBridge.Execute(() =>
             {
@@ -175,6 +173,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
                     throw new InvalidOperationException(registrationResult.Message);
                 }
 
+                shouldRefreshCaseListState = true;
                 Excel.Workbook registrationKernelWorkbook = registrationResult.KernelWorkbook;
                 if (registrationKernelWorkbook == null)
                 {
@@ -211,7 +210,11 @@ namespace CaseInfoSystem.ExcelAddIn.App
                 shouldShowKernelCaseList = true;
             });
 
-            // Keep the already-open CASE pane as-is; the Kernel sheet transition owns this route.
+            if (shouldRefreshCaseListState)
+            {
+                _activeTaskPaneRefreshBridge.RequestRefresh("DocumentCommandService.CaseListStateUpdated");
+            }
+
             if (shouldShowKernelCaseList)
             {
                 string kernelTransitionSheetCodeName = "shCaseList";

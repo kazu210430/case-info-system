@@ -219,7 +219,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void HandleCaseControlActionInvoked_WhenCaseListActionRuns_SkipsRefreshAndKeepsSignature()
+        public void HandleCaseControlActionInvoked_WhenCaseListActionRuns_DefersRefreshAndInvalidatesSignature()
         {
             var addIn = new CaseInfoSystem.ExcelAddIn.ThisAddIn();
             var excelInteropService = new ExcelInteropService();
@@ -269,10 +269,9 @@ namespace CaseInfoSystem.Tests
             dispatcher.HandleCaseControlActionInvoked("303", control, new TaskPaneActionEventArgs("caselist", string.Empty));
 
             Assert.Equal(0, requestCalls);
-            Assert.Equal(0, invalidateCalls);
+            Assert.Equal(1, invalidateCalls);
             Assert.Equal(0, renderAfterActionCalls);
             Assert.Equal(0, showCalls);
-            Assert.Equal("existing-signature", host.LastRenderSignature);
         }
 
         private static Excel.Workbook CreateWorkbook(string fullName)

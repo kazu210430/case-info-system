@@ -289,6 +289,8 @@
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\WorkbookCloseInteropHelper.cs" Link="Source\Infrastructure\WorkbookCloseInteropHelper.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\KernelWorkbookResolverService.cs" Link="Source\Infrastructure\KernelWorkbookResolverService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookOpenCleanupOutcomeService.cs" Link="Source\Infrastructure\CaseWorkbookOpenCleanupOutcomeService.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookHiddenAppCacheDiagnosticEventFactory.cs" Link="Source\Infrastructure\CaseWorkbookHiddenAppCacheDiagnosticEventFactory.cs" />
+    <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookHiddenAppCacheSlotDecisionService.cs" Link="Source\Infrastructure\CaseWorkbookHiddenAppCacheSlotDecisionService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookHiddenAppLifecycleSupportService.cs" Link="Source\Infrastructure\CaseWorkbookHiddenAppLifecycleSupportService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookPresentationHandoffService.cs" Link="Source\Infrastructure\CaseWorkbookPresentationHandoffService.cs" />
     <Compile Include="..\CaseInfoSystem.ExcelAddIn\Infrastructure\CaseWorkbookOpenRouteDecisionService.cs" Link="Source\Infrastructure\CaseWorkbookOpenRouteDecisionService.cs" />

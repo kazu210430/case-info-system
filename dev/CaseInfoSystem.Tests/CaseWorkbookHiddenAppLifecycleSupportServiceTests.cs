@@ -165,6 +165,95 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
+        public void SlotDecisionService_ClassifiesCacheLifecycleWithoutOwningExecution()
+        {
+            var lifecycleSupport = new CaseWorkbookHiddenAppLifecycleSupportService();
+            var decisionService = new CaseWorkbookHiddenAppCacheSlotDecisionService();
+            DateTime now = new DateTime(2026, 5, 16, 0, 0, 0, DateTimeKind.Utc);
+            CaseWorkbookHiddenAppLifecycleFacts reusableFacts = lifecycleSupport.CaptureLifecycleFacts(
+                CreateReusableHiddenApplication(),
+                isInUse: false,
+                isPoisoned: false,
+                isOwnedByCache: true,
+                idleSinceUtc: now,
+                idleTimeoutSeconds: 60,
+                utcNow: now);
+            CaseWorkbookHiddenAppLifecycleFacts poisonedFacts = lifecycleSupport.CaptureLifecycleFacts(
+                CreateReusableHiddenApplication(),
+                isInUse: false,
+                isPoisoned: true,
+                isOwnedByCache: true,
+                idleSinceUtc: now,
+                idleTimeoutSeconds: 60,
+                utcNow: now);
+
+            CaseWorkbookHiddenAppCacheAcquisitionDecision noSlot =
+                decisionService.DecideAcquisition(slotPresent: false, slotInUse: false, lifecycleFacts: null);
+            CaseWorkbookHiddenAppCacheAcquisitionDecision inUse =
+                decisionService.DecideAcquisition(slotPresent: true, slotInUse: true, lifecycleFacts: null);
+            CaseWorkbookHiddenAppCacheAcquisitionDecision poisoned =
+                decisionService.DecideAcquisition(slotPresent: true, slotInUse: false, lifecycleFacts: poisonedFacts);
+            CaseWorkbookHiddenAppCacheAcquisitionDecision reusable =
+                decisionService.DecideAcquisition(slotPresent: true, slotInUse: false, lifecycleFacts: reusableFacts);
+            CaseWorkbookHiddenAppCacheReturnSlotDecision mismatch =
+                decisionService.DecideReturnSlot(slotPresent: true, sameApplication: false, isOwnedByCache: true);
+            CaseWorkbookHiddenAppCacheReturnHealthDecision unhealthy =
+                decisionService.DecideReturnHealth(poisonedFacts);
+            CaseWorkbookHiddenAppCacheDisposalDecision skipNotOwned =
+                decisionService.DecideDisposal(slotPresent: true, isOwnedByCache: false, applicationPresent: true);
+            CaseWorkbookHiddenAppCacheDisposalDecision disposeOwned =
+                decisionService.DecideDisposal(slotPresent: true, isOwnedByCache: true, applicationPresent: true);
+
+            Assert.Equal("create-new", noSlot.Action);
+            Assert.True(inUse.ShouldBypassCache);
+            Assert.True(poisoned.ShouldDisposeSlot);
+            Assert.Equal("cache-replaced-after-unhealthy", poisoned.NextAcquisitionReason);
+            Assert.True(reusable.ShouldReuseSlot);
+            Assert.False(mismatch.CanReturn);
+            Assert.Equal("cache-slot-mismatch", mismatch.Reason);
+            Assert.False(unhealthy.CanReturn);
+            Assert.Equal("return-to-idle-health-check-failed", unhealthy.Reason);
+            Assert.Equal("not-cache-owned", skipNotOwned.Reason);
+            Assert.False(skipNotOwned.ShouldQuitApplication);
+            Assert.True(disposeOwned.ShouldQuitApplication);
+            Assert.True(disposeOwned.ShouldReleaseApplication);
+        }
+
+        [Fact]
+        public void DiagnosticEventFactory_AssemblesRetainedCacheEventsWithExistingTerms()
+        {
+            var routeDecisionService = new CaseWorkbookOpenRouteDecisionService();
+            var lifecycleSupport = new CaseWorkbookHiddenAppLifecycleSupportService();
+            var factory = new CaseWorkbookHiddenAppCacheDiagnosticEventFactory(routeDecisionService);
+
+            string shutdownEvent = lifecycleSupport.BuildDiagnosticEventMessage(
+                factory.CreateShutdownEvent(retainedInstancePresent: true, appHwnd: "42"));
+            string acquireEvent = lifecycleSupport.BuildDiagnosticEventMessage(
+                factory.CreateAcquireEvent(
+                    @"C:\Cases\factory.xlsx",
+                    "cache-reusable",
+                    reusedApplication: true,
+                    appHwnd: "43",
+                    elapsedMilliseconds: 12));
+            string fallbackEvent = lifecycleSupport.BuildDiagnosticEventMessage(
+                factory.CreateAcquireFallbackEvent(
+                    @"C:\Cases\bypass.xlsx",
+                    routeDecisionService.DecideHiddenApplicationCacheAcquisition(cachedApplicationInUse: true),
+                    elapsedMilliseconds: 13));
+
+            Assert.Contains("action=retained-hidden-app-cache-shutdown", shutdownEvent);
+            Assert.Contains("eventOutcome=dispose-retained-instance", shutdownEvent);
+            Assert.Contains("cleanupReason=shutdown-cleanup", shutdownEvent);
+            Assert.Contains("action=retained-hidden-app-cache-acquire", acquireEvent);
+            Assert.Contains("reason=cache-reusable", acquireEvent);
+            Assert.Contains("acquisitionKind=reused", acquireEvent);
+            Assert.Contains("applicationKind=retained-hidden-app-cache", acquireEvent);
+            Assert.Contains("action=retained-hidden-app-cache-fallback", fallbackEvent);
+            Assert.Contains("fallbackRoute=app-cache-bypass-inuse", fallbackEvent);
+            Assert.Contains("safetyAction=open-dedicated-hidden-session", fallbackEvent);
+        }
+
+        [Fact]
         public void BuildTraceMessages_PreservesRetainedCacheReasonAndDiagnosticTerms()
         {
             var service = new CaseWorkbookHiddenAppLifecycleSupportService();
@@ -230,10 +319,16 @@ namespace CaseInfoSystem.Tests
         public void SourceBoundary_HelperDoesNotOwnTimerPoisonShutdownCloseQuitOrComRelease()
         {
             string serviceSource = ReadInfrastructureSource("CaseWorkbookHiddenAppLifecycleSupportService.cs");
+            string slotDecisionSource = ReadInfrastructureSource("CaseWorkbookHiddenAppCacheSlotDecisionService.cs");
+            string diagnosticFactorySource = ReadInfrastructureSource("CaseWorkbookHiddenAppCacheDiagnosticEventFactory.cs");
             string strategySource = ReadInfrastructureSource("CaseWorkbookOpenStrategy.cs");
 
             Assert.Contains("new CaseWorkbookHiddenAppLifecycleSupportService", strategySource);
+            Assert.Contains("new CaseWorkbookHiddenAppCacheSlotDecisionService", strategySource);
+            Assert.Contains("new CaseWorkbookHiddenAppCacheDiagnosticEventFactory", strategySource);
             Assert.Contains("_hiddenAppLifecycleSupportService.CaptureLifecycleFacts", strategySource);
+            Assert.Contains("_hiddenAppCacheSlotDecisionService.DecideAcquisition", strategySource);
+            Assert.Contains("_hiddenAppCacheDiagnosticEventFactory.CreateAcquireEvent", strategySource);
             Assert.Contains("HiddenApplicationIdleTimer_Tick", strategySource);
             Assert.Contains("DisposeHiddenApplicationIdleTimerUnlocked", strategySource);
             Assert.Contains("MarkCachedHiddenApplicationPoisoned", strategySource);
@@ -241,6 +336,7 @@ namespace CaseInfoSystem.Tests
             Assert.Contains("WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave", strategySource);
             Assert.Contains("TryQuitApplication(", strategySource);
             Assert.Contains("ReleaseComObject(", strategySource);
+            Assert.DoesNotContain("new CaseWorkbookHiddenAppLifecycleDiagnosticEvent", strategySource);
 
             Assert.DoesNotContain("WorkbookCloseInteropHelper", serviceSource);
             Assert.DoesNotContain("CloseOwnedWorkbook", serviceSource);
@@ -263,6 +359,20 @@ namespace CaseInfoSystem.Tests
             Assert.DoesNotContain(".EnableEvents =", serviceSource);
             Assert.DoesNotContain(".DisplayAlerts =", serviceSource);
             Assert.DoesNotContain(".UserControl =", serviceSource);
+            Assert.DoesNotContain("Microsoft.Office.Interop.Excel", slotDecisionSource);
+            Assert.DoesNotContain("WorkbookCloseInteropHelper", slotDecisionSource);
+            Assert.DoesNotContain(".Close(", slotDecisionSource);
+            Assert.DoesNotContain(".Quit(", slotDecisionSource);
+            Assert.DoesNotContain("TryQuitApplication", slotDecisionSource);
+            Assert.DoesNotContain("ReleaseComObject", slotDecisionSource);
+            Assert.DoesNotContain("Timer", slotDecisionSource);
+            Assert.DoesNotContain("Microsoft.Office.Interop.Excel", diagnosticFactorySource);
+            Assert.DoesNotContain("WorkbookCloseInteropHelper", diagnosticFactorySource);
+            Assert.DoesNotContain(".Close(", diagnosticFactorySource);
+            Assert.DoesNotContain(".Quit(", diagnosticFactorySource);
+            Assert.DoesNotContain("TryQuitApplication", diagnosticFactorySource);
+            Assert.DoesNotContain("ReleaseComObject", diagnosticFactorySource);
+            Assert.DoesNotContain("Timer", diagnosticFactorySource);
         }
 
         private static Excel.Application CreateReusableHiddenApplication()

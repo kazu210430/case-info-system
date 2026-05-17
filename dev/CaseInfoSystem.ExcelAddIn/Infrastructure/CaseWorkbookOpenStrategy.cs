@@ -18,6 +18,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         private readonly CaseWorkbookOpenCleanupOutcomeService _cleanupOutcomeService;
         private readonly CaseWorkbookPresentationHandoffService _presentationHandoffService;
         private readonly CaseWorkbookHiddenAppLifecycleSupportService _hiddenAppLifecycleSupportService;
+        private readonly CaseWorkbookHiddenAppCacheSlotDecisionService _hiddenAppCacheSlotDecisionService;
+        private readonly CaseWorkbookHiddenAppCacheDiagnosticEventFactory _hiddenAppCacheDiagnosticEventFactory;
         private readonly Func<Excel.Application> _hiddenApplicationFactory;
         private readonly Action<object> _releaseComObject;
         private readonly object _hiddenApplicationCacheSync = new object();
@@ -38,6 +40,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             _cleanupOutcomeService = new CaseWorkbookOpenCleanupOutcomeService(_routeDecisionService);
             _presentationHandoffService = new CaseWorkbookPresentationHandoffService();
             _hiddenAppLifecycleSupportService = new CaseWorkbookHiddenAppLifecycleSupportService();
+            _hiddenAppCacheSlotDecisionService = new CaseWorkbookHiddenAppCacheSlotDecisionService();
+            _hiddenAppCacheDiagnosticEventFactory = new CaseWorkbookHiddenAppCacheDiagnosticEventFactory(_routeDecisionService);
             _hiddenApplicationFactory = hiddenApplicationFactory ?? (() => new Excel.Application());
             _releaseComObject = releaseComObject;
         }
@@ -57,21 +61,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _cachedHiddenApplication = null;
             }
 
-            LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionShutdown,
-                string.Empty,
-                CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                "CaseWorkbookOpenStrategy.ShutdownHiddenApplicationCache",
-                "shutdown-cleanup")
-            {
-                EventOutcome = slotToDispose == null ? "no-retained-instance" : "dispose-retained-instance",
-                CacheEvent = "shutdown",
-                RetainedInstancePresent = slotToDispose != null && slotToDispose.Application != null,
-                AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(slotToDispose == null ? null : slotToDispose.Application),
-                CleanupReason = "shutdown-cleanup",
-                SafetyAction = slotToDispose == null ? "none" : "dispose-retained-application",
-                ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-            });
+            LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateShutdownEvent(
+                slotToDispose != null && slotToDispose.Application != null,
+                _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(slotToDispose == null ? null : slotToDispose.Application)));
             DisposeCachedHiddenApplicationSlot(slotToDispose, "shutdown-cleanup");
         }
 
@@ -154,47 +146,38 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 EnsureHiddenApplicationIdleTimerUnlocked();
                 expiredSlotToDispose = CleanupExpiredCachedHiddenApplicationUnlocked("OpenHiddenWorkbook.Acquire");
 
-                if (_cachedHiddenApplication != null)
+                CaseWorkbookHiddenAppLifecycleFacts lifecycleFacts =
+                    _cachedHiddenApplication != null && !_cachedHiddenApplication.IsInUse
+                        ? CaptureCachedHiddenApplicationLifecycleFactsUnlocked(_cachedHiddenApplication)
+                        : null;
+                CaseWorkbookHiddenAppCacheAcquisitionDecision acquisitionDecision =
+                    _hiddenAppCacheSlotDecisionService.DecideAcquisition(
+                        slotPresent: _cachedHiddenApplication != null,
+                        slotInUse: _cachedHiddenApplication != null && _cachedHiddenApplication.IsInUse,
+                        lifecycleFacts: lifecycleFacts);
+
+                if (acquisitionDecision.ShouldBypassCache)
                 {
-                    if (_cachedHiddenApplication.IsInUse)
-                    {
-                        bypassRouteDecision = _routeDecisionService.DecideHiddenApplicationCacheAcquisition(cachedApplicationInUse: true);
-                        bypassBecauseInUse = bypassRouteDecision.IsFallbackRoute;
-                    }
-                    else
-                    {
-                        CaseWorkbookHiddenAppLifecycleFacts lifecycleFacts = CaptureCachedHiddenApplicationLifecycleFactsUnlocked(_cachedHiddenApplication);
-                        if (!lifecycleFacts.IsReusable)
-                        {
-                            _logger.Warn(_hiddenAppLifecycleSupportService.BuildCacheUnhealthyMessage("acquire-health-check-failed", lifecycleFacts.AppHwnd));
-                            LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionOrphanSuspicion,
-                                caseWorkbookPath,
-                                CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                                "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
-                                "acquire-health-check-failed")
-                            {
-                                EventOutcome = "suspected-unhealthy-retained-instance",
-                                CacheEvent = "acquire-health-check",
-                                AppHwnd = lifecycleFacts.AppHwnd,
-                                SafetyAction = "dispose-retained-application",
-                                AbandonedOperation = "reuse-retained-application",
-                                LifecycleFacts = lifecycleFacts,
-                                ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-                            });
-                            acquisitionReason = "cache-replaced-after-unhealthy";
-                            DisposeCachedHiddenApplicationSlotUnlocked("acquire-unhealthy");
-                        }
-                        else
-                        {
-                            hiddenApplication = _cachedHiddenApplication.Application;
-                            _cachedHiddenApplication.IsInUse = true;
-                            _cachedHiddenApplication.IdleSinceUtc = DateTime.MinValue;
-                            StopHiddenApplicationIdleTimerUnlocked();
-                            reusedApplication = true;
-                            acquisitionReason = "cache-reusable";
-                        }
-                    }
+                    bypassRouteDecision = _routeDecisionService.DecideHiddenApplicationCacheAcquisition(cachedApplicationInUse: true);
+                    bypassBecauseInUse = bypassRouteDecision.IsFallbackRoute;
+                }
+                else if (acquisitionDecision.ShouldDisposeSlot)
+                {
+                    _logger.Warn(_hiddenAppLifecycleSupportService.BuildCacheUnhealthyMessage(acquisitionDecision.Reason, lifecycleFacts.AppHwnd));
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateAcquireUnhealthyEvent(
+                        caseWorkbookPath,
+                        lifecycleFacts));
+                    acquisitionReason = acquisitionDecision.NextAcquisitionReason;
+                    DisposeCachedHiddenApplicationSlotUnlocked("acquire-unhealthy");
+                }
+                else if (acquisitionDecision.ShouldReuseSlot)
+                {
+                    hiddenApplication = _cachedHiddenApplication.Application;
+                    _cachedHiddenApplication.IsInUse = true;
+                    _cachedHiddenApplication.IdleSinceUtc = DateTime.MinValue;
+                    StopHiddenApplicationIdleTimerUnlocked();
+                    reusedApplication = true;
+                    acquisitionReason = acquisitionDecision.NextAcquisitionReason;
                 }
 
                 if (!bypassBecauseInUse && hiddenApplication == null)
@@ -215,21 +198,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 CaseWorkbookOpenRouteDecision fallbackDecision = bypassRouteDecision
                     ?? _routeDecisionService.DecideHiddenApplicationCacheAcquisition(cachedApplicationInUse: true);
-                LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                    CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionFallback,
+                LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateAcquireFallbackEvent(
                     caseWorkbookPath,
-                    fallbackDecision.RouteName,
-                    "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
-                    fallbackDecision.Reason)
-                {
-                    EventOutcome = "fallback-to-dedicated-hidden-session",
-                    CacheEvent = "acquire-fallback",
-                    FallbackRoute = fallbackDecision.RouteName,
-                    AbandonedOperation = "retained-cache-acquire",
-                    SafetyAction = "open-dedicated-hidden-session",
-                    ElapsedMilliseconds = stopwatch.ElapsedMilliseconds,
-                    ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(fallbackDecision.RouteName)
-                });
+                    fallbackDecision,
+                    stopwatch.ElapsedMilliseconds));
                 _logger.Info(_hiddenAppLifecycleSupportService.BuildCacheBypassInUseMessage(caseWorkbookPath, fallbackDecision, stopwatch.ElapsedMilliseconds));
                 return OpenDedicatedHiddenWorkbookSession(
                     caseWorkbookPath,
@@ -237,21 +209,12 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                     fallbackDecision.SaveBeforeClose);
             }
 
-            LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionAcquire,
+            LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateAcquireEvent(
                 caseWorkbookPath,
-                CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
-                acquisitionReason)
-            {
-                EventOutcome = "acquired",
-                CacheEvent = "acquire",
-                AcquisitionKind = reusedApplication ? "reused" : "created",
-                ReusedApplication = reusedApplication,
-                AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(hiddenApplication),
-                ElapsedMilliseconds = stopwatch.ElapsedMilliseconds,
-                ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-            });
+                acquisitionReason,
+                reusedApplication,
+                _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(hiddenApplication),
+                stopwatch.ElapsedMilliseconds));
             _logger.Info(_hiddenAppLifecycleSupportService.BuildCacheAcquiredMessage(caseWorkbookPath, reusedApplication, CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName, _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(hiddenApplication), stopwatch.ElapsedMilliseconds));
             NewCaseVisibilityObservation.Log(
                 _logger,
@@ -321,21 +284,10 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             }
             catch (Exception ex)
             {
-                LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                    CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionPoisonMark,
+                LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateAcquireOpenFailedPoisonEvent(
                     caseWorkbookPath,
-                    CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                    "CaseWorkbookOpenStrategy.OpenHiddenWorkbookWithApplicationCache",
-                    "workbook-open-failed")
-                {
-                    EventOutcome = "poison-requested",
-                    CacheEvent = "acquire-open-failed",
-                    PoisonReason = "workbookOpenFailed",
-                    AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(hiddenApplication),
-                    ExceptionType = ex.GetType().Name,
-                    SafetyAction = "poison-dispose",
-                    ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-                });
+                    _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(hiddenApplication),
+                    ex.GetType().Name));
                 TryCloseWorkbookWithoutSaving(workbook);
                 ReleaseComObject(workbook);
                 CleanupCachedHiddenSession(
@@ -842,47 +794,33 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
         {
             lock (_hiddenApplicationCacheSync)
             {
-                if (_cachedHiddenApplication == null
-                    || !ReferenceEquals(_cachedHiddenApplication.Application, application)
-                    || !_cachedHiddenApplication.IsOwnedByCache)
+                bool slotPresent = _cachedHiddenApplication != null;
+                bool sameApplication = slotPresent && ReferenceEquals(_cachedHiddenApplication.Application, application);
+                bool ownedByCache = slotPresent && _cachedHiddenApplication.IsOwnedByCache;
+                CaseWorkbookHiddenAppCacheReturnSlotDecision returnSlotDecision =
+                    _hiddenAppCacheSlotDecisionService.DecideReturnSlot(
+                        slotPresent,
+                        sameApplication,
+                        ownedByCache);
+                if (!returnSlotDecision.CanReturn)
                 {
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionIdleReturn,
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateReturnSlotMismatchEvent(
                         caseWorkbookPath,
                         routeName,
-                        "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
-                        "cache-slot-mismatch")
-                    {
-                        EventOutcome = "not-returned",
-                        CacheEvent = "idle-return",
-                        ReturnOutcome = "not-cache-slot",
-                        AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application),
-                        RetainedInstancePresent = _cachedHiddenApplication != null && _cachedHiddenApplication.Application != null,
-                        SafetyAction = "return-false",
-                        ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    });
+                        _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application),
+                        _cachedHiddenApplication != null && _cachedHiddenApplication.Application != null,
+                        stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                     return false;
                 }
 
                 if (!_routeDecisionService.IsHiddenApplicationCacheEnabled())
                 {
                     _logger.Info(_hiddenAppLifecycleSupportService.BuildReturnToIdleDisabledMessage(caseWorkbookPath, routeName, _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application)));
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionIdleReturn,
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateReturnFeatureDisabledEvent(
                         caseWorkbookPath,
                         routeName,
-                        "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
-                        "feature-flag-disabled")
-                    {
-                        EventOutcome = "not-returned",
-                        CacheEvent = "idle-return",
-                        ReturnOutcome = "discard",
-                        AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application),
-                        SafetyAction = "poison-dispose",
-                        ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    });
+                        _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application),
+                        stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                     _cachedHiddenApplication.IsPoisoned = true;
                     return false;
                 }
@@ -894,62 +832,32 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 catch (Exception ex)
                 {
                     _logger.Error(_hiddenAppLifecycleSupportService.BuildReturnToIdleFailedHiddenStateMessage(), ex);
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionIdleReturn,
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateReturnHiddenStateFailedEvent(
                         caseWorkbookPath,
                         routeName,
-                        "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
-                        "hidden-state-reapply-failed")
-                    {
-                        EventOutcome = "not-returned",
-                        CacheEvent = "idle-return",
-                        ReturnOutcome = "discard",
-                        AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application),
-                        ExceptionType = ex.GetType().Name,
-                        SafetyAction = "poison-dispose",
-                        ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    });
+                        appHwnd: _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(application),
+                        exceptionType: ex.GetType().Name,
+                        elapsedMilliseconds: stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                     _cachedHiddenApplication.IsPoisoned = true;
                     return false;
                 }
 
                 CaseWorkbookHiddenAppLifecycleFacts lifecycleFacts = CaptureCachedHiddenApplicationLifecycleFactsUnlocked(_cachedHiddenApplication);
-                if (!lifecycleFacts.IsApplicationStateHealthy)
+                CaseWorkbookHiddenAppCacheReturnHealthDecision returnHealthDecision =
+                    _hiddenAppCacheSlotDecisionService.DecideReturnHealth(lifecycleFacts);
+                if (!returnHealthDecision.CanReturn)
                 {
                     _cachedHiddenApplication.IsPoisoned = true;
-                    _logger.Warn(_hiddenAppLifecycleSupportService.BuildCacheUnhealthyMessage("return-to-idle-health-check-failed", lifecycleFacts.AppHwnd));
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionOrphanSuspicion,
+                    _logger.Warn(_hiddenAppLifecycleSupportService.BuildCacheUnhealthyMessage(returnHealthDecision.Reason, lifecycleFacts.AppHwnd));
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateReturnHealthCheckSuspicionEvent(
                         caseWorkbookPath,
                         routeName,
-                        "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
-                        "return-to-idle-health-check-failed")
-                    {
-                        EventOutcome = "suspected-unhealthy-retained-instance",
-                        CacheEvent = "idle-return-health-check",
-                        AppHwnd = lifecycleFacts.AppHwnd,
-                        SafetyAction = "poison-dispose",
-                        AbandonedOperation = "return-retained-application-to-idle",
-                        LifecycleFacts = lifecycleFacts,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    });
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionIdleReturn,
+                        lifecycleFacts));
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateReturnHealthCheckFailedEvent(
                         caseWorkbookPath,
                         routeName,
-                        "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
-                        "health-check-failed")
-                    {
-                        EventOutcome = "not-returned",
-                        CacheEvent = "idle-return",
-                        ReturnOutcome = "discard",
-                        AppHwnd = lifecycleFacts.AppHwnd,
-                        SafetyAction = "poison-dispose",
-                        LifecycleFacts = lifecycleFacts,
-                        ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    });
+                        lifecycleFacts: lifecycleFacts,
+                        elapsedMilliseconds: stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                     return false;
                 }
 
@@ -957,22 +865,11 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _cachedHiddenApplication.IdleSinceUtc = DateTime.UtcNow;
                 ScheduleHiddenApplicationIdleTimerUnlocked();
                 _logger.Info(_hiddenAppLifecycleSupportService.BuildReturnedToIdleMessage(caseWorkbookPath, routeName, lifecycleFacts.AppHwnd, _routeDecisionService.ResolveHiddenApplicationCacheIdleSeconds(), stopwatch == null ? 0 : stopwatch.ElapsedMilliseconds));
-                LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                    CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionIdleReturn,
+                LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateReturnedToIdleEvent(
                     caseWorkbookPath,
                     routeName,
-                    "CaseWorkbookOpenStrategy.TryReturnCachedHiddenApplicationToIdle",
-                    "returnedToIdle")
-                {
-                    EventOutcome = "returned-to-idle",
-                    CacheEvent = "idle-return",
-                    ReturnOutcome = "returned-to-idle",
-                    AppHwnd = lifecycleFacts.AppHwnd,
-                    SafetyAction = "keep-retained-application-idle",
-                    LifecycleFacts = lifecycleFacts,
-                    ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                    ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                });
+                    lifecycleFacts,
+                    stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                 NewCaseVisibilityObservation.Log(
                     _logger,
                     null,
@@ -1003,22 +900,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 {
                     _cachedHiddenApplication.IsPoisoned = true;
                     _logger.Warn(_hiddenAppLifecycleSupportService.BuildPoisonedMessage(caseWorkbookPath, routeName, appHwnd, stopwatch == null ? 0 : stopwatch.ElapsedMilliseconds, poisonReason));
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionPoisonMark,
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreatePoisonMarkedEvent(
                         caseWorkbookPath,
                         routeName,
-                        "CaseWorkbookOpenStrategy.MarkCachedHiddenApplicationPoisoned",
-                        poisonReason)
-                    {
-                        EventOutcome = "marked",
-                        CacheEvent = "poison",
-                        PoisonReason = poisonReason,
-                        AppHwnd = appHwnd,
-                        ExceptionType = exceptionType,
-                        SafetyAction = "detach-and-dispose-retained-application",
-                        ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                    });
+                        poisonReason,
+                        appHwnd,
+                        exceptionType,
+                        stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
                     slotToDispose = _cachedHiddenApplication;
                     _cachedHiddenApplication = null;
                     StopHiddenApplicationIdleTimerUnlocked();
@@ -1027,22 +915,13 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
             if (slotToDispose == null)
             {
-                LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                    CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionPoisonMark,
+                LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreatePoisonSlotMissingEvent(
                     caseWorkbookPath,
                     routeName,
-                    "CaseWorkbookOpenStrategy.MarkCachedHiddenApplicationPoisoned",
-                    poisonReason)
-                {
-                    EventOutcome = "not-marked-slot-missing",
-                    CacheEvent = "poison",
-                    PoisonReason = poisonReason,
-                    AppHwnd = appHwnd,
-                    ExceptionType = exceptionType,
-                    SafetyAction = "skip-dispose-slot-not-found",
-                    ElapsedMilliseconds = stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds,
-                    ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(routeName)
-                });
+                    poisonReason,
+                    appHwnd,
+                    exceptionType,
+                    stopwatch == null ? (long?)null : stopwatch.ElapsedMilliseconds));
             }
 
             DisposeCachedHiddenApplicationSlot(slotToDispose, "poisoned");
@@ -1169,21 +1048,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
             {
                 if (string.Equals(expirationDecision.DecisionReason, "in-use", StringComparison.Ordinal))
                 {
-                    LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                        CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionTimeoutFallback,
-                        string.Empty,
-                        CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                        "CaseWorkbookOpenStrategy.CleanupExpiredCachedHiddenApplicationUnlocked",
-                        expirationDecision.DecisionReason)
-                    {
-                        EventOutcome = "fallback-stop-idle-timer",
-                        CacheEvent = "expiration-decision",
-                        CleanupReason = reason,
-                        AbandonedOperation = "idle-timeout-cleanup",
-                        SafetyAction = "stop-idle-timer",
-                        ExpirationDecision = expirationDecision,
-                        ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-                    });
+                    LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateExpirationInUseEvent(
+                        reason,
+                        expirationDecision));
                 }
 
                 if (expirationDecision.StopIdleTimer)
@@ -1206,90 +1073,63 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
                 _logger.Info(_hiddenAppLifecycleSupportService.BuildTimedOutMessage(reason, _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(expiredSlot.Application)));
             }
 
-            LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionTimeoutFallback,
-                string.Empty,
-                CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                "CaseWorkbookOpenStrategy.CleanupExpiredCachedHiddenApplicationUnlocked",
-                expirationDecision.DecisionReason)
-            {
-                EventOutcome = "dispose-retained-instance",
-                CacheEvent = "expiration-decision",
-                CleanupReason = reason,
-                AppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(expiredSlot == null ? null : expiredSlot.Application),
-                AbandonedOperation = "retain-idle-cache",
-                SafetyAction = "dispose-retained-application",
-                ExpirationDecision = expirationDecision,
-                ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-            });
+            LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateExpirationDisposeEvent(
+                reason,
+                _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(expiredSlot == null ? null : expiredSlot.Application),
+                expirationDecision));
             return expiredSlot;
         }
 
         private void DisposeCachedHiddenApplicationSlot(CachedHiddenApplicationSlot slot, string reason)
         {
-            if (slot == null)
+            CaseWorkbookHiddenAppCacheDisposalDecision disposalDecision =
+                _hiddenAppCacheSlotDecisionService.DecideDisposal(
+                    slotPresent: slot != null,
+                    isOwnedByCache: slot != null && slot.IsOwnedByCache,
+                    applicationPresent: slot != null && slot.Application != null);
+            if (!disposalDecision.DisposalRequired)
             {
                 return;
             }
 
-            if (!slot.IsOwnedByCache)
+            if (string.Equals(disposalDecision.Reason, "not-cache-owned", StringComparison.Ordinal))
             {
                 string appHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(slot.Application);
                 _logger.Warn(_hiddenAppLifecycleSupportService.BuildCleanupSkippedNotOwnedMessage(reason, appHwnd));
-                LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                    CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionDispose,
-                    string.Empty,
-                    CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                    "CaseWorkbookOpenStrategy.DisposeCachedHiddenApplicationSlot",
-                    reason)
-                {
-                    EventOutcome = "skipped-not-cache-owned",
-                    CacheEvent = "dispose",
-                    CleanupReason = reason,
-                    AppHwnd = appHwnd,
-                    RetainedInstancePresent = slot.Application != null,
-                    AppQuitAttempted = false,
-                    AppQuitCompleted = false,
-                    SafetyAction = "skip-quit",
-                    ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-                });
+                LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateDisposeSkippedNotOwnedEvent(
+                    reason,
+                    appHwnd,
+                    disposalDecision.RetainedInstancePresent));
                 LogRetainedInstanceCleanupOutcome(_cleanupOutcomeService.CreateRetainedInstanceCleanupOutcome(
                     reason,
                     appHwnd,
-                    retainedInstancePresent: slot.Application != null,
+                    retainedInstancePresent: disposalDecision.RetainedInstancePresent,
                     isOwnedByCache: false,
                     quitAttempted: false,
                     quitCompleted: false));
                 return;
             }
 
-            bool quitCompleted = TryQuitApplication(slot.Application);
-            ReleaseComObject(slot.Application);
+            bool quitCompleted = disposalDecision.ShouldQuitApplication && TryQuitApplication(slot.Application);
+            if (disposalDecision.ShouldReleaseApplication)
+            {
+                ReleaseComObject(slot.Application);
+            }
+
             string retainedAppHwnd = _hiddenAppLifecycleSupportService.CaptureApplicationHwnd(slot.Application);
             LogRetainedInstanceCleanupOutcome(_cleanupOutcomeService.CreateRetainedInstanceCleanupOutcome(
                 reason,
                 retainedAppHwnd,
-                retainedInstancePresent: slot.Application != null,
+                retainedInstancePresent: disposalDecision.RetainedInstancePresent,
                 isOwnedByCache: true,
-                quitAttempted: slot.Application != null,
+                quitAttempted: disposalDecision.ShouldQuitApplication,
                 quitCompleted: quitCompleted));
-            LogRetainedHiddenAppCacheEvent(new CaseWorkbookHiddenAppLifecycleDiagnosticEvent(
-                CaseWorkbookHiddenAppLifecycleSupportService.LifecycleActionDispose,
-                string.Empty,
-                CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName,
-                "CaseWorkbookOpenStrategy.DisposeCachedHiddenApplicationSlot",
-                reason)
-            {
-                EventOutcome = quitCompleted ? "disposed" : "degraded",
-                CacheEvent = "dispose",
-                CleanupReason = reason,
-                AppHwnd = retainedAppHwnd,
-                RetainedInstancePresent = slot.Application != null,
-                AppQuitAttempted = slot.Application != null,
-                AppQuitCompleted = quitCompleted,
-                SafetyAction = quitCompleted ? "quit-and-release" : "release-after-quit-failure",
-                ApplicationOwnerFacts = _routeDecisionService.BuildApplicationOwnerFacts(CaseWorkbookOpenRouteDecisionService.HiddenApplicationCacheRouteName)
-            });
+            LogRetainedHiddenAppCacheEvent(_hiddenAppCacheDiagnosticEventFactory.CreateDisposeEvent(
+                reason,
+                retainedAppHwnd,
+                disposalDecision.RetainedInstancePresent,
+                disposalDecision.ShouldQuitApplication,
+                quitCompleted));
             _logger.Info(_hiddenAppLifecycleSupportService.BuildDiscardedMessage(reason, retainedAppHwnd));
         }
 

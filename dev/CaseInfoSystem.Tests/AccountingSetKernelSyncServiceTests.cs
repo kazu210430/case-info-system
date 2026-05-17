@@ -204,6 +204,7 @@ namespace CaseInfoSystem.Tests
         [Fact]
         public void Execute_WhenTemplateIsNotOpen_OpensHiddenInCurrentApplicationAndRestoresState()
         {
+            List<string> logs = new List<string>();
             string tempDirectory = CreateTempDirectory();
             try
             {
@@ -245,7 +246,7 @@ namespace CaseInfoSystem.Tests
                         OnSetWorkbookWindowsVisible = (_, visible) => hiddenVisibility = visible
                     },
                     new PathCompatibilityService(),
-                    OrchestrationTestSupport.CreateLogger(new List<string>()));
+                    OrchestrationTestSupport.CreateLogger(logs));
 
                 service.Execute(kernelWorkbook);
 
@@ -259,6 +260,73 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(1, accountingWorkbook.SaveCallCount);
                 Assert.Equal(1, accountingWorkbook.CloseCallCount);
                 Assert.Equal(0, sharedApplication.QuitCallCount);
+                Assert.Contains(logs, message =>
+                    ContainsOrdinal(message, "Accounting set kernel sync owned workbook close attempted.")
+                    && ContainsOrdinal(message, "route=AccountingSetKernelSyncService.current-application-owned-workbook")
+                    && ContainsOrdinal(message, "ownedWorkbook=True")
+                    && ContainsOrdinal(message, "closeAttempted=True")
+                    && ContainsOrdinal(message, "closeSucceeded=True")
+                    && ContainsOrdinal(message, "hiddenWindowRoute=True"));
+            }
+            finally
+            {
+                TryDeleteDirectory(tempDirectory);
+            }
+        }
+
+        [Fact]
+        public void Execute_WhenCurrentApplicationFallbackCloseFails_LogsFailureOutcomeWithoutThrowing()
+        {
+            List<string> logs = new List<string>();
+            string tempDirectory = CreateTempDirectory();
+            try
+            {
+                string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
+                File.WriteAllText(templatePath, "template");
+                Excel.Application sharedApplication = new Excel.Application
+                {
+                    DisplayAlerts = true,
+                    ScreenUpdating = true,
+                    EnableEvents = true
+                };
+                Excel.Workbook kernelWorkbook = CreateWorkbook(Path.Combine(tempDirectory, "kernel.xlsx"));
+                kernelWorkbook.Application = sharedApplication;
+                kernelWorkbook.Worksheets.Add(CreateUserDataWorksheet());
+                Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
+                accountingWorkbook.CloseBehavior = () => throw new InvalidOperationException("close failed " + templatePath + " 東京都");
+
+                var service = new AccountingSetKernelSyncService(
+                    new ExcelInteropService(),
+                    new AccountingTemplateResolver
+                    {
+                        OnResolveTemplatePath = _ => templatePath
+                    },
+                    new AccountingWorkbookService
+                    {
+                        OnOpenInCurrentApplication = _ =>
+                        {
+                            accountingWorkbook.Application = sharedApplication;
+                            return accountingWorkbook;
+                        }
+                    },
+                    new PathCompatibilityService(),
+                    OrchestrationTestSupport.CreateLogger(logs));
+
+                service.Execute(kernelWorkbook);
+
+                Assert.Equal(1, accountingWorkbook.SaveCallCount);
+                Assert.Equal(1, accountingWorkbook.CloseCallCount);
+                Assert.Contains(logs, message =>
+                    ContainsOrdinal(message, "WARN: Accounting set kernel sync owned workbook close attempted.")
+                    && ContainsOrdinal(message, "route=AccountingSetKernelSyncService.current-application-owned-workbook")
+                    && ContainsOrdinal(message, "ownedWorkbook=True")
+                    && ContainsOrdinal(message, "closeAttempted=True")
+                    && ContainsOrdinal(message, "closeSucceeded=False")
+                    && ContainsOrdinal(message, "exceptionType=System.InvalidOperationException")
+                    && ContainsOrdinal(message, "hresult=0x"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, tempDirectory));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "close failed"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "東京都"));
             }
             finally
             {
@@ -313,6 +381,67 @@ namespace CaseInfoSystem.Tests
                 Assert.Equal(0, accountingWorkbook.SaveCallCount);
                 Assert.Equal(1, accountingWorkbook.CloseCallCount);
                 Assert.Equal(0, sharedApplication.QuitCallCount);
+            }
+            finally
+            {
+                TryDeleteDirectory(tempDirectory);
+            }
+        }
+
+        [Fact]
+        public void Execute_WhenCurrentApplicationFallbackWriteFailsAndCloseFails_RethrowsOriginalWriteException()
+        {
+            List<string> logs = new List<string>();
+            string tempDirectory = CreateTempDirectory();
+            try
+            {
+                string templatePath = Path.Combine(tempDirectory, "accounting-template.xlsx");
+                File.WriteAllText(templatePath, "template");
+                Excel.Application sharedApplication = new Excel.Application
+                {
+                    DisplayAlerts = true,
+                    ScreenUpdating = true,
+                    EnableEvents = true
+                };
+                Excel.Workbook kernelWorkbook = CreateWorkbook(Path.Combine(tempDirectory, "kernel.xlsx"));
+                kernelWorkbook.Application = sharedApplication;
+                kernelWorkbook.Worksheets.Add(CreateUserDataWorksheet());
+                Excel.Workbook accountingWorkbook = CreateWorkbook(templatePath);
+                InvalidOperationException expected = new InvalidOperationException("write failed");
+                accountingWorkbook.CloseBehavior = () => throw new InvalidOperationException("close failed " + templatePath);
+
+                var service = new AccountingSetKernelSyncService(
+                    new ExcelInteropService(),
+                    new AccountingTemplateResolver
+                    {
+                        OnResolveTemplatePath = _ => templatePath
+                    },
+                    new AccountingWorkbookService
+                    {
+                        OnOpenInCurrentApplication = _ =>
+                        {
+                            accountingWorkbook.Application = sharedApplication;
+                            return accountingWorkbook;
+                        },
+                        OnWriteCell = (_, __, ___, ____) => throw expected
+                    },
+                    new PathCompatibilityService(),
+                    OrchestrationTestSupport.CreateLogger(logs));
+
+                InvalidOperationException actual = Assert.Throws<InvalidOperationException>(() => service.Execute(kernelWorkbook));
+
+                Assert.Same(expected, actual);
+                Assert.Equal(0, accountingWorkbook.SaveCallCount);
+                Assert.Equal(1, accountingWorkbook.CloseCallCount);
+                Assert.True(sharedApplication.DisplayAlerts);
+                Assert.True(sharedApplication.ScreenUpdating);
+                Assert.True(sharedApplication.EnableEvents);
+                Assert.Contains(logs, message =>
+                    ContainsOrdinal(message, "WARN: Accounting set kernel sync owned workbook close attempted.")
+                    && ContainsOrdinal(message, "closeSucceeded=False")
+                    && ContainsOrdinal(message, "exceptionType=System.InvalidOperationException"));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, tempDirectory));
+                Assert.DoesNotContain(logs, message => ContainsOrdinal(message, "close failed"));
             }
             finally
             {

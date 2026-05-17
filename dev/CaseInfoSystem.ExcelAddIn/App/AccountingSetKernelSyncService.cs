@@ -57,6 +57,46 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
+		private sealed class WorkbookCloseOutcome
+		{
+			internal bool Attempted { get; }
+
+			internal bool Succeeded { get; }
+
+			internal bool OwnedWorkbook { get; }
+
+			internal string Route { get; }
+
+			internal string SkipReason { get; }
+
+			internal Exception Exception { get; }
+
+			private WorkbookCloseOutcome (bool attempted, bool succeeded, bool ownedWorkbook, string route, string skipReason, Exception exception)
+			{
+				Attempted = attempted;
+				Succeeded = succeeded;
+				OwnedWorkbook = ownedWorkbook;
+				Route = route ?? string.Empty;
+				SkipReason = skipReason ?? string.Empty;
+				Exception = exception;
+			}
+
+			internal static WorkbookCloseOutcome Skipped (string reason, string route)
+			{
+				return new WorkbookCloseOutcome (attempted: false, succeeded: false, ownedWorkbook: false, route: route, skipReason: reason, exception: null);
+			}
+
+			internal static WorkbookCloseOutcome Success (string route)
+			{
+				return new WorkbookCloseOutcome (attempted: true, succeeded: true, ownedWorkbook: true, route: route, skipReason: string.Empty, exception: null);
+			}
+
+			internal static WorkbookCloseOutcome Failure (string route, Exception exception)
+			{
+				return new WorkbookCloseOutcome (attempted: true, succeeded: false, ownedWorkbook: true, route: route, skipReason: string.Empty, exception: exception);
+			}
+		}
+
 		private readonly ExcelInteropService _excelInteropService;
 
 		private readonly AccountingTemplateResolver _accountingTemplateResolver;
@@ -124,8 +164,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 						ownedWorkbook.Save ();
 						_logger.Info ("Accounting set kernel sync completed. " + BuildPathDiagnostics ("localTemplate", text2) + ", alreadyOpen=" + flag);
 					} finally {
-						CloseWorkbookQuietly (ownedWorkbook);
-						_logger.Info ("Accounting set kernel sync current application fallback closed. appHwnd=" + SafeApplicationHwnd (application));
+						WorkbookCloseOutcome closeOutcome = CloseWorkbookQuietly (ownedWorkbook);
+						LogOwnedWorkbookCloseOutcome (closeOutcome, application);
 					}
 				}
 			} catch (Exception exception) {
@@ -211,20 +251,50 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			}
 		}
 
-		private void CloseWorkbookQuietly (Workbook workbook)
+		private WorkbookCloseOutcome CloseWorkbookQuietly (Workbook workbook)
 		{
+			const string route = "AccountingSetKernelSyncService.current-application-owned-workbook";
 			if (workbook == null) {
-				return;
+				return WorkbookCloseOutcome.Skipped ("no-owned-workbook", route);
 			}
 			try {
 				WorkbookCloseInteropHelper.CloseOwnedWorkbookWithoutSave (
 					workbook,
-					_logger,
-					"AccountingSetKernelSyncService.CloseWorkbookQuietly");
-			} catch {
+					null,
+					route);
+				return WorkbookCloseOutcome.Success (route);
+			} catch (Exception exception) {
+				return WorkbookCloseOutcome.Failure (route, exception);
 			} finally {
 				CaseInfoSystem.ExcelAddIn.Infrastructure.ComObjectReleaseService.FinalRelease (workbook);
 			}
+		}
+
+		private void LogOwnedWorkbookCloseOutcome (WorkbookCloseOutcome outcome, Application application)
+		{
+			WorkbookCloseOutcome safeOutcome = outcome ?? WorkbookCloseOutcome.Skipped ("outcome-missing", "AccountingSetKernelSyncService.current-application-owned-workbook");
+			string message = "Accounting set kernel sync owned workbook close "
+				+ (safeOutcome.Attempted ? "attempted" : "skipped")
+				+ ". route="
+				+ safeOutcome.Route
+				+ ", ownedWorkbook="
+				+ safeOutcome.OwnedWorkbook
+				+ ", closeAttempted="
+				+ safeOutcome.Attempted
+				+ ", closeSucceeded="
+				+ safeOutcome.Succeeded
+				+ ", hiddenWindowRoute=True"
+				+ ", appHwnd="
+				+ SafeApplicationHwnd (application);
+			if (!safeOutcome.Attempted) {
+				_logger.Info (message + ", reason=" + safeOutcome.SkipReason);
+				return;
+			}
+			if (safeOutcome.Succeeded) {
+				_logger.Info (message);
+				return;
+			}
+			_logger.Warn (message + ", " + BuildExceptionDiagnostics (safeOutcome.Exception));
 		}
 
 		private static string BuildValueDiagnostics (string label, string value)

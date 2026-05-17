@@ -34,6 +34,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 		}
 
+		// Temporary ownership is derived only from whether this resolver opened the workbook.
+		// Already-open Kernel workbooks remain owned by Excel/user/caller code and are not closed here.
 		internal void CloseIfOwned ()
 		{
 			CloseIfOwned (routeName: null, suppressEventsDuringClose: false);
@@ -127,6 +129,9 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			if (!_pathCompatibilityService.FileExistsSafe (text)) {
 				return CreateResult (text, null, workbookWasAlreadyOpen: false, readOnly);
 			}
+			// ResolveOrOpen is intentionally not a pure resolver: it may temporarily open
+			// the root-bound Kernel workbook in the current application and hide its windows.
+			// The returned result is the caller's cleanup boundary via CloseIfOwned().
 			bool enableEvents = _application.EnableEvents;
 			try {
 				_application.EnableEvents = false;

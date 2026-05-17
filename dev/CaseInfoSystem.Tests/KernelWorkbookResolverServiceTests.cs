@@ -10,22 +10,19 @@ namespace CaseInfoSystem.Tests
     public class KernelWorkbookResolverServiceTests
     {
         [Fact]
-        public void ResolveOrOpenReadOnly_WhenKernelWorkbookAlreadyOpen_CloseIfOwnedDoesNotClose()
+        public void ResolveOrOpenReadOnly_ReturnsAlreadyOpenWorkbookWithoutOwnership()
         {
             using (var fixture = KernelWorkbookResolverFixture.Create())
             {
                 var existingKernelWorkbook = fixture.CreateKernelWorkbook();
                 fixture.Application.Workbooks.Add(existingKernelWorkbook);
-                var result = new KernelWorkbookAccessResult(
-                    fixture.KernelWorkbookPath,
-                    existingKernelWorkbook,
-                    workbookWasAlreadyOpen: true,
-                    readOnly: true,
-                    fixture.Logger);
+
+                KernelWorkbookAccessResult result = fixture.Service.ResolveOrOpenReadOnly(fixture.CreateCaseWorkbook());
 
                 Assert.Same(existingKernelWorkbook, result.Workbook);
                 Assert.True(result.WorkbookWasAlreadyOpen);
                 Assert.False(result.WorkbookWasOpenedByResolver);
+                Assert.True(existingKernelWorkbook.Windows[1].Visible);
 
                 result.CloseIfOwned("unit-existing-kernel");
 
@@ -35,7 +32,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ResolveOrOpenReadOnly_WhenResolverOpensWorkbook_CloseIfOwnedClosesTemporaryWorkbook()
+        public void ResolveOrOpenReadOnly_OpensTemporaryWorkbookAndRequiresCloseIfOwned()
         {
             using (var fixture = KernelWorkbookResolverFixture.Create())
             {
@@ -46,6 +43,7 @@ namespace CaseInfoSystem.Tests
                 Assert.NotNull(result.Workbook);
                 Assert.False(result.WorkbookWasAlreadyOpen);
                 Assert.True(result.WorkbookWasOpenedByResolver);
+                Assert.Same(fixture.Application, result.Workbook.Application);
                 Assert.False(result.Workbook.Windows[1].Visible);
 
                 result.CloseIfOwned("unit-temporary-kernel");
@@ -88,7 +86,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ResolveOrOpenReadOnly_UsesSystemRootPathAndDoesNotReuseKernelWorkbookFromAnotherRoot()
+        public void ResolveOrOpenReadOnly_UsesSystemRootPathAndDoesNotTransferOwnershipFromAnotherRoot()
         {
             using (var fixture = KernelWorkbookResolverFixture.Create())
             using (var otherRoot = KernelWorkbookResolverFixture.Create())
@@ -126,6 +124,23 @@ namespace CaseInfoSystem.Tests
             }
         }
 
+        [Fact]
+        public void ResolveOrOpenReadOnly_WhenOpenFails_RestoresEventsAndPropagates()
+        {
+            using (var fixture = KernelWorkbookResolverFixture.Create())
+            {
+                fixture.Application.EnableEvents = true;
+                fixture.Application.Workbooks.OpenBehavior = (_, __, ___) => throw new InvalidOperationException("open failed");
+
+                InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                    () => fixture.Service.ResolveOrOpenReadOnly(fixture.CreateCaseWorkbook()));
+
+                Assert.Equal("open failed", exception.Message);
+                Assert.True(fixture.Application.EnableEvents);
+                Assert.Empty(fixture.Application.Workbooks);
+            }
+        }
+
         private sealed class KernelWorkbookResolverFixture : IDisposable
         {
             private KernelWorkbookResolverFixture(string rootPath)
@@ -137,6 +152,7 @@ namespace CaseInfoSystem.Tests
                 Logger = new Logger(_ => { });
                 PathCompatibilityService = new PathCompatibilityService(Logger);
                 ExcelInteropService = new ExcelInteropService(Application, Logger, PathCompatibilityService);
+                ExcelInteropService.OnFindOpenWorkbook = FindOpenWorkbook;
                 Service = new KernelWorkbookResolverService(Application, ExcelInteropService, PathCompatibilityService, Logger);
             }
 
@@ -192,6 +208,26 @@ namespace CaseInfoSystem.Tests
                 catch
                 {
                 }
+            }
+
+            private Excel.Workbook FindOpenWorkbook(string workbookPath)
+            {
+                string normalizedTarget = PathCompatibilityService.NormalizePath(workbookPath);
+                foreach (Excel.Workbook workbook in Application.Workbooks)
+                {
+                    if (workbook == null)
+                    {
+                        continue;
+                    }
+
+                    string workbookFullName = PathCompatibilityService.NormalizePath(workbook.FullName);
+                    if (string.Equals(workbookFullName, normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return workbook;
+                    }
+                }
+
+                return null;
             }
 
             private static IDictionary<string, string> CreateDocumentProperties(string systemRoot)

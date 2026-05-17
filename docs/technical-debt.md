@@ -46,6 +46,17 @@
 - 業務都合により、現時点ではこの open 内包責務を残置している。
 - したがって、Kernel 文脈寄せフェーズ完了は `ResolveOrOpen` 系の純化完了を意味しない。
 
+#### 現行 contract freeze
+
+- `ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` は pure resolve ではない。CASE workbook の `SYSTEM_ROOT` から Kernel path を解決し、必要に応じて current/shared `Application` 上で temporary open する。
+- 同じ Kernel path の already-open workbook を返す場合、ownership は移転しない。呼び出し側は `CloseIfOwned()` を呼んでもよいが、実際には close されず、caller が workbook を勝手に close してはいけない。
+- newly-opened workbook は resolver が一時 open した temporary workbook であり、`KernelWorkbookAccessResult.WorkbookWasOpenedByResolver == true` として caller に close 責任が生じる。caller は `finally` 境界などで `CloseIfOwned()` を呼ぶ。
+- `CloseIfOwned()` は temporary ownership の唯一の回収境界であり、resolver が一時 open した workbook だけを一度だけ閉じる。non-owned / already-open workbook は閉じない。
+- temporary open は dedicated/isolated hidden `Application` ではなく、current/shared `Application` の `Workbooks.Open` を使い、開いた workbook window を hidden にする現行 route である。将来の整理でも already-open / temporary-hidden-current-app / root-missing / open-failed の診断価値は維持する。
+- `SYSTEM_ROOT` 不明、Kernel path 不明、Kernel file 不在は fail-closed の null result とし、workbook を open しない。`Workbooks.Open` 例外は握りつぶさず、`EnableEvents` 復元後に呼び出し側へ伝播する。
+- `ResolvedKernelPath` は path matching と戻り値 contract のために保持するが、Kernel / CASE workbook path や root には案件名・個人情報が含まれうる。ログは route / outcome / ownership などの抽象情報を優先し、full path を安易に出さない。
+- 将来 `Open` を Application Service 側へ寄せる場合も、上記 ownership contract、`CloseIfOwned()` の意味、already-open workbook を閉じない条件を壊してはいけない。
+
 ### open 粒度の整理
 
 #### 許容される open
@@ -62,7 +73,7 @@
 ### 将来方針
 
 - `Resolve` と `Open` を分離する。
-- `Open` は ApplicationService 層へ押し出す。
+- `Open` は ownership result を保ったまま ApplicationService 層へ押し出す。
 - Resolver は pure に近い責務へ寄せる。
 - `ResolveOrOpen` 系は段階的に縮退させ、最終的に `WorkbookContext` / `SYSTEM_ROOT` 解決責務へ閉じる。
 

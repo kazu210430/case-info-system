@@ -175,6 +175,10 @@ CASE 表示は `KernelCasePresentationService` を起点として処理されま
 - 許容される open は、明示的な `WorkbookContext` / `SYSTEM_ROOT` 文脈から行う open と user action 起点の open です。
 - 禁止される open は、context-less fallback open と暗黙の workbook 推測です。
 - `KernelWorkbookResolverService.ResolveOrOpen(...)` 系は、業務都合により open 内包責務を残した将来課題として扱います。
+- `ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` は CASE workbook の `SYSTEM_ROOT` から Kernel path を解決し、同じ path の already-open Kernel workbook があれば ownership を移転せず返します。この場合、caller は close しません。
+- already-open が無く、Kernel file が存在する場合だけ、resolver が current/shared `Application` で Kernel workbook を一時 open し、window を hidden にしたうえで ownership result を返します。この temporary workbook は caller が `CloseIfOwned()` で回収します。
+- `SYSTEM_ROOT` 不明、Kernel path 不明、Kernel file 不在では workbook を open せず null result で fail-closed とします。`Workbooks.Open` 失敗は握りつぶさず、`EnableEvents` 復元後に呼び出し側へ伝播します。
+- この経路の診断では already-open / temporary-hidden-current-app / root-missing / open-failed の違いを追える粒度を維持します。ただし workbook full path や root には案件名・個人情報が含まれうるため、ログへ安易に出しません。
 
 ### 登録前チェック
 
@@ -541,7 +545,7 @@ CASE の文書ボタンパネル更新仕様は、次を同時に満たすため
 
 - 現在の実装では、この `openKernelWorkbook` は `ResolveKernelWorkbook(context)` によって要求元の `SYSTEM_ROOT` 文脈へ閉じた workbook として選ばれます。
 - したがって cache invalidate と雛形登録・更新の Kernel workbook 選択境界は root 単位に整理済みです。`KernelWorkbookResolverService.ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` 系は open 内包責務を残す限定境界ですが、未 open Kernel workbook を一時 open した場合の close ownership は `KernelWorkbookAccessResult.CloseIfOwned()` に寄せます。CASE 作成入口や雛形登録・更新が `GetOpenKernelWorkbook()` のような文脈なし再検索に依存しているという意味ではありません。
-- result 型の `CloseIfOwned()` は resolver が一時 open した workbook だけを閉じます。既に open 済みの Kernel workbook は閉じず、root 文脈が混線する形で別 Kernel workbook を再検索しません。
+- result 型の `CloseIfOwned()` は resolver が一時 open した workbook だけを一度だけ閉じます。既に open 済みの Kernel workbook は閉じず、root 文脈が混線する形で別 Kernel workbook を再検索しません。
 - `MasterTemplateCatalogService` と `TaskPaneSnapshotBuilderService` は、どちらも `MasterWorkbookReadAccessService` を共有して Master path 解決と read-only open を揃えています。
 
 #### 新規 CASE 作成時の流れ

@@ -69,6 +69,8 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				};
 			}
 			KernelWorkbookAccessResult kernelAccess = _kernelWorkbookResolverService.ResolveOrOpen (caseWorkbook);
+			// Registration writes to Kernel and hands the workbook to DocumentCommandService
+			// for save/display, so this boundary keeps it open instead of closing ownership here.
 			Workbook workbook = kernelAccess.Workbook;
 			if (workbook == null) {
 				return new CaseListRegistrationResult {

@@ -35,6 +35,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 			try {
 				return Create (caseWorkbook, workbook);
 			} finally {
+				// This caller only borrows Kernel definitions, so temporary access is recovered here.
 				kernelAccess.CloseIfOwned (
 					"CaseDataSnapshotFactory.CloseOpenedKernelWorkbook",
 					suppressEventsDuringClose: true);

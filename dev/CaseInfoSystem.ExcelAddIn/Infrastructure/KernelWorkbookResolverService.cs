@@ -26,11 +26,22 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal bool WorkbookWasAlreadyOpen { get; }
 
-		internal bool WorkbookWasOpenedByResolver
+		// True when this result carries temporary close responsibility for the caller.
+		// Callers should recover that access with CloseIfOwned() unless they deliberately
+		// hand the opened workbook to a downstream owner.
+		internal bool CallerOwnsTemporaryWorkbook
 		{
 			get
 			{
 				return Workbook != null && !WorkbookWasAlreadyOpen;
+			}
+		}
+
+		internal bool WorkbookWasOpenedByResolver
+		{
+			get
+			{
+				return CallerOwnsTemporaryWorkbook;
 			}
 		}
 
@@ -48,7 +59,7 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 
 		internal void CloseIfOwned (string routeName, bool suppressEventsDuringClose)
 		{
-			if (!WorkbookWasOpenedByResolver || _closeAttempted) {
+			if (!CallerOwnsTemporaryWorkbook || _closeAttempted) {
 				return;
 			}
 			_closeAttempted = true;
@@ -131,7 +142,8 @@ namespace CaseInfoSystem.ExcelAddIn.Infrastructure
 			}
 			// ResolveOrOpen is intentionally not a pure resolver: it may temporarily open
 			// the root-bound Kernel workbook in the current application and hide its windows.
-			// The returned result is the caller's cleanup boundary via CloseIfOwned().
+			// The returned result carries the caller's temporary-close responsibility via
+			// CloseIfOwned(); callers that retain the workbook must make that handoff explicit.
 			bool enableEvents = _application.EnableEvents;
 			try {
 				_application.EnableEvents = false;

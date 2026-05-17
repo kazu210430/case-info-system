@@ -10,7 +10,7 @@ namespace CaseInfoSystem.Tests
     public class KernelWorkbookResolverServiceTests
     {
         [Fact]
-        public void ResolveOrOpenReadOnly_ReturnsAlreadyOpenWorkbookWithoutOwnership()
+        public void ResolveOrOpenReadOnly_ReturnsAlreadyOpenWorkbookWithoutTemporaryCloseResponsibility()
         {
             using (var fixture = KernelWorkbookResolverFixture.Create())
             {
@@ -21,6 +21,7 @@ namespace CaseInfoSystem.Tests
 
                 Assert.Same(existingKernelWorkbook, result.Workbook);
                 Assert.True(result.WorkbookWasAlreadyOpen);
+                Assert.False(result.CallerOwnsTemporaryWorkbook);
                 Assert.False(result.WorkbookWasOpenedByResolver);
                 Assert.True(existingKernelWorkbook.Windows[1].Visible);
 
@@ -32,7 +33,7 @@ namespace CaseInfoSystem.Tests
         }
 
         [Fact]
-        public void ResolveOrOpenReadOnly_OpensTemporaryWorkbookAndRequiresCloseIfOwned()
+        public void ResolveOrOpenReadOnly_OpensTemporaryWorkbookAndAssignsCallerCloseResponsibility()
         {
             using (var fixture = KernelWorkbookResolverFixture.Create())
             {
@@ -42,6 +43,7 @@ namespace CaseInfoSystem.Tests
 
                 Assert.NotNull(result.Workbook);
                 Assert.False(result.WorkbookWasAlreadyOpen);
+                Assert.True(result.CallerOwnsTemporaryWorkbook);
                 Assert.True(result.WorkbookWasOpenedByResolver);
                 Assert.Same(fixture.Application, result.Workbook.Application);
                 Assert.False(result.Workbook.Windows[1].Visible);
@@ -98,6 +100,7 @@ namespace CaseInfoSystem.Tests
 
                 Assert.NotSame(otherKernelWorkbook, result.Workbook);
                 Assert.Equal(fixture.KernelWorkbookPath, result.ResolvedKernelPath);
+                Assert.True(result.CallerOwnsTemporaryWorkbook);
                 Assert.True(result.WorkbookWasOpenedByResolver);
 
                 result.CloseIfOwned("unit-root-bound-kernel");
@@ -118,6 +121,7 @@ namespace CaseInfoSystem.Tests
                 KernelWorkbookAccessResult result = fixture.Service.ResolveOrOpenReadOnly(caseWorkbook);
 
                 Assert.Null(result.Workbook);
+                Assert.False(result.CallerOwnsTemporaryWorkbook);
                 Assert.False(result.WorkbookWasOpenedByResolver);
                 result.CloseIfOwned("unit-missing-root");
                 Assert.Empty(fixture.Application.Workbooks);

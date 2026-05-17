@@ -50,12 +50,27 @@
 
 - `ResolveOrOpen(...)` / `ResolveOrOpenReadOnly(...)` は pure resolve ではない。CASE workbook の `SYSTEM_ROOT` から Kernel path を解決し、必要に応じて current/shared `Application` 上で temporary open する。
 - 同じ Kernel path の already-open workbook を返す場合、ownership は移転しない。呼び出し側は `CloseIfOwned()` を呼んでもよいが、実際には close されず、caller が workbook を勝手に close してはいけない。
-- newly-opened workbook は resolver が一時 open した temporary workbook であり、`KernelWorkbookAccessResult.WorkbookWasOpenedByResolver == true` として caller に close 責任が生じる。caller は `finally` 境界などで `CloseIfOwned()` を呼ぶ。
+- newly-opened workbook は resolver が一時 open した temporary workbook であり、`KernelWorkbookAccessResult.CallerOwnsTemporaryWorkbook == true` として caller に close 責任が生じる。既存診断名として `WorkbookWasOpenedByResolver` も同じ条件を返す。caller は `finally` 境界などで `CloseIfOwned()` を呼ぶ。
 - `CloseIfOwned()` は temporary ownership の唯一の回収境界であり、resolver が一時 open した workbook だけを一度だけ閉じる。non-owned / already-open workbook は閉じない。
 - temporary open は dedicated/isolated hidden `Application` ではなく、current/shared `Application` の `Workbooks.Open` を使い、開いた workbook window を hidden にする現行 route である。将来の整理でも already-open / temporary-hidden-current-app / root-missing / open-failed の診断価値は維持する。
 - `SYSTEM_ROOT` 不明、Kernel path 不明、Kernel file 不在は fail-closed の null result とし、workbook を open しない。`Workbooks.Open` 例外は握りつぶさず、`EnableEvents` 復元後に呼び出し側へ伝播する。
 - `ResolvedKernelPath` は path matching と戻り値 contract のために保持するが、Kernel / CASE workbook path や root には案件名・個人情報が含まれうる。ログは route / outcome / ownership などの抽象情報を優先し、full path を安易に出さない。
 - 将来 `Open` を Application Service 側へ寄せる場合も、上記 ownership contract、`CloseIfOwned()` の意味、already-open workbook を閉じない条件を壊してはいけない。
+
+#### C-2 caller ownership result 整理
+
+- `KernelWorkbookAccessResult` は workbook 本体だけではなく、caller が temporary Kernel workbook の close responsibility を持つかを表す result である。
+- caller が result を使い終わった場合、temporary open workbook は `CloseIfOwned()` で回収する。already-open workbook は caller が close しない。
+- caller が実際に必要としている情報は基本的に workbook と close responsibility であり、open route / hidden window / temporary open の詳細を caller へ漏らしすぎない方向が C-3 の候補である。
+- read-only intent は `ResolveOrOpenReadOnly(...)` と `CloseIfOwned()` 内の close 方法に必要だが、caller は route 詳細としては扱わない。
+- C-3 では open 責務を Application Service 側へ寄せるか判断する。C-2 では `ResolveOrOpen` 分解や open 責務移動は行わない。
+
+| caller | 利用内容 | caller が必要としている result 情報 | close responsibility |
+| --- | --- | --- | --- |
+| `CaseDataSnapshotFactory.Create(...)` | CASE snapshot 用に Kernel の field definitions を read-only 参照する。 | `Workbook` と temporary close responsibility。read-only intent は resolver / close helper 側に閉じる。 | `finally` で `CloseIfOwned(..., suppressEventsDuringClose: true)` を呼び、borrow した temporary workbook を回収する。already-open は閉じない。 |
+| `KernelCasePresentationService.ResolveInitialCursorRange(...)` | 初期カーソル位置解決のため Kernel の field definitions を read-only 参照する。 | `Workbook` と temporary close responsibility。route / hidden window 詳細は不要。 | `finally` で `CloseIfOwned(...)` を呼び、close 失敗は表示フローを壊さないようログへ寄せる。already-open は閉じない。 |
+| `CaseListRegistrationService.Execute(...)` | 案件一覧登録として writable Kernel workbook へ行を書き込み、登録結果に Kernel workbook を返す。 | writable `Workbook`。`WorkbookWasAlreadyOpen` は既存ログ用途のみで、route 詳細は業務判断に使っていない。 | この service 境界では閉じない。後段 `DocumentCommandService` が保存・Kernel シート遷移に使うため、workbook を open のまま handoff している。C-3 ではこの handoff を close responsibility とどう表すかが判断対象である。 |
+| `DocumentCommandService` の案件一覧登録後段 | `CaseListRegistrationResult.KernelWorkbook` を保存し、`CaseContextFactory` 経由の Kernel シート遷移へ進める。 | result 型そのものではなく、登録済みの Kernel workbook handle を必要とする。 | `KernelWorkbookAccessResult` を直接持たないため `CloseIfOwned()` は呼ばない。route 詳細へ依存せず、保存対象 workbook と表示遷移 context だけを扱う。 |
 
 ### open 粒度の整理
 

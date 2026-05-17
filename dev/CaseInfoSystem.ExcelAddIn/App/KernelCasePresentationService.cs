@@ -356,6 +356,7 @@ namespace CaseInfoSystem.ExcelAddIn.App
 				return _excelInteropService.ResolveFieldRange (caseWorkbook, homeWorksheet, value);
 			} finally {
 				try {
+					// Initial cursor lookup only borrows Kernel definitions; close any temporary access here.
 					kernelAccess.CloseIfOwned ("KernelCasePresentationService.ResolveInitialCursorRange");
 				} catch (Exception exception) {
 					_logger.Error ("ResolveInitialCursorRange temporary kernel close failed.", exception);
